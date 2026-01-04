@@ -25,7 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
-import { Download } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -319,17 +319,29 @@ const Index = () => {
             <section className="mb-20">
               <BookCover title={displayTitle} topic={topic} />
               
-              {/* Download PDF Button */}
-              <div className="flex justify-center mt-8">
-                <Button
-                  onClick={handleDownloadPDF}
-                  variant="outline"
-                  size="lg"
-                  className="gap-2 font-serif"
-                >
-                  <Download className="w-4 h-4" />
-                  Download as PDF
-                </Button>
+              {/* Action Buttons */}
+              <div className="flex flex-col items-center mt-8 gap-4">
+                <div className="flex flex-col sm:flex-row justify-center gap-3">
+                  <Button
+                    onClick={handleDownloadPDF}
+                    variant="outline"
+                    size="lg"
+                    className="gap-2 font-serif"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Free Sample (PDF)
+                  </Button>
+                  <Button
+                    size="lg"
+                    className="gap-2 font-serif"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Unlock Full Artisan Guide — $4.99
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center max-w-md">
+                  Sample includes Step 1 and the material list. The full $4.99 guide unlocks all steps, pro tips, and the local supplier map.
+                </p>
               </div>
             </section>
 
