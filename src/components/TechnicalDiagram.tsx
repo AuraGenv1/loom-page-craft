@@ -1,11 +1,15 @@
-import { Lightbulb } from 'lucide-react';
+import { getTopicIcon } from '@/lib/iconMap';
+import { LucideIcon } from 'lucide-react';
 
 interface TechnicalDiagramProps {
   caption: string;
   plateNumber?: string;
+  topic?: string;
 }
 
-const TechnicalDiagram = ({ caption, plateNumber = "1.1" }: TechnicalDiagramProps) => {
+const TechnicalDiagram = ({ caption, plateNumber = "1.1", topic = "" }: TechnicalDiagramProps) => {
+  const TopicIcon = getTopicIcon(topic);
+
   return (
     <div className="w-full my-12 relative">
       {/* Plate container with deckle edge effect */}
@@ -20,24 +24,39 @@ const TechnicalDiagram = ({ caption, plateNumber = "1.1" }: TechnicalDiagramProp
           </span>
         </div>
 
-        {/* Aspect-video diagram container */}
-        <div className="aspect-video w-full bg-background/50 border border-dashed border-foreground/10 flex flex-col items-center justify-center gap-6 rounded-sm">
-          {/* Abstract geometric representation */}
-          <div className="relative w-full max-w-sm h-32">
-            {/* Center node */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full border border-foreground/20 flex items-center justify-center bg-secondary/30">
-              <Lightbulb className="w-6 h-6 text-foreground/40 stroke-[1.5]" />
+        {/* Aspect-video diagram container with blueprint styling */}
+        <div className="aspect-video w-full bg-background/50 border border-dashed border-foreground/10 flex flex-col items-center justify-center gap-6 rounded-sm relative overflow-hidden">
+          {/* Blueprint grid background */}
+          <div className="absolute inset-0 opacity-[0.03]" style={{
+            backgroundImage: `
+              linear-gradient(to right, currentColor 1px, transparent 1px),
+              linear-gradient(to bottom, currentColor 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px'
+          }} />
+          
+          {/* Blueprint-styled topic icon */}
+          <div className="relative">
+            {/* Outer measurement circle */}
+            <div className="absolute -inset-8 rounded-full border border-dashed border-foreground/10" />
+            <div className="absolute -inset-4 rounded-full border border-foreground/8" />
+            
+            {/* Main icon container */}
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border border-foreground/15 flex items-center justify-center bg-secondary/30">
+              <TopicIcon className="w-10 h-10 md:w-12 md:h-12 text-foreground/20 stroke-[0.5]" />
             </div>
-            {/* Connecting lines */}
-            <div className="absolute left-1/4 top-1/2 w-1/4 h-[1px] bg-foreground/15" />
-            <div className="absolute right-1/4 top-1/2 w-1/4 h-[1px] bg-foreground/15" />
-            <div className="absolute left-1/2 top-0 -translate-x-1/2 w-[1px] h-1/4 bg-foreground/15" />
-            <div className="absolute left-1/2 bottom-0 -translate-x-1/2 w-[1px] h-1/4 bg-foreground/15" />
-            {/* Outer nodes */}
-            <div className="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-foreground/5 border border-foreground/10" />
-            <div className="absolute right-1/4 top-1/2 translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-foreground/5 border border-foreground/10" />
-            <div className="absolute left-1/2 top-0 -translate-x-1/2 w-8 h-8 rounded-full bg-foreground/5 border border-foreground/10" />
-            <div className="absolute left-1/2 bottom-0 -translate-x-1/2 w-8 h-8 rounded-full bg-foreground/5 border border-foreground/10" />
+            
+            {/* Corner measurement marks */}
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[1px] h-4 bg-foreground/10" />
+            <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-[1px] h-4 bg-foreground/10" />
+            <div className="absolute top-1/2 -left-12 -translate-y-1/2 w-4 h-[1px] bg-foreground/10" />
+            <div className="absolute top-1/2 -right-12 -translate-y-1/2 w-4 h-[1px] bg-foreground/10" />
+          </div>
+
+          {/* Connecting annotation lines */}
+          <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+            <div className="text-[8px] uppercase tracking-widest text-foreground/20">REF: {plateNumber}</div>
+            <div className="text-[8px] uppercase tracking-widest text-foreground/20">SCALE: 1:1</div>
           </div>
         </div>
 
