@@ -29,34 +29,77 @@ const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
 
   return (
     <div className="w-full max-w-2xl mx-auto py-12 animate-fade-up animation-delay-200">
-      <h2 className="font-serif text-2xl md:text-3xl text-center mb-8">
-        Table of Contents
-      </h2>
-      <div className="space-y-3">
-        {displayChapters.map((chapter) => (
+      {/* Decorative header */}
+      <div className="text-center mb-10">
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="w-16 h-[1px] bg-foreground/15" />
+          <div className="w-1.5 h-1.5 rounded-full bg-foreground/20" />
+          <div className="w-16 h-[1px] bg-foreground/15" />
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
+          Contents
+        </p>
+        <h2 className="font-serif text-3xl md:text-4xl font-medium text-foreground">
+          Table of Contents
+        </h2>
+      </div>
+
+      {/* Chapters list */}
+      <div className="space-y-1 border-t border-b border-border/30 py-6">
+        {displayChapters.map((chapter, idx) => (
           <div
             key={chapter.number}
-            className={`flex items-center justify-between py-3 px-4 rounded-lg transition-colors ${
+            className={`group flex items-center justify-between py-4 px-5 rounded-lg transition-all duration-200 ${
               chapter.isUnlocked
-                ? 'bg-card hover:bg-secondary/50 cursor-pointer'
-                : 'opacity-50'
+                ? 'hover:bg-secondary/60 cursor-pointer'
+                : 'opacity-60'
             }`}
           >
-            <div className="flex items-center gap-4">
-              <span className="font-serif text-lg text-muted-foreground w-8">
+            <div className="flex items-center gap-5">
+              <span className="font-serif text-xl md:text-2xl text-muted-foreground/60 w-10 tabular-nums">
                 {chapter.number.toString().padStart(2, '0')}
               </span>
-              <span className={chapter.isUnlocked ? 'text-foreground' : 'text-muted-foreground'}>
-                {chapter.title}
-              </span>
+              <div className="flex flex-col">
+                <span className={`font-serif text-base md:text-lg ${chapter.isUnlocked ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {chapter.title}
+                </span>
+                {chapter.isUnlocked && (
+                  <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">
+                    Available
+                  </span>
+                )}
+              </div>
             </div>
-            {chapter.isUnlocked ? (
-              <Check className="w-4 h-4 text-accent" />
-            ) : (
-              <Lock className="w-4 h-4 text-muted-foreground" />
-            )}
+            <div className="flex items-center gap-3">
+              {/* Decorative dots leading to icon */}
+              <div className="hidden md:flex items-center gap-1 opacity-30">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="w-0.5 h-0.5 rounded-full bg-foreground/40" />
+                ))}
+              </div>
+              {chapter.isUnlocked ? (
+                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 text-accent" />
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                  <Lock className="w-3 h-3 text-muted-foreground" />
+                </div>
+              )}
+            </div>
           </div>
         ))}
+      </div>
+
+      {/* Footer decoration */}
+      <div className="flex items-center justify-center mt-8">
+        <div className="flex items-center gap-2 opacity-40">
+          <div className="w-8 h-[1px] bg-foreground/30" />
+          <span className="text-[9px] tracking-[0.2em] text-muted-foreground uppercase font-serif">
+            {displayChapters.length} Chapters
+          </span>
+          <div className="w-8 h-[1px] bg-foreground/30" />
+        </div>
       </div>
     </div>
   );
