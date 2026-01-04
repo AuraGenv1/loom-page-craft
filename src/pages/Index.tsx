@@ -14,6 +14,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/hooks/useAuth';
+import { generateGuidePDF } from '@/lib/generatePDF';
+import { Download } from 'lucide-react';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -165,6 +167,23 @@ const Index = () => {
     });
   };
 
+  const handleDownloadPDF = async () => {
+    if (!bookData) return;
+    
+    try {
+      toast.loading('Generating your PDF...', { id: 'pdf-download' });
+      await generateGuidePDF({
+        title: displayTitle,
+        topic,
+        bookData,
+      });
+      toast.success('PDF downloaded successfully!', { id: 'pdf-download' });
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.error('Failed to generate PDF. Please try again.', { id: 'pdf-download' });
+    }
+  };
+
   const handleStartOver = () => {
     setViewState('landing');
     setTopic('');
@@ -246,6 +265,19 @@ const Index = () => {
             {/* Book Cover */}
             <section className="mb-20">
               <BookCover title={displayTitle} topic={topic} />
+              
+              {/* Download PDF Button */}
+              <div className="flex justify-center mt-8">
+                <Button
+                  onClick={handleDownloadPDF}
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 font-serif"
+                >
+                  <Download className="w-4 h-4" />
+                  Download as PDF
+                </Button>
+              </div>
             </section>
 
             {/* Table of Contents */}
