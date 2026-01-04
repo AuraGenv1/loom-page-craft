@@ -20,6 +20,88 @@ This volume is provided for educational and informational purposes only. The con
 
 ---`;
 
+// Fetch local resources using Google Places API (New) with fallback to Legacy
+async function fetchLocalResources(topic: string, apiKey: string): Promise<Array<{ name: string; type: string; description: string }>> {
+  const searchQuery = `${topic} supplies store`;
+  
+  // Try Places API (New) first - more cost effective
+  try {
+    console.log('Attempting Places API (New) text search...');
+    const newApiResponse = await fetch(
+      'https://places.googleapis.com/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.displayName,places.primaryType,places.formattedAddress,places.rating',
+        },
+        body: JSON.stringify({
+          textQuery: searchQuery,
+          maxResultCount: 3,
+        }),
+      }
+    );
+
+    if (newApiResponse.ok) {
+      const data = await newApiResponse.json();
+      if (data.places && data.places.length > 0) {
+        console.log(`Places API (New) returned ${data.places.length} results`);
+        return data.places.slice(0, 3).map((place: {
+          displayName?: { text?: string };
+          primaryType?: string;
+          formattedAddress?: string;
+          rating?: number;
+        }) => ({
+          name: place.displayName?.text || 'Local Business',
+          type: place.primaryType?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
+          description: place.formattedAddress || 'Local provider for your project needs.',
+        }));
+      }
+      console.log('Places API (New) returned no results, falling back to legacy...');
+    } else {
+      const errorText = await newApiResponse.text();
+      console.log('Places API (New) failed:', newApiResponse.status, errorText, '- falling back to legacy...');
+    }
+  } catch (error) {
+    console.error('Places API (New) error:', error, '- falling back to legacy...');
+  }
+
+  // Fallback to Legacy Places API
+  try {
+    console.log('Attempting Legacy Places API text search...');
+    const legacyResponse = await fetch(
+      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`
+    );
+
+    if (legacyResponse.ok) {
+      const data = await legacyResponse.json();
+      if (data.results && data.results.length > 0) {
+        console.log(`Legacy Places API returned ${data.results.length} results`);
+        return data.results.slice(0, 3).map((place: {
+          name?: string;
+          types?: string[];
+          formatted_address?: string;
+        }) => ({
+          name: place.name || 'Local Business',
+          type: place.types?.[0]?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
+          description: place.formatted_address || 'Local provider for your project needs.',
+        }));
+      }
+      console.log('Legacy Places API returned no results');
+    } else {
+      const errorText = await legacyResponse.text();
+      console.error('Legacy Places API failed:', legacyResponse.status, errorText);
+    }
+  } catch (error) {
+    console.error('Legacy Places API error:', error);
+  }
+
+  // Return empty array if both APIs fail - AI-generated fallback will be used
+  console.log('Both Places APIs returned no results, using AI-generated resources');
+  return [];
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -57,6 +139,8 @@ serve(async (req) => {
       console.error('GEMINI_API_KEY is not configured');
       throw new Error('AI service is not configured');
     }
+
+    const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
 
     // Check if topic is high-risk
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
@@ -211,6 +295,20 @@ Chapter 1 requirements:
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Fetch real local resources from Google Places API if key is configured
+    if (GOOGLE_PLACES_API_KEY) {
+      console.log('Fetching local resources from Google Places API...');
+      const placesResources = await fetchLocalResources(topic, GOOGLE_PLACES_API_KEY);
+      if (placesResources.length > 0) {
+        bookData.localResources = placesResources;
+        console.log('Using Google Places API results for local resources');
+      } else {
+        console.log('Using AI-generated local resources as fallback');
+      }
+    } else {
+      console.log('GOOGLE_PLACES_API_KEY not configured, using AI-generated local resources');
     }
 
     // Prepend safety disclaimer for high-risk topics
