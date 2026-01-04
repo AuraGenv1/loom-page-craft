@@ -84,8 +84,8 @@ const Index = () => {
         {viewState === 'book' && (
           <div className="py-12">
             {/* Book Cover */}
-            <section className="mb-16">
-              <BookCover title={`How to Master ${topic}`} />
+            <section className="mb-20">
+              <BookCover title={`How to Master ${topic}`} topic={topic} />
             </section>
 
             {/* Table of Contents */}
