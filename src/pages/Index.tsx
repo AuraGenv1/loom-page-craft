@@ -135,6 +135,20 @@ const Index = () => {
         // Don't block the user, just log the error
       } else {
         setBookId(savedBook.id);
+        
+        // If user is logged in, also save to their saved_projects
+        if (user) {
+          const { error: saveProjectError } = await supabase
+            .from('saved_projects')
+            .insert([{
+              user_id: user.id,
+              book_id: savedBook.id,
+            }]);
+          
+          if (saveProjectError) {
+            console.error('Error saving to projects:', saveProjectError);
+          }
+        }
       }
 
       setViewState('book');
