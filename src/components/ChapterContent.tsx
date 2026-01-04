@@ -48,6 +48,7 @@ const ChapterContent = ({ topic }: ChapterContentProps) => {
         <TechnicalDiagram 
           caption={`Core concepts of ${topic} visualized`} 
           plateNumber="1.1"
+          topic={topic}
         />
 
         <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
@@ -69,6 +70,7 @@ const ChapterContent = ({ topic }: ChapterContentProps) => {
         <TechnicalDiagram 
           caption={`Essential tools and materials for ${topic}`} 
           plateNumber="1.2"
+          topic={topic}
         />
 
         <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">

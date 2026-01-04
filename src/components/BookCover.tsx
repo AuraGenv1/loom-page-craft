@@ -1,38 +1,9 @@
-import { BookOpen, Utensils, Palette, Wrench, Camera, Music, Leaf, Dumbbell, Code, Sparkles } from 'lucide-react';
+import { getTopicIcon } from '@/lib/iconMap';
 
 interface BookCoverProps {
   title: string;
   topic?: string;
 }
-
-const getTopicIcon = (topic: string) => {
-  const lowerTopic = topic.toLowerCase();
-  if (lowerTopic.includes('cook') || lowerTopic.includes('bak') || lowerTopic.includes('food') || lowerTopic.includes('bread')) {
-    return Utensils;
-  }
-  if (lowerTopic.includes('paint') || lowerTopic.includes('art') || lowerTopic.includes('draw') || lowerTopic.includes('color')) {
-    return Palette;
-  }
-  if (lowerTopic.includes('repair') || lowerTopic.includes('fix') || lowerTopic.includes('build') || lowerTopic.includes('diy')) {
-    return Wrench;
-  }
-  if (lowerTopic.includes('photo') || lowerTopic.includes('camera')) {
-    return Camera;
-  }
-  if (lowerTopic.includes('music') || lowerTopic.includes('guitar') || lowerTopic.includes('piano')) {
-    return Music;
-  }
-  if (lowerTopic.includes('garden') || lowerTopic.includes('plant') || lowerTopic.includes('grow')) {
-    return Leaf;
-  }
-  if (lowerTopic.includes('fitness') || lowerTopic.includes('exercise') || lowerTopic.includes('workout')) {
-    return Dumbbell;
-  }
-  if (lowerTopic.includes('code') || lowerTopic.includes('program') || lowerTopic.includes('develop')) {
-    return Code;
-  }
-  return BookOpen;
-};
 
 const BookCover = ({ title, topic = '' }: BookCoverProps) => {
   const TopicIcon = getTopicIcon(topic || title);
