@@ -42,7 +42,7 @@ const Index = () => {
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
-  const { user, profile, loading: authLoading, signInWithGoogle, signOut } = useAuth();
+  const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignIn = async () => {
@@ -272,8 +272,9 @@ const Index = () => {
                   variant="default"
                   size="sm"
                   onClick={handleSignIn}
+                  disabled={isAuthenticating}
                 >
-                  Join
+                  {isAuthenticating ? 'Signing in...' : 'Join'}
                 </Button>
               )
             )}
