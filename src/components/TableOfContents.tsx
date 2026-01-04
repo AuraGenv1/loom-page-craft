@@ -1,28 +1,31 @@
 import { Check, Lock } from 'lucide-react';
-
-interface Chapter {
-  number: number;
-  title: string;
-  isUnlocked: boolean;
-}
+import { ChapterInfo } from '@/lib/bookTypes';
 
 interface TableOfContentsProps {
   topic: string;
+  chapters?: ChapterInfo[];
 }
 
-const TableOfContents = ({ topic }: TableOfContentsProps) => {
-  const chapters: Chapter[] = [
-    { number: 1, title: `Introduction to ${topic}`, isUnlocked: true },
-    { number: 2, title: 'Understanding the Fundamentals', isUnlocked: false },
-    { number: 3, title: 'Essential Tools & Materials', isUnlocked: false },
-    { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: false },
-    { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: false },
-    { number: 6, title: 'Advanced Techniques', isUnlocked: false },
-    { number: 7, title: 'Troubleshooting Guide', isUnlocked: false },
-    { number: 8, title: 'Expert Tips & Tricks', isUnlocked: false },
-    { number: 9, title: 'Real-World Applications', isUnlocked: false },
-    { number: 10, title: 'Your Next Steps', isUnlocked: false },
-  ];
+const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
+  // Use AI-generated chapters or fallback to defaults
+  const displayChapters = chapters?.length
+    ? chapters.map((ch, idx) => ({
+        number: ch.chapter,
+        title: ch.title,
+        isUnlocked: idx === 0,
+      }))
+    : [
+        { number: 1, title: `Introduction to ${topic}`, isUnlocked: true },
+        { number: 2, title: 'Understanding the Fundamentals', isUnlocked: false },
+        { number: 3, title: 'Essential Tools & Materials', isUnlocked: false },
+        { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: false },
+        { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: false },
+        { number: 6, title: 'Advanced Techniques', isUnlocked: false },
+        { number: 7, title: 'Troubleshooting Guide', isUnlocked: false },
+        { number: 8, title: 'Expert Tips & Tricks', isUnlocked: false },
+        { number: 9, title: 'Real-World Applications', isUnlocked: false },
+        { number: 10, title: 'Your Next Steps', isUnlocked: false },
+      ];
 
   return (
     <div className="w-full max-w-2xl mx-auto py-12 animate-fade-up animation-delay-200">
@@ -30,7 +33,7 @@ const TableOfContents = ({ topic }: TableOfContentsProps) => {
         Table of Contents
       </h2>
       <div className="space-y-3">
-        {chapters.map((chapter) => (
+        {displayChapters.map((chapter) => (
           <div
             key={chapter.number}
             className={`flex items-center justify-between py-3 px-4 rounded-lg transition-colors ${
