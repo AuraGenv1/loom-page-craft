@@ -30,14 +30,33 @@ const MyProjects = () => {
     const fetchBooks = async () => {
       if (!user) return;
 
+      // Fetch saved projects joined with books
       const { data, error } = await supabase
-        .from('books')
-        .select('id, topic, title, created_at')
-        .eq('session_id', user.id)
+        .from('saved_projects')
+        .select(`
+          id,
+          created_at,
+          books (
+            id,
+            topic,
+            title,
+            created_at
+          )
+        `)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setBooks(data);
+        // Transform the data to flatten the book info
+        const transformedBooks = data
+          .filter(item => item.books)
+          .map(item => ({
+            id: (item.books as any).id,
+            topic: (item.books as any).topic,
+            title: (item.books as any).title,
+            created_at: (item.books as any).created_at,
+          }));
+        setBooks(transformedBooks);
       }
       setLoadingBooks(false);
     };
