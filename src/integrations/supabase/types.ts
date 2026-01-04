@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      books: {
+        Row: {
+          chapter1_content: string
+          created_at: string
+          has_disclaimer: boolean
+          id: string
+          local_resources: Json
+          session_id: string
+          table_of_contents: Json
+          title: string
+          topic: string
+        }
+        Insert: {
+          chapter1_content: string
+          created_at?: string
+          has_disclaimer?: boolean
+          id?: string
+          local_resources?: Json
+          session_id: string
+          table_of_contents?: Json
+          title: string
+          topic: string
+        }
+        Update: {
+          chapter1_content?: string
+          created_at?: string
+          has_disclaimer?: boolean
+          id?: string
+          local_resources?: Json
+          session_id?: string
+          table_of_contents?: Json
+          title?: string
+          topic?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
@@ -13,10 +13,51 @@ import { BookData } from '@/lib/bookTypes';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
+// Generate or retrieve a session ID for anonymous users
+const getSessionId = (): string => {
+  const stored = localStorage.getItem('loom_page_session_id');
+  if (stored) return stored;
+  
+  const newId = crypto.randomUUID();
+  localStorage.setItem('loom_page_session_id', newId);
+  return newId;
+};
+
 const Index = () => {
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
+  const [bookId, setBookId] = useState<string | null>(null);
+
+  // Check for existing book on mount
+  useEffect(() => {
+    const checkExistingBook = async () => {
+      const sessionId = getSessionId();
+      
+      const { data, error } = await supabase
+        .from('books')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data && !error) {
+        setBookData({
+          title: data.title,
+          tableOfContents: data.table_of_contents as unknown as BookData['tableOfContents'],
+          chapter1Content: data.chapter1_content,
+          localResources: data.local_resources as unknown as BookData['localResources'],
+          hasDisclaimer: data.has_disclaimer ?? false,
+        });
+        setTopic(data.topic);
+        setBookId(data.id);
+        setViewState('book');
+      }
+    };
+
+    checkExistingBook();
+  }, []);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
@@ -41,7 +82,32 @@ const Index = () => {
         return;
       }
 
-      setBookData(data as BookData);
+      const generatedBook = data as BookData;
+      setBookData(generatedBook);
+
+      // Save to database
+      const sessionId = getSessionId();
+      const { data: savedBook, error: saveError } = await supabase
+        .from('books')
+        .insert([{
+          topic: query,
+          title: generatedBook.title,
+          table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
+          chapter1_content: generatedBook.chapter1Content,
+          local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
+          has_disclaimer: generatedBook.hasDisclaimer || false,
+          session_id: sessionId,
+        }])
+        .select()
+        .single();
+
+      if (saveError) {
+        console.error('Error saving book:', saveError);
+        // Don't block the user, just log the error
+      } else {
+        setBookId(savedBook.id);
+      }
+
       setViewState('book');
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -60,6 +126,7 @@ const Index = () => {
     setViewState('landing');
     setTopic('');
     setBookData(null);
+    setBookId(null);
   };
 
   // Use AI-generated title or fallback
