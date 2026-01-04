@@ -105,34 +105,53 @@ Chapter 1 requirements:
 
     console.log('Calling Google Gemini API...');
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-        },
-      }),
-    });
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    let response: Response | null = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`Gemini API attempt ${attempt}/${maxRetries}`);
       
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        break; // Success, exit retry loop
+      }
+
+      const errorText = await response.text();
+      console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
+
+      if (response.status === 429 && attempt < maxRetries) {
+        // Exponential backoff: 2s, 4s, 8s
+        const waitTime = Math.pow(2, attempt) * 1000;
+        console.log(`Rate limited. Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: 'Our presses are momentarily at capacity. Please try again in a moment.' }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      
       if (response.status === 400) {
         return new Response(
           JSON.stringify({ error: 'Invalid request to AI service.' }),
@@ -141,6 +160,10 @@ Chapter 1 requirements:
       }
       
       throw new Error(`AI service error: ${response.status}`);
+    }
+
+    if (!response || !response.ok) {
+      throw new Error('Failed to get response from AI service after retries');
     }
 
     const data = await response.json();
