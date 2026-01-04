@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
@@ -7,10 +8,12 @@ import TableOfContents from '@/components/TableOfContents';
 import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
+import { useAuth } from '@/hooks/useAuth';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -29,6 +32,16 @@ const Index = () => {
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
+  const { user, loading: authLoading, signInWithGoogle } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignIn = async () => {
+    const { error } = await signInWithGoogle();
+    if (error) {
+      toast.error('Failed to sign in. Please try again.');
+      console.error('Sign in error:', error);
+    }
+  };
 
   // Check for existing book on mount
   useEffect(() => {
@@ -156,14 +169,35 @@ const Index = () => {
           <button onClick={handleStartOver} className="hover:opacity-70 transition-opacity">
             <Logo />
           </button>
-          {viewState === 'book' && (
-            <button
-              onClick={handleStartOver}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              New Guide
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {viewState === 'book' && (
+              <button
+                onClick={handleStartOver}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                New Guide
+              </button>
+            )}
+            {!authLoading && (
+              user ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/my-projects')}
+                >
+                  My Projects
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleSignIn}
+                >
+                  Sign In
+                </Button>
+              )
+            )}
+          </div>
         </div>
       </header>
 
