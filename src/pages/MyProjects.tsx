@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
