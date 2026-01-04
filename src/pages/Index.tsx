@@ -63,15 +63,15 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Check for existing book on mount
+  // Check for existing book on mount (only for authenticated users)
   useEffect(() => {
     const checkExistingBook = async () => {
-      const sessionId = getSessionId();
+      if (!user) return;
       
       const { data, error } = await supabase
         .from('books')
         .select('*')
-        .eq('session_id', sessionId)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -91,9 +91,15 @@ const Index = () => {
     };
 
     checkExistingBook();
-  }, []);
+  }, [user]);
 
   const handleSearch = async (query: string) => {
+    // Require authentication to create guides
+    if (!user) {
+      toast.error('Please sign in to create a guide');
+      return;
+    }
+
     setTopic(query);
     setViewState('loading');
 
@@ -105,8 +111,6 @@ const Index = () => {
       if (error) {
         console.error('Error generating book:', error);
 
-        // If the function returned a non-2xx response, Supabase surfaces it as a FunctionsHttpError.
-        // Parse the JSON body so we can show the friendly server-provided message.
         let message = 'Failed to generate your guide. Please try again.';
         if (error instanceof FunctionsHttpError) {
           try {
@@ -134,7 +138,7 @@ const Index = () => {
       const generatedBook = data as BookData;
       setBookData(generatedBook);
 
-      // Save to database
+      // Save to database with user_id
       const sessionId = getSessionId();
       const { data: savedBook, error: saveError } = await supabase
         .from('books')
@@ -146,29 +150,30 @@ const Index = () => {
           local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
           has_disclaimer: generatedBook.hasDisclaimer || false,
           session_id: sessionId,
+          user_id: user.id,
         }])
         .select()
         .single();
 
       if (saveError) {
         console.error('Error saving book:', saveError);
-        // Don't block the user, just log the error
-      } else {
-        setBookId(savedBook.id);
-        
-        // If user is logged in, also save to their saved_projects
-        if (user) {
-          const { error: saveProjectError } = await supabase
-            .from('saved_projects')
-            .insert([{
-              user_id: user.id,
-              book_id: savedBook.id,
-            }]);
-          
-          if (saveProjectError) {
-            console.error('Error saving to projects:', saveProjectError);
-          }
-        }
+        toast.error('Failed to save your guide. Please try again.');
+        setViewState('landing');
+        return;
+      }
+
+      setBookId(savedBook.id);
+      
+      // Also save to saved_projects for dashboard
+      const { error: saveProjectError } = await supabase
+        .from('saved_projects')
+        .insert([{
+          user_id: user.id,
+          book_id: savedBook.id,
+        }]);
+      
+      if (saveProjectError) {
+        console.error('Error saving to projects:', saveProjectError);
       }
 
       setViewState('book');
