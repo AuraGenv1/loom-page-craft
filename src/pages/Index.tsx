@@ -9,6 +9,7 @@ import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import SaveToCloudBanner from '@/components/SaveToCloudBanner';
+import AuthModal from '@/components/AuthModal';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -43,15 +44,12 @@ const Index = () => {
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const handleSignIn = async () => {
-    const { error } = await signInWithGoogle();
-    if (error) {
-      toast.error('Failed to sign in. Please try again.');
-      console.error('Sign in error:', error);
-    }
+  const handleOpenAuthModal = () => {
+    setAuthModalOpen(true);
   };
 
   const handleSignOut = async () => {
@@ -269,7 +267,7 @@ const Index = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleSignIn}
+                  onClick={handleOpenAuthModal}
                   disabled={isAuthenticating}
                   className="gap-2"
                 >
@@ -312,7 +310,7 @@ const Index = () => {
             {/* Save to Cloud Banner for guests */}
             {!user && (
               <SaveToCloudBanner 
-                onSignIn={handleSignIn} 
+                onSignIn={handleOpenAuthModal} 
                 isAuthenticating={isAuthenticating} 
               />
             )}
@@ -369,6 +367,14 @@ const Index = () => {
 
       {/* Sticky Footer Disclaimer */}
       <Footer />
+
+      {/* Auth Modal */}
+      <AuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
+        onGoogleSignIn={signInWithGoogle}
+        isAuthenticating={isAuthenticating}
+      />
     </div>
   );
 };
