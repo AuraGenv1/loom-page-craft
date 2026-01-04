@@ -8,6 +8,7 @@ import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 
@@ -70,7 +71,22 @@ const Index = () => {
 
       if (error) {
         console.error('Error generating book:', error);
-        toast.error('Failed to generate your guide. Please try again.');
+
+        // If the function returned a non-2xx response, Supabase surfaces it as a FunctionsHttpError.
+        // Parse the JSON body so we can show the friendly server-provided message.
+        let message = 'Failed to generate your guide. Please try again.';
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const body = await error.context.json();
+            if (body?.error && typeof body.error === 'string') {
+              message = body.error;
+            }
+          } catch {
+            // ignore JSON parse errors
+          }
+        }
+
+        toast.error(message);
         setViewState('landing');
         return;
       }
