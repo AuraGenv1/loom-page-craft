@@ -10,10 +10,17 @@ const HIGH_RISK_KEYWORDS = [
   'legal', 'law', 'attorney', 'lawyer', 'court', 'lawsuit', 'contract', 'sue'
 ];
 
-const SAFETY_DISCLAIMER = `⚠️ IMPORTANT DISCLAIMER: This guide is provided for educational and informational purposes only. It is NOT a substitute for professional advice. For medical topics, always consult a licensed healthcare provider. For legal topics, always consult a qualified attorney. The information presented here should not be used for self-diagnosis, self-treatment, or as the basis for legal decisions.\n\n---\n\n`;
+const BLOCKED_KEYWORDS = [
+  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'drug', 'narcotic'
+];
+
+const SAFETY_DISCLAIMER = `⚠️ IMPORTANT NOTICE
+
+This volume is provided for educational and informational purposes only. The content herein does not constitute professional advice. For medical topics, we strongly advise consultation with a licensed healthcare provider. For legal matters, engagement with a qualified attorney is essential. This guide should not be used for self-diagnosis, self-treatment, or as the basis for legal decisions.
+
+---`;
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -31,6 +38,20 @@ serve(async (req) => {
 
     console.log('Generating book for topic:', topic);
 
+    // Check for blocked topics
+    const lowerTopic = topic.toLowerCase();
+    const isBlocked = BLOCKED_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
+    
+    if (isBlocked) {
+      console.log('Blocked topic detected:', topic);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       console.error('LOVABLE_API_KEY is not configured');
@@ -38,37 +59,49 @@ serve(async (req) => {
     }
 
     // Check if topic is high-risk
-    const lowerTopic = topic.toLowerCase();
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     console.log('High-risk topic detected:', isHighRisk);
 
-    const systemPrompt = `You are a professional technical writer for Loom & Page, a publisher of elegant instructional guides. Your writing style is sophisticated, clear, and instructional—similar to high-end textbooks or professional manuals.
+    const systemPrompt = `You are the Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined book content.
+
+CRITICAL RULES:
+- Never say "Sure", "Here is", "I can help", or any conversational filler
+- Output ONLY the structured book content in the exact JSON format specified
+- Write in first-person plural ("we", "our") with an academic yet accessible tone
+- Avoid fluff, redundancy, or informal language
+- Every sentence must provide instructional value
+
+Your writing style emulates the clarity of technical manuals and the elegance of classic educational texts. Use phrases like:
+- "In this volume, we examine..."
+- "The practitioner will find..."
+- "It is essential to understand..."
+- "We now turn our attention to..."
 
 You must respond with a JSON object in this exact format:
 {
-  "title": "The book title",
+  "title": "The elegant book title",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title here" },
-    { "chapter": 2, "title": "Chapter title here" },
-    ... (10 chapters total)
+    { "chapter": 1, "title": "Chapter title" },
+    { "chapter": 2, "title": "Chapter title" },
+    ... (exactly 10 chapters)
   ],
-  "chapter1Content": "The full content of chapter 1 in markdown format...",
+  "chapter1Content": "Full markdown content of chapter 1...",
   "localResources": [
-    { "name": "Business Name", "type": "Type of business", "description": "Brief description" },
-    { "name": "Business Name 2", "type": "Type of business", "description": "Brief description" },
-    { "name": "Business Name 3", "type": "Type of business", "description": "Brief description" }
+    { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
+    { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
+    { "name": "Business Name", "type": "Service Type", "description": "Brief description" }
   ]
 }
 
-Important guidelines:
-- The title should be elegant and professional (e.g., "The Art of Sourdough Bread Baking")
-- Create exactly 10 chapters that build progressively from fundamentals to advanced topics
-- Chapter 1 should be an introduction that covers the fundamentals, history, and importance of the topic
-- The chapter 1 content should be substantial (at least 500 words) with proper markdown formatting including headers, paragraphs, and bullet points
-- Include 3 relevant local resource suggestions (types of businesses/services that could help with this topic)
-- Write in a timeless, instructional tone suitable for a printed book`;
+Chapter 1 requirements:
+- Minimum 600 words of substantive instructional content
+- Begin with a compelling opening paragraph (no "Welcome" or greetings)
+- Include 2-3 section headers using ## markdown syntax
+- Incorporate at least one blockquote with a relevant insight
+- End with a transition to subsequent chapters
+- Use proper markdown: headers, paragraphs, bullet lists where appropriate`;
 
-    const userPrompt = `Create a detailed Chapter 1 and a 10-chapter Table of Contents for a book titled "${topic}". Use a sophisticated, instructional tone. Include a section for local resources that would be relevant to someone learning about ${topic}.`;
+    const userPrompt = `Compose Chapter One and the complete Table of Contents for an instructional volume on: "${topic}"`;
 
     console.log('Calling Lovable AI Gateway...');
 
@@ -94,7 +127,7 @@ Important guidelines:
       
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }),
+          JSON.stringify({ error: 'Our presses are momentarily at capacity. Please try again in a moment.' }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -120,18 +153,34 @@ Important guidelines:
     // Parse the JSON from the response
     let bookData;
     try {
-      // Try to extract JSON from the response (it might be wrapped in markdown code blocks)
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
       const jsonStr = jsonMatch[1] || content;
       bookData = JSON.parse(jsonStr.trim());
     } catch (parseError) {
       console.error('Failed to parse AI response as JSON:', parseError, content);
-      throw new Error('Failed to parse generated content');
+      // If parsing fails, it might be nonsense input
+      return new Response(
+        JSON.stringify({ 
+          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate the response structure
+    if (!bookData.title || !bookData.tableOfContents || !bookData.chapter1Content) {
+      console.error('Invalid book structure:', bookData);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Prepend safety disclaimer for high-risk topics
-    if (isHighRisk && bookData.chapter1Content) {
-      bookData.chapter1Content = SAFETY_DISCLAIMER + bookData.chapter1Content;
+    if (isHighRisk) {
+      bookData.chapter1Content = SAFETY_DISCLAIMER + '\n\n' + bookData.chapter1Content;
       bookData.hasDisclaimer = true;
     }
 
@@ -145,7 +194,7 @@ Important guidelines:
   } catch (error) {
     console.error('Error in generate-book function:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error occurred' }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'An unexpected error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
