@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { Download } from 'lucide-react';
 

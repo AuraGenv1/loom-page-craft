@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
