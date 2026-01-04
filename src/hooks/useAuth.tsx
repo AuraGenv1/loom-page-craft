@@ -14,6 +14,7 @@ export const useAuth = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -61,7 +62,8 @@ export const useAuth = () => {
   }, [fetchProfile]);
 
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    setIsAuthenticating(true);
+    const redirectUrl = window.location.origin;
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -69,6 +71,10 @@ export const useAuth = () => {
         redirectTo: redirectUrl,
       },
     });
+    
+    if (error) {
+      setIsAuthenticating(false);
+    }
     
     return { error };
   };
@@ -90,6 +96,7 @@ export const useAuth = () => {
     session,
     profile,
     loading,
+    isAuthenticating,
     signInWithGoogle,
     signOut,
     refetchProfile,
