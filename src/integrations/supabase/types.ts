@@ -25,6 +25,7 @@ export type Database = {
           table_of_contents: Json
           title: string
           topic: string
+          user_id: string | null
         }
         Insert: {
           chapter1_content: string
@@ -36,6 +37,7 @@ export type Database = {
           table_of_contents?: Json
           title: string
           topic: string
+          user_id?: string | null
         }
         Update: {
           chapter1_content?: string
@@ -47,6 +49,7 @@ export type Database = {
           table_of_contents?: Json
           title?: string
           topic?: string
+          user_id?: string | null
         }
         Relationships: []
       }
