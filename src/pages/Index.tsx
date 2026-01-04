@@ -9,6 +9,14 @@ import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,7 +42,7 @@ const Index = () => {
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
-  const { user, loading: authLoading, signInWithGoogle } = useAuth();
+  const { user, profile, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignIn = async () => {
@@ -43,6 +51,16 @@ const Index = () => {
       toast.error('Failed to sign in. Please try again.');
       console.error('Sign in error:', error);
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Signed out successfully');
+  };
+
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   // Check for existing book on mount
@@ -213,20 +231,44 @@ const Index = () => {
             )}
             {!authLoading && (
               user ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/my-projects')}
-                >
-                  My Projects
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate('/dashboard')}
+                    className="hidden sm:flex"
+                  >
+                    Dashboard
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="hover:opacity-80 transition-opacity">
+                        <Avatar className="h-8 w-8 border border-border">
+                          <AvatarImage src={profile?.avatar_url || user?.user_metadata?.avatar_url} />
+                          <AvatarFallback className="bg-secondary text-xs font-serif">
+                            {getInitials(profile?.full_name || user?.user_metadata?.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                        Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleSignOut} className="text-muted-foreground">
+                        Sign Out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               ) : (
                 <Button
                   variant="default"
                   size="sm"
                   onClick={handleSignIn}
                 >
-                  Sign In
+                  Join
                 </Button>
               )
             )}
