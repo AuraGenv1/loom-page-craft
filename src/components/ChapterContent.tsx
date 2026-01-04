@@ -1,11 +1,120 @@
 import TechnicalDiagram from './TechnicalDiagram';
 import LocalResources from './LocalResources';
+import { LocalResource } from '@/lib/bookTypes';
+import { AlertTriangle } from 'lucide-react';
 
 interface ChapterContentProps {
   topic: string;
+  content?: string;
+  localResources?: LocalResource[];
+  hasDisclaimer?: boolean;
 }
 
-const ChapterContent = ({ topic }: ChapterContentProps) => {
+const ChapterContent = ({ topic, content, localResources, hasDisclaimer }: ChapterContentProps) => {
+  // Parse markdown content into sections (simplified rendering)
+  const renderContent = () => {
+    if (!content) {
+      return (
+        <>
+          <p className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground">
+            Welcome to your comprehensive guide on {topic}. This carefully crafted manual 
+            will walk you through everything you need to know, from the foundational 
+            concepts to advanced techniques that experts use every day.
+          </p>
+
+          <p className="text-base md:text-lg">
+            Whether you're a complete beginner or looking to refine your existing skills, 
+            this guide is designed to meet you where you are. We've distilled years of 
+            expertise and countless hours of research into clear, actionable steps.
+          </p>
+        </>
+      );
+    }
+
+    // Split content by paragraphs and render with proper styling
+    const paragraphs = content.split('\n\n').filter(p => p.trim());
+    
+    return paragraphs.map((paragraph, index) => {
+      const trimmed = paragraph.trim();
+      
+      // Check for headers
+      if (trimmed.startsWith('### ')) {
+        return (
+          <h3 key={index} className="font-serif text-xl md:text-2xl font-semibold mt-10 mb-4 text-foreground">
+            {trimmed.replace('### ', '')}
+          </h3>
+        );
+      }
+      if (trimmed.startsWith('## ')) {
+        return (
+          <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
+            {trimmed.replace('## ', '')}
+          </h2>
+        );
+      }
+      if (trimmed.startsWith('# ')) {
+        return (
+          <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
+            {trimmed.replace('# ', '')}
+          </h2>
+        );
+      }
+
+      // Check for bullet points
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const items = trimmed.split('\n').filter(line => line.trim().startsWith('-') || line.trim().startsWith('*'));
+        return (
+          <ul key={index} className="list-none pl-0 space-y-3 text-foreground/75 my-6">
+            {items.map((item, i) => (
+              <li key={i} className="flex items-start gap-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-foreground/30 shrink-0 mt-2.5" />
+                <span>{item.replace(/^[-*]\s*/, '')}</span>
+              </li>
+            ))}
+          </ul>
+        );
+      }
+
+      // Check for blockquote
+      if (trimmed.startsWith('>')) {
+        return (
+          <blockquote key={index} className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
+            {trimmed.replace(/^>\s*/gm, '')}
+          </blockquote>
+        );
+      }
+
+      // Check for disclaimer (starts with warning emoji)
+      if (trimmed.startsWith('⚠️')) {
+        return (
+          <div key={index} className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8">
+            <div className="flex items-start gap-4">
+              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-amber-800 dark:text-amber-200 text-sm leading-relaxed">
+                {trimmed.replace('⚠️ ', '')}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Regular paragraph - first one gets drop cap
+      if (index === 0 || (hasDisclaimer && index === 1)) {
+        return (
+          <p key={index} className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground">
+            {trimmed}
+          </p>
+        );
+      }
+
+      return (
+        <p key={index} className="text-base md:text-lg">
+          {trimmed}
+        </p>
+      );
+    });
+  };
+
   return (
     <article className="w-full max-w-3xl mx-auto py-16 md:py-20 px-6 md:px-12 animate-fade-up animation-delay-300 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative">
       {/* Deckle edge effect */}
@@ -33,17 +142,7 @@ const ChapterContent = ({ topic }: ChapterContentProps) => {
 
       {/* Chapter content */}
       <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
-        <p className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground">
-          Welcome to your comprehensive guide on {topic}. This carefully crafted manual 
-          will walk you through everything you need to know, from the foundational 
-          concepts to advanced techniques that experts use every day.
-        </p>
-
-        <p className="text-base md:text-lg">
-          Whether you're a complete beginner or looking to refine your existing skills, 
-          this guide is designed to meet you where you are. We've distilled years of 
-          expertise and countless hours of research into clear, actionable steps.
-        </p>
+        {renderContent()}
 
         <TechnicalDiagram 
           caption={`Core concepts of ${topic} visualized`} 
@@ -51,67 +150,35 @@ const ChapterContent = ({ topic }: ChapterContentProps) => {
           topic={topic}
         />
 
-        <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
-          Why This Matters
-        </h2>
+        {!content && (
+          <>
+            <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
+              Why This Matters
+            </h2>
 
-        <p className="text-base md:text-lg">
-          Understanding {topic} isn't just about acquiring a new skill—it's about 
-          opening doors to new possibilities. In today's world, this knowledge can 
-          transform how you approach problems and create opportunities you never 
-          knew existed.
-        </p>
+            <p className="text-base md:text-lg">
+              Understanding {topic} isn't just about acquiring a new skill—it's about 
+              opening doors to new possibilities. In today's world, this knowledge can 
+              transform how you approach problems and create opportunities you never 
+              knew existed.
+            </p>
 
-        <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
-          "The journey of a thousand miles begins with a single step. This chapter 
-          is that first step."
-        </blockquote>
+            <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
+              "The journey of a thousand miles begins with a single step. This chapter 
+              is that first step."
+            </blockquote>
+          </>
+        )}
 
         <TechnicalDiagram 
           caption={`Essential tools and materials for ${topic}`} 
           plateNumber="1.2"
           topic={topic}
         />
-
-        <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
-          What You'll Need
-        </h2>
-
-        <p className="text-base md:text-lg">
-          Before we dive deeper, let's ensure you have everything prepared. The 
-          good news? You probably already have most of what's needed. We believe 
-          in accessibility and have designed this guide to work with commonly 
-          available resources.
-        </p>
-
-        <ul className="list-none pl-0 space-y-4 text-foreground/75 my-8">
-          <li className="flex items-start gap-4">
-            <span className="w-6 h-6 rounded-full border border-foreground/20 flex items-center justify-center text-xs text-muted-foreground shrink-0 mt-0.5">1</span>
-            <span>A curious mindset and willingness to learn</span>
-          </li>
-          <li className="flex items-start gap-4">
-            <span className="w-6 h-6 rounded-full border border-foreground/20 flex items-center justify-center text-xs text-muted-foreground shrink-0 mt-0.5">2</span>
-            <span>Basic familiarity with fundamental concepts</span>
-          </li>
-          <li className="flex items-start gap-4">
-            <span className="w-6 h-6 rounded-full border border-foreground/20 flex items-center justify-center text-xs text-muted-foreground shrink-0 mt-0.5">3</span>
-            <span>Access to standard tools (detailed in Chapter 3)</span>
-          </li>
-          <li className="flex items-start gap-4">
-            <span className="w-6 h-6 rounded-full border border-foreground/20 flex items-center justify-center text-xs text-muted-foreground shrink-0 mt-0.5">4</span>
-            <span>Approximately 2-3 hours per week for practice</span>
-          </li>
-        </ul>
-
-        <p className="mt-10 text-base md:text-lg">
-          In the following chapters, we'll explore each aspect in detail, building 
-          your knowledge systematically. By the end of this guide, you'll have a 
-          solid foundation and the confidence to apply what you've learned.
-        </p>
       </div>
 
       {/* Local Resources Section */}
-      <LocalResources topic={topic} />
+      <LocalResources topic={topic} resources={localResources} />
     </article>
   );
 };

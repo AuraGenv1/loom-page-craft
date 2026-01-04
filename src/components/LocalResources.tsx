@@ -1,7 +1,9 @@
 import { MapPin, Star, Phone } from 'lucide-react';
+import { LocalResource } from '@/lib/bookTypes';
 
 interface LocalResourcesProps {
   topic: string;
+  resources?: LocalResource[];
 }
 
 interface LocalBusiness {
@@ -13,33 +15,43 @@ interface LocalBusiness {
   phone: string;
 }
 
-const LocalResources = ({ topic }: LocalResourcesProps) => {
-  const businesses: LocalBusiness[] = [
-    {
-      name: `${topic} Learning Center`,
-      type: 'Educational Institution',
-      address: '123 Main Street, Your City, ST 12345',
-      rating: 4.8,
-      reviewCount: 127,
-      phone: '(555) 123-4567',
-    },
-    {
-      name: `Expert ${topic} Studio`,
-      type: 'Professional Services',
-      address: '456 Oak Avenue, Your City, ST 12345',
-      rating: 4.9,
-      reviewCount: 89,
-      phone: '(555) 234-5678',
-    },
-    {
-      name: `Community ${topic} Workshop`,
-      type: 'Community Center',
-      address: '789 Elm Boulevard, Your City, ST 12345',
-      rating: 4.7,
-      reviewCount: 203,
-      phone: '(555) 345-6789',
-    },
-  ];
+const LocalResources = ({ topic, resources }: LocalResourcesProps) => {
+  // Use AI-generated resources or fallback to defaults
+  const businesses: LocalBusiness[] = resources?.length
+    ? resources.map((res, idx) => ({
+        name: res.name,
+        type: res.type,
+        address: `${123 + idx * 111} Main Street, Your City, ST 12345`,
+        rating: 4.7 + (idx * 0.1),
+        reviewCount: 100 + idx * 50,
+        phone: `(555) ${123 + idx}-${4567 + idx}`,
+      }))
+    : [
+        {
+          name: `${topic} Learning Center`,
+          type: 'Educational Institution',
+          address: '123 Main Street, Your City, ST 12345',
+          rating: 4.8,
+          reviewCount: 127,
+          phone: '(555) 123-4567',
+        },
+        {
+          name: `Expert ${topic} Studio`,
+          type: 'Professional Services',
+          address: '456 Oak Avenue, Your City, ST 12345',
+          rating: 4.9,
+          reviewCount: 89,
+          phone: '(555) 234-5678',
+        },
+        {
+          name: `Community ${topic} Workshop`,
+          type: 'Community Center',
+          address: '789 Elm Boulevard, Your City, ST 12345',
+          rating: 4.7,
+          reviewCount: 203,
+          phone: '(555) 345-6789',
+        },
+      ];
 
   return (
     <section className="mt-16 pt-10 border-t border-border">
@@ -72,7 +84,7 @@ const LocalResources = ({ topic }: LocalResourcesProps) => {
             </h3>
             <div className="flex items-center gap-1 mb-3">
               <Star className="w-3.5 h-3.5 fill-accent text-accent" />
-              <span className="text-sm font-medium">{business.rating}</span>
+              <span className="text-sm font-medium">{business.rating.toFixed(1)}</span>
               <span className="text-sm text-muted-foreground">
                 ({business.reviewCount} reviews)
               </span>

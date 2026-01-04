@@ -8,21 +8,46 @@ import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { BookData } from '@/lib/bookTypes';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
 const Index = () => {
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
+  const [bookData, setBookData] = useState<BookData | null>(null);
 
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');
 
-    // Simulate book generation
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-book', {
+        body: { topic: query }
+      });
+
+      if (error) {
+        console.error('Error generating book:', error);
+        toast.error('Failed to generate your guide. Please try again.');
+        setViewState('landing');
+        return;
+      }
+
+      if (data.error) {
+        console.error('API error:', data.error);
+        toast.error(data.error);
+        setViewState('landing');
+        return;
+      }
+
+      setBookData(data as BookData);
       setViewState('book');
-    }, 2500);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('Something went wrong. Please try again.');
+      setViewState('landing');
+    }
   };
 
   const handlePurchase = () => {
@@ -34,7 +59,11 @@ const Index = () => {
   const handleStartOver = () => {
     setViewState('landing');
     setTopic('');
+    setBookData(null);
   };
+
+  // Use AI-generated title or fallback
+  const displayTitle = bookData?.title || `How to Master ${topic}`;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -85,12 +114,12 @@ const Index = () => {
           <div className="py-12">
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={`How to Master ${topic}`} topic={topic} />
+              <BookCover title={displayTitle} topic={topic} />
             </section>
 
             {/* Table of Contents */}
             <section className="mb-8">
-              <TableOfContents topic={topic} />
+              <TableOfContents topic={topic} chapters={bookData?.tableOfContents} />
             </section>
 
             {/* Divider */}
@@ -106,7 +135,12 @@ const Index = () => {
 
             {/* Chapter 1 Content */}
             <section>
-              <ChapterContent topic={topic} />
+              <ChapterContent 
+                topic={topic} 
+                content={bookData?.chapter1Content}
+                localResources={bookData?.localResources}
+                hasDisclaimer={bookData?.hasDisclaimer}
+              />
             </section>
 
             {/* Paywall */}
