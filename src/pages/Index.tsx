@@ -94,11 +94,6 @@ const Index = () => {
   }, [user]);
 
   const handleSearch = async (query: string) => {
-    // Require authentication to create guides
-    if (!user) {
-      toast.error('Please sign in to create a guide');
-      return;
-    }
 
     setTopic(query);
     setViewState('loading');
@@ -138,7 +133,7 @@ const Index = () => {
       const generatedBook = data as BookData;
       setBookData(generatedBook);
 
-      // Save to database with user_id
+      // Save to database (user_id is null for guests)
       const sessionId = getSessionId();
       const { data: savedBook, error: saveError } = await supabase
         .from('books')
@@ -150,7 +145,7 @@ const Index = () => {
           local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
           has_disclaimer: generatedBook.hasDisclaimer || false,
           session_id: sessionId,
-          user_id: user.id,
+          user_id: user?.id || null,
         }])
         .select()
         .single();
@@ -164,16 +159,18 @@ const Index = () => {
 
       setBookId(savedBook.id);
       
-      // Also save to saved_projects for dashboard
-      const { error: saveProjectError } = await supabase
-        .from('saved_projects')
-        .insert([{
-          user_id: user.id,
-          book_id: savedBook.id,
-        }]);
-      
-      if (saveProjectError) {
-        console.error('Error saving to projects:', saveProjectError);
+      // Only save to saved_projects if user is logged in
+      if (user) {
+        const { error: saveProjectError } = await supabase
+          .from('saved_projects')
+          .insert([{
+            user_id: user.id,
+            book_id: savedBook.id,
+          }]);
+        
+        if (saveProjectError) {
+          console.error('Error saving to projects:', saveProjectError);
+        }
       }
 
       setViewState('book');
@@ -268,14 +265,17 @@ const Index = () => {
                   </DropdownMenu>
                 </div>
               ) : (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleSignIn}
-                  disabled={isAuthenticating}
-                >
-                  {isAuthenticating ? 'Signing in...' : 'Join'}
-                </Button>
+                viewState === 'book' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSignIn}
+                    disabled={isAuthenticating}
+                    className="gap-2"
+                  >
+                    {isAuthenticating ? 'Signing in...' : 'Save to Cloud'}
+                  </Button>
+                )
               )
             )}
           </div>
