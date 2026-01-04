@@ -8,6 +8,7 @@ import TableOfContents from '@/components/TableOfContents';
 import ChapterContent from '@/components/ChapterContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
+import SaveToCloudBanner from '@/components/SaveToCloudBanner';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -265,17 +266,15 @@ const Index = () => {
                   </DropdownMenu>
                 </div>
               ) : (
-                viewState === 'book' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSignIn}
-                    disabled={isAuthenticating}
-                    className="gap-2"
-                  >
-                    {isAuthenticating ? 'Signing in...' : 'Save to Cloud'}
-                  </Button>
-                )
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSignIn}
+                  disabled={isAuthenticating}
+                  className="gap-2"
+                >
+                  {isAuthenticating ? 'Signing in...' : 'Join'}
+                </Button>
               )
             )}
           </div>
@@ -310,6 +309,14 @@ const Index = () => {
         {/* Book View */}
         {viewState === 'book' && (
           <div className="py-12">
+            {/* Save to Cloud Banner for guests */}
+            {!user && (
+              <SaveToCloudBanner 
+                onSignIn={handleSignIn} 
+                isAuthenticating={isAuthenticating} 
+              />
+            )}
+            
             {/* Book Cover */}
             <section className="mb-20">
               <BookCover title={displayTitle} topic={topic} />
