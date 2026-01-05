@@ -14,6 +14,186 @@ interface PlaceResult {
   placeId: string;
 }
 
+// Generic retailers to filter out
+const BLOCKED_NAMES = [
+  'target', 'walmart', 'costco', 'amazon', 'best buy', 'home depot', 'lowes',
+  'staples', 'office depot', 'dollar general', 'dollar tree', 'family dollar',
+  'big lots', 'five below', 'ross', 'marshalls', 'tj maxx', 'kohl\'s', 'jcpenney',
+  'macy\'s', 'nordstrom', 'sears', 'cvs', 'walgreens', 'rite aid', 'kroger',
+  'safeway', 'publix', 'whole foods', 'trader joe\'s', 'aldi', 'lidl'
+];
+
+// Blocked place types (generic retail)
+const BLOCKED_TYPES = [
+  'department_store', 'electronics_store', 'discount_store', 'supermarket',
+  'grocery_or_supermarket', 'convenience_store', 'drugstore', 'pharmacy',
+  'clothing_store', 'shoe_store'
+];
+
+// Topic-specific search configurations
+const TOPIC_CONFIGS: Record<string, { keywords: string[]; types: string[]; relevantTerms: string[] }> = {
+  'car': {
+    keywords: ['classic car restoration', 'automotive machine shop', 'auto body shop', 'car parts specialty'],
+    types: ['car_repair', 'car_dealer', 'auto_parts_store'],
+    relevantTerms: ['auto', 'motors', 'automotive', 'restoration', 'classic', 'vintage', 'body shop', 'machine shop', 'parts']
+  },
+  'ferrari': {
+    keywords: ['Ferrari parts dealer', 'exotic car restoration', 'Italian car specialist', 'sports car mechanic'],
+    types: ['car_repair', 'car_dealer'],
+    relevantTerms: ['ferrari', 'exotic', 'italian', 'sports car', 'luxury', 'restoration', 'specialty']
+  },
+  'motorcycle': {
+    keywords: ['motorcycle shop', 'motorcycle parts', 'custom motorcycle builder'],
+    types: ['car_repair', 'store'],
+    relevantTerms: ['motorcycle', 'cycle', 'harley', 'honda', 'yamaha', 'custom', 'parts']
+  },
+  'wood': {
+    keywords: ['lumber yard', 'hardwood supplier', 'woodworking supply', 'cabinet shop'],
+    types: ['home_improvement_store', 'furniture_store'],
+    relevantTerms: ['lumber', 'hardwood', 'wood', 'cabinet', 'millwork', 'timber']
+  },
+  'leather': {
+    keywords: ['leather supply', 'upholstery shop', 'leather craft', 'tannery'],
+    types: ['store', 'home_goods_store'],
+    relevantTerms: ['leather', 'upholstery', 'craft', 'hide', 'tannery']
+  },
+  'sew': {
+    keywords: ['fabric store', 'sewing machine dealer', 'quilting shop', 'textile supplier'],
+    types: ['store', 'home_goods_store'],
+    relevantTerms: ['fabric', 'sewing', 'quilt', 'textile', 'notions', 'thread']
+  },
+  'bread': {
+    keywords: ['baking supply store', 'restaurant supply', 'specialty flour', 'artisan bakery supply'],
+    types: ['store', 'bakery'],
+    relevantTerms: ['baking', 'flour', 'bakery', 'artisan', 'pastry', 'supply']
+  },
+  'garden': {
+    keywords: ['nursery plants', 'garden center', 'landscape supply', 'seed supplier'],
+    types: ['florist', 'store', 'home_improvement_store'],
+    relevantTerms: ['nursery', 'garden', 'plant', 'landscape', 'seed', 'greenhouse']
+  },
+  'paint': {
+    keywords: ['art supply store', 'paint supplier', 'artist materials'],
+    types: ['store', 'art_gallery'],
+    relevantTerms: ['art', 'paint', 'artist', 'canvas', 'brush', 'supply']
+  },
+  'jewelry': {
+    keywords: ['jewelry supply', 'gemstone dealer', 'metalsmith supply', 'bead store'],
+    types: ['jewelry_store', 'store'],
+    relevantTerms: ['jewelry', 'gem', 'bead', 'metal', 'silver', 'gold', 'craft']
+  }
+};
+
+function getTopicConfig(topic: string): { keywords: string[]; types: string[]; relevantTerms: string[] } {
+  const lowerTopic = topic.toLowerCase();
+  
+  for (const [key, config] of Object.entries(TOPIC_CONFIGS)) {
+    if (lowerTopic.includes(key)) {
+      return config;
+    }
+  }
+  
+  // Default config for unknown topics
+  return {
+    keywords: [`${topic} specialty shop`, `${topic} supplies`, `${topic} professional`],
+    types: ['store', 'establishment'],
+    relevantTerms: topic.toLowerCase().split(' ').filter(w => w.length > 3)
+  };
+}
+
+function isRelevantPlace(placeName: string, placeType: string, relevantTerms: string[]): boolean {
+  const lowerName = placeName.toLowerCase();
+  const lowerType = placeType.toLowerCase();
+  
+  // Block generic retailers by name
+  if (BLOCKED_NAMES.some(blocked => lowerName.includes(blocked))) {
+    return false;
+  }
+  
+  // Block generic retail types
+  if (BLOCKED_TYPES.some(blocked => lowerType.includes(blocked.replace(/_/g, ' ')))) {
+    return false;
+  }
+  
+  // Must contain at least one relevant term
+  return relevantTerms.some(term => lowerName.includes(term) || lowerType.includes(term));
+}
+
+async function searchPlaces(
+  apiKey: string,
+  query: string,
+  latitude: number | null,
+  longitude: number | null,
+  radiusMeters: number,
+  relevantTerms: string[]
+): Promise<PlaceResult[]> {
+  const results: PlaceResult[] = [];
+  
+  // Try Places API (New) with location bias
+  try {
+    console.log(`Searching: "${query}" within ${radiusMeters / 1000}km...`);
+    
+    const requestBody: Record<string, unknown> = {
+      textQuery: query,
+      maxResultCount: 10, // Get more results to filter
+    };
+
+    if (latitude && longitude) {
+      requestBody.locationBias = {
+        circle: {
+          center: { latitude, longitude },
+          radius: radiusMeters,
+        },
+      };
+    }
+
+    const response = await fetch(
+      'https://places.googleapis.com/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.displayName,places.primaryType,places.formattedAddress,places.rating,places.userRatingCount,places.id',
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.places && data.places.length > 0) {
+        for (const place of data.places) {
+          const name = place.displayName?.text || 'Local Business';
+          const type = place.primaryType?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Specialty Store';
+          
+          // Filter out irrelevant places
+          if (isRelevantPlace(name, type, relevantTerms)) {
+            results.push({
+              name,
+              type,
+              address: place.formattedAddress || 'Address not available',
+              rating: place.rating || null,
+              reviewCount: place.userRatingCount || null,
+              placeId: place.id || '',
+            });
+          } else {
+            console.log(`Filtered out: ${name} (${type})`);
+          }
+        }
+      }
+    } else {
+      const errorText = await response.text();
+      console.log('Places API (New) failed:', response.status, errorText);
+    }
+  } catch (error) {
+    console.error('Places API (New) error:', error);
+  }
+  
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -33,145 +213,72 @@ serve(async (req) => {
       );
     }
 
-    // Build search query from materials or topic
+    // Get topic-specific configuration
+    const topicConfig = getTopicConfig(topic || '');
+    console.log('Topic config:', topicConfig);
+
+    // Combine topic keywords with any extracted materials
     const materialsList = Array.isArray(materials) ? materials.slice(0, 3) : [];
-    const searchTerms = materialsList.length > 0 
-      ? materialsList.join(' OR ') + ' supplies store'
-      : `${topic} supplies materials store`;
-
-    console.log('Search terms:', searchTerms);
-
-    const results: PlaceResult[] = [];
-
-    // Try Places API (New) with location bias
-    try {
-      console.log('Attempting Places API (New) with location bias...');
-      
-      const requestBody: Record<string, unknown> = {
-        textQuery: searchTerms,
-        maxResultCount: 5,
-      };
-
-      // Add location bias if coordinates provided
-      if (latitude && longitude) {
-        requestBody.locationBias = {
-          circle: {
-            center: {
-              latitude: latitude,
-              longitude: longitude,
-            },
-            radius: 25000, // 25km radius
-          },
-        };
-      }
-
-      const response = await fetch(
-        'https://places.googleapis.com/v1/places:searchText',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-            'X-Goog-FieldMask': 'places.displayName,places.primaryType,places.formattedAddress,places.rating,places.userRatingCount,places.id',
-          },
-          body: JSON.stringify(requestBody),
-        }
+    const allRelevantTerms = [...topicConfig.relevantTerms, ...materialsList.map(m => m.toLowerCase())];
+    
+    let allResults: PlaceResult[] = [];
+    
+    // Search with each specialty keyword
+    for (const keyword of topicConfig.keywords.slice(0, 2)) {
+      // First try 16km (~10 miles)
+      const nearResults = await searchPlaces(
+        GOOGLE_PLACES_API_KEY,
+        keyword,
+        latitude,
+        longitude,
+        16000,
+        allRelevantTerms
       );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Places API (New) response:', JSON.stringify(data).substring(0, 500));
-
-        if (data.places && data.places.length > 0) {
-          for (const place of data.places.slice(0, 3)) {
-            results.push({
-              name: place.displayName?.text || 'Local Business',
-              type: place.primaryType?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
-              address: place.formattedAddress || 'Address not available',
-              rating: place.rating || null,
-              reviewCount: place.userRatingCount || null,
-              placeId: place.id || '',
-            });
-          }
-        }
-      } else {
-        const errorText = await response.text();
-        console.log('Places API (New) failed:', response.status, errorText);
+      
+      if (nearResults.length > 0) {
+        allResults.push(...nearResults);
       }
-    } catch (error) {
-      console.error('Places API (New) error:', error);
     }
-
-    // Fallback to Legacy Nearby Search if we have coordinates and no results
-    if (results.length === 0 && latitude && longitude) {
-      try {
-        console.log('Attempting Legacy Nearby Search...');
-        
-        const nearbyResponse = await fetch(
-          `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=25000&keyword=${encodeURIComponent(searchTerms)}&key=${GOOGLE_PLACES_API_KEY}`
+    
+    // If we don't have enough results, expand to 80km (~50 miles)
+    if (allResults.length < 3 && latitude && longitude) {
+      console.log('Expanding search radius to 50 miles...');
+      
+      for (const keyword of topicConfig.keywords) {
+        const wideResults = await searchPlaces(
+          GOOGLE_PLACES_API_KEY,
+          keyword,
+          latitude,
+          longitude,
+          80000,
+          allRelevantTerms
         );
-
-        if (nearbyResponse.ok) {
-          const data = await nearbyResponse.json();
-          console.log('Legacy Nearby Search status:', data.status);
-
-          if (data.results && data.results.length > 0) {
-            for (const place of data.results.slice(0, 3)) {
-              results.push({
-                name: place.name || 'Local Business',
-                type: place.types?.[0]?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
-                address: place.vicinity || place.formatted_address || 'Address not available',
-                rating: place.rating || null,
-                reviewCount: place.user_ratings_total || null,
-                placeId: place.place_id || '',
-              });
-            }
-          }
+        
+        if (wideResults.length > 0) {
+          allResults.push(...wideResults);
         }
-      } catch (error) {
-        console.error('Legacy Nearby Search error:', error);
+        
+        if (allResults.length >= 5) break;
       }
     }
-
-    // Final fallback to Legacy Text Search
-    if (results.length === 0) {
-      try {
-        console.log('Attempting Legacy Text Search...');
-        
-        let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchTerms)}&key=${GOOGLE_PLACES_API_KEY}`;
-        
-        if (latitude && longitude) {
-          url += `&location=${latitude},${longitude}&radius=25000`;
-        }
-
-        const textResponse = await fetch(url);
-
-        if (textResponse.ok) {
-          const data = await textResponse.json();
-          console.log('Legacy Text Search status:', data.status);
-
-          if (data.results && data.results.length > 0) {
-            for (const place of data.results.slice(0, 3)) {
-              results.push({
-                name: place.name || 'Local Business',
-                type: place.types?.[0]?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
-                address: place.formatted_address || 'Address not available',
-                rating: place.rating || null,
-                reviewCount: place.user_ratings_total || null,
-                placeId: place.place_id || '',
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Legacy Text Search error:', error);
+    
+    // Deduplicate by placeId
+    const uniqueResults = allResults.reduce<PlaceResult[]>((acc, place) => {
+      if (!acc.find(p => p.placeId === place.placeId || p.name === place.name)) {
+        acc.push(place);
       }
-    }
+      return acc;
+    }, []);
+    
+    // Sort by rating (higher first), then take top 3
+    const sortedResults = uniqueResults
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .slice(0, 3);
 
-    console.log(`Returning ${results.length} places`);
+    console.log(`Returning ${sortedResults.length} filtered places`);
 
     return new Response(
-      JSON.stringify({ resources: results }),
+      JSON.stringify({ resources: sortedResults }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
