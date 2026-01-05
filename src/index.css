@@ -188,6 +188,15 @@
     }
   }
 
+  @keyframes pulse-travel {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
+    }
+  }
+
   .animate-weave {
     animation: weave 1s ease-in-out infinite;
   }

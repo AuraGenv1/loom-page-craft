@@ -123,32 +123,33 @@ const Index = () => {
 
   // Check for existing book on mount
   // For authenticated users: query their books directly
-  // For guests: use RPC function with session_id
+  // For guests: clear state to show landing page (fix Groundhog Day bug)
   useEffect(() => {
     if (authLoading) return;
     
     const checkExistingBook = async () => {
-      let data = null;
-      let error = null;
-
-      if (user) {
-        // Authenticated user: direct query (RLS allows this)
-        const result = await supabase
-          .from('books')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        data = result.data;
-        error = result.error;
-      } else {
-        // Guest: use session-based RPC function
-        const sessionId = getSessionId();
-        const result = await supabase.rpc('get_book_by_session', { p_session_id: sessionId });
-        data = result.data?.[0] || null;
-        error = result.error;
+      // Guest users should always see the landing page on fresh load
+      // Clear any stale session data to prevent "Groundhog Day" effect
+      if (!user) {
+        // Reset to landing for guests - they start fresh each time
+        setViewState('landing');
+        setBookData(null);
+        setBookId(null);
+        setCoverImageUrl(null);
+        return;
       }
+
+      // Authenticated user: query their books directly (RLS allows this)
+      const result = await supabase
+        .from('books')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      const data = result.data;
+      const error = result.error;
 
       if (data && !error) {
         // Generate fallback displayTitle from stored title

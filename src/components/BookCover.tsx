@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getTopicIcon } from '@/lib/iconMap';
-import { Skeleton } from '@/components/ui/skeleton';
+import WeavingLoader from '@/components/WeavingLoader';
 
 interface BookCoverProps {
   title: string;
@@ -24,44 +24,32 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
         <div className="absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
       </div>
 
-      {/* Main Content Area - Centered vertically */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        {/* AI-Generated Cover Image - Top Center */}
-        <div className="relative w-full max-w-[140px] md:max-w-[160px] aspect-square mb-8">
+      {/* Main Content Area - Vertical layout: Image on top, text below */}
+      <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
+        {/* AI-Generated Cover Image - Top */}
+        <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
           {isLoadingImage ? (
-            <div className="w-full h-full flex flex-col items-center">
-              <div className="w-full aspect-square rounded-full overflow-hidden border-2 border-foreground/10 relative">
-                <Skeleton className="w-full h-full rounded-full" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-[85%] h-[85%] rounded-full border border-dashed border-foreground/10 flex items-center justify-center animate-pulse">
-                    <TopicIcon className="w-10 h-10 text-foreground/20 stroke-[0.5]" />
-                  </div>
-                </div>
-              </div>
-              <p className="mt-4 text-[10px] text-muted-foreground/60 italic font-serif tracking-wide">
-                Illustrating...
-              </p>
+            <div className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-foreground/10 bg-secondary/20">
+              <WeavingLoader text="Weaving..." className="w-full px-4" />
             </div>
           ) : coverImageUrl ? (
-            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
+            <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
               {!imageLoaded && (
-                <div className="absolute inset-0 bg-secondary/30 animate-pulse flex items-center justify-center">
-                  <TopicIcon className="w-10 h-10 text-foreground/20 stroke-[0.5]" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <WeavingLoader text="Loading..." className="w-full px-4" />
                 </div>
               )}
               <img 
                 src={coverImageUrl} 
                 alt={`Cover illustration for ${title}`}
-                className={`w-full h-full object-cover opacity-90 mix-blend-multiply transition-opacity duration-500 ${imageLoaded ? 'opacity-90' : 'opacity-0'}`}
+                className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 onLoad={() => setImageLoaded(true)}
                 loading="eager"
               />
             </div>
           ) : (
-            <div className="w-full h-full rounded-full border border-foreground/10 flex items-center justify-center bg-secondary/20">
-              <div className="w-[90%] h-[90%] rounded-full border border-dashed border-foreground/15 flex items-center justify-center">
-                <TopicIcon className="w-12 h-12 md:w-14 md:h-14 text-foreground/40 stroke-[0.75]" />
-              </div>
+            <div className="w-full h-full rounded-lg border-2 border-dashed border-foreground/10 flex items-center justify-center bg-secondary/20">
+              <TopicIcon className="w-16 h-16 md:w-20 md:h-20 text-foreground/30 stroke-[0.5]" />
             </div>
           )}
         </div>
