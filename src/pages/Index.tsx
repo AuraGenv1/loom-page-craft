@@ -540,7 +540,7 @@ const Index = () => {
             </section>
 
             {/* Paywall - only show if not paid */}
-            {!isPaid && <PaywallOverlay onPurchase={handlePurchase} />}
+            {!isPaid && <PaywallOverlay onPurchase={handlePurchase} onDownload={handleDownloadPDF} />}
           </div>
         )}
       </main>

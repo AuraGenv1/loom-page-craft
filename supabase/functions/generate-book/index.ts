@@ -11,8 +11,14 @@ const HIGH_RISK_KEYWORDS = [
 ];
 
 const BLOCKED_KEYWORDS = [
-  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'drug', 'narcotic'
+  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'drug', 'narcotic',
+  'kill', 'murder', 'assassin', 'poison', 'suicide', 'self-harm', 'cutting',
+  'terrorism', 'terrorist', 'bio-weapon', 'chemical weapon', 'nerve agent',
+  'child abuse', 'exploitation', 'human trafficking', 'torture',
+  'counterfeit', 'fraud', 'launder', 'money laundering'
 ];
+
+const SAFETY_ERROR = 'This topic violates our safety guidelines and cannot be generated.';
 
 const SAFETY_DISCLAIMER = `⚠️ IMPORTANT NOTICE
 
@@ -129,16 +135,31 @@ serve(async (req) => {
 
     console.log('Generating book for topic:', topic);
 
-    // Check for blocked topics
+    // Check for blocked topics (safety filter)
     const lowerTopic = topic.toLowerCase();
     const isBlocked = BLOCKED_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     
     if (isBlocked) {
-      console.log('Blocked topic detected:', topic);
+      console.log('Safety filter triggered for topic:', topic);
       return new Response(
-        JSON.stringify({ 
-          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
-        }),
+        JSON.stringify({ error: SAFETY_ERROR }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Additional safety check: scan for dangerous instruction patterns
+    const dangerousPatterns = [
+      /how to (make|build|create|manufacture).*(weapon|bomb|explosive|gun)/i,
+      /how to (harm|hurt|injure|kill)/i,
+      /instructions for (violence|assault|attack)/i,
+      /ways to (poison|drug|sedate)/i,
+    ];
+    
+    const hasDangerousPattern = dangerousPatterns.some(pattern => pattern.test(topic));
+    if (hasDangerousPattern) {
+      console.log('Safety pattern match for topic:', topic);
+      return new Response(
+        JSON.stringify({ error: SAFETY_ERROR }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
