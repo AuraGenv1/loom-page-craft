@@ -202,39 +202,87 @@ const Index = () => {
 
       // Save to database (user_id is null for guests)
       const sessionId = getSessionId();
-      const { data: savedBook, error: saveError } = await supabase
-        .from('books')
-        .insert([{
-          topic: query,
-          title: generatedBook.title,
-          table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
-          chapter1_content: generatedBook.chapter1Content,
-          local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
-          has_disclaimer: generatedBook.hasDisclaimer || false,
-          session_id: sessionId,
-          user_id: user?.id || null,
-        }])
-        .select()
-        .single();
 
-      if (saveError) {
-        console.error('Error saving book:', saveError);
-        toast.error('Failed to save your guide. Please try again.');
-        setViewState('landing');
-        return;
+      let savedBookId: string | null = null;
+
+      if (user) {
+        // Authenticated users can insert + return row normally
+        const { data: savedBook, error: saveError } = await supabase
+          .from('books')
+          .insert([
+            {
+              topic: query,
+              title: generatedBook.title,
+              table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
+              chapter1_content: generatedBook.chapter1Content,
+              local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
+              has_disclaimer: generatedBook.hasDisclaimer || false,
+              session_id: sessionId,
+              user_id: user.id,
+            },
+          ])
+          .select()
+          .single();
+
+        if (saveError) {
+          console.error('Error saving book:', saveError);
+          toast.error('Failed to save your guide. Please try again.');
+          setViewState('landing');
+          return;
+        }
+
+        savedBookId = savedBook.id;
+      } else {
+        // Guests cannot SELECT directly due to RLS, so insert without returning rows...
+        const { error: saveError } = await supabase.from('books').insert([
+          {
+            topic: query,
+            title: generatedBook.title,
+            table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
+            chapter1_content: generatedBook.chapter1Content,
+            local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
+            has_disclaimer: generatedBook.hasDisclaimer || false,
+            session_id: sessionId,
+            user_id: null,
+          },
+        ]);
+
+        if (saveError) {
+          console.error('Error saving book (guest):', saveError);
+          toast.error('Failed to save your guide. Please try again.');
+          setViewState('landing');
+          return;
+        }
+
+        // ...then fetch the latest book for this session via the security definer RPC.
+        const { data: sessionBooks, error: fetchError } = await supabase.rpc('get_book_by_session', {
+          p_session_id: sessionId,
+        });
+
+        const first = (sessionBooks as any[] | null)?.[0];
+        if (fetchError || !first?.id) {
+          console.error('Error fetching session book:', fetchError);
+          toast.error('Guide saved, but we could not load it. Please refresh.');
+          setViewState('landing');
+          return;
+        }
+
+        savedBookId = first.id as string;
       }
 
-      setBookId(savedBook.id);
+      setBookId(savedBookId);
       
       // Only save to saved_projects if user is logged in
-      if (user) {
+      if (user && savedBookId) {
         const { error: saveProjectError } = await supabase
           .from('saved_projects')
-          .insert([{
-            user_id: user.id,
-            book_id: savedBook.id,
-          }]);
-        
+          .insert([
+            {
+              user_id: user.id,
+              book_id: savedBookId,
+            },
+          ]);
+
         if (saveProjectError) {
           console.error('Error saving to projects:', saveProjectError);
         }
