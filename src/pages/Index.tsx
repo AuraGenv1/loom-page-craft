@@ -25,6 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
+import PrintPreview from '@/components/PrintPreview';
 import { Download, Sparkles, FlaskConical } from 'lucide-react';
 
 type ViewState = 'landing' | 'loading' | 'book';
@@ -544,7 +545,7 @@ const Index = () => {
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
-                <div className="flex flex-col sm:flex-row justify-center gap-3">
+                <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap">
                   <Button
                     onClick={handleDownloadPDF}
                     variant={isPaid ? "default" : "outline"}
@@ -554,6 +555,14 @@ const Index = () => {
                     <Download className="w-4 h-4" />
                     {isPaid ? 'Download Full Guide (PDF)' : 'Download Free Sample (PDF)'}
                   </Button>
+                  {bookData && (
+                    <PrintPreview 
+                      topic={topic}
+                      bookData={bookData}
+                      displayTitle={displayTitle}
+                      diagramImages={diagramImages}
+                    />
+                  )}
                   {!isPaid && (
                     <Button
                       size="lg"
@@ -604,6 +613,7 @@ const Index = () => {
                 materials={extractMaterials(bookData?.chapter1Content)}
                 isGenerating={isGeneratingDiagrams}
                 diagramImages={diagramImages}
+                tableOfContents={bookData?.tableOfContents}
               />
             </section>
 
