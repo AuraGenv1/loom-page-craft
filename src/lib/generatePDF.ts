@@ -524,8 +524,64 @@ export const generateGuidePDF = async ({ title, topic, bookData, previewElement 
   doc.save(filename);
 };
 
+// Wait for all images to load
+const waitForImages = (container: HTMLElement): Promise<void> => {
+  const images = container.querySelectorAll('img');
+  const promises = Array.from(images).map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve(); // Don't block on failed images
+    });
+  });
+  return Promise.all(promises).then(() => {});
+};
+
+// Inject Artisan CSS styles into container for PDF capture
+const injectArtisanStyles = (container: HTMLElement): void => {
+  // Set explicit styles that match the Artisan theme
+  container.style.fontFamily = "'Playfair Display', Georgia, serif";
+  container.style.background = "linear-gradient(135deg, hsl(40, 20%, 97%) 0%, hsl(30, 15%, 95%) 100%)";
+  container.style.color = "#1a1a1a";
+  
+  // Style headings
+  const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  headings.forEach((h) => {
+    (h as HTMLElement).style.fontFamily = "'Playfair Display', Georgia, serif";
+    (h as HTMLElement).style.letterSpacing = "-0.02em";
+  });
+  
+  // Style paragraphs with Inter
+  const paragraphs = container.querySelectorAll('p, li, span');
+  paragraphs.forEach((p) => {
+    (p as HTMLElement).style.fontFamily = "'Inter', system-ui, sans-serif";
+  });
+  
+  // Add deckle edge simulation via box-shadow
+  container.style.boxShadow = `
+    0 25px 50px -12px rgba(0, 0, 0, 0.15),
+    0 12px 24px -8px rgba(0, 0, 0, 0.08),
+    0 4px 8px -2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5)
+  `;
+};
+
 // HTML-to-canvas PDF export for pixel-perfect rendering
-export const generatePixelPerfectPDF = async (containerElement: HTMLElement, filename: string) => {
+export const generatePixelPerfectPDF = async (
+  containerElement: HTMLElement, 
+  filename: string,
+  isAdmin: boolean = false
+) => {
+  // Wait for all images to fully load
+  await waitForImages(containerElement);
+  
+  // Inject Artisan CSS before capture
+  injectArtisanStyles(containerElement);
+  
+  // A4 dimensions in mm
+  const A4_WIDTH_MM = 210;
+  const A4_HEIGHT_MM = 297;
+  
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -535,16 +591,36 @@ export const generatePixelPerfectPDF = async (containerElement: HTMLElement, fil
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   
-  // Capture the element as canvas
+  // Use devicePixelRatio or scale 2 for high quality
+  const scale = Math.max(window.devicePixelRatio || 2, 2);
+  
+  // Capture the element as canvas with matched width
   const canvas = await html2canvas(containerElement, {
-    scale: 2,
+    scale: scale,
     useCORS: true,
     allowTaint: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: null, // Use gradient from element
     logging: false,
+    width: containerElement.scrollWidth,
+    height: containerElement.scrollHeight,
+    windowWidth: containerElement.scrollWidth,
+    windowHeight: containerElement.scrollHeight,
+    onclone: (clonedDoc, clonedElement) => {
+      // Ensure fonts are loaded in cloned document
+      clonedElement.style.transform = 'none';
+      clonedElement.style.transformOrigin = 'top left';
+      
+      // Remove any blur effects for admin
+      if (isAdmin) {
+        const blurred = clonedElement.querySelectorAll('[class*="blur"]');
+        blurred.forEach((el) => {
+          (el as HTMLElement).style.filter = 'none';
+        });
+      }
+    },
   });
   
-  const imgData = canvas.toDataURL('image/jpeg', 0.95);
+  const imgData = canvas.toDataURL('image/png', 1.0);
   const imgWidth = pageWidth;
   const imgHeight = (canvas.height * imgWidth) / canvas.width;
   
@@ -552,14 +628,14 @@ export const generatePixelPerfectPDF = async (containerElement: HTMLElement, fil
   let position = 0;
   
   // Add first page
-  doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+  doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
   heightLeft -= pageHeight;
   
   // Add additional pages if content overflows
   while (heightLeft > 0) {
     position = heightLeft - imgHeight;
     doc.addPage();
-    doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
     heightLeft -= pageHeight;
   }
   

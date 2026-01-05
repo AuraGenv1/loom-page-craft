@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { FileText, X, Download } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { BookData } from '@/lib/bookTypes';
 import { generatePixelPerfectPDF } from '@/lib/generatePDF';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PrintPreviewProps {
   topic: string;
@@ -17,6 +19,42 @@ const PrintPreview = ({ topic, bookData, displayTitle, diagramImages }: PrintPre
   const [open, setOpen] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const { user } = useAuth();
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      setIsAdmin(!!data);
+    };
+    checkAdmin();
+  }, [user]);
+
+  // Wait for images when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    
+    const checkImages = () => {
+      const container = previewRef.current;
+      if (!container) return;
+      
+      const images = container.querySelectorAll('img');
+      const allLoaded = Array.from(images).every((img) => img.complete);
+      setImagesLoaded(allLoaded);
+      
+      if (!allLoaded) {
+        setTimeout(checkImages, 100);
+      }
+    };
+    
+    checkImages();
+  }, [open, diagramImages]);
 
   const handleExportPDF = async () => {
     if (!previewRef.current) return;
@@ -27,7 +65,8 @@ const PrintPreview = ({ topic, bookData, displayTitle, diagramImages }: PrintPre
     try {
       await generatePixelPerfectPDF(
         previewRef.current,
-        `${topic.toLowerCase().replace(/\s+/g, '-')}-guide.pdf`
+        `${topic.toLowerCase().replace(/\s+/g, '-')}-guide.pdf`,
+        isAdmin
       );
       toast.success('PDF exported successfully!', { id: 'pdf-export' });
     } catch (error) {
@@ -125,16 +164,20 @@ const PrintPreview = ({ topic, bookData, displayTitle, diagramImages }: PrintPre
         </DialogHeader>
         
         <div className="overflow-auto p-6 bg-muted/30" style={{ maxHeight: 'calc(90vh - 80px)' }}>
-          {/* A4 Sheet Preview */}
+          {/* A4 Sheet Preview - Exact 210mm width for PDF sync */}
           <div
             ref={previewRef}
-            className="mx-auto bg-background shadow-xl border border-border"
+            className="mx-auto shadow-book gradient-paper"
             style={{
               width: '210mm',
               minHeight: '297mm',
               padding: '20mm',
-              transform: 'scale(0.6)',
+              transform: 'scale(0.55)',
               transformOrigin: 'top center',
+              fontFamily: "'Playfair Display', Georgia, serif",
+              color: 'hsl(0 0% 10%)',
+              borderRadius: '2px',
+              position: 'relative',
             }}
           >
             {/* Cover Page */}
