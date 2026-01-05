@@ -5,7 +5,7 @@ import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, BookOpen, Calendar, MoreVertical, Trash2 } from 'lucide-react';
+import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,21 +14,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { generateGuidePDF } from '@/lib/generatePDF';
+import { generateGuideEPUB } from '@/lib/generateEPUB';
+import { BookData } from '@/lib/bookTypes';
 
-interface Project {
+interface SavedBook {
   id: string;
-  title: string;
-  gemini_content: any;
-  places_data: any;
-  is_published: boolean;
+  book_id: string;
   created_at: string;
+  books: {
+    id: string;
+    title: string;
+    topic: string;
+    chapter1_content: string;
+    table_of_contents: any;
+    local_resources: any;
+    has_disclaimer: boolean;
+  } | null;
 }
 
 const Dashboard = () => {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
+  const [loadingBooks, setLoadingBooks] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -38,23 +48,36 @@ const Dashboard = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchSavedBooks = async () => {
       if (!user) return;
 
       const { data, error } = await supabase
-        .from('projects')
-        .select('*')
+        .from('saved_projects')
+        .select(`
+          id,
+          book_id,
+          created_at,
+          books (
+            id,
+            title,
+            topic,
+            chapter1_content,
+            table_of_contents,
+            local_resources,
+            has_disclaimer
+          )
+        `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setProjects(data);
+        setSavedBooks(data as SavedBook[]);
       }
-      setLoadingProjects(false);
+      setLoadingBooks(false);
     };
 
     if (user) {
-      fetchProjects();
+      fetchSavedBooks();
     }
   }, [user]);
 
@@ -63,17 +86,73 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleDeleteBook = async (savedBookId: string) => {
     const { error } = await supabase
-      .from('projects')
+      .from('saved_projects')
       .delete()
-      .eq('id', projectId);
+      .eq('id', savedBookId);
 
     if (error) {
-      toast.error('Failed to delete project');
+      toast.error('Failed to delete guide');
     } else {
-      setProjects(projects.filter(p => p.id !== projectId));
-      toast.success('Project deleted');
+      setSavedBooks(savedBooks.filter(b => b.id !== savedBookId));
+      toast.success('Guide removed from library');
+    }
+  };
+
+  const handleDownloadPDF = async (book: SavedBook['books']) => {
+    if (!book) return;
+    
+    setDownloadingId(book.id);
+    try {
+      const bookData: BookData = {
+        title: book.title,
+        displayTitle: book.title.split(' ').slice(0, 5).join(' '),
+        subtitle: `A Comprehensive Guide to ${book.topic}`,
+        tableOfContents: book.table_of_contents || [],
+        chapter1Content: book.chapter1_content,
+        localResources: book.local_resources || [],
+        hasDisclaimer: book.has_disclaimer,
+      };
+
+      await generateGuidePDF({
+        title: bookData.displayTitle,
+        topic: book.topic,
+        bookData,
+      });
+      toast.success('PDF downloaded!');
+    } catch (error) {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadKindle = async (book: SavedBook['books']) => {
+    if (!book) return;
+    
+    setDownloadingId(book.id + '-kindle');
+    try {
+      const bookData: BookData = {
+        title: book.title,
+        displayTitle: book.title.split(' ').slice(0, 5).join(' '),
+        subtitle: `A Comprehensive Guide to ${book.topic}`,
+        tableOfContents: book.table_of_contents || [],
+        chapter1Content: book.chapter1_content,
+        localResources: book.local_resources || [],
+        hasDisclaimer: book.has_disclaimer,
+      };
+
+      await generateGuideEPUB({
+        title: bookData.displayTitle,
+        topic: book.topic,
+        bookData,
+      });
+      toast.success('Kindle file downloaded!');
+    } catch (error) {
+      toast.error('Failed to generate Kindle file');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -187,16 +266,16 @@ const Dashboard = () => {
           <div className="flex items-center gap-4 mb-10">
             <div className="flex-1 h-[1px] bg-border" />
             <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-serif">
-              Woven Guides
+              Your Library
             </span>
             <div className="flex-1 h-[1px] bg-border" />
           </div>
 
-          {loadingProjects ? (
+          {loadingBooks ? (
             <div className="text-center py-20 text-muted-foreground">
               Loading your guides...
             </div>
-          ) : projects.length === 0 ? (
+          ) : savedBooks.length === 0 ? (
             /* Empty State */
             <div className="text-center py-20">
               <div className="relative inline-block mb-8">
@@ -221,11 +300,11 @@ const Dashboard = () => {
               </Button>
             </div>
           ) : (
-            /* Projects Grid */
+            /* Saved Books Grid */
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((project) => (
+              {savedBooks.map((saved) => (
                 <div
-                  key={project.id}
+                  key={saved.id}
                   className="group relative bg-card border border-border rounded-lg overflow-hidden hover:shadow-card transition-all duration-300"
                 >
                   {/* Card Header */}
@@ -246,15 +325,6 @@ const Dashboard = () => {
                       </div>
                     </div>
 
-                    {/* Status badge */}
-                    {project.is_published && (
-                      <div className="absolute top-3 right-3">
-                        <span className="text-[9px] uppercase tracking-wider bg-accent/10 text-accent px-2 py-1 rounded">
-                          Published
-                        </span>
-                      </div>
-                    )}
-
                     {/* Actions dropdown */}
                     <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       <DropdownMenu>
@@ -265,7 +335,22 @@ const Dashboard = () => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
                           <DropdownMenuItem 
-                            onClick={() => handleDeleteProject(project.id)}
+                            onClick={() => handleDownloadPDF(saved.books)}
+                            disabled={downloadingId === saved.books?.id}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDownloadKindle(saved.books)}
+                            disabled={downloadingId === saved.books?.id + '-kindle'}
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            Download Kindle (.epub)
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteBook(saved.id)}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
@@ -279,17 +364,44 @@ const Dashboard = () => {
                   {/* Card Content */}
                   <div className="p-5">
                     <h3 className="font-serif text-lg font-medium text-foreground mb-2 line-clamp-2">
-                      {project.title}
+                      {saved.books?.title || 'Untitled Guide'}
                     </h3>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-1">
+                      {saved.books?.topic}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
                       <Calendar className="h-3 w-3" />
                       <span>
-                        {new Date(project.created_at).toLocaleDateString('en-US', {
+                        {new Date(saved.created_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
                         })}
                       </span>
+                    </div>
+                    
+                    {/* Download buttons */}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-1.5 text-xs"
+                        onClick={() => handleDownloadPDF(saved.books)}
+                        disabled={downloadingId === saved.books?.id}
+                      >
+                        <Download className="h-3 w-3" />
+                        PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-1.5 text-xs"
+                        onClick={() => handleDownloadKindle(saved.books)}
+                        disabled={downloadingId === saved.books?.id + '-kindle'}
+                      >
+                        <FileText className="h-3 w-3" />
+                        Kindle
+                      </Button>
                     </div>
                   </div>
                 </div>

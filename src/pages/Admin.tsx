@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -22,10 +23,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield, BookOpen, Download, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield, BookOpen, Download, Loader2, FileText } from 'lucide-react';
 import Logo from '@/components/Logo';
 import { BookData } from '@/lib/bookTypes';
 import { generateGuidePDF } from '@/lib/generatePDF';
+import { generateGuideEPUB } from '@/lib/generateEPUB';
 
 interface PromoCode {
   id: string;
@@ -48,8 +50,11 @@ const Admin = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [bookTopic, setBookTopic] = useState('');
+  const [fullBookMode, setFullBookMode] = useState(true);
   const [generatingBook, setGeneratingBook] = useState(false);
   const [generatedBook, setGeneratedBook] = useState<BookData | null>(null);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingKindle, setDownloadingKindle] = useState(false);
   const [newCode, setNewCode] = useState({
     code: '',
     discount_percent: 10,
@@ -175,7 +180,7 @@ const Admin = () => {
     try {
       const sessionId = crypto.randomUUID();
       const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { topic: bookTopic, sessionId }
+        body: { topic: bookTopic, sessionId, fullBook: fullBookMode }
       });
 
       if (error) {
@@ -190,7 +195,7 @@ const Admin = () => {
       }
 
       setGeneratedBook(data as BookData);
-      toast.success('Book generated successfully!');
+      toast.success(`Book generated successfully! (${fullBookMode ? 'Full 12 chapters' : 'Sample'})`);
     } catch (err) {
       console.error('Unexpected error:', err);
       toast.error('Something went wrong');
@@ -202,6 +207,7 @@ const Admin = () => {
   const handleDownloadPDF = async () => {
     if (!generatedBook) return;
 
+    setDownloadingPDF(true);
     try {
       toast.loading('Generating PDF...', { id: 'admin-pdf' });
       await generateGuidePDF({
@@ -213,6 +219,28 @@ const Admin = () => {
     } catch (error) {
       console.error('PDF error:', error);
       toast.error('Failed to generate PDF', { id: 'admin-pdf' });
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
+
+  const handleDownloadKindle = async () => {
+    if (!generatedBook) return;
+
+    setDownloadingKindle(true);
+    try {
+      toast.loading('Generating Kindle file...', { id: 'admin-kindle' });
+      await generateGuideEPUB({
+        title: generatedBook.displayTitle || generatedBook.title,
+        topic: bookTopic,
+        bookData: generatedBook,
+      });
+      toast.success('Kindle file downloaded!', { id: 'admin-kindle' });
+    } catch (error) {
+      console.error('Kindle error:', error);
+      toast.error('Failed to generate Kindle file', { id: 'admin-kindle' });
+    } finally {
+      setDownloadingKindle(false);
     }
   };
 
@@ -304,6 +332,19 @@ const Admin = () => {
                       disabled={generatingBook}
                     />
                   </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="full-book"
+                      checked={fullBookMode}
+                      onCheckedChange={(checked) => setFullBookMode(checked === true)}
+                      disabled={generatingBook}
+                    />
+                    <Label htmlFor="full-book" className="text-sm font-normal cursor-pointer">
+                      Generate Full Book (12 chapters with complete content)
+                    </Label>
+                  </div>
+                  
                   <Button
                     onClick={handleGenerateBook}
                     className="w-full"
@@ -312,10 +353,10 @@ const Admin = () => {
                     {generatingBook ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
+                        Generating {fullBookMode ? 'Full Book' : 'Sample'}...
                       </>
                     ) : (
-                      'Generate Book'
+                      `Generate ${fullBookMode ? 'Full Book' : 'Sample'}`
                     )}
                   </Button>
 
@@ -328,10 +369,33 @@ const Admin = () => {
                       <div className="text-sm text-muted-foreground">
                         {generatedBook.tableOfContents?.length || 0} chapters generated
                       </div>
-                      <Button onClick={handleDownloadPDF} className="w-full gap-2">
-                        <Download className="w-4 h-4" />
-                        Download Full PDF
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={handleDownloadPDF} 
+                          className="flex-1 gap-2"
+                          disabled={downloadingPDF}
+                        >
+                          {downloadingPDF ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                          PDF
+                        </Button>
+                        <Button 
+                          onClick={handleDownloadKindle} 
+                          variant="outline"
+                          className="flex-1 gap-2"
+                          disabled={downloadingKindle}
+                        >
+                          {downloadingKindle ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
+                          Kindle (.epub)
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -339,7 +403,7 @@ const Admin = () => {
             </Dialog>
           </div>
           <p className="text-sm text-muted-foreground">
-            As an admin, you can generate and download full books without payment restrictions.
+            As an admin, you can generate complete 12-chapter books and download them in PDF or Kindle format without restrictions.
           </p>
         </section>
 
