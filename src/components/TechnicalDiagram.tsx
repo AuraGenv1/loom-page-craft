@@ -7,20 +7,27 @@ interface TechnicalDiagramProps {
   caption: string;
   plateNumber?: string;
   topic?: string;
+  isGenerating?: boolean;
 }
 
-const TechnicalDiagram = ({ caption, plateNumber = "1.1", topic = "" }: TechnicalDiagramProps) => {
+const TechnicalDiagram = ({ caption, plateNumber = "1.1", topic = "", isGenerating = false }: TechnicalDiagramProps) => {
   const TopicIcon = getTopicIcon(topic);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Simulate image loading (in real implementation this would be an actual image load)
+  // Show weaving loader while parent says we're generating OR during initial mount delay
   useEffect(() => {
+    if (isGenerating) {
+      setIsLoading(true);
+      return;
+    }
+    
+    // Brief delay for smooth transition after generation completes
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 1500 + Math.random() * 1000); // 1.5-2.5 seconds
+    }, 800);
 
     return () => clearTimeout(timer);
-  }, [topic]);
+  }, [topic, isGenerating]);
 
   return (
     <div className="w-full my-12 relative">

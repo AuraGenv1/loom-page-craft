@@ -9,9 +9,10 @@ interface ChapterContentProps {
   localResources?: LocalResource[];
   hasDisclaimer?: boolean;
   materials?: string[];
+  isGenerating?: boolean;
 }
 
-const ChapterContent = ({ topic, content, localResources, hasDisclaimer, materials }: ChapterContentProps) => {
+const ChapterContent = ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false }: ChapterContentProps) => {
   // Parse markdown content into sections (simplified rendering)
   const renderContent = () => {
     if (!content) {
@@ -149,6 +150,7 @@ const ChapterContent = ({ topic, content, localResources, hasDisclaimer, materia
           caption={`Core concepts of ${topic} visualized`} 
           plateNumber="1.1"
           topic={topic}
+          isGenerating={isGenerating}
         />
 
         {!content && (
@@ -175,6 +177,7 @@ const ChapterContent = ({ topic, content, localResources, hasDisclaimer, materia
           caption={`Essential tools and materials for ${topic}`} 
           plateNumber="1.2"
           topic={topic}
+          isGenerating={isGenerating}
         />
       </div>
 

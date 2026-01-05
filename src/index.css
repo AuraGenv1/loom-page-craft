@@ -228,4 +228,16 @@
   .animation-delay-400 {
     animation-delay: 400ms;
   }
+
+  /* Hide Lovable branding for white-label */
+  .lovable-badge,
+  [data-lovable-badge],
+  a[href*="lovable.dev"]:not(nav a),
+  div[class*="lovable"],
+  .gpt-badge,
+  #lovable-badge {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
 }
