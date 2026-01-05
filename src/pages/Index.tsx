@@ -27,9 +27,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { Download, Sparkles, FlaskConical } from 'lucide-react';
 
-// Admin email for test mode access
-const ADMIN_EMAIL = 'admin@loomandpage.com'; // Update this to your admin email
-
 type ViewState = 'landing' | 'loading' | 'book';
 
 // Generate or retrieve a session ID for anonymous users
@@ -83,13 +80,29 @@ const Index = () => {
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Test mode: enabled via ?test=true URL param OR admin user
+  // Check if user is admin via database role
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin',
+      });
+      setIsAdmin(data === true);
+    };
+    checkAdminRole();
+  }, [user]);
+
+  // Test mode: enabled via ?test=true URL param OR admin user (from database)
   const isTestMode = useMemo(() => {
     const testParam = searchParams.get('test') === 'true';
-    const isAdmin = user?.email === ADMIN_EMAIL;
     return testParam || isAdmin;
-  }, [searchParams, user?.email]);
+  }, [searchParams, isAdmin]);
 
   // In test mode, content is fully unlocked (simulates paid state)
   const isPaid = isTestMode;
