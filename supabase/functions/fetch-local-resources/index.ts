@@ -47,8 +47,23 @@ const SPECIALTY_KEYWORDS = [
   'master', 'expert', 'specialist', 'workshop', 'studio', 'atelier', 'guild'
 ];
 
-// Topic-specific search configurations
+// Topic-specific search configurations (instructional resources prioritized)
 const TOPIC_CONFIGS: Record<string, { keywords: string[]; types: string[]; relevantTerms: string[] }> = {
+  'fly': {
+    keywords: ['flight school', 'flying lessons', 'pilot training', 'aviation academy'],
+    types: ['school', 'airport'],
+    relevantTerms: ['flight', 'flying', 'aviation', 'pilot', 'lessons', 'school', 'training', 'academy', 'aero', 'aircraft']
+  },
+  'airplane': {
+    keywords: ['flight school', 'pilot training academy', 'learn to fly', 'aviation school'],
+    types: ['school', 'airport'],
+    relevantTerms: ['flight', 'airplane', 'aviation', 'pilot', 'lessons', 'school', 'training', 'academy', 'aero']
+  },
+  'pilot': {
+    keywords: ['pilot training', 'flight school', 'aviation academy', 'certified flight instructor'],
+    types: ['school', 'airport'],
+    relevantTerms: ['pilot', 'flight', 'aviation', 'training', 'lessons', 'school', 'certificate', 'instructor']
+  },
   'car': {
     keywords: ['classic car restoration', 'automotive machine shop', 'auto body shop', 'car parts specialty'],
     types: ['car_repair', 'car_dealer', 'auto_parts_store'],
@@ -75,44 +90,69 @@ const TOPIC_CONFIGS: Record<string, { keywords: string[]; types: string[]; relev
     relevantTerms: ['restoration', 'custom', 'rebuild', 'specialty', 'collector', 'vintage', 'classic']
   },
   'motorcycle': {
-    keywords: ['motorcycle shop', 'motorcycle parts', 'custom motorcycle builder'],
-    types: ['car_repair', 'store'],
-    relevantTerms: ['motorcycle', 'cycle', 'harley', 'honda', 'yamaha', 'custom', 'parts']
+    keywords: ['motorcycle training course', 'motorcycle riding school', 'motorcycle shop', 'custom motorcycle builder'],
+    types: ['car_repair', 'store', 'school'],
+    relevantTerms: ['motorcycle', 'cycle', 'harley', 'honda', 'yamaha', 'custom', 'parts', 'riding', 'training']
   },
   'wood': {
-    keywords: ['lumber yard', 'hardwood supplier', 'woodworking supply', 'cabinet shop'],
-    types: ['home_improvement_store', 'furniture_store'],
-    relevantTerms: ['lumber', 'hardwood', 'wood', 'cabinet', 'millwork', 'timber']
+    keywords: ['woodworking classes', 'lumber yard', 'hardwood supplier', 'woodworking supply'],
+    types: ['home_improvement_store', 'furniture_store', 'school'],
+    relevantTerms: ['lumber', 'hardwood', 'wood', 'cabinet', 'millwork', 'timber', 'classes', 'workshop']
   },
   'leather': {
-    keywords: ['leather supply', 'upholstery shop', 'leather craft', 'tannery'],
-    types: ['store', 'home_goods_store'],
-    relevantTerms: ['leather', 'upholstery', 'craft', 'hide', 'tannery']
+    keywords: ['leatherworking classes', 'leather supply', 'upholstery shop', 'leather craft'],
+    types: ['store', 'home_goods_store', 'school'],
+    relevantTerms: ['leather', 'upholstery', 'craft', 'hide', 'tannery', 'classes', 'workshop']
   },
   'sew': {
-    keywords: ['fabric store', 'sewing machine dealer', 'quilting shop', 'textile supplier'],
-    types: ['store', 'home_goods_store'],
-    relevantTerms: ['fabric', 'sewing', 'quilt', 'textile', 'notions', 'thread']
+    keywords: ['sewing classes', 'fabric store', 'quilting classes', 'sewing machine dealer'],
+    types: ['store', 'home_goods_store', 'school'],
+    relevantTerms: ['fabric', 'sewing', 'quilt', 'textile', 'notions', 'thread', 'classes', 'lessons']
   },
   'bread': {
-    keywords: ['baking supply store', 'restaurant supply', 'specialty flour', 'artisan bakery supply'],
-    types: ['store', 'bakery'],
-    relevantTerms: ['baking', 'flour', 'bakery', 'artisan', 'pastry', 'supply']
+    keywords: ['bread baking classes', 'baking school', 'artisan bakery supply', 'culinary school'],
+    types: ['store', 'bakery', 'school'],
+    relevantTerms: ['baking', 'flour', 'bakery', 'artisan', 'pastry', 'supply', 'classes', 'school']
+  },
+  'cook': {
+    keywords: ['cooking classes', 'culinary school', 'cooking lessons', 'chef training'],
+    types: ['school', 'restaurant'],
+    relevantTerms: ['cooking', 'culinary', 'chef', 'classes', 'lessons', 'school', 'kitchen']
   },
   'garden': {
-    keywords: ['nursery plants', 'garden center', 'landscape supply', 'seed supplier'],
-    types: ['florist', 'store', 'home_improvement_store'],
-    relevantTerms: ['nursery', 'garden', 'plant', 'landscape', 'seed', 'greenhouse']
+    keywords: ['gardening classes', 'nursery plants', 'garden center', 'master gardener program'],
+    types: ['florist', 'store', 'home_improvement_store', 'school'],
+    relevantTerms: ['nursery', 'garden', 'plant', 'landscape', 'seed', 'greenhouse', 'classes', 'workshop']
   },
   'paint': {
-    keywords: ['art supply store', 'paint supplier', 'artist materials'],
-    types: ['store', 'art_gallery'],
-    relevantTerms: ['art', 'paint', 'artist', 'canvas', 'brush', 'supply']
+    keywords: ['painting classes', 'art school', 'art supply store', 'artist studio'],
+    types: ['store', 'art_gallery', 'school'],
+    relevantTerms: ['art', 'paint', 'artist', 'canvas', 'brush', 'supply', 'classes', 'studio', 'lessons']
+  },
+  'pottery': {
+    keywords: ['pottery classes', 'ceramics studio', 'pottery wheel lessons', 'clay studio'],
+    types: ['school', 'art_gallery'],
+    relevantTerms: ['pottery', 'ceramic', 'clay', 'wheel', 'studio', 'classes', 'lessons', 'workshop']
   },
   'jewelry': {
-    keywords: ['jewelry supply', 'gemstone dealer', 'metalsmith supply', 'bead store'],
-    types: ['jewelry_store', 'store'],
-    relevantTerms: ['jewelry', 'gem', 'bead', 'metal', 'silver', 'gold', 'craft']
+    keywords: ['jewelry making classes', 'jewelry supply', 'metalsmith workshop', 'bead store'],
+    types: ['jewelry_store', 'store', 'school'],
+    relevantTerms: ['jewelry', 'gem', 'bead', 'metal', 'silver', 'gold', 'craft', 'classes', 'workshop']
+  },
+  'music': {
+    keywords: ['music lessons', 'music school', 'instrument store', 'music teacher'],
+    types: ['school', 'store'],
+    relevantTerms: ['music', 'lessons', 'instrument', 'teacher', 'school', 'studio', 'academy']
+  },
+  'dance': {
+    keywords: ['dance classes', 'dance studio', 'dance lessons', 'dance academy'],
+    types: ['school', 'gym'],
+    relevantTerms: ['dance', 'studio', 'lessons', 'classes', 'ballet', 'academy', 'instructor']
+  },
+  'yoga': {
+    keywords: ['yoga studio', 'yoga classes', 'yoga teacher training', 'meditation center'],
+    types: ['gym', 'health'],
+    relevantTerms: ['yoga', 'studio', 'classes', 'meditation', 'wellness', 'instructor', 'training']
   }
 };
 

@@ -108,70 +108,27 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
     handleClose(false);
   };
 
-  const ForgotPasswordForm = ({
-    email,
-    setEmail,
-    loading,
-    setLoading,
-    onBack,
-  }: {
-    email: string;
-    setEmail: (v: string) => void;
-    loading: boolean;
-    setLoading: (v: boolean) => void;
-    onBack: () => void;
-  }) => {
-    const handleForgotPassword = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!email) {
-        toast.error("Please enter your email");
-        return;
-      }
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
 
-      setLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/`,
-      });
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
 
-      setLoading(false);
+    setLoading(false);
 
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
 
-      toast.success("Password reset email sent! Check your inbox.");
-      onBack();
-    };
-
-    return (
-      <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
-        <p className="text-sm text-muted-foreground text-center">
-          Enter your email and we'll send you a link to reset your password.
-        </p>
-        <div className="space-y-2">
-          <Label htmlFor="forgot-email">Email</Label>
-          <Input
-            id="forgot-email"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
-        </Button>
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-xs text-muted-foreground hover:underline w-full text-center"
-        >
-          ← Back to login
-        </button>
-      </form>
-    );
+    toast.success("Password reset email sent! Check your inbox.");
+    setView("email-login");
   };
 
   return (
@@ -348,13 +305,32 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
         )}
 
         {view === "forgot-password" && (
-          <ForgotPasswordForm
-            email={email}
-            setEmail={setEmail}
-            loading={loading}
-            setLoading={setLoading}
-            onBack={() => setView("email-login")}
-          />
+          <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Enter your email and we'll send you a link to reset your password.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setView("email-login")}
+              className="text-xs text-muted-foreground hover:underline w-full text-center"
+            >
+              ← Back to login
+            </button>
+          </form>
         )}
       </DialogContent>
     </Dialog>
