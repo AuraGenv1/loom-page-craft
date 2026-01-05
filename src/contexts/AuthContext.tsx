@@ -51,6 +51,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
         setIsAuthenticating(false);
         
+        // Handle PASSWORD_RECOVERY event - redirect to reset password page
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log('Password recovery event detected, redirecting...');
+          window.location.href = '/reset-password';
+          return;
+        }
+        
         // Defer profile fetch to avoid deadlock
         if (session?.user) {
           setTimeout(() => {

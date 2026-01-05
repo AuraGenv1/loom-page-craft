@@ -394,6 +394,64 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
   }
 
   // ==========================================
+  // COPYRIGHT PAGE
+  // ==========================================
+  doc.addPage();
+  yPosition = margin;
+  
+  // Header
+  doc.setFont('times', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(30, 30, 30);
+  doc.text('Copyright & Ownership', centerX, yPosition + 40, { align: 'center' });
+  
+  yPosition += 70;
+  
+  // Copyright notice
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  
+  const copyrightText = [
+    'This book was generated via Loom & Page.',
+    '',
+    'The user holds full ownership and commercial resale rights.',
+    '',
+    'You are free to:',
+    '• Use this guide for personal or commercial purposes',
+    '• Modify, adapt, and build upon this content',
+    '• Distribute and sell copies of this guide',
+    '• Use this content in any format or medium',
+    '',
+    'No attribution required, though appreciated.',
+    '',
+    `Generated on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+  ];
+  
+  copyrightText.forEach((line) => {
+    if (line.startsWith('•')) {
+      doc.text(line, margin + 10, yPosition);
+    } else {
+      doc.text(line, margin, yPosition);
+    }
+    yPosition += 8;
+  });
+  
+  // Decorative divider
+  yPosition += 20;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(centerX - 30, yPosition, centerX + 30, yPosition);
+  
+  yPosition += 20;
+  
+  // Loom & Page branding
+  drawLoomLogo(centerX - 6, yPosition, 1);
+  doc.setFont('times', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text('LOOM & PAGE', centerX, yPosition + 15, { align: 'center' });
+
+  // ==========================================
   // FOOTER ON ALL PAGES
   // ==========================================
   const totalPages = doc.getNumberOfPages();
