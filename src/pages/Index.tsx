@@ -78,8 +78,14 @@ const Index = () => {
         .maybeSingle();
 
       if (data && !error) {
+        // Generate fallback displayTitle from stored title
+        const words = data.title.split(' ');
+        const fallbackDisplayTitle = words.slice(0, 5).join(' ');
+        
         setBookData({
           title: data.title,
+          displayTitle: fallbackDisplayTitle,
+          subtitle: `A Comprehensive Guide to ${data.topic}`,
           tableOfContents: data.table_of_contents as unknown as BookData['tableOfContents'],
           chapter1Content: data.chapter1_content,
           localResources: data.local_resources as unknown as BookData['localResources'],
@@ -228,8 +234,9 @@ const Index = () => {
     setIsLoadingCoverImage(false);
   };
 
-  // Use AI-generated title or fallback
-  const displayTitle = bookData?.title || `How to Master ${topic}`;
+  // Use AI-generated display title or fallback
+  const displayTitle = bookData?.displayTitle || bookData?.title || `Master ${topic}`;
+  const subtitle = bookData?.subtitle;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -335,7 +342,7 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={displayTitle} topic={topic} coverImageUrl={coverImageUrl} isLoadingImage={isLoadingCoverImage} />
+              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrl={coverImageUrl} isLoadingImage={isLoadingCoverImage} />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">

@@ -161,9 +161,16 @@ Your writing style emulates the clarity of technical manuals and the elegance of
 - "It is essential to understand..."
 - "We now turn our attention to..."
 
+TITLE REQUIREMENTS:
+- "displayTitle": A short, punchy title of NO MORE THAN 5 WORDS. This appears on the book cover.
+- "subtitle": A longer, more descriptive subtitle (8-15 words) for the inside of the book.
+- "title": The full combined title for reference.
+
 You must respond with a JSON object in this exact format:
 {
-  "title": "The elegant book title",
+  "title": "The Full Combined Title: With Subtitle",
+  "displayTitle": "Short Cover Title",
+  "subtitle": "A longer descriptive subtitle explaining the book's contents",
   "tableOfContents": [
     { "chapter": 1, "title": "Chapter title" },
     { "chapter": 2, "title": "Chapter title" },
@@ -295,6 +302,16 @@ Chapter 1 requirements:
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Ensure displayTitle and subtitle exist (fallback for backwards compatibility)
+    if (!bookData.displayTitle) {
+      // Generate a short display title from the full title (first 5 words)
+      const words = bookData.title.split(' ');
+      bookData.displayTitle = words.slice(0, 5).join(' ');
+    }
+    if (!bookData.subtitle) {
+      bookData.subtitle = `A Comprehensive Guide to ${topic}`;
     }
 
     // Fetch real local resources from Google Places API if key is configured

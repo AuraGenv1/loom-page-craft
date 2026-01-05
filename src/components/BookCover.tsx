@@ -3,12 +3,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 interface BookCoverProps {
   title: string;
+  subtitle?: string;
   topic?: string;
   coverImageUrl?: string | null;
   isLoadingImage?: boolean;
 }
 
-const BookCover = ({ title, topic = '', coverImageUrl, isLoadingImage }: BookCoverProps) => {
+const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage }: BookCoverProps) => {
   const TopicIcon = getTopicIcon(topic || title);
 
   return (
@@ -61,12 +62,14 @@ const BookCover = ({ title, topic = '', coverImageUrl, isLoadingImage }: BookCov
         <p className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-muted-foreground mb-2">
           A Complete Guide
         </p>
-        <h1 className="font-serif text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold text-foreground leading-tight mb-3 line-clamp-3 text-center px-2">
+        <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-semibold text-foreground leading-tight mb-2 line-clamp-2 text-center px-2">
           {title}
         </h1>
-        <p className="text-xs md:text-sm text-muted-foreground/70 italic tracking-wide">
-          A Comprehensive Instructional Volume
-        </p>
+        {subtitle && (
+          <p className="text-xs md:text-sm text-muted-foreground/80 italic tracking-wide text-center px-4 line-clamp-2">
+            {subtitle}
+          </p>
+        )}
         <div className="w-16 h-[1px] bg-foreground/20 mt-4" />
       </div>
 
