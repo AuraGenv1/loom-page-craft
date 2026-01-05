@@ -33,16 +33,21 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
         </div>
       </div>
 
-      {/* Cover Image Area */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
-        {/* AI-Generated Cover Image or Fallback Icon */}
-        <div className="relative mb-6 w-full max-w-[180px] aspect-square">
+      {/* Cover Content Area */}
+      <div className="flex-1 flex flex-col items-center justify-between text-center px-2 py-4">
+        {/* Main Title - Above Image */}
+        <div className="flex flex-col items-center">
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground leading-tight text-center px-2 tracking-tight">
+            {title}
+          </h1>
+        </div>
+
+        {/* AI-Generated Cover Image */}
+        <div className="relative w-full max-w-[160px] aspect-square my-4">
           {isLoadingImage ? (
-            // Skeleton with subtle animation while generating
             <div className="w-full h-full flex flex-col items-center">
               <div className="w-full aspect-square rounded-full overflow-hidden border-2 border-foreground/10 relative">
                 <Skeleton className="w-full h-full rounded-full" />
-                {/* Animated placeholder pattern */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-[85%] h-[85%] rounded-full border border-dashed border-foreground/10 flex items-center justify-center animate-pulse">
                     <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
@@ -55,7 +60,6 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
             </div>
           ) : coverImageUrl ? (
             <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
-              {/* Blurred placeholder shown until image loads */}
               {!imageLoaded && (
                 <div className="absolute inset-0 bg-secondary/30 animate-pulse flex items-center justify-center">
                   <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
@@ -72,24 +76,19 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
           ) : (
             <div className="w-full h-full rounded-full border border-foreground/10 flex items-center justify-center bg-secondary/20">
               <div className="w-[90%] h-[90%] rounded-full border border-dashed border-foreground/15 flex items-center justify-center">
-                <TopicIcon className="w-16 h-16 md:w-20 md:h-20 text-foreground/40 stroke-[0.75]" />
+                <TopicIcon className="w-14 h-14 md:w-16 md:h-16 text-foreground/40 stroke-[0.75]" />
               </div>
             </div>
           )}
         </div>
 
-        <p className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-muted-foreground mb-2">
-          A Complete Guide
-        </p>
-        <h1 className="font-serif text-xl sm:text-2xl md:text-3xl font-semibold text-foreground leading-tight mb-2 line-clamp-2 text-center px-2">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="text-xs md:text-sm text-muted-foreground/80 italic tracking-wide text-center px-4 line-clamp-2">
-            {subtitle}
+        {/* Subtitle - Below Image */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-[1px] bg-foreground/15" />
+          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-muted-foreground/60 font-serif">
+            A Curated Loom & Page Technical Manual
           </p>
-        )}
-        <div className="w-16 h-[1px] bg-foreground/20 mt-4" />
+        </div>
       </div>
 
       {/* Bottom branding with logo */}
