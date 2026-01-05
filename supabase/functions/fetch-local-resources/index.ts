@@ -14,7 +14,7 @@ interface PlaceResult {
   placeId: string;
 }
 
-// Generic retailers to filter out
+// Generic retailers to filter out - expanded list
 const BLOCKED_NAMES = [
   'target', 'walmart', 'costco', 'amazon', 'best buy', 'home depot', 'lowes',
   'staples', 'office depot', 'dollar general', 'dollar tree', 'family dollar',
@@ -22,14 +22,29 @@ const BLOCKED_NAMES = [
   'macy\'s', 'nordstrom', 'sears', 'cvs', 'walgreens', 'rite aid', 'kroger',
   'safeway', 'publix', 'whole foods', 'trader joe\'s', 'aldi', 'lidl',
   'autozone', 'o\'reilly', 'advance auto', 'pep boys', 'jiffy lube', 'valvoline',
-  'firestone', 'discount tire', 'big o tires', 'les schwab'
+  'firestone', 'discount tire', 'big o tires', 'les schwab',
+  'hobby lobby', 'michaels', 'joann', 'ace hardware', 'true value', 'menards',
+  'harbor freight', 'northern tool', 'tractor supply', 'rural king',
+  'sam\'s club', 'bj\'s', 'big 5', 'dick\'s sporting', 'bass pro', 'cabela\'s',
+  'bed bath', 'pier 1', 'pottery barn', 'crate barrel', 'ikea', 'wayfair',
+  'sephora', 'ulta', 'bath body works', 'victoria secret', 'gap', 'old navy',
+  'banana republic', 'h&m', 'zara', 'forever 21', 'aeropostale', 'american eagle',
+  'foot locker', 'finish line', 'champs', 'gamestop', 'barnes noble'
 ];
 
 // Blocked place types (generic retail)
 const BLOCKED_TYPES = [
   'department_store', 'electronics_store', 'discount_store', 'supermarket',
   'grocery_or_supermarket', 'convenience_store', 'drugstore', 'pharmacy',
-  'clothing_store', 'shoe_store'
+  'clothing_store', 'shoe_store', 'shopping_mall', 'home_goods_store',
+  'hardware_store', 'sporting_goods_store', 'pet_store', 'book_store'
+];
+
+// Specialty keywords that indicate high-quality artisan results
+const SPECIALTY_KEYWORDS = [
+  'restoration', 'artisan', 'boutique', 'specialty', 'custom', 'professional',
+  'vintage', 'antique', 'classic', 'handcraft', 'bespoke', 'luxury', 'premium',
+  'master', 'expert', 'specialist', 'workshop', 'studio', 'atelier', 'guild'
 ];
 
 // Topic-specific search configurations
@@ -124,16 +139,34 @@ function isRelevantPlace(placeName: string, placeType: string, relevantTerms: st
   
   // Block generic retailers by name
   if (BLOCKED_NAMES.some(blocked => lowerName.includes(blocked))) {
+    console.log(`Blocked (name match): ${placeName}`);
     return false;
   }
   
   // Block generic retail types
   if (BLOCKED_TYPES.some(blocked => lowerType.includes(blocked.replace(/_/g, ' ')))) {
+    console.log(`Blocked (type match): ${placeName} - ${placeType}`);
     return false;
   }
   
-  // Must contain at least one relevant term
-  return relevantTerms.some(term => lowerName.includes(term) || lowerType.includes(term));
+  // Prioritize places with specialty keywords
+  const hasSpecialtyKeyword = SPECIALTY_KEYWORDS.some(kw => lowerName.includes(kw));
+  
+  // Must contain at least one relevant term OR have a specialty keyword
+  const hasRelevantTerm = relevantTerms.some(term => lowerName.includes(term) || lowerType.includes(term));
+  
+  if (hasSpecialtyKeyword) {
+    console.log(`Accepted (specialty): ${placeName}`);
+    return true;
+  }
+  
+  if (hasRelevantTerm) {
+    console.log(`Accepted (relevant): ${placeName}`);
+    return true;
+  }
+  
+  console.log(`Filtered out (no match): ${placeName}`);
+  return false;
 }
 
 async function searchPlaces(
