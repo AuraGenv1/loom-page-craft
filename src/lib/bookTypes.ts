@@ -6,7 +6,11 @@ export interface ChapterInfo {
 export interface LocalResource {
   name: string;
   type: string;
-  description: string;
+  description?: string;
+  address?: string;
+  rating?: number | null;
+  reviewCount?: number | null;
+  placeId?: string;
 }
 
 export interface BookData {

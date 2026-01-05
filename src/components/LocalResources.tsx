@@ -1,57 +1,111 @@
-import { MapPin, Star, Phone } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { MapPin, Star, ExternalLink, Loader2, MapPinOff } from 'lucide-react';
 import { LocalResource } from '@/lib/bookTypes';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 interface LocalResourcesProps {
   topic: string;
   resources?: LocalResource[];
+  materials?: string[];
 }
 
-interface LocalBusiness {
+interface FetchedResource {
   name: string;
   type: string;
   address: string;
-  rating: number;
-  reviewCount: number;
-  phone: string;
+  rating: number | null;
+  reviewCount: number | null;
+  placeId: string;
 }
 
-const LocalResources = ({ topic, resources }: LocalResourcesProps) => {
-  // Use AI-generated resources or fallback to defaults
-  const businesses: LocalBusiness[] = resources?.length
-    ? resources.map((res, idx) => ({
-        name: res.name,
-        type: res.type,
-        address: `${123 + idx * 111} Main Street, Your City, ST 12345`,
-        rating: 4.7 + (idx * 0.1),
-        reviewCount: 100 + idx * 50,
-        phone: `(555) ${123 + idx}-${4567 + idx}`,
-      }))
-    : [
-        {
-          name: `${topic} Learning Center`,
-          type: 'Educational Institution',
-          address: '123 Main Street, Your City, ST 12345',
-          rating: 4.8,
-          reviewCount: 127,
-          phone: '(555) 123-4567',
-        },
-        {
-          name: `Expert ${topic} Studio`,
-          type: 'Professional Services',
-          address: '456 Oak Avenue, Your City, ST 12345',
-          rating: 4.9,
-          reviewCount: 89,
-          phone: '(555) 234-5678',
-        },
-        {
-          name: `Community ${topic} Workshop`,
-          type: 'Community Center',
-          address: '789 Elm Boulevard, Your City, ST 12345',
-          rating: 4.7,
-          reviewCount: 203,
-          phone: '(555) 345-6789',
-        },
-      ];
+const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) => {
+  const [fetchedResources, setFetchedResources] = useState<FetchedResource[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+
+  const fetchLocalResources = async (latitude: number, longitude: number) => {
+    setIsLoading(true);
+    setLocationError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-local-resources', {
+        body: { 
+          latitude, 
+          longitude, 
+          materials: materials || [],
+          topic 
+        }
+      });
+
+      if (error) {
+        console.error('Error fetching local resources:', error);
+        setLocationError('Unable to find local resources');
+        return;
+      }
+
+      if (data?.resources && data.resources.length > 0) {
+        setFetchedResources(data.resources);
+      } else {
+        setLocationError('No local suppliers found in your area');
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setLocationError('Failed to fetch local resources');
+    } finally {
+      setIsLoading(false);
+      setHasAttemptedFetch(true);
+    }
+  };
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      setHasAttemptedFetch(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        fetchLocalResources(position.coords.latitude, position.coords.longitude);
+      },
+      (error) => {
+        setIsLoading(false);
+        setHasAttemptedFetch(true);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError('Location access denied. Enable location to see nearby suppliers.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError('Location information is unavailable.');
+            break;
+          case error.TIMEOUT:
+            setLocationError('Location request timed out.');
+            break;
+          default:
+            setLocationError('An unknown error occurred.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  // Use fetched resources if available, otherwise show placeholder UI
+  const displayResources = fetchedResources.length > 0 ? fetchedResources : null;
+
+  // Fallback to AI-generated resources with placeholder addresses
+  const fallbackResources = resources?.map((res, idx) => ({
+    name: res.name,
+    type: res.type,
+    address: res.address || res.description || 'Address available after location access',
+    rating: res.rating ?? null,
+    reviewCount: res.reviewCount ?? null,
+    placeId: res.placeId || '',
+  }));
 
   return (
     <section className="mt-16 pt-10 border-t border-border">
@@ -66,44 +120,141 @@ const LocalResources = ({ topic, resources }: LocalResourcesProps) => {
       <h2 className="font-serif text-2xl font-semibold mb-6">
         Local Resources for {topic}
       </h2>
-      <p className="text-muted-foreground mb-8">
-        Connect with these trusted local providers to enhance your learning journey.
-      </p>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {businesses.map((business, index) => (
-          <div
-            key={index}
-            className="bg-card border border-border rounded-lg p-5 hover:shadow-card transition-shadow"
+      
+      {!hasAttemptedFetch && !displayResources && (
+        <div className="bg-secondary/30 border border-border rounded-lg p-6 text-center mb-8">
+          <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground mb-4">
+            Find material suppliers and workshops near you
+          </p>
+          <Button 
+            onClick={requestLocation} 
+            disabled={isLoading}
+            className="gap-2"
           >
-            <div className="mb-3">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                {business.type}
-              </span>
-            </div>
-            <h3 className="font-semibold text-foreground mb-2 leading-tight">
-              {business.name}
-            </h3>
-            <div className="flex items-center gap-1 mb-3">
-              <Star className="w-3.5 h-3.5 fill-accent text-accent" />
-              <span className="text-sm font-medium">{business.rating.toFixed(1)}</span>
-              <span className="text-sm text-muted-foreground">
-                ({business.reviewCount} reviews)
-              </span>
-            </div>
-            <div className="space-y-1.5 text-sm text-muted-foreground">
-              <div className="flex items-start gap-2">
-                <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                <span>{business.address}</span>
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Finding nearby places...
+              </>
+            ) : (
+              <>
+                <MapPin className="w-4 h-4" />
+                Enable Location
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {locationError && !displayResources && (
+        <div className="bg-secondary/30 border border-border rounded-lg p-6 text-center mb-8">
+          <MapPinOff className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground mb-4">{locationError}</p>
+          <Button 
+            onClick={requestLocation} 
+            variant="outline"
+            disabled={isLoading}
+            className="gap-2"
+          >
+            Try Again
+          </Button>
+        </div>
+      )}
+
+      {isLoading && hasAttemptedFetch && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Searching nearby...</span>
+        </div>
+      )}
+
+      {displayResources && displayResources.length > 0 && (
+        <>
+          <p className="text-muted-foreground mb-8">
+            Connect with these trusted local providers to enhance your learning journey.
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {displayResources.map((business, index) => (
+              <div
+                key={index}
+                className="bg-card border border-border rounded-lg p-5 hover:shadow-card transition-shadow"
+              >
+                <div className="mb-3">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {business.type}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 leading-tight">
+                  {business.name}
+                </h3>
+                {(business.rating !== null && business.rating > 0) && (
+                  <div className="flex items-center gap-1 mb-3">
+                    <Star className="w-3.5 h-3.5 fill-accent text-accent" />
+                    <span className="text-sm font-medium">{business.rating.toFixed(1)}</span>
+                    {business.reviewCount !== null && business.reviewCount > 0 && (
+                      <span className="text-sm text-muted-foreground">
+                        ({business.reviewCount.toLocaleString()} reviews)
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-1.5 text-sm text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span>{business.address}</span>
+                  </div>
+                </div>
+                {business.placeId && (
+                  <a
+                    href={`https://www.google.com/maps/place/?q=place_id:${business.placeId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-3"
+                  >
+                    View on Maps
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5" />
-                <span>{business.phone}</span>
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
+
+      {/* Show AI-generated fallback if location not enabled and we have resources */}
+      {!displayResources && fallbackResources && fallbackResources.length > 0 && hasAttemptedFetch && !isLoading && (
+        <>
+          <p className="text-muted-foreground mb-8">
+            Enable location access to see real suppliers near you. Here are some general recommendations:
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-3 opacity-70">
+            {fallbackResources.map((business, index) => (
+              <div
+                key={index}
+                className="bg-card border border-border rounded-lg p-5"
+              >
+                <div className="mb-3">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {business.type}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-foreground mb-2 leading-tight">
+                  {business.name}
+                </h3>
+                <div className="text-sm text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span className="italic">{business.address}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Google Attribution */}
       <div className="flex items-center justify-end mt-6 gap-2">
