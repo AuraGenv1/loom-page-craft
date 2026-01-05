@@ -301,6 +301,16 @@ serve(async (req) => {
       );
     }
 
+    // SECURITY: Limit topic length to prevent abuse
+    const MAX_TOPIC_LENGTH = 200;
+    if (topic && typeof topic === 'string' && topic.length > MAX_TOPIC_LENGTH) {
+      console.error('Topic too long:', topic.length, 'chars');
+      return new Response(
+        JSON.stringify({ error: `Topic must be ${MAX_TOPIC_LENGTH} characters or less` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Fetching local resources:', { latitude, longitude, materials, topic });
 
     const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
