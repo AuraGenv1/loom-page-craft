@@ -166,8 +166,9 @@ const Index = () => {
     setCoverImageUrl(null);
 
     try {
+      const currentSessionId = getSessionId();
       const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { topic: query }
+        body: { topic: query, sessionId: currentSessionId }
       });
 
       if (error) {
@@ -292,8 +293,9 @@ const Index = () => {
 
       // Generate cover image in background (non-blocking)
       setIsLoadingCoverImage(true);
+      const coverSessionId = getSessionId();
       supabase.functions.invoke('generate-cover-image', {
-        body: { title: generatedBook.title, topic: query }
+        body: { title: generatedBook.title, topic: query, sessionId: coverSessionId }
       }).then(({ data: imageData, error: imageError }) => {
         setIsLoadingCoverImage(false);
         if (!imageError && imageData?.imageUrl) {
