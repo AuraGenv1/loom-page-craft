@@ -12,6 +12,7 @@ serve(async (req) => {
 
   try {
     const { title, topic } = await req.json();
+    console.log(`Generating cover image for: ${title} (topic: ${topic})`);
 
     const prompt = `Minimalist black and white technical line art of ${topic || title}, isolated on white background, architectural sketch style, no shading, high contrast. No text, no words, no letters. Clean precise thin lines only.`;
 
@@ -46,6 +47,10 @@ serve(async (req) => {
       throw new Error("No image generated");
     }
 
+    console.log(`Cover image generated successfully (base64 length: ${imageUrl.length})`);
+
+    // Return the base64 image directly - it's already optimized
+    // The base64 data URL is ready to use in <img> tags
     return new Response(
       JSON.stringify({ imageUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
