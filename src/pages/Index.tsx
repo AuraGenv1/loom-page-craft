@@ -493,6 +493,7 @@ const Index = () => {
                     <Button
                       size="lg"
                       className="gap-2 font-serif"
+                      onClick={handlePurchase}
                     >
                       <Sparkles className="w-4 h-4" />
                       Unlock Full Artisan Guide — $4.99
@@ -536,6 +537,7 @@ const Index = () => {
                 localResources={bookData?.localResources}
                 hasDisclaimer={bookData?.hasDisclaimer}
                 materials={extractMaterials(bookData?.chapter1Content)}
+                isGenerating={isLoadingCoverImage}
               />
             </section>
 

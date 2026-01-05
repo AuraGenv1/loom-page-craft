@@ -42,6 +42,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    // Check for password recovery hash in URL on mount (hard override for redirect)
+    const hash = window.location.hash;
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=password_recovery'))) {
+      console.log('Password recovery detected in URL hash, redirecting...');
+      window.location.href = '/reset-password' + hash;
+      return;
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {

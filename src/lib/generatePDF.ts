@@ -413,9 +413,12 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
   doc.setTextColor(60, 60, 60);
   
   const copyrightText = [
-    'This book was generated via Loom & Page.',
+    'Commercial Rights & Ownership',
     '',
-    'The user holds full ownership and commercial resale rights.',
+    'This work was generated via the Loom & Page platform.',
+    '',
+    'The creator of this work retains 100% ownership of the content,',
+    'including all commercial, distribution, and resale rights.',
     '',
     'You are free to:',
     '• Use this guide for personal or commercial purposes',
