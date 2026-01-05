@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 
-const LoadingAnimation = () => {
+const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Gathering threads...');
 
@@ -26,7 +26,7 @@ const LoadingAnimation = () => {
   }, []);
 
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center py-24 animate-fade-in">
+    <div ref={ref} className="min-h-[60vh] flex flex-col items-center justify-center py-24 animate-fade-in">
       {/* Weaving loom animation */}
       <div className="flex items-end gap-2 h-16 mb-10">
         {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -45,7 +45,7 @@ const LoadingAnimation = () => {
       <h2 className="font-serif text-2xl md:text-3xl text-foreground tracking-tight mb-3">
         Weaving...
       </h2>
-      
+
       {/* Status text */}
       <p className="text-sm text-muted-foreground mb-8 h-5 transition-opacity duration-300">
         {statusText}
@@ -53,12 +53,12 @@ const LoadingAnimation = () => {
 
       {/* Progress bar */}
       <div className="w-64 md:w-80 h-1 bg-secondary rounded-full overflow-hidden">
-        <div 
+        <div
           className="h-full bg-foreground/70 rounded-full transition-all duration-700 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
-      
+
       {/* Decorative element */}
       <div className="mt-12 flex items-center gap-3 opacity-40">
         <div className="w-8 h-[1px] bg-foreground/30" />
@@ -71,6 +71,9 @@ const LoadingAnimation = () => {
       </div>
     </div>
   );
-};
+});
+
+LoadingAnimation.displayName = 'LoadingAnimation';
 
 export default LoadingAnimation;
+

@@ -78,6 +78,8 @@ const Index = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
+  const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
+  const [isGeneratingDiagrams, setIsGeneratingDiagrams] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -174,10 +176,58 @@ const Index = () => {
     checkExistingBook();
   }, [user, authLoading]);
 
+  // Generate chapter diagrams in background (never show blank boxes)
+  useEffect(() => {
+    if (viewState !== 'book' || !bookData?.title || !topic) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      setIsGeneratingDiagrams(true);
+
+      const sessionId = getSessionId();
+      const plates = [
+        { plateNumber: '1.1', caption: `Core concepts of ${topic} visualized` },
+        { plateNumber: '1.2', caption: `Essential tools and materials for ${topic}` },
+      ];
+
+      await Promise.all(
+        plates.map(async ({ plateNumber, caption }) => {
+          const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+            body: {
+              title: bookData.title,
+              topic,
+              caption,
+              plateNumber,
+              variant: 'diagram',
+              sessionId,
+            },
+          });
+
+          if (cancelled) return;
+          if (!error && data?.imageUrl) {
+            setDiagramImages((prev) => ({ ...prev, [plateNumber]: data.imageUrl }));
+          }
+        })
+      );
+
+      if (!cancelled) setIsGeneratingDiagrams(false);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewState, bookData?.title, topic]);
+
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');
     setCoverImageUrl(null);
+    setDiagramImages({});
+    setIsGeneratingDiagrams(false);
+
 
     try {
       const currentSessionId = getSessionId();
@@ -308,16 +358,18 @@ const Index = () => {
       // Generate cover image in background (non-blocking)
       setIsLoadingCoverImage(true);
       const coverSessionId = getSessionId();
-      supabase.functions.invoke('generate-cover-image', {
-        body: { title: generatedBook.title, topic: query, sessionId: coverSessionId }
-      }).then(({ data: imageData, error: imageError }) => {
-        setIsLoadingCoverImage(false);
-        if (!imageError && imageData?.imageUrl) {
-          setCoverImageUrl(imageData.imageUrl);
-        } else {
-          console.log('Cover image generation skipped or failed:', imageError);
-        }
-      });
+      supabase.functions
+        .invoke('generate-cover-image', {
+          body: { title: generatedBook.title, topic: query, sessionId: coverSessionId, variant: 'cover' },
+        })
+        .then(({ data: imageData, error: imageError }) => {
+          setIsLoadingCoverImage(false);
+          if (!imageError && imageData?.imageUrl) {
+            setCoverImageUrl(imageData.imageUrl);
+          } else {
+            console.log('Cover image generation skipped or failed:', imageError);
+          }
+        });
 
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -537,7 +589,8 @@ const Index = () => {
                 localResources={bookData?.localResources}
                 hasDisclaimer={bookData?.hasDisclaimer}
                 materials={extractMaterials(bookData?.chapter1Content)}
-                isGenerating={isLoadingCoverImage}
+                isGenerating={isGeneratingDiagrams}
+                diagramImages={diagramImages}
               />
             </section>
 
