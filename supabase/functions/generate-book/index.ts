@@ -108,7 +108,16 @@ serve(async (req) => {
   }
 
   try {
-    const { topic } = await req.json();
+    const { topic, sessionId } = await req.json();
+    
+    // Validate session_id to prevent bot abuse
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
+      console.error('Invalid or missing session_id:', sessionId);
+      return new Response(
+        JSON.stringify({ error: 'Valid session required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!topic || typeof topic !== 'string') {
       console.error('Invalid topic provided:', topic);

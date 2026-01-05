@@ -11,7 +11,16 @@ serve(async (req) => {
   }
 
   try {
-    const { title, topic } = await req.json();
+    const { title, topic, sessionId } = await req.json();
+    
+    // Validate session_id to prevent bot abuse
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
+      console.error('Invalid or missing session_id:', sessionId);
+      return new Response(
+        JSON.stringify({ error: 'Valid session required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     console.log(`Generating cover image for: ${title} (topic: ${topic})`);
 
     const prompt = `Minimalist black and white technical line art of ${topic || title}, isolated on white background, architectural sketch style, no shading, high contrast. No text, no words, no letters. Clean precise thin lines only.`;

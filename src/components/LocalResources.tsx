@@ -25,17 +25,29 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
   const [locationError, setLocationError] = useState<string | null>(null);
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
+  // Generate or retrieve session ID
+  const getSessionId = (): string => {
+    const stored = localStorage.getItem('loom_page_session_id');
+    if (stored) return stored;
+    
+    const newId = crypto.randomUUID();
+    localStorage.setItem('loom_page_session_id', newId);
+    return newId;
+  };
+
   const fetchLocalResources = async (latitude: number, longitude: number) => {
     setIsLoading(true);
     setLocationError(null);
 
     try {
+      const sessionId = getSessionId();
       const { data, error } = await supabase.functions.invoke('fetch-local-resources', {
         body: { 
           latitude, 
           longitude, 
           materials: materials || [],
-          topic 
+          topic,
+          sessionId
         }
       });
 

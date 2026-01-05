@@ -20,7 +20,9 @@ const BLOCKED_NAMES = [
   'staples', 'office depot', 'dollar general', 'dollar tree', 'family dollar',
   'big lots', 'five below', 'ross', 'marshalls', 'tj maxx', 'kohl\'s', 'jcpenney',
   'macy\'s', 'nordstrom', 'sears', 'cvs', 'walgreens', 'rite aid', 'kroger',
-  'safeway', 'publix', 'whole foods', 'trader joe\'s', 'aldi', 'lidl'
+  'safeway', 'publix', 'whole foods', 'trader joe\'s', 'aldi', 'lidl',
+  'autozone', 'o\'reilly', 'advance auto', 'pep boys', 'jiffy lube', 'valvoline',
+  'firestone', 'discount tire', 'big o tires', 'les schwab'
 ];
 
 // Blocked place types (generic retail)
@@ -38,9 +40,24 @@ const TOPIC_CONFIGS: Record<string, { keywords: string[]; types: string[]; relev
     relevantTerms: ['auto', 'motors', 'automotive', 'restoration', 'classic', 'vintage', 'body shop', 'machine shop', 'parts']
   },
   'ferrari': {
-    keywords: ['Ferrari parts dealer', 'exotic car restoration', 'Italian car specialist', 'sports car mechanic'],
+    keywords: ['Ferrari specialist shop', 'exotic car restoration shop', 'Italian sports car service', 'specialty automotive restoration'],
     types: ['car_repair', 'car_dealer'],
-    relevantTerms: ['ferrari', 'exotic', 'italian', 'sports car', 'luxury', 'restoration', 'specialty']
+    relevantTerms: ['ferrari', 'exotic', 'italian', 'lamborghini', 'maserati', 'porsche', 'luxury auto', 'restoration', 'specialty', 'european', 'supercar', 'collector']
+  },
+  'porsche': {
+    keywords: ['Porsche specialist', 'German car restoration', 'sports car service center'],
+    types: ['car_repair', 'car_dealer'],
+    relevantTerms: ['porsche', 'german', 'sports car', 'restoration', 'specialty', 'european', 'collector']
+  },
+  'classic': {
+    keywords: ['classic car restoration', 'vintage auto shop', 'antique car specialist', 'collector car service'],
+    types: ['car_repair', 'car_dealer'],
+    relevantTerms: ['classic', 'vintage', 'antique', 'restoration', 'collector', 'muscle car', 'specialty']
+  },
+  'restoration': {
+    keywords: ['specialty automotive restoration', 'custom car builder', 'restoration shop', 'classic auto restoration'],
+    types: ['car_repair'],
+    relevantTerms: ['restoration', 'custom', 'rebuild', 'specialty', 'collector', 'vintage', 'classic']
   },
   'motorcycle': {
     keywords: ['motorcycle shop', 'motorcycle parts', 'custom motorcycle builder'],
@@ -200,7 +217,16 @@ serve(async (req) => {
   }
 
   try {
-    const { latitude, longitude, materials, topic } = await req.json();
+    const { latitude, longitude, materials, topic, sessionId } = await req.json();
+    
+    // Validate session_id to prevent bot abuse
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
+      console.error('Invalid or missing session_id:', sessionId);
+      return new Response(
+        JSON.stringify({ error: 'Valid session required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     console.log('Fetching local resources:', { latitude, longitude, materials, topic });
 
