@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { getTopicIcon } from '@/lib/iconMap';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -11,6 +12,7 @@ interface BookCoverProps {
 
 const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage }: BookCoverProps) => {
   const TopicIcon = getTopicIcon(topic || title);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   return (
     <div className="w-full max-w-md mx-auto aspect-[3/4] gradient-paper rounded-sm shadow-book p-8 md:p-10 flex flex-col justify-between animate-page-turn relative overflow-hidden border border-border/30">
@@ -36,13 +38,30 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
         {/* AI-Generated Cover Image or Fallback Icon */}
         <div className="relative mb-6 w-full max-w-[180px] aspect-square">
           {isLoadingImage ? (
-            <Skeleton className="w-full h-full rounded-full" />
+            // Skeleton with subtle animation while generating
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
+              <Skeleton className="w-full h-full rounded-full" />
+              {/* Animated placeholder pattern */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-[85%] h-[85%] rounded-full border border-dashed border-foreground/10 flex items-center justify-center animate-pulse">
+                  <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
+                </div>
+              </div>
+            </div>
           ) : coverImageUrl ? (
-            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10">
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
+              {/* Blurred placeholder shown until image loads */}
+              {!imageLoaded && (
+                <div className="absolute inset-0 bg-secondary/30 animate-pulse flex items-center justify-center">
+                  <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
+                </div>
+              )}
               <img 
                 src={coverImageUrl} 
                 alt={`Cover illustration for ${title}`}
-                className="w-full h-full object-cover opacity-80 mix-blend-multiply"
+                className={`w-full h-full object-cover opacity-80 mix-blend-multiply transition-opacity duration-500 ${imageLoaded ? 'opacity-80' : 'opacity-0'}`}
+                onLoad={() => setImageLoaded(true)}
+                loading="eager"
               />
             </div>
           ) : (
