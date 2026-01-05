@@ -12,10 +12,11 @@ interface ChapterContentProps {
   materials?: string[];
   isGenerating?: boolean;
   diagramImages?: Record<string, string | undefined>;
+  tableOfContents?: Array<{ chapter: number; title: string; imageDescription?: string }>;
 }
 
 const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
-  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages }, ref) => {
+  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents }, ref) => {
     // Parse markdown content into sections (simplified rendering)
     const renderContent = () => {
       if (!content) {
@@ -169,6 +170,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             topic={topic}
             isGenerating={isGenerating}
             imageUrl={diagramImages?.['1.1'] ?? null}
+            imageDescription={
+              tableOfContents?.[0]?.imageDescription || 
+              `A detailed instructional diagram illustrating the core concepts and fundamentals of ${topic}.`
+            }
           />
 
           {!content && (
@@ -197,6 +202,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             topic={topic}
             isGenerating={isGenerating}
             imageUrl={diagramImages?.['1.2'] ?? null}
+            imageDescription={`Essential tools, materials, and equipment needed for mastering ${topic}.`}
           />
         </div>
 

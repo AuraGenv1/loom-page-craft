@@ -19,7 +19,7 @@ const TechnicalDiagram = forwardRef<HTMLDivElement, TechnicalDiagramProps>(
 
     return (
       <div ref={ref} className="w-full my-12 relative">
-        {/* Plate container with deckle edge effect */}
+        {/* Plate container - no padding for full-bleed images */}
         <div className="bg-secondary/20 border border-border/50 shadow-sm overflow-hidden">
           {/* Plate header */}
           <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-border/30">
@@ -31,8 +31,8 @@ const TechnicalDiagram = forwardRef<HTMLDivElement, TechnicalDiagramProps>(
             </span>
           </div>
 
-          {/* Full-width diagram container - NO padding, images fill entire space */}
-          <div className="aspect-video w-full bg-background/50 flex flex-col items-center justify-center relative overflow-hidden">
+          {/* Full-width image container - completely fills width, no margins */}
+          <div className="w-full aspect-video bg-background/50 flex flex-col items-center justify-center relative overflow-hidden">
             {isLoading ? (
               /* ALWAYS show weaving animation when loading */
               <div className="w-full h-full flex flex-col items-center justify-center px-6 gap-4">
@@ -45,38 +45,29 @@ const TechnicalDiagram = forwardRef<HTMLDivElement, TechnicalDiagramProps>(
                 </div>
               </div>
             ) : (
-              /* Premium full-width image display */
-              <>
-                <img
-                  src={imageUrl}
-                  alt={imageDescription || `Instructional diagram: ${caption}`}
-                  className="w-full h-full object-cover animate-fade-in"
-                  loading="lazy"
-                  crossOrigin="anonymous"
-                />
-
-                {/* Subtle reference markers in corners */}
-                <div className="absolute bottom-2 left-2 right-2 flex justify-between items-end pointer-events-none">
-                  <div className="text-[8px] uppercase tracking-widest text-white/60 bg-black/30 px-2 py-0.5 rounded">
-                    REF: {plateNumber}
-                  </div>
-                  <div className="text-[8px] uppercase tracking-widest text-white/60 bg-black/30 px-2 py-0.5 rounded">
-                    SCALE: 1:1
-                  </div>
-                </div>
-              </>
+              <img
+                src={imageUrl}
+                alt={imageDescription || `Instructional diagram: ${caption}`}
+                className="w-full h-full object-cover animate-fade-in"
+                loading="lazy"
+                crossOrigin="anonymous"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
             )}
           </div>
 
-          {/* Caption box - styled overlay look */}
-          <div className="bg-secondary/40 border-t border-border/30 px-4 py-4 md:px-6">
+          {/* Stylized caption box - light gray background */}
+          <div className="bg-secondary/50 border-t border-border/30 px-4 py-4 md:px-6">
             <p className="text-sm text-muted-foreground italic font-serif text-center">
               Plate {plateNumber} — {caption}
             </p>
+            {/* AI-generated image description caption */}
             {imageDescription && !isLoading && (
-              <p className="text-xs text-muted-foreground/70 text-center mt-2 max-w-lg mx-auto">
-                {imageDescription}
-              </p>
+              <div className="mt-3 pt-3 border-t border-border/20">
+                <p className="text-xs text-muted-foreground/80 text-center leading-relaxed max-w-2xl mx-auto">
+                  {imageDescription}
+                </p>
+              </div>
             )}
           </div>
         </div>

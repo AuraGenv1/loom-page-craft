@@ -1,13 +1,16 @@
+import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { BookData, LocalResource } from '@/lib/bookTypes';
+import { BookData } from '@/lib/bookTypes';
 
 interface GeneratePDFOptions {
   title: string;
   topic: string;
   bookData: BookData;
+  previewElement?: HTMLElement | null;
 }
 
-export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOptions) => {
+// Convert preview element to PDF using html2canvas for pixel-perfect rendering
+export const generateGuidePDF = async ({ title, topic, bookData, previewElement }: GeneratePDFOptions) => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -44,6 +47,8 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
     doc.rect(x - 2 * scale, y + barHeight / 2, 12 * scale, 0.8 * scale, 'F');
   };
 
+  const centerX = pageWidth / 2;
+
   // ==========================================
   // COVER PAGE
   // ==========================================
@@ -54,7 +59,6 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
   doc.rect(margin - 5, margin - 5, contentWidth + 10, pageHeight - (margin * 2) + 10);
   
   // Top decorative lines
-  const centerX = pageWidth / 2;
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.3);
   doc.line(centerX - 30, margin + 20, centerX - 8, margin + 20);
@@ -173,7 +177,7 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
   });
 
   // ==========================================
-  // CHAPTER 1 CONTENT PAGE
+  // CHAPTER 1 CONTENT PAGE (with page break)
   // ==========================================
   doc.addPage();
   yPosition = margin;
@@ -394,65 +398,102 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
   }
 
   // ==========================================
-  // COPYRIGHT PAGE
+  // COMMERCIAL RIGHTS CERTIFICATE PAGE
   // ==========================================
   doc.addPage();
   yPosition = margin;
   
-  // Header
+  // Decorative border for certificate
+  doc.setDrawColor(180, 140, 80);
+  doc.setLineWidth(1);
+  doc.rect(margin - 5, margin - 5, contentWidth + 10, pageHeight - (margin * 2) + 10);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, margin, contentWidth, pageHeight - (margin * 2));
+  
+  // Certificate header
   doc.setFont('times', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(12);
+  doc.setTextColor(180, 140, 80);
+  doc.text('CERTIFICATE OF OWNERSHIP', centerX, margin + 20, { align: 'center' });
+  
+  // Decorative flourish
+  doc.setDrawColor(180, 140, 80);
+  doc.line(centerX - 40, margin + 28, centerX - 10, margin + 28);
+  doc.line(centerX + 10, margin + 28, centerX + 40, margin + 28);
+  doc.setFillColor(180, 140, 80);
+  doc.circle(centerX, margin + 28, 2, 'F');
+  
+  // Main title
+  doc.setFont('times', 'bold');
+  doc.setFontSize(26);
   doc.setTextColor(30, 30, 30);
-  doc.text('Copyright & Ownership', centerX, yPosition + 40, { align: 'center' });
+  doc.text('Commercial Rights', centerX, margin + 50, { align: 'center' });
+  doc.text('& Ownership Grant', centerX, margin + 62, { align: 'center' });
   
-  yPosition += 70;
+  yPosition = margin + 85;
   
-  // Copyright notice
-  doc.setFont('helvetica', 'normal');
+  // Content box
+  doc.setFont('times', 'normal');
   doc.setFontSize(11);
-  doc.setTextColor(60, 60, 60);
+  doc.setTextColor(50, 50, 50);
   
-  const copyrightText = [
-    'Commercial Rights & Ownership',
+  const certificateContent = [
+    'This certificate confirms that the bearer of this document',
+    'holds complete ownership of the enclosed instructional guide,',
+    'including all intellectual property rights therein.',
+    '',
+    'RIGHTS GRANTED:',
+    '',
+    '• Full commercial use and distribution rights',
+    '• Permission to modify, adapt, and create derivative works',
+    '• Unlimited reproduction in any format or medium',
+    '• Rights to sell, license, or transfer this work',
+    '• No attribution required (though appreciated)',
     '',
     'This work was generated via the Loom & Page platform.',
+    'The creator retains 100% ownership of all content.',
     '',
-    'The creator of this work retains 100% ownership of the content,',
-    'including all commercial, distribution, and resale rights.',
-    '',
-    'You are free to:',
-    '• Use this guide for personal or commercial purposes',
-    '• Modify, adapt, and build upon this content',
-    '• Distribute and sell copies of this guide',
-    '• Use this content in any format or medium',
-    '',
-    'No attribution required, though appreciated.',
-    '',
-    `Generated on: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+    `Document Title: ${title}`,
+    `Subject Matter: ${topic}`,
+    `Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
   ];
   
-  copyrightText.forEach((line) => {
-    if (line.startsWith('•')) {
-      doc.text(line, margin + 10, yPosition);
+  certificateContent.forEach((line) => {
+    if (line === 'RIGHTS GRANTED:') {
+      doc.setFont('times', 'bold');
+      doc.setFontSize(12);
+      doc.text(line, centerX, yPosition, { align: 'center' });
+      doc.setFont('times', 'normal');
+      doc.setFontSize(11);
+    } else if (line.startsWith('•')) {
+      doc.text(line, margin + 30, yPosition);
+    } else if (line.startsWith('Document Title:') || line.startsWith('Subject Matter:') || line.startsWith('Generated:')) {
+      doc.setFont('times', 'italic');
+      doc.text(line, centerX, yPosition, { align: 'center' });
+      doc.setFont('times', 'normal');
     } else {
-      doc.text(line, margin, yPosition);
+      doc.text(line, centerX, yPosition, { align: 'center' });
     }
-    yPosition += 8;
+    yPosition += line === '' ? 6 : 8;
   });
   
-  // Decorative divider
+  // Signature line
   yPosition += 20;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(centerX - 30, yPosition, centerX + 30, yPosition);
-  
-  yPosition += 20;
-  
-  // Loom & Page branding
-  drawLoomLogo(centerX - 6, yPosition, 1);
-  doc.setFont('times', 'normal');
+  doc.setDrawColor(150, 150, 150);
+  doc.line(centerX - 40, yPosition, centerX + 40, yPosition);
   doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Authorized by Loom & Page', centerX, yPosition + 8, { align: 'center' });
+  
+  // Logo at bottom
+  yPosition = pageHeight - margin - 30;
+  drawLoomLogo(centerX - 6, yPosition, 1.2);
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
   doc.setTextColor(120, 120, 120);
-  doc.text('LOOM & PAGE', centerX, yPosition + 15, { align: 'center' });
+  doc.text('LOOM & PAGE', centerX, yPosition + 18, { align: 'center' });
+  doc.setFontSize(7);
+  doc.text('Artisan Instructional Guides', centerX, yPosition + 24, { align: 'center' });
 
   // ==========================================
   // FOOTER ON ALL PAGES
@@ -480,5 +521,47 @@ export const generateGuidePDF = async ({ title, topic, bookData }: GeneratePDFOp
 
   // Save the PDF
   const filename = `${topic.toLowerCase().replace(/\s+/g, '-')}-guide.pdf`;
+  doc.save(filename);
+};
+
+// HTML-to-canvas PDF export for pixel-perfect rendering
+export const generatePixelPerfectPDF = async (containerElement: HTMLElement, filename: string) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  // Capture the element as canvas
+  const canvas = await html2canvas(containerElement, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+  });
+  
+  const imgData = canvas.toDataURL('image/jpeg', 0.95);
+  const imgWidth = pageWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  
+  let heightLeft = imgHeight;
+  let position = 0;
+  
+  // Add first page
+  doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight;
+  
+  // Add additional pages if content overflows
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight;
+    doc.addPage();
+    doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+  
   doc.save(filename);
 };
