@@ -22,8 +22,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield, BookOpen, Download, Loader2 } from 'lucide-react';
 import Logo from '@/components/Logo';
+import { BookData } from '@/lib/bookTypes';
+import { generateGuidePDF } from '@/lib/generatePDF';
 
 interface PromoCode {
   id: string;
@@ -44,6 +46,10 @@ const Admin = () => {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bookDialogOpen, setBookDialogOpen] = useState(false);
+  const [bookTopic, setBookTopic] = useState('');
+  const [generatingBook, setGeneratingBook] = useState(false);
+  const [generatedBook, setGeneratedBook] = useState<BookData | null>(null);
   const [newCode, setNewCode] = useState({
     code: '',
     discount_percent: 10,
@@ -153,7 +159,60 @@ const Admin = () => {
       toast.error('Failed to delete promo code');
     } else {
       setPromoCodes(codes => codes.filter(c => c.id !== id));
-      toast.success('Promo code deleted');
+    toast.success('Promo code deleted');
+    }
+  };
+
+  const handleGenerateBook = async () => {
+    if (!bookTopic.trim()) {
+      toast.error('Please enter a topic');
+      return;
+    }
+
+    setGeneratingBook(true);
+    setGeneratedBook(null);
+
+    try {
+      const sessionId = crypto.randomUUID();
+      const { data, error } = await supabase.functions.invoke('generate-book', {
+        body: { topic: bookTopic, sessionId }
+      });
+
+      if (error) {
+        toast.error('Failed to generate book');
+        console.error('Book generation error:', error);
+        return;
+      }
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      setGeneratedBook(data as BookData);
+      toast.success('Book generated successfully!');
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('Something went wrong');
+    } finally {
+      setGeneratingBook(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!generatedBook) return;
+
+    try {
+      toast.loading('Generating PDF...', { id: 'admin-pdf' });
+      await generateGuidePDF({
+        title: generatedBook.displayTitle || generatedBook.title,
+        topic: bookTopic,
+        bookData: generatedBook,
+      });
+      toast.success('PDF downloaded!', { id: 'admin-pdf' });
+    } catch (error) {
+      console.error('PDF error:', error);
+      toast.error('Failed to generate PDF', { id: 'admin-pdf' });
     }
   };
 
@@ -218,9 +277,76 @@ const Admin = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <main className="container mx-auto px-4 py-8 max-w-4xl space-y-12">
+        {/* Generate Full Book Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-serif text-2xl text-foreground">Generate Full Book</h2>
+            <Dialog open={bookDialogOpen} onOpenChange={setBookDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  New Book
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="font-serif">Generate Full Book (Admin)</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="book-topic">Topic</Label>
+                    <Input
+                      id="book-topic"
+                      value={bookTopic}
+                      onChange={e => setBookTopic(e.target.value)}
+                      placeholder="e.g., Ferrari 308 GTB Restoration"
+                      disabled={generatingBook}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleGenerateBook}
+                    className="w-full"
+                    disabled={generatingBook || !bookTopic.trim()}
+                  >
+                    {generatingBook ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      'Generate Book'
+                    )}
+                  </Button>
+
+                  {generatedBook && (
+                    <div className="pt-4 border-t space-y-3">
+                      <div className="text-sm">
+                        <span className="font-medium">Title:</span>{' '}
+                        {generatedBook.displayTitle || generatedBook.title}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {generatedBook.tableOfContents?.length || 0} chapters generated
+                      </div>
+                      <Button onClick={handleDownloadPDF} className="w-full gap-2">
+                        <Download className="w-4 h-4" />
+                        Download Full PDF
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            As an admin, you can generate and download full books without payment restrictions.
+          </p>
+        </section>
+
+        {/* Promo Codes Section */}
+        <section>
         <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-3xl text-foreground">Promo Codes</h1>
+          <h2 className="font-serif text-2xl text-foreground">Promo Codes</h2>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -338,6 +464,7 @@ const Admin = () => {
             </Table>
           </div>
         )}
+        </section>
       </main>
     </div>
   );

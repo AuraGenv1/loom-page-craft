@@ -15,7 +15,7 @@ interface AuthModalProps {
   isAuthenticating: boolean;
 }
 
-type AuthView = "options" | "email-signup" | "email-login";
+type AuthView = "options" | "email-signup" | "email-login" | "forgot-password";
 
 const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: AuthModalProps) => {
   const [view, setView] = useState<AuthView>("options");
@@ -108,6 +108,72 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
     handleClose(false);
   };
 
+  const ForgotPasswordForm = ({
+    email,
+    setEmail,
+    loading,
+    setLoading,
+    onBack,
+  }: {
+    email: string;
+    setEmail: (v: string) => void;
+    loading: boolean;
+    setLoading: (v: boolean) => void;
+    onBack: () => void;
+  }) => {
+    const handleForgotPassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!email) {
+        toast.error("Please enter your email");
+        return;
+      }
+
+      setLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+
+      setLoading(false);
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success("Password reset email sent! Check your inbox.");
+      onBack();
+    };
+
+    return (
+      <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
+        <p className="text-sm text-muted-foreground text-center">
+          Enter your email and we'll send you a link to reset your password.
+        </p>
+        <div className="space-y-2">
+          <Label htmlFor="forgot-email">Email</Label>
+          <Input
+            id="forgot-email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
+        </Button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs text-muted-foreground hover:underline w-full text-center"
+        >
+          ← Back to login
+        </button>
+      </form>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -116,6 +182,7 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
             {view === "options" && "Join LOOM & PAGE"}
             {view === "email-signup" && "Create an account"}
             {view === "email-login" && "Welcome back"}
+            {view === "forgot-password" && "Reset password"}
           </DialogTitle>
         </DialogHeader>
 
@@ -242,7 +309,16 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login-password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="login-password">Password</Label>
+                <button
+                  type="button"
+                  onClick={() => setView("forgot-password")}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <Input
                 id="login-password"
                 type="password"
@@ -269,6 +345,16 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
               ← Back to options
             </button>
           </form>
+        )}
+
+        {view === "forgot-password" && (
+          <ForgotPasswordForm
+            email={email}
+            setEmail={setEmail}
+            loading={loading}
+            setLoading={setLoading}
+            onBack={() => setView("email-login")}
+          />
         )}
       </DialogContent>
     </Dialog>
