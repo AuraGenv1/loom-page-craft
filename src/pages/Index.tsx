@@ -109,10 +109,12 @@ const Index = () => {
   };
 
   // Check for existing book on mount (only for authenticated users)
+  // This effect only runs when user is authenticated - guests skip it entirely
   useEffect(() => {
+    // Skip if still loading auth or if no user (guest mode)
+    if (authLoading || !user) return;
+    
     const checkExistingBook = async () => {
-      if (!user) return;
-      
       const { data, error } = await supabase
         .from('books')
         .select('*')
@@ -142,7 +144,7 @@ const Index = () => {
     };
 
     checkExistingBook();
-  }, [user]);
+  }, [user, authLoading]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
