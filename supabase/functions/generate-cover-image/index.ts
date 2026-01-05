@@ -13,7 +13,7 @@ serve(async (req) => {
   try {
     const { title, topic } = await req.json();
 
-    const prompt = `Create a minimalist technical blueprint illustration for a book cover about "${title}". Style: vintage technical drawing with clean lines on a cream/off-white paper background. Include subtle geometric patterns, architectural-style line work, and schematic elements related to ${topic || title}. No text, no words, no letters. Clean, elegant, minimalist aesthetic with muted earth tones and thin precise lines. The illustration should feel like a vintage engineering diagram or botanical illustration.`;
+    const prompt = `Minimalist black and white technical line art of ${topic || title}, isolated on white background, architectural sketch style, no shading, high contrast. No text, no words, no letters. Clean precise thin lines only.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
