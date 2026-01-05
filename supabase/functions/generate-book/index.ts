@@ -10,12 +10,21 @@ const HIGH_RISK_KEYWORDS = [
   'legal', 'law', 'attorney', 'lawyer', 'court', 'lawsuit', 'contract', 'sue'
 ];
 
+// Strictly block only violence, illegal acts, and self-harm (allow wellness/nutrition/fitness)
 const BLOCKED_KEYWORDS = [
-  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'drug', 'narcotic',
+  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'narcotic',
   'kill', 'murder', 'assassin', 'poison', 'suicide', 'self-harm', 'cutting',
   'terrorism', 'terrorist', 'bio-weapon', 'chemical weapon', 'nerve agent',
   'child abuse', 'exploitation', 'human trafficking', 'torture',
   'counterfeit', 'fraud', 'launder', 'money laundering'
+];
+
+// Wellness topics that are explicitly ALLOWED
+const WELLNESS_ALLOWED = [
+  'fasting', 'intermittent fasting', 'diet', 'nutrition', 'weight loss',
+  'fitness', 'exercise', 'workout', 'yoga', 'meditation', 'mindfulness',
+  'wellness', 'healthy eating', 'keto', 'paleo', 'vegan', 'vegetarian',
+  'meal prep', 'calorie', 'protein', 'vitamins', 'supplements'
 ];
 
 const SAFETY_ERROR = 'This topic violates our safety guidelines and cannot be generated.';
@@ -114,7 +123,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, sessionId } = await req.json();
+    const { topic, sessionId, fullBook = false } = await req.json();
     
     // Validate session_id to prevent bot abuse
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
@@ -133,11 +142,15 @@ serve(async (req) => {
       );
     }
 
-    console.log('Generating book for topic:', topic);
+    console.log('Generating book for topic:', topic, 'fullBook:', fullBook);
 
-    // Check for blocked topics (safety filter)
     const lowerTopic = topic.toLowerCase();
-    const isBlocked = BLOCKED_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
+    
+    // Check if topic is explicitly allowed (wellness/nutrition/fitness)
+    const isWellnessAllowed = WELLNESS_ALLOWED.some(keyword => lowerTopic.includes(keyword));
+    
+    // Check for blocked topics (safety filter) - skip if wellness allowed
+    const isBlocked = !isWellnessAllowed && BLOCKED_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     
     if (isBlocked) {
       console.log('Safety filter triggered for topic:', topic);
@@ -147,7 +160,7 @@ serve(async (req) => {
       );
     }
     
-    // Additional safety check: scan for dangerous instruction patterns
+    // Additional safety check: scan for dangerous instruction patterns (skip for wellness)
     const dangerousPatterns = [
       /how to (make|build|create|manufacture).*(weapon|bomb|explosive|gun)/i,
       /how to (harm|hurt|injure|kill)/i,
@@ -155,7 +168,7 @@ serve(async (req) => {
       /ways to (poison|drug|sedate)/i,
     ];
     
-    const hasDangerousPattern = dangerousPatterns.some(pattern => pattern.test(topic));
+    const hasDangerousPattern = !isWellnessAllowed && dangerousPatterns.some(pattern => pattern.test(topic));
     if (hasDangerousPattern) {
       console.log('Safety pattern match for topic:', topic);
       return new Response(
@@ -172,9 +185,13 @@ serve(async (req) => {
 
     const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
 
-    // Check if topic is high-risk
+    // Check if topic is high-risk (but allowed)
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     console.log('High-risk topic detected:', isHighRisk);
+
+    // Determine chapter count based on fullBook flag
+    const chapterCount = fullBook ? 12 : 10;
+    const contentLength = fullBook ? 1200 : 600;
 
     const systemPrompt = `You are the Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined book content.
 
@@ -202,11 +219,22 @@ You must respond with a JSON object in this exact format:
   "displayTitle": "Short Cover Title",
   "subtitle": "A longer descriptive subtitle explaining the book's contents",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title" },
-    { "chapter": 2, "title": "Chapter title" },
-    ... (exactly 10 chapters)
+    { "chapter": 1, "title": "Chapter title", "imageDescription": "A clear instructional diagram showing..." },
+    { "chapter": 2, "title": "Chapter title", "imageDescription": "An illustration depicting..." },
+    ... (exactly ${chapterCount} chapters)
   ],
   "chapter1Content": "Full markdown content of chapter 1...",
+  ${fullBook ? `"chapter2Content": "Full markdown content of chapter 2...",
+  "chapter3Content": "Full markdown content of chapter 3...",
+  "chapter4Content": "Full markdown content of chapter 4...",
+  "chapter5Content": "Full markdown content of chapter 5...",
+  "chapter6Content": "Full markdown content of chapter 6...",
+  "chapter7Content": "Full markdown content of chapter 7...",
+  "chapter8Content": "Full markdown content of chapter 8...",
+  "chapter9Content": "Full markdown content of chapter 9...",
+  "chapter10Content": "Full markdown content of chapter 10...",
+  "chapter11Content": "Full markdown content of chapter 11...",
+  "chapter12Content": "Full markdown content of chapter 12...",` : ''}
   "localResources": [
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
@@ -214,15 +242,23 @@ You must respond with a JSON object in this exact format:
   ]
 }
 
-Chapter 1 requirements:
-- Minimum 600 words of substantive instructional content
+IMPORTANT FOR TABLE OF CONTENTS:
+- Each chapter MUST include an "imageDescription" field that describes a clear, instructional diagram or illustration for that chapter
+- The imageDescription should be specific and describe what the diagram shows (e.g., "A labeled diagram showing the parts of a sourdough starter jar with temperature zones")
+- For instructional topics, describe diagrams, step-by-step visuals, or annotated illustrations
+- Avoid generic descriptions - be specific to the chapter content
+
+Chapter requirements:
+- Minimum ${contentLength} words of substantive instructional content per chapter
 - Begin with a compelling opening paragraph (no "Welcome" or greetings)
 - Include 2-3 section headers using ## markdown syntax
 - Incorporate at least one blockquote with a relevant insight
 - End with a transition to subsequent chapters
 - Use proper markdown: headers, paragraphs, bullet lists where appropriate`;
 
-    const userPrompt = `Compose Chapter One and the complete Table of Contents for an instructional volume on: "${topic}"`;
+    const userPrompt = fullBook 
+      ? `Compose ALL ${chapterCount} chapters with full content and the complete Table of Contents for an instructional volume on: "${topic}"`
+      : `Compose Chapter One and the complete Table of Contents for an instructional volume on: "${topic}"`;
 
     console.log('Calling Google Gemini API...');
 
@@ -250,6 +286,7 @@ Chapter 1 requirements:
             ],
             generationConfig: {
               temperature: 0.7,
+              maxOutputTokens: fullBook ? 32000 : 8000,
             },
           }),
         }

@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -19,14 +19,29 @@ const queryClient = new QueryClient();
 
 const AppRoutes = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Hard-override: if the auth recovery type is present in the URL hash, force the reset page.
   useEffect(() => {
     const hash = window.location.hash || "";
-    if (hash.includes("type=recovery")) {
+    // Check for recovery token in hash (Supabase sends #access_token=...&type=recovery)
+    if (hash.includes("type=recovery") || hash.includes("type=signup") || hash.includes("type=magiclink")) {
+      // Only redirect to reset-password for recovery type
+      if (hash.includes("type=recovery")) {
+        // Use window.location.replace to ensure a hard redirect
+        window.location.replace('/reset-password' + window.location.hash);
+        return;
+      }
+    }
+  }, []);
+
+  // Secondary effect to catch any missed recovery redirects
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    if (hash.includes("type=recovery") && location.pathname !== "/reset-password") {
       navigate("/reset-password", { replace: true });
     }
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   return (
     <Routes>
@@ -59,4 +74,3 @@ const App = () => (
 );
 
 export default App;
-

@@ -379,8 +379,21 @@ const Index = () => {
   };
 
   const handlePurchase = () => {
+    // If not logged in, prompt auth first
+    if (!user) {
+      toast.info('Please sign in or create an account to purchase', {
+        description: 'You can checkout as a guest or sign in for your library.',
+        action: {
+          label: 'Sign In',
+          onClick: () => setAuthModalOpen(true),
+        },
+      });
+      return;
+    }
+    
+    // TODO: Integrate Stripe checkout here
     toast.success('Thank you! Your complete guide is now unlocked.', {
-      description: 'Check your email for the download link.',
+      description: 'You can now download the full guide.',
     });
   };
 
