@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
@@ -25,7 +25,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
-import { Download, Sparkles } from 'lucide-react';
+import { Download, Sparkles, FlaskConical } from 'lucide-react';
+
+// Admin email for test mode access
+const ADMIN_EMAIL = 'admin@loomandpage.com'; // Update this to your admin email
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -70,6 +73,7 @@ const extractMaterials = (content?: string): string[] => {
 };
 
 const Index = () => {
+  const [searchParams] = useSearchParams();
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
@@ -79,6 +83,16 @@ const Index = () => {
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Test mode: enabled via ?test=true URL param OR admin user
+  const isTestMode = useMemo(() => {
+    const testParam = searchParams.get('test') === 'true';
+    const isAdmin = user?.email === ADMIN_EMAIL;
+    return testParam || isAdmin;
+  }, [searchParams, user?.email]);
+
+  // In test mode, content is fully unlocked (simulates paid state)
+  const isPaid = isTestMode;
 
   const handleOpenAuthModal = () => {
     setAuthModalOpen(true);
@@ -363,11 +377,20 @@ const Index = () => {
         {viewState === 'book' && (
           <div className="py-12">
             {/* Save to Cloud Banner for guests */}
-            {!user && (
+            {!user && !isTestMode && (
               <SaveToCloudBanner 
                 onSignIn={handleOpenAuthModal} 
                 isAuthenticating={isAuthenticating} 
               />
+            )}
+            
+            {/* Test Mode Indicator */}
+            {isTestMode && (
+              <div className="mb-6 flex items-center justify-center gap-2 py-2 px-4 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
+                <FlaskConical className="w-4 h-4" />
+                <span className="font-medium">Test Mode Active</span>
+                <span className="text-amber-600 dark:text-amber-400">— Full content unlocked</span>
+              </div>
             )}
             
             {/* Book Cover */}
@@ -379,24 +402,33 @@ const Index = () => {
                 <div className="flex flex-col sm:flex-row justify-center gap-3">
                   <Button
                     onClick={handleDownloadPDF}
-                    variant="outline"
+                    variant={isPaid ? "default" : "outline"}
                     size="lg"
                     className="gap-2 font-serif"
                   >
                     <Download className="w-4 h-4" />
-                    Download Free Sample (PDF)
+                    {isPaid ? 'Download Full Guide (PDF)' : 'Download Free Sample (PDF)'}
                   </Button>
-                  <Button
-                    size="lg"
-                    className="gap-2 font-serif"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Unlock Full Artisan Guide — $4.99
-                  </Button>
+                  {!isPaid && (
+                    <Button
+                      size="lg"
+                      className="gap-2 font-serif"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Unlock Full Artisan Guide — $4.99
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground text-center max-w-md">
-                  Sample includes Step 1 and the material list. The full $4.99 guide unlocks all steps, pro tips, and the local supplier map.
-                </p>
+                {!isPaid && (
+                  <p className="text-xs text-muted-foreground text-center max-w-md">
+                    Sample includes Step 1 and the material list. The full $4.99 guide unlocks all steps, pro tips, and the local supplier map.
+                  </p>
+                )}
+                {isPaid && (
+                  <p className="text-xs text-accent text-center max-w-md font-medium">
+                    ✓ Full access unlocked — All 10 chapters available
+                  </p>
+                )}
               </div>
             </section>
 
@@ -427,8 +459,8 @@ const Index = () => {
               />
             </section>
 
-            {/* Paywall */}
-            <PaywallOverlay onPurchase={handlePurchase} />
+            {/* Paywall - only show if not paid */}
+            {!isPaid && <PaywallOverlay onPurchase={handlePurchase} />}
           </div>
         )}
       </main>
