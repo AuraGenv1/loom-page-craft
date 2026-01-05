@@ -86,7 +86,7 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-[1px] bg-foreground/15" />
           <p className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-muted-foreground/60 font-serif">
-            A Curated Loom & Page Technical Manual
+            An Artisan Series Technical Manual
           </p>
         </div>
       </div>
