@@ -32,6 +32,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading && !user) {
+      toast.error('Please sign in to view your library.');
       navigate('/');
     }
   }, [user, loading, navigate]);
