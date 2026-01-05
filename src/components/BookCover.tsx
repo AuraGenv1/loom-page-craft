@@ -34,15 +34,15 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
       {/* Cover Image Area */}
       <div className="flex-1 flex flex-col items-center justify-center text-center px-2 py-4">
         {/* AI-Generated Cover Image or Fallback Icon */}
-        <div className="relative mb-6 w-full max-w-[200px] aspect-square">
+        <div className="relative mb-6 w-full max-w-[180px] aspect-square">
           {isLoadingImage ? (
-            <Skeleton className="w-full h-full rounded-lg" />
+            <Skeleton className="w-full h-full rounded-full" />
           ) : coverImageUrl ? (
-            <div className="w-full h-full rounded-lg overflow-hidden border border-foreground/10 bg-secondary/20">
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10">
               <img 
                 src={coverImageUrl} 
                 alt={`Cover illustration for ${title}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover opacity-80 mix-blend-multiply"
               />
             </div>
           ) : (
@@ -52,11 +52,6 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
               </div>
             </div>
           )}
-          {/* Corner accents */}
-          <div className="absolute -top-2 -left-2 w-4 h-4 border-t border-l border-foreground/20" />
-          <div className="absolute -top-2 -right-2 w-4 h-4 border-t border-r border-foreground/20" />
-          <div className="absolute -bottom-2 -left-2 w-4 h-4 border-b border-l border-foreground/20" />
-          <div className="absolute -bottom-2 -right-2 w-4 h-4 border-b border-r border-foreground/20" />
         </div>
 
         <p className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-muted-foreground mb-2">
