@@ -46,7 +46,7 @@ const BookCover = ({ title, topic = '' }: BookCoverProps) => {
         <p className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-muted-foreground mb-3">
           A Complete Guide
         </p>
-        <h1 className="font-serif text-2xl md:text-3xl lg:text-4xl font-semibold text-foreground leading-tight mb-4">
+        <h1 className="font-serif text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold text-foreground leading-tight mb-4 line-clamp-3 text-center px-2">
           {title}
         </h1>
         <p className="text-xs md:text-sm text-muted-foreground/70 italic tracking-wide">
