@@ -39,14 +39,19 @@ const BookCover = ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage 
         <div className="relative mb-6 w-full max-w-[180px] aspect-square">
           {isLoadingImage ? (
             // Skeleton with subtle animation while generating
-            <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
-              <Skeleton className="w-full h-full rounded-full" />
-              {/* Animated placeholder pattern */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-[85%] h-[85%] rounded-full border border-dashed border-foreground/10 flex items-center justify-center animate-pulse">
-                  <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
+            <div className="w-full h-full flex flex-col items-center">
+              <div className="w-full aspect-square rounded-full overflow-hidden border-2 border-foreground/10 relative">
+                <Skeleton className="w-full h-full rounded-full" />
+                {/* Animated placeholder pattern */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border border-dashed border-foreground/10 flex items-center justify-center animate-pulse">
+                    <TopicIcon className="w-12 h-12 text-foreground/20 stroke-[0.5]" />
+                  </div>
                 </div>
               </div>
+              <p className="mt-3 text-[10px] text-muted-foreground/70 italic font-serif tracking-wide">
+                Illustrating your custom guide...
+              </p>
             </div>
           ) : coverImageUrl ? (
             <div className="w-full h-full rounded-full overflow-hidden border-2 border-foreground/10 relative">
