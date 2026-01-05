@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Check, Lock } from 'lucide-react';
 import { ChapterInfo } from '@/lib/bookTypes';
 
@@ -6,7 +7,7 @@ interface TableOfContentsProps {
   chapters?: ChapterInfo[];
 }
 
-const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
+const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(({ topic, chapters }, ref) => {
   // Use AI-generated chapters or fallback to defaults
   const displayChapters = chapters?.length
     ? chapters.map((ch, idx) => ({
@@ -28,7 +29,7 @@ const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
       ];
 
   return (
-    <div className="w-full max-w-2xl mx-auto py-12 animate-fade-up animation-delay-200">
+    <div ref={ref} className="w-full max-w-2xl mx-auto py-12 animate-fade-up animation-delay-200">
       {/* Decorative header */}
       <div className="text-center mb-10">
         <div className="flex items-center justify-center gap-4 mb-4">
@@ -36,23 +37,17 @@ const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
           <div className="w-1.5 h-1.5 rounded-full bg-foreground/20" />
           <div className="w-16 h-[1px] bg-foreground/15" />
         </div>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
-          Contents
-        </p>
-        <h2 className="font-serif text-3xl md:text-4xl font-medium text-foreground">
-          Table of Contents
-        </h2>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Contents</p>
+        <h2 className="font-serif text-3xl md:text-4xl font-medium text-foreground">Table of Contents</h2>
       </div>
 
       {/* Chapters list */}
       <div className="space-y-1 border-t border-b border-border/30 py-6">
-        {displayChapters.map((chapter, idx) => (
+        {displayChapters.map((chapter) => (
           <div
             key={chapter.number}
             className={`group flex items-center justify-between py-4 px-5 rounded-lg transition-all duration-200 ${
-              chapter.isUnlocked
-                ? 'hover:bg-secondary/60 cursor-pointer'
-                : 'opacity-60'
+              chapter.isUnlocked ? 'hover:bg-secondary/60 cursor-pointer' : 'opacity-60'
             }`}
           >
             <div className="flex items-center gap-5">
@@ -60,13 +55,15 @@ const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
                 {chapter.number.toString().padStart(2, '0')}
               </span>
               <div className="flex flex-col">
-                <span className={`font-serif text-base md:text-lg ${chapter.isUnlocked ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <span
+                  className={`font-serif text-base md:text-lg ${
+                    chapter.isUnlocked ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
                   {chapter.title}
                 </span>
                 {chapter.isUnlocked && (
-                  <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">
-                    Available
-                  </span>
+                  <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">Available</span>
                 )}
               </div>
             </div>
@@ -103,6 +100,9 @@ const TableOfContents = ({ topic, chapters }: TableOfContentsProps) => {
       </div>
     </div>
   );
-};
+});
+
+TableOfContents.displayName = 'TableOfContents';
 
 export default TableOfContents;
+

@@ -231,13 +231,21 @@
 
   /* Hide Lovable branding for white-label */
   .lovable-badge,
+  .lovable-watermark,
+  .lovable-branding,
   [data-lovable-badge],
+  [data-testid="lovable-badge"],
+  [data-testid="lovable-watermark"],
   a[href*="lovable.dev"]:not(nav a),
+  a[href*="lovable.app"]:not(nav a),
   div[class*="lovable"],
+  [class*="lovable-badge"],
+  [id*="lovable"],
   .gpt-badge,
   #lovable-badge {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    pointer-events: none !important;
   }
 }
