@@ -6,7 +6,7 @@ interface GeneratePDFOptions {
   title: string;
   topic: string;
   bookData: BookData;
-  previewElement: HTMLElement; // The DOM element to capture
+  previewElement?: HTMLElement; // Optional - if not provided, generates text-only PDF
   isAdmin?: boolean;
 }
 
@@ -27,6 +27,8 @@ const waitForImages = async (container: HTMLElement): Promise<void> => {
 
 /**
  * Captures the React component and generates a high-resolution A4 PDF.
+ * If previewElement is provided, captures it with html2canvas.
+ * Otherwise generates a basic text PDF.
  */
 export const generateGuidePDF = async ({
   title,
@@ -35,8 +37,44 @@ export const generateGuidePDF = async ({
   previewElement,
   isAdmin = false,
 }: GeneratePDFOptions) => {
+  // Initialize jsPDF (A4 Portrait)
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // If no preview element, generate a simple text-based PDF
   if (!previewElement) {
-    console.error("Target element for PDF capture not found.");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(24);
+    doc.text(title, pageWidth / 2, 40, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.text(`A Complete Guide to ${topic}`, pageWidth / 2, 55, { align: "center" });
+    
+    // Add chapter content as text
+    if (bookData.chapter1Content) {
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(bookData.chapter1Content, pageWidth - 40);
+      let y = 80;
+      
+      for (const line of lines) {
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 20, y);
+        y += 5;
+      }
+    }
+    
+    const safeTitle = topic.toLowerCase().replace(/\s+/g, "-");
+    doc.save(`${safeTitle}-artisan-guide.pdf`);
     return;
   }
 
@@ -45,7 +83,7 @@ export const generateGuidePDF = async ({
 
   // 2. Configure html2canvas for "Pixel-Perfect" output
   const canvas = await html2canvas(previewElement, {
-    scale: 3, // High-DPI output for professional print quality
+    scale: 2, // High-DPI output for professional print quality
     useCORS: true, // Allows capture of AI images from external URLs
     allowTaint: false,
     backgroundColor: "#ffffff",
@@ -68,17 +106,7 @@ export const generateGuidePDF = async ({
     },
   });
 
-  // 3. Initialize jsPDF (A4 Portrait)
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-
-  // 4. Calculate dimensions to maintain aspect ratio
+  // 3. Calculate dimensions to maintain aspect ratio
   const imgData = canvas.toDataURL("image/jpeg", 0.98); // High quality JPEG
   const imgWidth = pageWidth;
   const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -86,8 +114,7 @@ export const generateGuidePDF = async ({
   let heightLeft = imgHeight;
   let position = 0;
 
-  // 5. Build the PDF pages
-  // Page 1: Cover & Start of content
+  // 4. Build the PDF pages
   doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
   heightLeft -= pageHeight;
 
@@ -99,7 +126,63 @@ export const generateGuidePDF = async ({
     heightLeft -= pageHeight;
   }
 
-  // 6. Download the file
+  // 5. Download the file
   const safeTitle = topic.toLowerCase().replace(/\s+/g, "-");
   doc.save(`${safeTitle}-artisan-guide.pdf`);
+};
+
+/**
+ * Pixel-perfect PDF from a DOM element (used by PrintPreview)
+ */
+export const generatePixelPerfectPDF = async (
+  element: HTMLElement,
+  filename: string,
+  isAdmin = false
+): Promise<void> => {
+  await waitForImages(element);
+
+  const canvas = await html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: "#ffffff",
+    logging: false,
+    onclone: (clonedDoc) => {
+      if (isAdmin) {
+        const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
+        blurred.forEach((el) => {
+          (el as HTMLElement).style.filter = "none";
+          (el as HTMLElement).style.backdropFilter = "none";
+        });
+      }
+    },
+  });
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  const imgData = canvas.toDataURL("image/jpeg", 0.98);
+  const imgWidth = pageWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  let heightLeft = imgHeight;
+  let position = 0;
+
+  doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+  heightLeft -= pageHeight;
+
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight;
+    doc.addPage();
+    doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+    heightLeft -= pageHeight;
+  }
+
+  doc.save(filename);
 };
