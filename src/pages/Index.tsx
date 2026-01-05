@@ -45,6 +45,8 @@ const Index = () => {
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -93,9 +95,9 @@ const Index = () => {
   }, [user]);
 
   const handleSearch = async (query: string) => {
-
     setTopic(query);
     setViewState('loading');
+    setCoverImageUrl(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('generate-book', {
@@ -173,6 +175,20 @@ const Index = () => {
       }
 
       setViewState('book');
+
+      // Generate cover image in background (non-blocking)
+      setIsLoadingCoverImage(true);
+      supabase.functions.invoke('generate-cover-image', {
+        body: { title: generatedBook.title, topic: query }
+      }).then(({ data: imageData, error: imageError }) => {
+        setIsLoadingCoverImage(false);
+        if (!imageError && imageData?.imageUrl) {
+          setCoverImageUrl(imageData.imageUrl);
+        } else {
+          console.log('Cover image generation skipped or failed:', imageError);
+        }
+      });
+
     } catch (err) {
       console.error('Unexpected error:', err);
       toast.error('Something went wrong. Please try again.');
@@ -208,6 +224,8 @@ const Index = () => {
     setTopic('');
     setBookData(null);
     setBookId(null);
+    setCoverImageUrl(null);
+    setIsLoadingCoverImage(false);
   };
 
   // Use AI-generated title or fallback
@@ -317,7 +335,7 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={displayTitle} topic={topic} />
+              <BookCover title={displayTitle} topic={topic} coverImageUrl={coverImageUrl} isLoadingImage={isLoadingCoverImage} />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
