@@ -11,6 +11,8 @@ export interface LocalResource {
 
 export interface BookData {
   title: string;
+  displayTitle: string;
+  subtitle: string;
   tableOfContents: ChapterInfo[];
   chapter1Content: string;
   localResources: LocalResource[];
