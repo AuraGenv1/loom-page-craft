@@ -8,9 +8,10 @@ interface ChapterContentProps {
   content?: string;
   localResources?: LocalResource[];
   hasDisclaimer?: boolean;
+  materials?: string[];
 }
 
-const ChapterContent = ({ topic, content, localResources, hasDisclaimer }: ChapterContentProps) => {
+const ChapterContent = ({ topic, content, localResources, hasDisclaimer, materials }: ChapterContentProps) => {
   // Parse markdown content into sections (simplified rendering)
   const renderContent = () => {
     if (!content) {
@@ -178,7 +179,7 @@ const ChapterContent = ({ topic, content, localResources, hasDisclaimer }: Chapt
       </div>
 
       {/* Local Resources Section */}
-      <LocalResources topic={topic} resources={localResources} />
+      <LocalResources topic={topic} resources={localResources} materials={materials} />
     </article>
   );
 };

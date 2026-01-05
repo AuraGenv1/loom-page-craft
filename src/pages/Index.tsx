@@ -39,6 +39,36 @@ const getSessionId = (): string => {
   return newId;
 };
 
+// Extract material keywords from chapter content for better local search
+const extractMaterials = (content?: string): string[] => {
+  if (!content) return [];
+  
+  // Look for common material list patterns
+  const materialPatterns = [
+    /materials?:?\s*([^\n]+)/gi,
+    /supplies?:?\s*([^\n]+)/gi,
+    /you(?:'ll)? need:?\s*([^\n]+)/gi,
+    /ingredients?:?\s*([^\n]+)/gi,
+    /tools?:?\s*([^\n]+)/gi,
+  ];
+  
+  const materials: string[] = [];
+  
+  for (const pattern of materialPatterns) {
+    const matches = content.matchAll(pattern);
+    for (const match of matches) {
+      if (match[1]) {
+        // Split by common delimiters and clean up
+        const items = match[1].split(/[,;]/).map(s => s.trim()).filter(s => s.length > 2 && s.length < 50);
+        materials.push(...items.slice(0, 5));
+      }
+    }
+  }
+  
+  // Return unique materials, limited to top 5
+  return [...new Set(materials)].slice(0, 5);
+};
+
 const Index = () => {
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
@@ -393,6 +423,7 @@ const Index = () => {
                 content={bookData?.chapter1Content}
                 localResources={bookData?.localResources}
                 hasDisclaimer={bookData?.hasDisclaimer}
+                materials={extractMaterials(bookData?.chapter1Content)}
               />
             </section>
 
