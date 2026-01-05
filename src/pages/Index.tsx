@@ -108,20 +108,34 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Check for existing book on mount (only for authenticated users)
-  // This effect only runs when user is authenticated - guests skip it entirely
+  // Check for existing book on mount
+  // For authenticated users: query their books directly
+  // For guests: use RPC function with session_id
   useEffect(() => {
-    // Skip if still loading auth or if no user (guest mode)
-    if (authLoading || !user) return;
+    if (authLoading) return;
     
     const checkExistingBook = async () => {
-      const { data, error } = await supabase
-        .from('books')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let data = null;
+      let error = null;
+
+      if (user) {
+        // Authenticated user: direct query (RLS allows this)
+        const result = await supabase
+          .from('books')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        data = result.data;
+        error = result.error;
+      } else {
+        // Guest: use session-based RPC function
+        const sessionId = getSessionId();
+        const result = await supabase.rpc('get_book_by_session', { p_session_id: sessionId });
+        data = result.data?.[0] || null;
+        error = result.error;
+      }
 
       if (data && !error) {
         // Generate fallback displayTitle from stored title

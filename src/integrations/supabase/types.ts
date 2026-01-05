@@ -152,7 +152,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_book_by_session: {
+        Args: { p_session_id: string }
+        Returns: {
+          chapter1_content: string
+          created_at: string
+          has_disclaimer: boolean
+          id: string
+          local_resources: Json
+          session_id: string
+          table_of_contents: Json
+          title: string
+          topic: string
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "books"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       [_ in never]: never
