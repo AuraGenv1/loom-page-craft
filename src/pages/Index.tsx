@@ -101,13 +101,19 @@ const Index = () => {
     checkAdminRole();
   }, [user]);
 
-  // Test mode: enabled via ?test=true URL param OR admin user (from database)
+  // Test mode: ONLY enabled for verified admin users (from database role check)
+  // URL parameter ?test=true is only allowed in development environment for testing
   const isTestMode = useMemo(() => {
-    const testParam = searchParams.get('test') === 'true';
-    return testParam || isAdmin;
+    // In development, allow ?test=true for local testing
+    if (import.meta.env.DEV) {
+      const testParam = searchParams.get('test') === 'true';
+      if (testParam) return true;
+    }
+    // In production, only database-verified admins can access test mode
+    return isAdmin;
   }, [searchParams, isAdmin]);
 
-  // In test mode, content is fully unlocked (simulates paid state)
+  // Content is unlocked for admins or paid users (payment integration TODO)
   const isPaid = isTestMode;
 
   const handleOpenAuthModal = () => {

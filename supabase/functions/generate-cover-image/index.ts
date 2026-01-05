@@ -63,8 +63,19 @@ serve(async (req) => {
       });
     }
 
+    // SECURITY: Limit input length to prevent cost abuse
+    const MAX_INPUT_LENGTH = 200;
+    const rawSubject = (topic || title || "").toString();
+    if (rawSubject.length > MAX_INPUT_LENGTH) {
+      console.error("Input too long:", rawSubject.length, "chars");
+      return new Response(JSON.stringify({ error: `Input must be ${MAX_INPUT_LENGTH} characters or less` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const resolvedVariant: Variant = variant === "diagram" ? "diagram" : "cover";
-    const subject = (topic || title || "").toString();
+    const subject = rawSubject;
 
     console.log(`Generating ${resolvedVariant} image for: ${subject}`);
 

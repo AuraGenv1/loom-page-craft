@@ -142,6 +142,16 @@ serve(async (req) => {
       );
     }
 
+    // SECURITY: Limit topic length to prevent cost abuse via excessive API token usage
+    const MAX_TOPIC_LENGTH = 200;
+    if (topic.length > MAX_TOPIC_LENGTH) {
+      console.error('Topic too long:', topic.length, 'chars');
+      return new Response(
+        JSON.stringify({ error: `Topic must be ${MAX_TOPIC_LENGTH} characters or less` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Generating book for topic:', topic, 'fullBook:', fullBook);
 
     const lowerTopic = topic.toLowerCase();
