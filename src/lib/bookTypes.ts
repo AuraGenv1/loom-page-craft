@@ -1,40 +1,36 @@
-/**
- * Unified Type Definitions
- */
-export interface LocalResource {
-  name: string;
-  type: string;
-  address: string;
-  phone?: string;
-  description?: string;
-  rating?: number;
-  reviewCount?: number;
-  placeId?: string;
-}
-
 export interface ChapterInfo {
   chapter: number;
   title: string;
   imageDescription?: string;
 }
 
-export interface Chapter {
-  title: string;
-  description: string;
+export interface LocalResource {
+  name: string;
+  type: string;
+  description?: string;
+  address?: string;
+  rating?: number | null;
+  reviewCount?: number | null;
+  placeId?: string;
 }
 
 export interface BookData {
   title: string;
-  displayTitle?: string;
-  subtitle?: string;
-  preface: string;
-  chapters: Chapter[];
-  topic: string;
-  coverImage?: string;
-  tableOfContents?: ChapterInfo[];
-  chapter1Content?: string;
-  localResources?: LocalResource[];
+  displayTitle: string;
+  subtitle: string;
+  tableOfContents: ChapterInfo[];
+  chapter1Content: string;
+  chapter2Content?: string;
+  chapter3Content?: string;
+  chapter4Content?: string;
+  chapter5Content?: string;
+  chapter6Content?: string;
+  chapter7Content?: string;
+  chapter8Content?: string;
+  chapter9Content?: string;
+  chapter10Content?: string;
+  chapter11Content?: string;
+  chapter12Content?: string;
+  localResources: LocalResource[];
   hasDisclaimer?: boolean;
-  // This helps fix the "bookData does not exist" errors in Admin/Dashboard
-  bookData?: any;
 }

@@ -14,9 +14,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
   ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage }, ref) => {
     const TopicIcon = getTopicIcon(topic || title);
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageFailed, setImageFailed] = useState(false);
 
     useEffect(() => {
       setImageLoaded(false);
+      setImageFailed(false);
+      
+      // Timeout fallback: if image doesn't load in 15s, show fallback
+      if (coverImageUrl) {
+        const timeout = setTimeout(() => {
+          if (!imageLoaded) {
+            console.warn('Cover image load timeout, showing fallback');
+            setImageFailed(true);
+            setImageLoaded(true);
+          }
+        }, 15000);
+        return () => clearTimeout(timeout);
+      }
     }, [coverImageUrl]);
 
     return (
@@ -38,13 +52,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
             {isLoadingImage ? (
               <div className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-foreground/10 bg-secondary/20">
-                <WeavingLoader text="Weaving your masterpiece..." className="w-full px-4" />
+                <WeavingLoader text="Weaving..." className="w-full px-4" />
               </div>
-            ) : coverImageUrl ? (
+            ) : coverImageUrl && !imageFailed ? (
               <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
                 {!imageLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <WeavingLoader text="Weaving your masterpiece..." className="w-full px-4" />
+                    <WeavingLoader text="Loading..." className="w-full px-4" />
                   </div>
                 )}
                 <img
@@ -52,6 +66,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                   alt={`Cover illustration for ${title}`}
                   className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   onLoad={() => setImageLoaded(true)}
+                  onError={() => {
+                    console.warn('Cover image failed to load, showing fallback');
+                    setImageFailed(true);
+                    setImageLoaded(true);
+                  }}
                   loading="eager"
                   crossOrigin="anonymous"
                 />

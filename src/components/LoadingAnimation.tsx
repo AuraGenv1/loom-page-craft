@@ -43,7 +43,7 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
 
       {/* Title */}
       <h2 className="font-serif text-2xl md:text-3xl text-foreground tracking-tight mb-3">
-        Weaving your masterpiece...
+        Weaving...
       </h2>
 
       {/* Status text */}

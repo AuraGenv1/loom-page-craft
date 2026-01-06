@@ -25,7 +25,7 @@ import {
 import { toast } from 'sonner';
 import { Plus, Trash2, ArrowLeft, Shield, BookOpen, Download, Loader2, FileText } from 'lucide-react';
 import Logo from '@/components/Logo';
-import { BookData, Chapter } from '@/lib/bookTypes';
+import { BookData } from '@/lib/bookTypes';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
 
@@ -62,6 +62,7 @@ const Admin = () => {
     expires_at: '',
   });
 
+  // Check if user is admin
   useEffect(() => {
     const checkAdminRole = async () => {
       if (!user) {
@@ -88,6 +89,7 @@ const Admin = () => {
     }
   }, [user, authLoading]);
 
+  // Fetch promo codes
   useEffect(() => {
     const fetchPromoCodes = async () => {
       if (!isAdmin) return;
@@ -131,6 +133,7 @@ const Admin = () => {
       toast.success('Promo code created');
       setDialogOpen(false);
       setNewCode({ code: '', discount_percent: 10, max_uses: '', expires_at: '' });
+      // Refresh list
       const { data } = await supabase
         .from('promo_codes')
         .select('*')
@@ -161,7 +164,7 @@ const Admin = () => {
       toast.error('Failed to delete promo code');
     } else {
       setPromoCodes(codes => codes.filter(c => c.id !== id));
-      toast.success('Promo code deleted');
+    toast.success('Promo code deleted');
     }
   };
 
@@ -175,8 +178,9 @@ const Admin = () => {
     setGeneratedBook(null);
 
     try {
+      const sessionId = crypto.randomUUID();
       const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { topic: bookTopic, fullBook: fullBookMode }
+        body: { topic: bookTopic, sessionId, fullBook: fullBookMode }
       });
 
       if (error) {
@@ -185,38 +189,16 @@ const Admin = () => {
         return;
       }
 
-      if (data?.error) {
+      if (data.error) {
         toast.error(data.error);
         return;
       }
 
-      // Safely build complete BookData with type casting
-      const content = data?.content || data;
-      const chapters: Chapter[] = Array.isArray(content?.chapters)
-        ? content.chapters.map((ch: any) => ({
-            title: ch?.title || 'Untitled',
-            description: ch?.description || '',
-          }))
-        : [];
-
-      const safeBook: BookData = {
-        title: content?.title || `Guide to ${bookTopic}`,
-        displayTitle: content?.displayTitle || content?.title || `Guide to ${bookTopic}`,
-        subtitle: content?.subtitle || '',
-        preface: content?.preface || '',
-        topic: bookTopic,
-        chapters,
-        tableOfContents: content?.tableOfContents || chapters.map((ch, i) => ({ chapter: i + 1, title: ch.title })),
-        chapter1Content: chapters[0]?.description || content?.preface || '',
-        localResources: content?.localResources || [],
-        hasDisclaimer: content?.hasDisclaimer ?? true,
-      };
-
-      setGeneratedBook(safeBook);
-      toast.success(`Book generated successfully! (${fullBookMode ? 'Full' : 'Sample'})`);
-    } catch (err: any) {
+      setGeneratedBook(data as BookData);
+      toast.success(`Book generated successfully! (${fullBookMode ? 'Full 12 chapters' : 'Sample'})`);
+    } catch (err) {
       console.error('Unexpected error:', err);
-      toast.error(`Something went wrong: ${err?.message || 'Unknown error'}`);
+      toast.error('Something went wrong');
     } finally {
       setGeneratingBook(false);
     }
@@ -234,7 +216,7 @@ const Admin = () => {
         bookData: generatedBook,
       });
       toast.success('PDF downloaded!', { id: 'admin-pdf' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('PDF error:', error);
       toast.error('Failed to generate PDF', { id: 'admin-pdf' });
     } finally {
@@ -254,7 +236,7 @@ const Admin = () => {
         bookData: generatedBook,
       });
       toast.success('Kindle file downloaded!', { id: 'admin-kindle' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Kindle error:', error);
       toast.error('Failed to generate Kindle file', { id: 'admin-kindle' });
     } finally {
@@ -262,6 +244,7 @@ const Admin = () => {
     }
   };
 
+  // Loading state
   if (authLoading || checkingRole) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -270,6 +253,7 @@ const Admin = () => {
     );
   }
 
+  // Not logged in
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 p-8">
@@ -286,6 +270,7 @@ const Admin = () => {
     );
   }
 
+  // Not admin
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 p-8">
@@ -304,6 +289,7 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -320,6 +306,7 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl space-y-12">
+        {/* Generate Full Book Section */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-serif text-2xl text-foreground">Generate Full Book</h2>
@@ -380,7 +367,7 @@ const Admin = () => {
                         {generatedBook.displayTitle || generatedBook.title}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {generatedBook.chapters?.length || 0} chapters generated
+                        {generatedBook.tableOfContents?.length || 0} chapters generated
                       </div>
                       <div className="flex gap-2">
                         <Button 
@@ -416,129 +403,131 @@ const Admin = () => {
             </Dialog>
           </div>
           <p className="text-sm text-muted-foreground">
-            As an admin, you can generate complete 12-chapter books and download them in PDF or Kindle format.
+            As an admin, you can generate complete 12-chapter books and download them in PDF or Kindle format without restrictions.
           </p>
         </section>
 
+        {/* Promo Codes Section */}
         <section>
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="font-serif text-2xl text-foreground">Promo Codes</h2>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Code
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="font-serif">Create Promo Code</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div>
-                    <Label htmlFor="code">Code</Label>
-                    <Input
-                      id="code"
-                      value={newCode.code}
-                      onChange={e => setNewCode({ ...newCode, code: e.target.value })}
-                      placeholder="SAVE20"
-                      className="uppercase"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="discount">Discount %</Label>
-                    <Input
-                      id="discount"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={newCode.discount_percent}
-                      onChange={e =>
-                        setNewCode({ ...newCode, discount_percent: parseInt(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="max_uses">Max Uses (leave empty for unlimited)</Label>
-                    <Input
-                      id="max_uses"
-                      type="number"
-                      min="1"
-                      value={newCode.max_uses}
-                      onChange={e => setNewCode({ ...newCode, max_uses: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="expires">Expires At (optional)</Label>
-                    <Input
-                      id="expires"
-                      type="datetime-local"
-                      value={newCode.expires_at}
-                      onChange={e => setNewCode({ ...newCode, expires_at: e.target.value })}
-                    />
-                  </div>
-                  <Button onClick={handleCreateCode} className="w-full">
-                    Create Code
-                  </Button>
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="font-serif text-2xl text-foreground">Promo Codes</h2>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                New Code
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-serif">Create Promo Code</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div>
+                  <Label htmlFor="code">Code</Label>
+                  <Input
+                    id="code"
+                    value={newCode.code}
+                    onChange={e => setNewCode({ ...newCode, code: e.target.value })}
+                    placeholder="SAVE20"
+                    className="uppercase"
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <div>
+                  <Label htmlFor="discount">Discount %</Label>
+                  <Input
+                    id="discount"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newCode.discount_percent}
+                    onChange={e =>
+                      setNewCode({ ...newCode, discount_percent: parseInt(e.target.value) || 0 })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="max_uses">Max Uses (leave empty for unlimited)</Label>
+                  <Input
+                    id="max_uses"
+                    type="number"
+                    min="1"
+                    value={newCode.max_uses}
+                    onChange={e => setNewCode({ ...newCode, max_uses: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="expires">Expires At (optional)</Label>
+                  <Input
+                    id="expires"
+                    type="datetime-local"
+                    value={newCode.expires_at}
+                    onChange={e => setNewCode({ ...newCode, expires_at: e.target.value })}
+                  />
+                </div>
+                <Button onClick={handleCreateCode} className="w-full">
+                  Create Code
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
 
-          {loadingCodes ? (
-            <div className="text-center py-12 text-muted-foreground">Loading...</div>
-          ) : promoCodes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No promo codes yet. Create your first one!
-            </div>
-          ) : (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Discount</TableHead>
-                    <TableHead>Uses</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead className="w-12"></TableHead>
+        {loadingCodes ? (
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        ) : promoCodes.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            No promo codes yet. Create your first one!
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Discount</TableHead>
+                  <TableHead>Uses</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {promoCodes.map(code => (
+                  <TableRow key={code.id}>
+                    <TableCell className="font-mono font-medium">{code.code}</TableCell>
+                    <TableCell>{code.discount_percent}%</TableCell>
+                    <TableCell>
+                      {code.current_uses}
+                      {code.max_uses ? ` / ${code.max_uses}` : ''}
+                    </TableCell>
+                    <TableCell>
+                      {code.expires_at
+                        ? new Date(code.expires_at).toLocaleDateString()
+                        : 'Never'}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={code.is_active}
+                        onCheckedChange={() => handleToggleActive(code.id, code.is_active)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(code.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {promoCodes.map(code => (
-                    <TableRow key={code.id}>
-                      <TableCell className="font-mono font-medium">{code.code}</TableCell>
-                      <TableCell>{code.discount_percent}%</TableCell>
-                      <TableCell>
-                        {code.current_uses} / {code.max_uses || '∞'}
-                      </TableCell>
-                      <TableCell>
-                        {code.expires_at
-                          ? new Date(code.expires_at).toLocaleDateString()
-                          : 'Never'}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={code.is_active}
-                          onCheckedChange={() => handleToggleActive(code.id, code.is_active)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(code.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
         </section>
       </main>
     </div>
