@@ -34,5 +34,7 @@ export interface BookData {
   tableOfContents?: ChapterInfo[];
   chapter1Content?: string;
   localResources?: LocalResource[];
-  hasDisclaimer?: boolean; // Added to fix Dashboard and Index errors
+  hasDisclaimer?: boolean;
+  // This helps fix the "bookData does not exist" errors in Admin/Dashboard
+  bookData?: any;
 }
