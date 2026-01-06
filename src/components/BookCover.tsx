@@ -1,6 +1,6 @@
-import { forwardRef, useEffect, useState } from 'react';
-import { getTopicIcon } from '@/lib/iconMap';
-import WeavingLoader from '@/components/WeavingLoader';
+import { forwardRef, useEffect, useState } from "react";
+import { getTopicIcon } from "@/lib/iconMap";
+import WeavingLoader from "@/components/WeavingLoader";
 
 interface BookCoverProps {
   title: string;
@@ -8,27 +8,24 @@ interface BookCoverProps {
   topic?: string;
   coverImageUrl?: string | null;
   isLoadingImage?: boolean;
-  coverStyle?: string; // 'automotive-photography' | 'artistic-photography' | undefined
+  coverStyle?: string;
 }
 
 const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
-  ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage, coverStyle }, ref) => {
+  ({ title, subtitle, topic = "", coverImageUrl, isLoadingImage, coverStyle }, ref) => {
     const TopicIcon = getTopicIcon(topic || title);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
-    
-    // Determine if this is a photography style (no blueprint overlay)
-    const isPhotographyStyle = coverStyle?.includes('photography') || false;
+
+    const isPhotographyStyle = true; // Forcing premium style
 
     useEffect(() => {
       setImageLoaded(false);
       setImageFailed(false);
-      
-      // Timeout fallback: if image doesn't load in 15s, show fallback
+
       if (coverImageUrl) {
         const timeout = setTimeout(() => {
           if (!imageLoaded) {
-            console.warn('Cover image load timeout, showing fallback');
             setImageFailed(true);
             setImageLoaded(true);
           }
@@ -40,28 +37,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     return (
       <div
         ref={ref}
-        className="w-full max-w-md mx-auto aspect-[3/4] gradient-paper rounded-sm shadow-book p-10 md:p-12 flex flex-col justify-between animate-page-turn relative overflow-hidden border border-border/30"
+        className="w-full max-w-md mx-auto aspect-[3/4] bg-white rounded-sm shadow-2xl p-10 md:p-12 flex flex-col justify-between relative overflow-hidden border border-black/5"
       >
-        {/* Deckle edge effect - only show for non-photography styles */}
-        {!isPhotographyStyle && (
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
-            <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
-            <div className="absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
-          </div>
-        )}
-
-        {/* Main Content Area - Vertical layout: Image on top, text below */}
+        {/* Main Content Area */}
         <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
-          {/* AI-Generated Cover Image - Top */}
-          <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
+          {/* AI-Generated Cover Image */}
+          <div className="relative w-full max-w-[220px] aspect-square mb-10 shadow-xl">
             {isLoadingImage ? (
-              <div className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-foreground/10 bg-secondary/20">
-                <WeavingLoader text="Weaving..." className="w-full px-4" />
+              <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/10">
+                <WeavingLoader text="Capturing..." className="w-full px-4" />
               </div>
             ) : coverImageUrl && !imageFailed ? (
-              <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
+              <div className="w-full h-full overflow-hidden border border-black/10 relative">
                 {!imageLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <WeavingLoader text="Loading..." className="w-full px-4" />
@@ -69,59 +56,43 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 )}
                 <img
                   src={coverImageUrl}
-                  alt={`Cover illustration for ${title}`}
-                  className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  alt={title}
+                  className={`w-full h-full object-cover transition-opacity duration-700 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
                   onLoad={() => setImageLoaded(true)}
-                  onError={() => {
-                    console.warn('Cover image failed to load, showing fallback');
-                    setImageFailed(true);
-                    setImageLoaded(true);
-                  }}
-                  loading="eager"
+                  onError={() => setImageFailed(true)}
                   crossOrigin="anonymous"
                 />
               </div>
             ) : (
-              <div className="w-full h-full rounded-lg border-2 border-dashed border-foreground/10 flex items-center justify-center bg-secondary/20">
-                <TopicIcon className="w-16 h-16 md:w-20 md:h-20 text-foreground/30 stroke-[0.5]" />
+              <div className="w-full h-full border flex items-center justify-center bg-secondary/5">
+                <TopicIcon className="w-16 h-16 text-foreground/20 stroke-[0.5]" />
               </div>
             )}
           </div>
 
-          {/* Main Title - Below Image */}
-          <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-medium text-foreground leading-tight text-center tracking-wide mb-3">
+          {/* Luxury Typography */}
+          <h1 className="font-serif text-3xl md:text-4xl font-light text-foreground leading-tight text-center tracking-tight mb-4 italic">
             {title}
           </h1>
 
-          {/* Decorative divider */}
-          <div className="w-10 h-[1px] bg-foreground/20 mb-3" />
+          <div className="w-16 h-[0.5px] bg-foreground/30 mb-6" />
 
-          {/* Subtitle */}
-          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif">
-            An Artisan Series Technical Manual
+          <p className="text-[10px] md:text-[11px] uppercase tracking-[0.4em] text-foreground/60 font-serif font-light px-4">
+            {subtitle || "A Definitive Visual Narrative"}
           </p>
         </div>
 
-        {/* Bottom branding */}
-        <div className="text-center flex flex-col items-center gap-2 pt-4">
-          <div className="flex items-center gap-2 opacity-50">
-            <div className="flex items-center gap-[2px]">
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-            </div>
-            <div className="w-2.5 h-[1px] bg-foreground/50 -ml-[5px]" />
-          </div>
-          <p className="text-[9px] tracking-[0.3em] text-muted-foreground/40 uppercase font-serif">
-            Loom & Page
+        {/* Publisher Branding */}
+        <div className="text-center flex flex-col items-center gap-3 pt-8 border-t border-black/5">
+          <p className="text-[11px] tracking-[0.6em] text-foreground font-serif font-semibold uppercase">LOOM & PAGE</p>
+          <p className="text-[8px] tracking-[0.2em] text-muted-foreground/60 uppercase italic font-serif">
+            London • New York • Milan
           </p>
         </div>
       </div>
     );
-  }
+  },
 );
 
-BookCover.displayName = 'BookCover';
-
+BookCover.displayName = "BookCover";
 export default BookCover;
-
