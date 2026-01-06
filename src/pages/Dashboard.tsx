@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, BookOpen, Download } from "lucide-react";
 import { toast } from "sonner";
-import { generateGuidePDF } from "@/lib/generatePDF";
+
 import { BookData } from "@/lib/bookTypes";
 import BookCover from "@/components/BookCover";
 import TableOfContents from "@/components/TableOfContents";
