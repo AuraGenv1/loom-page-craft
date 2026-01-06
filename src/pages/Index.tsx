@@ -1,38 +1,38 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import Logo from '@/components/Logo';
-import SearchInput from '@/components/SearchInput';
-import LoadingAnimation from '@/components/LoadingAnimation';
-import BookCover from '@/components/BookCover';
-import TableOfContents from '@/components/TableOfContents';
-import ChapterContent from '@/components/ChapterContent';
-import PaywallOverlay from '@/components/PaywallOverlay';
-import Footer from '@/components/Footer';
-import SaveToCloudBanner from '@/components/SaveToCloudBanner';
-import AuthModal from '@/components/AuthModal';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import Logo from "@/components/Logo";
+import SearchInput from "@/components/SearchInput";
+import LoadingAnimation from "@/components/LoadingAnimation";
+import BookCover from "@/components/BookCover";
+import TableOfContents from "@/components/TableOfContents";
+import ChapterContent from "@/components/ChapterContent";
+import PaywallOverlay from "@/components/PaywallOverlay";
+import Footer from "@/components/Footer";
+import SaveToCloudBanner from "@/components/SaveToCloudBanner";
+import AuthModal from "@/components/AuthModal";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import { BookData } from '@/lib/bookTypes';
-import { useAuth } from '@/contexts/AuthContext';
-import { generateGuidePDF } from '@/lib/generatePDF';
-import { Download, Sparkles } from 'lucide-react';
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { BookData } from "@/lib/bookTypes";
+import { useAuth } from "@/contexts/AuthContext";
+import { generateGuidePDF } from "@/lib/generatePDF";
+import { Download, Sparkles } from "lucide-react";
 
-type ViewState = 'landing' | 'loading' | 'book';
+type ViewState = "landing" | "loading" | "book";
 
 const getSessionId = (): string => {
-  const stored = localStorage.getItem('loom_page_session_id');
+  const stored = localStorage.getItem("loom_page_session_id");
   if (stored) return stored;
   const newId = crypto.randomUUID();
-  localStorage.setItem('loom_page_session_id', newId);
+  localStorage.setItem("loom_page_session_id", newId);
   return newId;
 };
 
@@ -44,7 +44,10 @@ const extractMaterials = (content?: string): string[] => {
     const matches = content.matchAll(pattern);
     for (const match of matches) {
       if (match[1]) {
-        const items = match[1].split(/[,;]/).map(s => s.trim()).filter(s => s.length > 2 && s.length < 50);
+        const items = match[1]
+          .split(/[,;]/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 2 && s.length < 50);
         materials.push(...items.slice(0, 5));
       }
     }
@@ -54,139 +57,168 @@ const extractMaterials = (content?: string): string[] => {
 
 const Index = () => {
   const [searchParams] = useSearchParams();
-  const [viewState, setViewState] = useState<ViewState>('landing');
-  const [topic, setTopic] = useState('');
+  const [viewState, setViewState] = useState<ViewState>("landing");
+  const [topic, setTopic] = useState("");
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
-  const [isGeneratingDiagrams, setIsGeneratingDiagrams] = useState(false);
   const { user, profile, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
-
-  // This REF is what allows the PDF generator to "see" your content
   const bookRef = useRef<HTMLDivElement>(null);
 
-  const isPaid = false; 
+  const isPaid = false;
 
-  const handleOpenAuthModal = () => setAuthModalOpen(true);
   const handleSignOut = async () => {
     await signOut();
-    toast.success('Signed out');
-  };
-
-  const getInitials = (name: string | null | undefined) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    toast.success("Signed out");
   };
 
   const handleSearch = async (query: string) => {
     setTopic(query);
-    setViewState('loading');
-    
+    setViewState("loading");
     try {
-      const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { title: `Artisan Guide: ${query}`, topic: query }
+      const { data, error } = await supabase.functions.invoke("generate-book", {
+        body: { title: `Artisan Guide: ${query}`, topic: query },
       });
-
       if (error) throw error;
 
-      const geminiContent = data.content;
+      const content = data.content;
       const formattedBook: BookData = {
-        title: geminiContent.title || `Mastering ${query}`,
-        displayTitle: geminiContent.title || `Mastering ${query}`,
-        subtitle: geminiContent.preface?.substring(0, 120) + "...",
-        tableOfContents: geminiContent.chapters.map((ch: any) => ({
-          title: ch.title,
-          description: ch.description
-        })),
-        chapter1Content: geminiContent.chapters[0]?.description || geminiContent.preface,
+        title: content.title || `Mastering ${query}`,
+        displayTitle: content.title || `Mastering ${query}`,
+        subtitle: content.preface?.substring(0, 120) + "...",
+        tableOfContents: content.chapters.map((ch: any) => ({ title: ch.title, description: ch.description })),
+        chapter1Content: content.chapters[0]?.description || content.preface,
         localResources: [],
         hasDisclaimer: true,
       };
 
       setBookData(formattedBook);
-      setViewState('book');
+      setViewState("book");
 
       setIsLoadingCoverImage(true);
-      supabase.functions.invoke('generate-cover-image', {
-        body: { title: formattedBook.title, topic: query },
-      }).then(({ data: imgData }) => {
-        setIsLoadingCoverImage(false);
-        if (imgData?.imageUrl) setCoverImageUrl(imgData.imageUrl);
-      });
-
-    } catch (err: any) {
+      supabase.functions
+        .invoke("generate-cover-image", {
+          body: { title: formattedBook.title, topic: query },
+        })
+        .then(({ data: imgData }) => {
+          setIsLoadingCoverImage(false);
+          if (imgData?.imageUrl) setCoverImageUrl(imgData.imageUrl);
+        });
+    } catch (err) {
       toast.error("Generation failed.");
-      setViewState('landing');
+      setViewState("landing");
     }
   };
 
   const handleDownloadPDF = async () => {
-    if (!bookData || !bookRef.current) {
-        toast.error("No content to download");
-        return;
-    }
-    
+    if (!bookData || !bookRef.current) return;
     try {
-      toast.loading('Capturing high-res guide...', { id: 'pdf' });
-      
-      // We pass bookRef.current so the PDF captures the actual photos
-      await generateGuidePDF({ 
-        title: bookData.displayTitle || bookData.title, 
-        topic, 
+      toast.loading("Capturing high-res guide...", { id: "pdf" });
+      await generateGuidePDF({
+        title: bookData.displayTitle || bookData.title,
+        topic,
         bookData,
         previewElement: bookRef.current,
-        isAdmin: true // This ensures blurs are removed in the PDF
+        isAdmin: true,
       });
-      
-      toast.success('Luxury PDF Ready!', { id: 'pdf' });
+      toast.success("Luxury PDF Ready!", { id: "pdf" });
     } catch (error) {
-      console.error("PDF Error:", error);
-      toast.error("Failed to generate PDF", { id: 'pdf' });
+      toast.error("PDF Failed", { id: "pdf" });
     }
-  };
-
-  const handleStartOver = () => {
-    setViewState('landing');
-    setTopic('');
-    setBookData(null);
   };
 
   return (
     <div className="min-h-screen bg-background pb-16">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
-          <button onClick={handleStartOver} className="hover:opacity-70 transition-opacity"><Logo /></button>
+          <button onClick={() => setViewState("landing")} className="hover:opacity-70 transition-opacity">
+            <Logo />
+          </button>
           <div className="flex items-center gap-3">
-            {viewState === 'book' && (
-              <button onClick={handleStartOver} className="text-sm text-muted-foreground hover:text-foreground">New Guide</button>
-            )}
-            {!authLoading && (
-              user ? (
+            {!authLoading &&
+              (user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="hover:opacity-80">
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={user?.user_metadata?.avatar_url} />
-                        <AvatarFallback>{getInitials(user?.user_metadata?.name)}</AvatarFallback>
+                        <AvatarFallback>U</AvatarFallback>
                       </Avatar>
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>Dashboard</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/dashboard")}>Dashboard</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>Sign Out</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button variant="outline" size="sm" onClick={handleOpenAuthModal}>Join</Button>
-              )
-            )}
+                <Button variant="outline" size="sm" onClick={() => setAuthModalOpen(true)}>
+                  Join
+                </Button>
+              ))}
           </div>
         </div>
       </header>
 
       <main className="container">
-        {viewState === 'landing'
+        {viewState === "landing" && (
+          <div className="min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center px-4">
+            <div className="text-center mb-10 animate-fade-up">
+              <h1 className="font-serif text-4xl md:text-5xl font-semibold mb-4">Learn anything.</h1>
+              <p className="text-lg text-muted-foreground max-w-md mx-auto">
+                Beautiful artisan guides crafted for you.
+              </p>
+            </div>
+            <SearchInput onSearch={handleSearch} />
+          </div>
+        )}
+
+        {viewState === "loading" && <LoadingAnimation />}
+
+        {viewState === "book" && (
+          <div ref={bookRef} className="py-12 animate-fade-in bg-white">
+            <BookCover
+              title={bookData?.displayTitle || `Mastering ${topic}`}
+              subtitle={bookData?.subtitle}
+              topic={topic}
+              coverImageUrl={coverImageUrl}
+              isLoadingImage={isLoadingCoverImage}
+            />
+            <div className="flex flex-col items-center mt-8 gap-4">
+              <Button onClick={handleDownloadPDF} variant="outline" className="gap-2">
+                <Download className="w-4 h-4" /> PDF Guide
+              </Button>
+            </div>
+            <section className="mt-12 mb-8">
+              <TableOfContents topic={topic} chapters={bookData?.tableOfContents} />
+            </section>
+            <section>
+              <ChapterContent
+                topic={topic}
+                content={bookData?.chapter1Content}
+                materials={extractMaterials(bookData?.chapter1Content)}
+                isGenerating={false}
+                diagramImages={diagramImages}
+                tableOfContents={bookData?.tableOfContents}
+              />
+            </section>
+            {!isPaid && <PaywallOverlay onPurchase={() => {}} onDownload={handleDownloadPDF} />}
+          </div>
+        )}
+      </main>
+      <Footer />
+      <AuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
+        onGoogleSignIn={signInWithGoogle}
+        isAuthenticating={false}
+      />
+    </div>
+  );
+};
+
+export default Index;
