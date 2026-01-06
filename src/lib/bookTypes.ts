@@ -8,6 +8,10 @@ export interface LocalResource {
   name: string;
   type: string;
   description: string;
+  address?: string; // Added back
+  rating?: number; // Added back
+  reviewCount?: number; // Added back
+  placeId?: string; // Added back
 }
 
 export interface BookData {
@@ -19,4 +23,5 @@ export interface BookData {
   localResources?: LocalResource[];
   hasDisclaimer?: boolean;
   coverImageUrl?: string;
+  diagramImages?: Record<string, string>; // Added for Index.tsx compatibility
 }
