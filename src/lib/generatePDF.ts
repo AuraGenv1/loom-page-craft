@@ -83,24 +83,36 @@ export const generateGuidePDF = async ({
 
   // 2. Configure html2canvas for "Pixel-Perfect" output
   const canvas = await html2canvas(previewElement, {
-    scale: 2, // High-DPI output for professional print quality
+    scale: 3, // Pro-grade DPI for print quality
     useCORS: true, // Allows capture of AI images from external URLs
     allowTaint: false,
     backgroundColor: "#ffffff",
     logging: false,
     onclone: (clonedDoc) => {
-      // ADMIN OVERRIDE: Remove blurs and expand content in the PDF only
+      // Always strip overflow/height restrictions to capture full content
+      const allElements = clonedDoc.querySelectorAll('*');
+      allElements.forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        const classList = htmlEl.className || '';
+        
+        // Strip max-h-*, overflow-hidden, overflow-y-auto classes
+        if (typeof classList === 'string' && (
+          classList.includes('max-h-') || 
+          classList.includes('overflow-hidden') || 
+          classList.includes('overflow-y-auto') ||
+          classList.includes('overflow-x-auto')
+        )) {
+          htmlEl.style.maxHeight = 'none';
+          htmlEl.style.overflow = 'visible';
+        }
+      });
+
+      // ADMIN OVERRIDE: Remove blurs in the PDF
       if (isAdmin) {
         const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
         blurred.forEach((el) => {
           (el as HTMLElement).style.filter = "none";
           (el as HTMLElement).style.backdropFilter = "none";
-        });
-
-        const restrictedContainers = clonedDoc.querySelectorAll('[class*="max-h-"], [class*="overflow-hidden"]');
-        restrictedContainers.forEach((el) => {
-          (el as HTMLElement).style.maxHeight = "none";
-          (el as HTMLElement).style.overflow = "visible";
         });
       }
     },
@@ -142,12 +154,29 @@ export const generatePixelPerfectPDF = async (
   await waitForImages(element);
 
   const canvas = await html2canvas(element, {
-    scale: 2,
+    scale: 3, // Pro-grade DPI
     useCORS: true,
     allowTaint: false,
     backgroundColor: "#ffffff",
     logging: false,
     onclone: (clonedDoc) => {
+      // Strip overflow/height restrictions for full content capture
+      const allElements = clonedDoc.querySelectorAll('*');
+      allElements.forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        const classList = htmlEl.className || '';
+        
+        if (typeof classList === 'string' && (
+          classList.includes('max-h-') || 
+          classList.includes('overflow-hidden') || 
+          classList.includes('overflow-y-auto') ||
+          classList.includes('overflow-x-auto')
+        )) {
+          htmlEl.style.maxHeight = 'none';
+          htmlEl.style.overflow = 'visible';
+        }
+      });
+
       if (isAdmin) {
         const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
         blurred.forEach((el) => {

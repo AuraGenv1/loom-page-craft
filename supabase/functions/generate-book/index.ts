@@ -187,13 +187,18 @@ serve(async (req) => {
       );
     }
 
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not configured');
       throw new Error('AI service is not configured');
     }
 
+    const FAL_KEY = Deno.env.get('FAL_KEY');
     const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
+
+    // Determine if topic is automotive/luxury for photography style
+    const isAutomotiveTopic = /\b(car|cars|vehicle|vehicles|automotive|ferrari|lamborghini|porsche|maserati|bugatti|mercedes|bmw|audi|luxury|supercar|hypercar|sports car|muscle car|classic car)\b/i.test(topic);
+    console.log('Automotive/luxury topic detected:', isAutomotiveTopic);
 
     // Check if topic is high-risk (but allowed)
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
@@ -409,6 +414,50 @@ Chapter requirements:
     if (isHighRisk) {
       bookData.chapter1Content = SAFETY_DISCLAIMER + '\n\n' + bookData.chapter1Content;
       bookData.hasDisclaimer = true;
+    }
+
+    // Generate cover image using Fal.ai if FAL_KEY is configured
+    if (FAL_KEY) {
+      try {
+        console.log('Generating cover image with Fal.ai...');
+        
+        // Build prompt based on topic type
+        const imagePrompt = isAutomotiveTopic
+          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic.`
+          : `Clean technical manual illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework.`;
+        
+        const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Key ${FAL_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: imagePrompt,
+            image_size: 'square_hd',
+            num_inference_steps: 4,
+            num_images: 1,
+            enable_safety_checker: true,
+          }),
+        });
+
+        if (falResponse.ok) {
+          const falData = await falResponse.json();
+          const imageUrl = falData.images?.[0]?.url;
+          if (imageUrl) {
+            bookData.coverImageUrl = imageUrl;
+            console.log('Fal.ai cover image generated successfully');
+          }
+        } else {
+          const errorText = await falResponse.text();
+          console.error('Fal.ai error:', falResponse.status, errorText);
+        }
+      } catch (falError) {
+        console.error('Fal.ai image generation failed:', falError);
+        // Continue without cover image - not critical
+      }
+    } else {
+      console.log('FAL_KEY not configured, skipping cover image generation');
     }
 
     console.log('Successfully generated book:', bookData.title);
