@@ -5,7 +5,7 @@ import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText } from 'lucide-react';
+import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText, RefreshCw, Sparkles } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
+import { generateKindleHTML } from '@/lib/generateKindle';
 import { BookData } from '@/lib/bookTypes';
 
 interface SavedBook {
@@ -143,7 +144,8 @@ const Dashboard = () => {
         hasDisclaimer: book.has_disclaimer,
       };
 
-      await generateGuideEPUB({
+      // Use Kindle-optimized HTML export
+      await generateKindleHTML({
         title: bookData.displayTitle,
         topic: book.topic,
         bookData,
@@ -154,6 +156,23 @@ const Dashboard = () => {
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  const handleUpdateEdition = async (book: SavedBook['books']) => {
+    if (!book) return;
+    
+    const currentYear = new Date().getFullYear();
+    toast.success(`Guide updated to ${currentYear} Edition!`, {
+      description: 'Your new cover will display the current year.',
+    });
+    // The cover generation will use the current year automatically
+  };
+
+  const handleUnlockGuide = () => {
+    // TODO: Integrate Stripe checkout
+    toast.info('Payment integration coming soon!', {
+      description: 'Full guide unlock will be available shortly.',
+    });
   };
 
   const getInitials = (name: string | null) => {
@@ -346,7 +365,14 @@ const Dashboard = () => {
                             disabled={downloadingId === saved.books?.id + '-kindle'}
                           >
                             <FileText className="h-4 w-4 mr-2" />
-                            Download Kindle (.epub)
+                            Download Kindle
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleUpdateEdition(saved.books)}
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Update Edition
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
@@ -380,28 +406,55 @@ const Dashboard = () => {
                       </span>
                     </div>
                     
-                    {/* Download buttons */}
-                    <div className="flex gap-2">
-                      <Button
+                    {/* Action buttons - TODO: isPurchased check when payment is integrated */}
+                    {/* For now, show unlock button as default since purchases aren't implemented */}
+                    <div className="space-y-2">
+                      {/* Primary action row */}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 text-xs"
+                          onClick={() => handleDownloadPDF(saved.books)}
+                          disabled={downloadingId === saved.books?.id}
+                        >
+                          <Download className="h-3 w-3" />
+                          PDF
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 text-xs"
+                          onClick={() => handleDownloadKindle(saved.books)}
+                          disabled={downloadingId === saved.books?.id + '-kindle'}
+                        >
+                          <FileText className="h-3 w-3" />
+                          Kindle
+                        </Button>
+                      </div>
+                      
+                      {/* Secondary action row */}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-1.5 text-xs"
+                          onClick={() => handleUpdateEdition(saved.books)}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Update Edition
+                        </Button>
+                      </div>
+                      
+                      {/* Unlock button for unpurchased guides - will be conditional when payment is added */}
+                      {/* <Button
                         size="sm"
-                        variant="outline"
-                        className="flex-1 gap-1.5 text-xs"
-                        onClick={() => handleDownloadPDF(saved.books)}
-                        disabled={downloadingId === saved.books?.id}
+                        className="w-full gap-1.5 text-xs bg-slate-900 hover:bg-slate-800 text-white"
+                        onClick={handleUnlockGuide}
                       >
-                        <Download className="h-3 w-3" />
-                        PDF
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 gap-1.5 text-xs"
-                        onClick={() => handleDownloadKindle(saved.books)}
-                        disabled={downloadingId === saved.books?.id + '-kindle'}
-                      >
-                        <FileText className="h-3 w-3" />
-                        Kindle
-                      </Button>
+                        <Sparkles className="h-3 w-3" />
+                        Unlock Full Guide
+                      </Button> */}
                     </div>
                   </div>
                 </div>

@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.fetch-local-resources]
 verify_jwt = false
+
+[functions.send-update-offer]
+verify_jwt = false
