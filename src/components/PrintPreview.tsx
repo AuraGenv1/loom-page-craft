@@ -16,14 +16,14 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
 
   const handleDownload = async () => {
     if (previewRef.current) {
-      // Fixed: Only passing 2 arguments to match the simplified generatePDF.ts
+      // Corrected to 2 arguments: element and filename
       await generatePixelPerfectPDF(previewRef.current, `${data.topic}-guide.pdf`);
     }
   };
 
   return (
     <div className="flex flex-col items-center gap-6 p-4">
-      <div className="flex justify-end w-full max-w-[210mm]">
+      <div className="flex justify-end w-full max-w-[210mm] no-pdf-capture">
         <Button onClick={handleDownload}>Download PDF</Button>
       </div>
 
@@ -48,12 +48,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
           <ChapterContent key={index} chapter={chapter} />
         ))}
 
-        {/* Using chapter1Content if chapters list is empty or for specific formatting */}
-        {data.chapter1Content && !data.chapters.length && (
-          <section className="prose prose-slate max-w-none">
-            <p className="whitespace-pre-wrap">{data.chapter1Content}</p>
-          </section>
-        )}
+        {data.localResources && data.localResources.length > 0 && <LocalResources resources={data.localResources} />}
       </div>
     </div>
   );
