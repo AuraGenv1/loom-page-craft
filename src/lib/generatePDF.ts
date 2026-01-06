@@ -1,14 +1,5 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { BookData } from "@/lib/bookTypes";
-
-interface GeneratePDFOptions {
-  title: string;
-  topic: string;
-  bookData: BookData;
-  previewElement?: HTMLElement;
-  isAdmin?: boolean;
-}
 
 /**
  * Ensures all images are fully loaded before capturing.
@@ -27,28 +18,21 @@ const waitForImages = async (container: HTMLElement): Promise<void> => {
 
 /**
  * Main function used by Index, Admin, and Dashboard.
+ * We use 'any' for options to break circular type dependencies.
  */
-export const generateGuidePDF = async ({
-  title,
-  topic,
-  bookData,
-  previewElement,
-  isAdmin = false,
-}: GeneratePDFOptions) => {
+export const generateGuidePDF = async (options: any) => {
+  const { title, topic, previewElement, isAdmin = false } = options;
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-
   if (!previewElement) {
-    // Basic text fallback if no visual element is provided
     doc.setFont("times", "bold");
-    doc.setFontSize(24);
-    doc.text(title, pageWidth / 2, 40, { align: "center" });
-    doc.save(`${topic.replace(/\s+/g, "-")}-guide.pdf`);
+    doc.text(title || "Artisan Guide", 105, 40, { align: "center" });
+    doc.save(`${topic || "guide"}.pdf`);
     return;
   }
 
@@ -59,9 +43,8 @@ export const generateGuidePDF = async ({
     useCORS: true,
     backgroundColor: "#ffffff",
     onclone: (clonedDoc) => {
-      // Remove UI elements that shouldn't be in the PDF
-      const buttons = clonedDoc.querySelectorAll("button, .no-pdf-capture");
-      buttons.forEach((btn) => ((btn as HTMLElement).style.display = "none"));
+      const ui = clonedDoc.querySelectorAll("button, .no-pdf-capture");
+      ui.forEach((el) => ((el as HTMLElement).style.display = "none"));
 
       if (isAdmin) {
         const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
@@ -74,11 +57,8 @@ export const generateGuidePDF = async ({
   });
 
   const imgData = canvas.toDataURL("image/jpeg", 0.95);
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-  doc.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
-  doc.save(`${topic.replace(/\s+/g, "-")}-artisan-guide.pdf`);
+  doc.addImage(imgData, "JPEG", 0, 0, 210, (canvas.height * 210) / canvas.width);
+  doc.save(`${topic?.replace(/\s+/g, "-") || "artisan"}-guide.pdf`);
 };
 
 /**
@@ -90,29 +70,12 @@ export const generatePixelPerfectPDF = async (
   isAdmin = false,
 ): Promise<void> => {
   await waitForImages(element);
-
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
     backgroundColor: "#ffffff",
-    onclone: (cloned) => {
-      if (isAdmin) {
-        const blurred = cloned.querySelectorAll('[class*="blur"]');
-        blurred.forEach((el) => ((el as HTMLElement).style.filter = "none"));
-      }
-    },
   });
-
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-
-  const imgData = canvas.toDataURL("image/jpeg", 0.95);
-  const imgWidth = 210; // A4 width in mm
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-  doc.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  doc.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, 210, (canvas.height * 210) / canvas.width);
   doc.save(filename);
 };
