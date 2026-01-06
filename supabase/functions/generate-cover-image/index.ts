@@ -11,8 +11,7 @@ serve(async (req) => {
     const { topic, title } = await req.json();
     const FAL_KEY = Deno.env.get("FAL_KEY");
 
-    if (!FAL_KEY) throw new Error("FAL_KEY is missing");
-
+    // FORCE high-end photography for EVERY request (No more diagrams)
     const prompt = `A cinematic, ultra-high-resolution studio photograph of ${topic} for a luxury book "${title}". Professional lighting, 8k, masterpiece quality.`;
 
     const response = await fetch("https://fal.run/fal-ai/flux/schnell", {
@@ -22,18 +21,11 @@ serve(async (req) => {
     });
 
     const data = await response.json();
-
-    if (!data.images || data.images.length === 0) {
-      throw new Error("Fal.ai failed to generate an image.");
-    }
-
     return new Response(JSON.stringify({ imageUrl: data.images[0].url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: corsHeaders,
-    });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500, headers: corsHeaders });
   }
 });
