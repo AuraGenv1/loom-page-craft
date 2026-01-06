@@ -22,49 +22,42 @@ serve(async (req) => {
       throw new Error("Missing or invalid topic");
     }
 
-    // Use prompt-based JSON enforcement - require 10-20 detailed chapters
+    // Optimized prompt - 5-8 chapters to avoid truncation
     const prompt = `You are a professional book author. Generate a comprehensive artisan guide about: "${topic}".
 
-CRITICAL: You MUST return ONLY a valid JSON object. Do NOT include any text before or after the JSON.
-Do NOT wrap the JSON in markdown code blocks or backticks.
-Start your response with { and end with }.
+CRITICAL JSON RULES:
+1. Return ONLY valid JSON - no text before or after
+2. Do NOT use markdown code blocks
+3. Start with { and end with }
+4. Escape all quotes inside strings with backslash
+5. No trailing commas
 
-IMPORTANT: Generate between 10 to 20 detailed chapters that weave together a cohesive narrative about ${topic}.
+Generate 5-8 chapters with detailed content (200-400 words each).
 
-The JSON structure must be EXACTLY:
+EXACT JSON structure:
 {
-  "title": "The main title of the book",
-  "displayTitle": "A beautiful display title",
-  "subtitle": "A compelling subtitle under 100 characters",
-  "preface": "A 2-3 paragraph introduction to the subject matter that sets the stage for the journey ahead",
+  "title": "Main book title",
+  "displayTitle": "Display title",
+  "subtitle": "Subtitle under 80 chars",
+  "preface": "2 paragraph introduction about ${topic}",
   "topic": "${topic}",
   "chapters": [
-    {
-      "title": "Chapter 1 Title",
-      "description": "Full detailed content for this chapter, at least 800 words with practical guidance, examples, and insights"
-    },
-    {
-      "title": "Chapter 2 Title", 
-      "description": "Full detailed content for chapter 2, continuing the narrative thread"
-    },
-    ... continue for 10-20 total chapters ...
+    {"title": "Chapter 1 Title", "description": "Detailed content 200-400 words"},
+    {"title": "Chapter 2 Title", "description": "Detailed content 200-400 words"},
+    {"title": "Chapter 3 Title", "description": "Detailed content 200-400 words"},
+    {"title": "Chapter 4 Title", "description": "Detailed content 200-400 words"},
+    {"title": "Chapter 5 Title", "description": "Detailed content 200-400 words"}
   ],
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter 1 Title" },
-    { "chapter": 2, "title": "Chapter 2 Title" },
-    ... matching entries for all chapters ...
+    {"chapter": 1, "title": "Chapter 1 Title"},
+    {"chapter": 2, "title": "Chapter 2 Title"},
+    {"chapter": 3, "title": "Chapter 3 Title"},
+    {"chapter": 4, "title": "Chapter 4 Title"},
+    {"chapter": 5, "title": "Chapter 5 Title"}
   ],
   "localResources": [],
   "hasDisclaimer": true
-}
-
-Requirements:
-- Generate EXACTLY between 10 and 20 chapters (minimum 10, maximum 20)
-- Each chapter must have at least 800 words of detailed, educational content
-- The narrative must weave consistently across all chapters, building upon previous concepts
-- Include practical examples, tips, and real-world applications
-- The tableOfContents must list ALL chapters in order
-- Make the content feel like a professionally authored artisan guide`;
+}`;
 
     console.log("Calling Gemini API for topic:", topic);
 
@@ -76,7 +69,7 @@ Requirements:
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            maxOutputTokens: 32000,
+            maxOutputTokens: 8192,
             temperature: 0.7,
           },
           safetySettings: [
@@ -92,56 +85,68 @@ Requirements:
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Gemini API error:", response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
     console.log("Gemini response received");
 
-    // Robust check for candidates
-    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-      console.error("No candidates in response:", JSON.stringify(data));
+    if (!data.candidates || data.candidates.length === 0) {
+      console.error("No candidates in response");
       throw new Error("No candidates returned from Gemini API");
     }
 
     const candidate = data.candidates[0];
-    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-      console.error("No content in candidate:", JSON.stringify(candidate));
-      throw new Error("No content in Gemini response candidate");
+    
+    // Check for truncation
+    if (candidate.finishReason === "MAX_TOKENS") {
+      console.error("Response was truncated due to max tokens");
+      throw new Error("Response truncated - please try a simpler topic");
+    }
+
+    if (!candidate.content?.parts?.[0]?.text) {
+      console.error("No content in candidate");
+      throw new Error("No content in Gemini response");
     }
 
     const text = candidate.content.parts[0].text;
-    if (!text) {
-      throw new Error("Empty text in Gemini response");
-    }
 
-    // Clean the response - strip markdown code blocks if present
-    let cleanJsonString = text.trim();
+    // Clean the response
+    let cleanJson = text.trim();
     
     // Remove markdown code blocks
-    if (cleanJsonString.startsWith("```json")) {
-      cleanJsonString = cleanJsonString.slice(7);
-    } else if (cleanJsonString.startsWith("```")) {
-      cleanJsonString = cleanJsonString.slice(3);
+    if (cleanJson.startsWith("```json")) {
+      cleanJson = cleanJson.slice(7);
+    } else if (cleanJson.startsWith("```")) {
+      cleanJson = cleanJson.slice(3);
     }
-    if (cleanJsonString.endsWith("```")) {
-      cleanJsonString = cleanJsonString.slice(0, -3);
+    if (cleanJson.endsWith("```")) {
+      cleanJson = cleanJson.slice(0, -3);
     }
-    cleanJsonString = cleanJsonString.trim();
+    cleanJson = cleanJson.trim();
+
+    // Attempt to fix common JSON issues
+    // Remove trailing commas before } or ]
+    cleanJson = cleanJson.replace(/,(\s*[}\]])/g, '$1');
 
     // Try to parse JSON
     let parsedContent;
     try {
-      parsedContent = JSON.parse(cleanJsonString);
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      console.error("Raw text:", cleanJsonString.substring(0, 500));
-      throw new Error("Failed to parse JSON from Gemini response");
+      parsedContent = JSON.parse(cleanJson);
+    } catch (parseError: any) {
+      console.error("JSON parse error:", parseError.message);
+      console.error("Raw text (first 1000 chars):", cleanJson.substring(0, 1000));
+      console.error("Raw text (last 500 chars):", cleanJson.substring(cleanJson.length - 500));
+      
+      // Check if JSON appears truncated
+      if (!cleanJson.endsWith("}")) {
+        throw new Error("Response was incomplete - please try again");
+      }
+      throw new Error("Failed to parse response - please try again");
     }
 
-    // Validate chapter count
     const chapterCount = parsedContent.chapters?.length || 0;
-    console.log(`Successfully parsed book content with ${chapterCount} chapters`);
+    console.log(`Successfully parsed book with ${chapterCount} chapters`);
 
     return new Response(JSON.stringify({ content: parsedContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
