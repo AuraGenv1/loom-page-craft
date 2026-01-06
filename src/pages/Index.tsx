@@ -362,21 +362,27 @@ const Index = () => {
 
       setViewState('book');
 
-      // Generate cover image in background (non-blocking)
-      setIsLoadingCoverImage(true);
-      const coverSessionId = getSessionId();
-      supabase.functions
-        .invoke('generate-cover-image', {
-          body: { title: generatedBook.title, topic: query, sessionId: coverSessionId, variant: 'cover' },
-        })
-        .then(({ data: imageData, error: imageError }) => {
-          setIsLoadingCoverImage(false);
-          if (!imageError && imageData?.imageUrl) {
-            setCoverImageUrl(imageData.imageUrl);
-          } else {
-            console.log('Cover image generation skipped or failed:', imageError);
-          }
-        });
+      // Use cover image from generate-book response (Fal.ai) if available
+      if (generatedBook.coverImageUrl) {
+        setCoverImageUrl(generatedBook.coverImageUrl);
+        setIsLoadingCoverImage(false);
+      } else {
+        // Fallback to separate cover image generation
+        setIsLoadingCoverImage(true);
+        const coverSessionId = getSessionId();
+        supabase.functions
+          .invoke('generate-cover-image', {
+            body: { title: generatedBook.title, topic: query, sessionId: coverSessionId, variant: 'cover' },
+          })
+          .then(({ data: imageData, error: imageError }) => {
+            setIsLoadingCoverImage(false);
+            if (!imageError && imageData?.imageUrl) {
+              setCoverImageUrl(imageData.imageUrl);
+            } else {
+              console.log('Cover image generation skipped or failed:', imageError);
+            }
+          });
+      }
 
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -552,32 +558,36 @@ const Index = () => {
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
                 <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap">
-                  <Button
-                    onClick={handleDownloadPDF}
-                    variant={isPaid ? "default" : "outline"}
-                    size="lg"
-                    className="gap-2 font-serif"
-                  >
-                    <Download className="w-4 h-4" />
-                    {isPaid ? 'Download Full Guide (PDF)' : 'Download Free Sample (PDF)'}
-                  </Button>
-                  {bookData && (
-                    <PrintPreview 
-                      topic={topic}
-                      bookData={bookData}
-                      displayTitle={displayTitle}
-                      diagramImages={diagramImages}
-                    />
-                  )}
-                  {!isPaid && (
+                  {isPaid ? (
                     <Button
+                      onClick={handleDownloadPDF}
+                      variant="default"
                       size="lg"
                       className="gap-2 font-serif"
-                      onClick={handlePurchase}
                     >
-                      <Sparkles className="w-4 h-4" />
-                      Unlock Full Artisan Guide — $4.99
+                      <Download className="w-4 h-4" />
+                      Download Full Guide (PDF)
                     </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={handleDownloadPDF}
+                        variant="outline"
+                        size="lg"
+                        className="gap-2 font-serif"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Free Sample (PDF)
+                      </Button>
+                      <Button
+                        size="lg"
+                        className="gap-2 font-serif bg-slate-900 hover:bg-slate-800 text-white"
+                        onClick={handlePurchase}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Unlock Full Artisan Guide
+                      </Button>
+                    </>
                   )}
                 </div>
                 {!isPaid && (
