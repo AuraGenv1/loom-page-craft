@@ -6,11 +6,16 @@ export interface LocalResource {
   type: string;
   address: string;
   phone?: string;
+  description?: string; // Added
+  rating?: number; // Added
+  reviewCount?: number; // Added
+  placeId?: string; // Added
 }
 
 export interface ChapterInfo {
+  chapter: number; // Renamed from pageNumber to match UI
   title: string;
-  pageNumber: number;
+  imageDescription?: string; // Added
 }
 
 export interface Chapter {
@@ -20,12 +25,13 @@ export interface Chapter {
 
 export interface BookData {
   title: string;
-  displayTitle?: string; // Added back
-  subtitle?: string; // Added back
+  displayTitle?: string;
+  subtitle?: string;
   preface: string;
   chapters: Chapter[];
   topic: string;
   coverImage?: string;
-  tableOfContents?: ChapterInfo[]; // Added back
-  chapter1Content?: string; // Added back
+  tableOfContents?: ChapterInfo[];
+  chapter1Content?: string;
+  localResources?: LocalResource[]; // Added
 }
