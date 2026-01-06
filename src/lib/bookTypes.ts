@@ -1,6 +1,6 @@
 /**
- * Standalone Type Definitions
- * No local imports allowed here to prevent circular loops.
+ * Isolated Type Definitions
+ * DO NOT import anything from other project files into this file.
  */
 export interface Chapter {
   title: string;
