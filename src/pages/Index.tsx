@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookData } from "@/lib/bookTypes";
 import SearchInterface from "@/components/SearchInterface";
@@ -11,10 +11,9 @@ const Index = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeBook, setActiveBook] = useState<BookData | null>(null);
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const handleGenerate = async (topic: string) => {
-    // LOCKDOWN: Reset everything before starting
+    // LOCKDOWN: Clear any previous book and start the loader
     setActiveBook(null);
     setIsGenerating(true);
 
@@ -25,7 +24,7 @@ const Index = () => {
 
       if (error) throw error;
 
-      // Ensure the state is updated only with the fresh AI data
+      // Update state with the fresh AI response
       setActiveBook(data);
 
       toast({
@@ -52,15 +51,16 @@ const Index = () => {
         {!activeBook && !isGenerating ? (
           <div className="max-w-4xl mx-auto text-center space-y-8 py-20">
             <h1 className="text-5xl md:text-7xl font-light italic tracking-tight">Loom & Page</h1>
-            <p className="text-sm uppercase tracking-[0.5em] text-muted-foreground">Artisan Instructional Narratives</p>
+            <p className="text-[10px] uppercase tracking-[0.5em] text-muted-foreground">
+              Artisan Instructional Narratives
+            </p>
             <div className="pt-10">
               <SearchInterface onSearch={handleGenerate} isLoading={isGenerating} />
             </div>
           </div>
         ) : (
           <div className="space-y-12">
-            {/* The PrintPreview is only shown if activeBook exists, 
-                preventing duplication with library items */}
+            {/* The PrintPreview is only shown if activeBook exists */}
             {activeBook && (
               <div className="animate-in fade-in zoom-in duration-1000">
                 <PrintPreview bookData={activeBook} />
@@ -69,8 +69,10 @@ const Index = () => {
 
             {isGenerating && (
               <div className="flex flex-col items-center justify-center py-40">
-                <div className="w-16 h-16 border-t-2 border-primary rounded-full animate-spin mb-4" />
-                <p className="text-[10px] uppercase tracking-widest animate-pulse">Drafting your manuscript...</p>
+                <div className="w-12 h-12 border-t-2 border-primary rounded-full animate-spin mb-6" />
+                <p className="text-[10px] uppercase tracking-[0.5em] animate-pulse text-muted-foreground">
+                  Drafting your manuscript...
+                </p>
               </div>
             )}
           </div>
