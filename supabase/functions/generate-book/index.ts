@@ -6,18 +6,23 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   try {
     const { title, topic } = await req.json();
     const apiKey = Deno.env.get("GEMINI_API_KEY");
 
     if (!apiKey) {
+      console.error("Missing GEMINI_API_KEY");
       return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY in Secrets" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log(`Generating book for title: "${title}", topic: "${topic}"`);
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -34,31 +39,57 @@ serve(async (req) => {
               ],
             },
           ],
-          generationConfig: { response_mime_type: "application/json" },
+          generationConfig: { 
+            response_mime_type: "application/json" 
+          },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+          ],
         }),
       },
     );
 
     const data = await response.json();
+    console.log("Gemini response status:", response.status);
+    console.log("Gemini response data:", JSON.stringify(data, null, 2));
 
-    // EXTREME PROTECTION: This check prevents the "reading '0'" error
-    if (data && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-      const content = JSON.parse(data.candidates[0].content.parts[0].text);
-      return new Response(JSON.stringify({ content }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    } else {
-      // If Gemini fails, we report the actual error instead of crashing
-      const errorMessage =
-        data.error?.message || "Gemini returned an empty response. Check your API key or Safety Settings.";
+    // Check for candidates array existence and length before accessing
+    if (!data.candidates || data.candidates.length === 0) {
+      const errorMessage = data.error?.message || 
+        data.promptFeedback?.blockReason ||
+        "Gemini returned no candidates. The request may have been blocked or the API key may be invalid.";
+      console.error("No candidates returned:", errorMessage);
       return new Response(JSON.stringify({ error: errorMessage }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+
+    // Check for content in the first candidate
+    if (!data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+      const finishReason = data.candidates[0].finishReason || "Unknown";
+      console.error("No content in candidate, finishReason:", finishReason);
+      return new Response(JSON.stringify({ error: `Gemini returned empty content. Finish reason: ${finishReason}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const content = JSON.parse(data.candidates[0].content.parts[0].text);
+    console.log("Successfully parsed book content");
+    
+    return new Response(JSON.stringify({ content }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    console.error("Generate book error:", errorMessage);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
