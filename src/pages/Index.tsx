@@ -205,8 +205,6 @@ const Index = () => {
               title: bookData.title,
               topic,
               caption,
-              plateNumber,
-              variant: 'diagram',
               sessionId,
             },
           });
@@ -367,7 +365,7 @@ const Index = () => {
       const coverSessionId = getSessionId();
       supabase.functions
         .invoke('generate-cover-image', {
-          body: { title: generatedBook.title, topic: query, sessionId: coverSessionId, variant: 'cover' },
+          body: { title: generatedBook.title, topic: query, sessionId: coverSessionId },
         })
         .then(({ data: imageData, error: imageError }) => {
           setIsLoadingCoverImage(false);
