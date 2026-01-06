@@ -3,7 +3,6 @@ import { BookData } from "@/lib/bookTypes";
 import { generatePixelPerfectPDF } from "@/lib/generatePDF";
 import { Button } from "./ui/button";
 
-// Adjusted imports to handle default exports
 import TableOfContents from "./TableOfContents";
 import ChapterContent from "./ChapterContent";
 import LocalResources from "./LocalResources";
@@ -43,14 +42,18 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
           <p className="whitespace-pre-wrap">{data.preface}</p>
         </section>
 
-        {data.tableOfContents && <TableOfContents chapters={data.tableOfContents} />}
+        {data.tableOfContents && <TableOfContents chapters={data.tableOfContents} topic={data.topic} />}
 
         {data.chapters.map((chapter, index) => (
-          <ChapterContent key={index} chapter={chapter} />
+          <ChapterContent key={index} title={chapter.title} description={chapter.description} />
         ))}
 
-        {data.localResources && data.localResources.length > 0 && <LocalResources resources={data.localResources} />}
+        {data.localResources && data.localResources.length > 0 && (
+          <LocalResources resources={data.localResources} topic={data.topic} />
+        )}
       </div>
     </div>
   );
 };
+
+export default PrintPreview;
