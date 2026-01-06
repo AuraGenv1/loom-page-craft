@@ -26,7 +26,7 @@ import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import PrintPreview from '@/components/PrintPreview';
-import { Download, Sparkles, FlaskConical } from 'lucide-react';
+import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -84,6 +84,8 @@ const Index = () => {
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Check if user is admin via database role
   useEffect(() => {
@@ -434,6 +436,48 @@ const Index = () => {
     setBookId(null);
     setCoverImageUrl(null);
     setIsLoadingCoverImage(false);
+    setIsSavedToLibrary(false);
+  };
+
+  const handleSaveToLibrary = async () => {
+    if (!bookId) return;
+    
+    // If not logged in, open auth modal
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Check if already saved
+      const { data: existing } = await supabase
+        .from('saved_projects')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('book_id', bookId)
+        .maybeSingle();
+
+      if (existing) {
+        toast.info('Already in your library!');
+        setIsSavedToLibrary(true);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('saved_projects')
+        .insert([{ user_id: user.id, book_id: bookId }]);
+
+      if (error) throw error;
+      
+      setIsSavedToLibrary(true);
+      toast.success('Saved to your library!');
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Use AI-generated display title or fallback
@@ -599,6 +643,22 @@ const Index = () => {
                   <p className="text-xs text-accent text-center max-w-md font-medium">
                     ✓ Full access unlocked — All 10 chapters available
                   </p>
+                )}
+                {/* Save to Library Button */}
+                {!isSavedToLibrary && bookId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSaveToLibrary}
+                    disabled={isSaving}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <BookmarkPlus className="w-4 h-4" />
+                    {isSaving ? 'Saving...' : 'Save to Library'}
+                  </Button>
+                )}
+                {isSavedToLibrary && (
+                  <p className="text-xs text-accent font-medium">✓ Saved to your library</p>
                 )}
               </div>
             </section>
