@@ -3,31 +3,38 @@ import { LocalResource } from "@/lib/bookTypes";
 
 interface LocalResourcesProps {
   topic: string;
-  resources: LocalResource[];
-  materials?: string[]; // Added this to fix the TS2322 error
+  resources?: LocalResource[]; // Made optional with '?'
+  materials?: string[];
 }
 
-const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) => {
+const LocalResources = ({ topic, resources = [], materials = [] }: LocalResourcesProps) => {
+  // If there is absolutely no data, show a graceful empty state
+  if ((!resources || resources.length === 0) && (!materials || materials.length === 0)) {
+    return (
+      <div className="w-full py-12 text-center border-t border-black/5">
+        <p className="text-serif italic text-muted-foreground">Additional resources for {topic} are being curated.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full py-8">
       <div className="mb-10 text-center">
         <h2 className="font-serif text-3xl italic mb-2">Curated Resources</h2>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-          Premium Providers & Materials for {topic}
-        </p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Artisan Series • {topic}</p>
       </div>
 
-      {/* Materials Section - If provided */}
+      {/* Materials Section */}
       {materials && materials.length > 0 && (
-        <div className="mb-12 p-6 bg-secondary/10 rounded-lg border border-black/5">
+        <div className="mb-12 p-6 bg-secondary/5 rounded-sm border border-black/5">
           <div className="flex items-center gap-2 mb-4">
             <Package className="w-4 h-4 text-primary" />
-            <h3 className="font-serif text-lg">Essential Materials</h3>
+            <h3 className="font-serif text-lg uppercase tracking-tight">Essential Materials</h3>
           </div>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {materials.map((item, i) => (
               <li key={i} className="text-sm text-muted-foreground flex items-center gap-2">
-                <span className="w-1 h-1 bg-primary rounded-full" />
+                <span className="w-1 h-1 bg-black/20 rounded-full" />
                 {item}
               </li>
             ))}
