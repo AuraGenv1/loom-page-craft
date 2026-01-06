@@ -6,31 +6,25 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { title, topic, variant, plateNumber, caption } = await req.json();
+    const { title, topic, caption } = await req.json();
     const FAL_KEY = Deno.env.get("FAL_KEY");
 
     if (!FAL_KEY) {
-      console.error("FAL_KEY is missing in environment variables");
-      throw new Error("Image service configuration missing");
+      throw new Error("FAL_KEY is missing in secrets");
     }
 
-    // Determine the prompt based on whether it's a cover or a diagram
-    let prompt = "";
-    if (variant === "diagram") {
-      prompt = `A professional, 8k technical diagram of ${topic} for ${title}. Plate ${plateNumber}: ${caption}. Detailed technical drawing, white background, labeled parts with clear text, architectural style, sharp lines.`;
-    } else {
-      prompt = `A cinematic, high-end studio photograph for a luxury book cover titled "${title}" about ${topic}. Professional lighting, shallow depth of field, minimal artisan aesthetic, 8k resolution, elegant composition.`;
-    }
+    // We removed the 'diagram' check. Now every image is a beautiful photo.
+    // We use the caption or the topic to create the scene.
+    const imageDescription = caption || topic;
+    const prompt = `A cinematic, high-end studio photograph of ${imageDescription} for a luxury book titled "${title}". Professional lighting, shallow depth of field, 8k resolution, elegant artisan aesthetic, masterpiece quality.`;
 
-    console.log(`Requesting Fal.ai image for: ${variant}`);
+    console.log(`Requesting Fal.ai photo for: ${imageDescription}`);
 
-    // Call Fal.ai FLUX Schnell (Fast and high quality)
     const response = await fetch("https://fal.run/fal-ai/flux/schnell", {
       method: "POST",
       headers: {
@@ -45,20 +39,11 @@ serve(async (req) => {
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Fal.ai API error:", errorData);
-      throw new Error("Failed to generate image from Fal.ai");
-    }
-
     const data = await response.json();
-    const imageUrl = data.images[0].url;
-
-    return new Response(JSON.stringify({ imageUrl }), {
+    return new Response(JSON.stringify({ imageUrl: data.images[0].url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    console.error("Error in generate-cover-image:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
