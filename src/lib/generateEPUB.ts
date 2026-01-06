@@ -1,30 +1,24 @@
 import { BookData } from "./bookTypes";
 
-export const generateEPUB = async (data: BookData) => {
-  // We use optional chaining and fallbacks to prevent crashes
+// Renamed to generateGuideEPUB to fix Admin/Dashboard import errors
+export const generateGuideEPUB = async (data: BookData) => {
   const title = data.displayTitle || data.title;
-  const subtitle = data.subtitle || "";
-  const chapters = data.chapters || [];
 
   console.log("Generating EPUB for:", title);
 
-  // Simple EPUB placeholder logic to clear errors
   const content = `
     Title: ${title}
-    Subtitle: ${subtitle}
     Topic: ${data.topic}
-    
-    Preface:
-    ${data.preface}
-    
-    Chapters:
-    ${chapters.map((c) => `${c.title}\n${c.description}`).join("\n\n")}
+    Preface: ${data.preface}
   `;
 
   const blob = new Blob([content], { type: "application/epub+zip" });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${data.topic}.epub`;
+  a.download = `${data.topic.replace(/\s+/g, "-")}.epub`;
   a.click();
 };
+
+// Also keep a generic export just in case
+export const generateEPUB = generateGuideEPUB;
