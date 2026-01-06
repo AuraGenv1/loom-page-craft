@@ -21,40 +21,42 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // Using 1.5-flash for speed and reliability
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       Generate a comprehensive artisan guide about: ${topic}.
       
-      You must return ONLY a raw JSON object. 
-      Do NOT include markdown formatting like \`\`\`json.
+      IMPORTANT: Return ONLY a valid JSON object. 
+      Do not include any markdown formatting or backticks (no \`\`\`json).
       
-      Structure:
+      Required JSON Structure:
       {
-        "title": "Title",
-        "displayTitle": "Main Title",
-        "subtitle": "Subtitle",
-        "preface": "Intro text",
+        "title": "Main Title",
+        "displayTitle": "A Beautiful Title",
+        "subtitle": "Informative Subtitle",
+        "preface": "Introductory text...",
         "topic": "${topic}",
         "chapters": [
           {
             "title": "Chapter 1",
-            "description": "Content here..."
+            "description": "Full content of the chapter..."
           }
         ],
         "tableOfContents": [
           { "chapter": 1, "title": "Chapter 1" }
         ],
+        "localResources": [],
         "hasDisclaimer": true
       }
     `;
 
-    // Fixed: Removed generation_config with response_mime_type to prevent 500 error
+    // Fixed: Removed the 'generation_config' block entirely to avoid the 500 error
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    // Safety check: Remove any accidental markdown backticks from the AI
+    // Safety: Strip markdown if the AI ignores the instruction
     const cleanJsonString = text
       .replace(/```json/g, "")
       .replace(/```/g, "")
