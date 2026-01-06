@@ -1,54 +1,118 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { BookData } from "@/lib/bookTypes";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+interface GeneratePDFOptions {
+  title: string;
+  topic: string;
+  bookData: BookData;
+  previewElement?: HTMLElement;
+  isAdmin?: boolean;
+}
+
+/**
+ * Ensures all images are fully loaded before capturing.
+ */
+const waitForImages = async (container: HTMLElement): Promise<void> => {
+  const images = Array.from(container.querySelectorAll("img"));
+  const promises = images.map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  });
+  await Promise.all(promises);
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+/**
+ * Main function used by Index, Admin, and Dashboard.
+ */
+export const generateGuidePDF = async ({
+  title,
+  topic,
+  bookData,
+  previewElement,
+  isAdmin = false,
+}: GeneratePDFOptions) => {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  if (!previewElement) {
+    // Basic text fallback if no visual element is provided
+    doc.setFont("times", "bold");
+    doc.setFontSize(24);
+    doc.text(title, pageWidth / 2, 40, { align: "center" });
+    doc.save(`${topic.replace(/\s+/g, "-")}-guide.pdf`);
+    return;
   }
 
-  try {
-    const { topic } = await req.json();
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+  await waitForImages(previewElement);
 
-    if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
+  const canvas = await html2canvas(previewElement, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    onclone: (clonedDoc) => {
+      // Remove UI elements that shouldn't be in the PDF
+      const buttons = clonedDoc.querySelectorAll("button, .no-pdf-capture");
+      buttons.forEach((btn) => ((btn as HTMLElement).style.display = "none"));
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const prompt = `
-      Create a comprehensive artisan how-to guide about: ${topic}.
-      Return the response as a valid JSON object:
-      {
-        "title": "Title",
-        "preface": "Intro",
-        "chapters": [{"title": "Ch1", "description": "Content"}]
+      if (isAdmin) {
+        const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
+        blurred.forEach((el) => {
+          (el as HTMLElement).style.filter = "none";
+          (el as HTMLElement).style.backdropFilter = "none";
+        });
       }
-    `;
+    },
+  });
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response
-      .text()
-      .replace(/```json|```/g, "")
-      .trim();
-    const jsonResponse = JSON.parse(text);
+  const imgData = canvas.toDataURL("image/jpeg", 0.95);
+  const imgWidth = pageWidth;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    return new Response(JSON.stringify({ content: jsonResponse }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-  } catch (error: any) {
-    // Type casting to 'any' or checking instance fixes the TS18046 error
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    console.error("Edge Function Error:", errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
+  doc.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
+  doc.save(`${topic.replace(/\s+/g, "-")}-artisan-guide.pdf`);
+};
+
+/**
+ * Specifically used by PrintPreview.tsx
+ */
+export const generatePixelPerfectPDF = async (
+  element: HTMLElement,
+  filename: string,
+  isAdmin = false,
+): Promise<void> => {
+  await waitForImages(element);
+
+  const canvas = await html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    onclone: (cloned) => {
+      if (isAdmin) {
+        const blurred = cloned.querySelectorAll('[class*="blur"]');
+        blurred.forEach((el) => ((el as HTMLElement).style.filter = "none"));
+      }
+    },
+  });
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const imgData = canvas.toDataURL("image/jpeg", 0.95);
+  const imgWidth = 210; // A4 width in mm
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  doc.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
+  doc.save(filename);
+};
