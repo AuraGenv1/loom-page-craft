@@ -75,27 +75,3 @@ export const generateGuidePDF = async ({ title, topic, bookData, previewElement 
 };
 
 export const generatePixelPerfectPDF = generateGuidePDF;
-// 2. Convert the HTML "Hidden Container" into a high-quality canvas
-const canvas = await html2canvas(previewElement, {
-  scale: 2, // Keeps file size manageable but text sharp
-  useCORS: true,
-  allowTaint: false,
-  backgroundColor: "#ffffff",
-  logging: false,
-  onclone: (clonedDoc) => {
-    // Force elements to be visible in the "snapshot"
-    const el = clonedDoc.body.querySelectorAll("*");
-    el.forEach((node) => {
-      const htmlNode = node as HTMLElement;
-      htmlNode.style.display = "block";
-      htmlNode.style.overflow = "visible";
-    });
-  },
-});
-
-// 3. Convert Canvas to JPEG Data
-const imgData = canvas.toDataURL("image/jpeg", 0.95);
-const pageWidth = doc.internal.pageSize.getWidth();
-const pageHeight = doc.internal.pageSize.getHeight();
-const imgWidth = pageWidth;
-const imgHeight = (canvas.height * imgWidth) / canvas.width;
