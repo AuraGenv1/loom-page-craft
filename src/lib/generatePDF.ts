@@ -1,31 +1,9 @@
 import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { BookData } from "@/lib/bookTypes";
+import { jsPDF } from "jspdf";
+import { BookData } from "./bookTypes";
 
-interface GeneratePDFOptions {
-  title: string;
-  topic: string;
-  bookData: BookData;
-  previewElement?: HTMLElement;
-}
-
-const waitForImages = async (container: HTMLElement): Promise<void> => {
-  const images = Array.from(container.querySelectorAll("img"));
-  const promises = images.map((img) => {
-    if (img.complete) return Promise.resolve();
-    return new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  });
-  await Promise.all(promises);
-};
-
-export const generateGuidePDF = async ({ title, topic, bookData, previewElement }: GeneratePDFOptions) => {
-  if (!previewElement) {
-    console.error("No preview element provided for PDF generation");
-    return;
-  }
+export const generateGuidePDF = async ({ title, topic, bookData, previewElement }: any) => {
+  if (!previewElement) return;
 
   const doc = new jsPDF({
     orientation: "portrait",
@@ -33,45 +11,18 @@ export const generateGuidePDF = async ({ title, topic, bookData, previewElement 
     format: "a4",
   });
 
-  await waitForImages(previewElement);
-
   const canvas = await html2canvas(previewElement, {
     scale: 2,
     useCORS: true,
     allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
-    onclone: (clonedDoc) => {
-      const el = clonedDoc.body.querySelectorAll("*");
-      el.forEach((node) => {
-        const htmlNode = node as HTMLElement;
-        htmlNode.style.display = "block";
-        htmlNode.style.overflow = "visible";
-      });
-    },
   });
 
   const imgData = canvas.toDataURL("image/jpeg", 0.95);
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-  let heightLeft = imgHeight;
-  let position = 0;
-
-  doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
-
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    doc.addPage();
-    doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-  }
+  doc.addImage(imgData, "JPEG", 0, 0, 210, (canvas.height * 210) / canvas.width);
 
   const safeTitle = topic.toLowerCase().replace(/\s+/g, "-");
   doc.save(`${safeTitle}-artisan-guide.pdf`);
 };
 
+// This alias stops the "binding not found" error
 export const generatePixelPerfectPDF = generateGuidePDF;
