@@ -1,10 +1,22 @@
+export interface ChapterInfo {
+  chapter: number;
+  title: string;
+  imageDescription: string;
+}
+
+export interface LocalResource {
+  name: string;
+  type: string;
+  description: string;
+}
+
 export interface BookData {
   title: string;
   displayTitle: string;
   subtitle: string;
-  tableOfContents: any[];
+  tableOfContents: ChapterInfo[];
   chapter1Content: string;
-  localResources?: any[];
+  localResources?: LocalResource[];
   hasDisclaimer?: boolean;
   coverImageUrl?: string;
 }
