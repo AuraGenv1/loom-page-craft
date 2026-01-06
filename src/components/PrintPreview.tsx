@@ -44,9 +44,17 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
 
         {data.tableOfContents && <TableOfContents chapters={data.tableOfContents} topic={data.topic} />}
 
-        {data.chapters.map((chapter, index) => (
-          <ChapterContent key={index} chapter={chapter} />
-        ))}
+        {/* Render chapters using ChapterContent with proper props */}
+        {data.chapters && data.chapters.length > 0 && (
+          <section className="space-y-8">
+            {data.chapters.map((chapter, index) => (
+              <div key={index} className="border-t pt-6">
+                <h3 className="text-xl font-serif font-semibold mb-4">{chapter.title}</h3>
+                <p className="whitespace-pre-wrap text-slate-700">{chapter.description}</p>
+              </div>
+            ))}
+          </section>
+        )}
 
         {data.localResources && data.localResources.length > 0 && (
           <LocalResources resources={data.localResources} topic={data.topic} />

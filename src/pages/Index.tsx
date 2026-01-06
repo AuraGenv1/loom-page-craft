@@ -1,14 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Logo from "@/components/Logo";
 import SearchInput from "@/components/SearchInput";
 import LoadingAnimation from "@/components/LoadingAnimation";
 import BookCover from "@/components/BookCover";
 import TableOfContents from "@/components/TableOfContents";
 import ChapterContent from "@/components/ChapterContent";
-import PaywallOverlay from "@/components/PaywallOverlay";
 import Footer from "@/components/Footer";
-import SaveToCloudBanner from "@/components/SaveToCloudBanner";
 import AuthModal from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,51 +22,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { BookData } from "@/lib/bookTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateGuidePDF } from "@/lib/generatePDF";
-import { Download, Sparkles } from "lucide-react";
+import { Download, ShoppingCart } from "lucide-react";
 
 type ViewState = "landing" | "loading" | "book";
 
-const getSessionId = (): string => {
-  const stored = localStorage.getItem("loom_page_session_id");
-  if (stored) return stored;
-  const newId = crypto.randomUUID();
-  localStorage.setItem("loom_page_session_id", newId);
-  return newId;
-};
-
-const extractMaterials = (content?: string): string[] => {
-  if (!content) return [];
-  const materialPatterns = [/materials?:?\s*([^\n]+)/gi, /supplies?:?\s*([^\n]+)/gi, /tools?:?\s*([^\n]+)/gi];
-  const materials: string[] = [];
-  for (const pattern of materialPatterns) {
-    const matches = content.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1]) {
-        const items = match[1]
-          .split(/[,;]/)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 2 && s.length < 50);
-        materials.push(...items.slice(0, 5));
-      }
-    }
-  }
-  return [...new Set(materials)].slice(0, 5);
-};
-
 const Index = () => {
-  const [searchParams] = useSearchParams();
   const [viewState, setViewState] = useState<ViewState>("landing");
   const [topic, setTopic] = useState("");
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
-  const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
-  const { user, profile, loading: authLoading, signInWithGoogle, signOut } = useAuth();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const navigate = useNavigate();
   const bookRef = useRef<HTMLDivElement>(null);
-
-  const isPaid = false;
 
   const handleSignOut = async () => {
     await signOut();
@@ -78,37 +46,90 @@ const Index = () => {
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState("loading");
+    setErrorMessage(null);
+    setCoverImageUrl(null);
+
     try {
       const { data, error } = await supabase.functions.invoke("generate-book", {
-        body: { title: `Artisan Guide: ${query}`, topic: query },
+        body: { topic: query },
       });
-      if (error) throw error;
 
-      const content = data.content;
+      if (error) {
+        console.error("Edge function error:", error);
+        setErrorMessage(`Edge function error: ${error.message}`);
+        toast.error(`Generation failed: ${error.message}`);
+        setViewState("landing");
+        return;
+      }
+
+      if (data?.error) {
+        console.error("API error:", data.error);
+        setErrorMessage(`API error: ${data.error}`);
+        toast.error(`Generation failed: ${data.error}`);
+        setViewState("landing");
+        return;
+      }
+
+      const content = data?.content;
+      if (!content) {
+        setErrorMessage("No content returned from API");
+        toast.error("No content returned from API");
+        setViewState("landing");
+        return;
+      }
+
+      // Safely build BookData with all required fields
       const formattedBook: BookData = {
         title: content.title || `Mastering ${query}`,
-        displayTitle: content.title || `Mastering ${query}`,
-        subtitle: content.preface?.substring(0, 120) + "...",
-        tableOfContents: content.chapters.map((ch: any) => ({ title: ch.title, description: ch.description })),
-        chapter1Content: content.chapters[0]?.description || content.preface,
-        localResources: [],
-        hasDisclaimer: true,
+        displayTitle: content.displayTitle || content.title || `Mastering ${query}`,
+        subtitle: content.subtitle || (content.preface ? content.preface.substring(0, 120) + "..." : ""),
+        preface: content.preface || "",
+        topic: query,
+        chapters: Array.isArray(content.chapters)
+          ? content.chapters.map((ch: any) => ({
+              title: ch?.title || "Untitled Chapter",
+              description: ch?.description || "",
+            }))
+          : [],
+        tableOfContents: Array.isArray(content.tableOfContents)
+          ? content.tableOfContents
+          : Array.isArray(content.chapters)
+          ? content.chapters.map((ch: any, idx: number) => ({
+              chapter: idx + 1,
+              title: ch?.title || `Chapter ${idx + 1}`,
+            }))
+          : [],
+        chapter1Content:
+          content.chapters?.[0]?.description || content.preface || "",
+        localResources: content.localResources || [],
+        hasDisclaimer: content.hasDisclaimer ?? true,
       };
 
       setBookData(formattedBook);
       setViewState("book");
 
+      // Generate cover image
       setIsLoadingCoverImage(true);
       supabase.functions
         .invoke("generate-cover-image", {
           body: { title: formattedBook.title, topic: query },
         })
-        .then(({ data: imgData }) => {
+        .then(({ data: imgData, error: imgError }) => {
           setIsLoadingCoverImage(false);
-          if (imgData?.imageUrl) setCoverImageUrl(imgData.imageUrl);
+          if (imgError) {
+            console.error("Cover image error:", imgError);
+          } else if (imgData?.imageUrl) {
+            setCoverImageUrl(imgData.imageUrl);
+          }
+        })
+        .catch((err) => {
+          setIsLoadingCoverImage(false);
+          console.error("Cover image exception:", err);
         });
-    } catch (err) {
-      toast.error("Generation failed.");
+    } catch (err: any) {
+      console.error("Unexpected error:", err);
+      setErrorMessage(`Unexpected error: ${err?.message || "Unknown error"}`);
+      toast.error(`Generation failed: ${err?.message || "Unknown error"}`);
       setViewState("landing");
     }
   };
@@ -116,25 +137,36 @@ const Index = () => {
   const handleDownloadPDF = async () => {
     if (!bookData || !bookRef.current) return;
     try {
-      toast.loading("Capturing high-res guide...", { id: "pdf" });
+      toast.loading("Generating PDF...", { id: "pdf" });
       await generateGuidePDF({
         title: bookData.displayTitle || bookData.title,
         topic,
         bookData,
         previewElement: bookRef.current,
-        isAdmin: true,
+        isAdmin: false,
       });
-      toast.success("Luxury PDF Ready!", { id: "pdf" });
-    } catch (error) {
-      toast.error("PDF Failed", { id: "pdf" });
+      toast.success("PDF Ready!", { id: "pdf" });
+    } catch (error: any) {
+      console.error("PDF error:", error);
+      toast.error(`PDF Failed: ${error?.message || "Unknown error"}`, { id: "pdf" });
     }
+  };
+
+  const handlePurchase = () => {
+    toast.info("Stripe integration coming soon! Full book purchase will be enabled shortly.");
   };
 
   return (
     <div className="min-h-screen bg-background pb-16">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
-          <button onClick={() => setViewState("landing")} className="hover:opacity-70 transition-opacity">
+          <button
+            onClick={() => {
+              setViewState("landing");
+              setErrorMessage(null);
+            }}
+            className="hover:opacity-70 transition-opacity"
+          >
             <Logo />
           </button>
           <div className="flex items-center gap-3">
@@ -150,7 +182,9 @@ const Index = () => {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => navigate("/dashboard")}>Dashboard</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/dashboard")}>
+                      Dashboard
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>Sign Out</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -168,48 +202,78 @@ const Index = () => {
         {viewState === "landing" && (
           <div className="min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center px-4">
             <div className="text-center mb-10 animate-fade-up">
-              <h1 className="font-serif text-4xl md:text-5xl font-semibold mb-4">Learn anything.</h1>
+              <h1 className="font-serif text-4xl md:text-5xl font-semibold mb-4">
+                Learn anything.
+              </h1>
               <p className="text-lg text-muted-foreground max-w-md mx-auto">
                 Beautiful artisan guides crafted for you.
               </p>
             </div>
             <SearchInput onSearch={handleSearch} />
+            {errorMessage && (
+              <div className="mt-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg max-w-lg">
+                <p className="text-sm text-destructive font-medium">Error:</p>
+                <p className="text-sm text-destructive/80 mt-1">{errorMessage}</p>
+              </div>
+            )}
           </div>
         )}
 
         {viewState === "loading" && <LoadingAnimation />}
 
-        {viewState === "book" && (
-          <div ref={bookRef} className="py-12 animate-fade-in bg-white">
+        {viewState === "book" && bookData && (
+          <div ref={bookRef} className="py-12 animate-fade-in">
+            {/* Purchase Button - Top */}
+            <div className="flex justify-center mb-8">
+              <Button onClick={handlePurchase} size="lg" className="gap-2 gradient-warm text-white">
+                <ShoppingCart className="w-5 h-5" />
+                Purchase Full Book
+              </Button>
+            </div>
+
+            {/* Book Cover */}
             <BookCover
-              title={bookData?.displayTitle || `Mastering ${topic}`}
-              subtitle={bookData?.subtitle}
+              title={bookData.displayTitle || bookData.title}
+              subtitle={bookData.subtitle}
               topic={topic}
               coverImageUrl={coverImageUrl}
               isLoadingImage={isLoadingCoverImage}
             />
-            <div className="flex flex-col items-center mt-8 gap-4">
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center mt-8 gap-4">
               <Button onClick={handleDownloadPDF} variant="outline" className="gap-2">
-                <Download className="w-4 h-4" /> PDF Guide
+                <Download className="w-4 h-4" /> Download PDF
               </Button>
             </div>
+
+            {/* Table of Contents */}
             <section className="mt-12 mb-8">
-              <TableOfContents topic={topic} chapters={bookData?.tableOfContents} />
+              <TableOfContents topic={topic} chapters={bookData.tableOfContents} />
             </section>
+
+            {/* Chapter 1 Content */}
             <section>
               <ChapterContent
                 topic={topic}
-                content={bookData?.chapter1Content}
-                materials={extractMaterials(bookData?.chapter1Content)}
+                content={bookData.chapter1Content}
+                localResources={bookData.localResources}
+                hasDisclaimer={bookData.hasDisclaimer}
                 isGenerating={false}
-                diagramImages={diagramImages}
-                tableOfContents={bookData?.tableOfContents}
               />
             </section>
-            {!isPaid && <PaywallOverlay onPurchase={() => {}} onDownload={handleDownloadPDF} />}
+
+            {/* Purchase Button - Bottom */}
+            <div className="flex justify-center mt-12 pt-8 border-t border-border">
+              <Button onClick={handlePurchase} size="lg" className="gap-2 gradient-warm text-white">
+                <ShoppingCart className="w-5 h-5" />
+                Purchase Full Book - Unlock All Chapters
+              </Button>
+            </div>
           </div>
         )}
       </main>
+
       <Footer />
       <AuthModal
         open={authModalOpen}

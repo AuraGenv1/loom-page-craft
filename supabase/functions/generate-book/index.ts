@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +6,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -20,49 +18,119 @@ serve(async (req) => {
       throw new Error("Missing GEMINI_API_KEY environment variable");
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // Using 1.5-flash for speed and reliability
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    if (!topic || typeof topic !== "string") {
+      throw new Error("Missing or invalid topic");
+    }
 
-    const prompt = `
-      Generate a comprehensive artisan guide about: ${topic}.
-      
-      IMPORTANT: Return ONLY a valid JSON object. 
-      Do not include any markdown formatting or backticks (no \`\`\`json).
-      
-      Required JSON Structure:
+    // Use prompt-based JSON enforcement instead of response_mime_type
+    const prompt = `You are a professional book author. Generate a comprehensive artisan guide about: "${topic}".
+
+CRITICAL: You MUST return ONLY a valid JSON object. Do NOT include any text before or after the JSON.
+Do NOT wrap the JSON in markdown code blocks or backticks.
+Start your response with { and end with }.
+
+The JSON structure must be EXACTLY:
+{
+  "title": "The main title of the book",
+  "displayTitle": "A beautiful display title",
+  "subtitle": "A compelling subtitle under 100 characters",
+  "preface": "A 2-3 paragraph introduction to the subject matter",
+  "topic": "${topic}",
+  "chapters": [
+    {
+      "title": "Chapter 1 Title",
+      "description": "Full detailed content for this chapter, at least 500 words with practical guidance"
+    },
+    {
+      "title": "Chapter 2 Title", 
+      "description": "Full detailed content for chapter 2"
+    },
+    {
+      "title": "Chapter 3 Title",
+      "description": "Full detailed content for chapter 3"
+    }
+  ],
+  "tableOfContents": [
+    { "chapter": 1, "title": "Chapter 1 Title" },
+    { "chapter": 2, "title": "Chapter 2 Title" },
+    { "chapter": 3, "title": "Chapter 3 Title" }
+  ],
+  "localResources": [],
+  "hasDisclaimer": true
+}
+
+Generate at least 3 detailed chapters with rich, educational content about ${topic}.`;
+
+    console.log("Calling Gemini API for topic:", topic);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
-        "title": "Main Title",
-        "displayTitle": "A Beautiful Title",
-        "subtitle": "Informative Subtitle",
-        "preface": "Introductory text...",
-        "topic": "${topic}",
-        "chapters": [
-          {
-            "title": "Chapter 1",
-            "description": "Full content of the chapter..."
-          }
-        ],
-        "tableOfContents": [
-          { "chapter": 1, "title": "Chapter 1" }
-        ],
-        "localResources": [],
-        "hasDisclaimer": true
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+          ],
+        }),
       }
-    `;
+    );
 
-    // Fixed: Removed the 'generation_config' block entirely to avoid the 500 error
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+    }
 
-    // Safety: Strip markdown if the AI ignores the instruction
-    const cleanJsonString = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    const data = await response.json();
+    console.log("Gemini response received");
 
-    const parsedContent = JSON.parse(cleanJsonString);
+    // Robust check for candidates
+    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error("No candidates in response:", JSON.stringify(data));
+      throw new Error("No candidates returned from Gemini API");
+    }
+
+    const candidate = data.candidates[0];
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      console.error("No content in candidate:", JSON.stringify(candidate));
+      throw new Error("No content in Gemini response candidate");
+    }
+
+    const text = candidate.content.parts[0].text;
+    if (!text) {
+      throw new Error("Empty text in Gemini response");
+    }
+
+    // Clean the response - strip markdown code blocks if present
+    let cleanJsonString = text.trim();
+    
+    // Remove markdown code blocks
+    if (cleanJsonString.startsWith("```json")) {
+      cleanJsonString = cleanJsonString.slice(7);
+    } else if (cleanJsonString.startsWith("```")) {
+      cleanJsonString = cleanJsonString.slice(3);
+    }
+    if (cleanJsonString.endsWith("```")) {
+      cleanJsonString = cleanJsonString.slice(0, -3);
+    }
+    cleanJsonString = cleanJsonString.trim();
+
+    // Try to parse JSON
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(cleanJsonString);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Raw text:", cleanJsonString.substring(0, 500));
+      throw new Error("Failed to parse JSON from Gemini response");
+    }
+
+    console.log("Successfully parsed book content");
 
     return new Response(JSON.stringify({ content: parsedContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

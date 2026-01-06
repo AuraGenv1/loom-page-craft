@@ -1,61 +1,159 @@
 import React, { useEffect, useState } from "react";
-import { BookData } from "@/lib/bookTypes";
-import { PrintPreview } from "@/components/PrintPreview";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, ShoppingCart, Book, Loader2 } from "lucide-react";
+import Logo from "@/components/Logo";
+import { toast } from "sonner";
+
+interface SavedBook {
+  id: string;
+  topic: string;
+  title: string;
+  created_at: string;
+  coverImage?: string;
+}
 
 const Dashboard = () => {
-  const [books, setBooks] = useState<BookData[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const [books, setBooks] = useState<SavedBook[]>([]);
+  const [loadingBooks, setLoadingBooks] = useState(true);
 
-  /**
-   * Sanitizes the data coming from the database/storage to
-   * match the required BookData type strictly.
-   */
-  const sanitizeBookData = (data: any): BookData => {
-    return {
-      title: data.title || "Untitled Guide",
-      displayTitle: data.displayTitle || data.title || "Untitled Guide",
-      subtitle: data.subtitle || "",
-      topic: data.topic || "General",
-      preface: data.preface || "",
-      chapters: data.chapters || [],
-      tableOfContents: data.tableOfContents || [],
-      chapter1Content: data.chapter1Content || "",
-      localResources: data.localResources || [],
-      hasDisclaimer: data.hasDisclaimer ?? true,
-      coverImage: data.coverImage,
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/");
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    const fetchBooks = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("books")
+          .select("id, topic, title, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching books:", error);
+          toast.error("Failed to load your guides");
+        } else {
+          setBooks(data || []);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+      } finally {
+        setLoadingBooks(false);
+      }
     };
+
+    if (user) {
+      fetchBooks();
+    }
+  }, [user]);
+
+  const handlePurchase = (bookId: string) => {
+    toast.info("Stripe integration coming soon! Full book purchase will be enabled shortly.");
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="bg-white border-b border-slate-200 p-4 mb-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link to="/">
+              <Logo />
+            </Link>
+            <span className="text-xs uppercase tracking-widest text-muted-foreground font-serif">
+              My Guides
+            </span>
+          </div>
           <Link to="/">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="w-4 h-4" />
-              Back to Generator
+              Back
             </Button>
           </Link>
-          <h1 className="text-xl font-bold text-slate-900">My Artisan Guides</h1>
-          <div className="w-24"></div> {/* Spacer for centering */}
         </div>
-      </nav>
+      </header>
 
-      <main className="max-w-5xl mx-auto p-4">
-        {books.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
-            <p className="text-slate-500">You haven't generated any guides yet.</p>
+      <main className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Title and New Guide Button */}
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="font-serif text-3xl text-foreground">My Artisan Guides</h1>
+          <Link to="/">
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Guide
+            </Button>
+          </Link>
+        </div>
+
+        {loadingBooks ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : books.length === 0 ? (
+          <div className="text-center py-20 bg-card rounded-xl border-2 border-dashed border-border">
+            <Book className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+            <p className="text-muted-foreground mb-4">You haven't generated any guides yet.</p>
             <Link to="/">
-              <Button className="mt-4">Generate Your First Guide</Button>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                Generate Your First Guide
+              </Button>
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-12">
-            {books.map((book, index) => (
-              <div key={index} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <PrintPreview data={sanitizeBookData(book)} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {books.map((book) => (
+              <div
+                key={book.id}
+                className="bg-card rounded-xl border border-border shadow-card overflow-hidden hover:shadow-book transition-shadow duration-300"
+              >
+                {/* Book Cover Placeholder */}
+                <div className="aspect-[3/4] bg-gradient-to-br from-secondary to-muted flex items-center justify-center">
+                  <Book className="w-16 h-16 text-muted-foreground/30" />
+                </div>
+
+                {/* Book Info */}
+                <div className="p-4">
+                  <h3 className="font-serif text-lg font-semibold text-foreground line-clamp-2 mb-1">
+                    {book.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-3">{book.topic}</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Created {new Date(book.created_at).toLocaleDateString()}
+                  </p>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handlePurchase(book.id)}
+                      size="sm"
+                      className="flex-1 gap-1"
+                    >
+                      <ShoppingCart className="w-3 h-3" />
+                      Buy
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      View
+                    </Button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
