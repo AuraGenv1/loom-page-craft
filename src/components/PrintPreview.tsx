@@ -2,9 +2,11 @@ import React from "react";
 import { BookData } from "@/lib/bookTypes";
 import { generatePixelPerfectPDF } from "@/lib/generatePDF";
 import { Button } from "./ui/button";
-import { TableOfContents } from "./TableOfContents";
-import { ChapterContent } from "./ChapterContent";
-import { LocalResources } from "./LocalResources";
+
+// Adjusted imports to handle default exports
+import TableOfContents from "./TableOfContents";
+import ChapterContent from "./ChapterContent";
+import LocalResources from "./LocalResources";
 
 interface PrintPreviewProps {
   data: BookData;
@@ -16,7 +18,6 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
 
   const handleDownload = async () => {
     if (previewRef.current) {
-      // Corrected to 2 arguments: element and filename
       await generatePixelPerfectPDF(previewRef.current, `${data.topic}-guide.pdf`);
     }
   };
