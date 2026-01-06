@@ -1,25 +1,17 @@
-import { useEffect, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import Logo from '@/components/Logo';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
-import { generateGuidePDF } from '@/lib/generatePDF';
-import { generateGuideEPUB } from '@/lib/generateEPUB';
-import { BookData } from '@/lib/bookTypes';
-import BookCover from '@/components/BookCover';
-import TableOfContents from '@/components/TableOfContents';
-import ChapterContent from '@/components/ChapterContent';
+import { useEffect, useState, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/components/Logo";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Plus, BookOpen, Download } from "lucide-react";
+import { toast } from "sonner";
+import { generateGuidePDF } from "@/lib/generatePDF";
+import { BookData } from "@/lib/bookTypes";
+import BookCover from "@/components/BookCover";
+import TableOfContents from "@/components/TableOfContents";
+import ChapterContent from "@/components/ChapterContent";
 
 interface SavedBook {
   id: string;
@@ -47,72 +39,35 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading && !user) {
-      toast.error('Please sign in to view your library.');
-      navigate('/');
+      toast.error("Please sign in to view your library.");
+      navigate("/");
     }
   }, [user, loading, navigate]);
 
   useEffect(() => {
     const fetchSavedBooks = async () => {
       if (!user) return;
-
       const { data, error } = await supabase
-        .from('saved_projects')
-        .select(`
-          id,
-          book_id,
-          created_at,
-          books (
-            id,
-            title,
-            topic,
-            chapter1_content,
-            table_of_contents,
-            local_resources,
-            has_disclaimer
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .from("saved_projects")
+        .select(
+          `id, book_id, created_at, books (id, title, topic, chapter1_content, table_of_contents, local_resources, has_disclaimer)`,
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-      if (!error && data) {
-        setSavedBooks(data as SavedBook[]);
-      }
+      if (!error && data) setSavedBooks(data as SavedBook[]);
       setLoadingBooks(false);
     };
-
-    if (user) {
-      fetchSavedBooks();
-    }
+    if (user) fetchSavedBooks();
   }, [user]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-
-  const handleDeleteBook = async (savedBookId: string) => {
-    const { error } = await supabase
-      .from('saved_projects')
-      .delete()
-      .eq('id', savedBookId);
-
-    if (error) {
-      toast.error('Failed to delete guide');
-    } else {
-      setSavedBooks(savedBooks.filter(b => b.id !== savedBookId));
-      toast.success('Guide removed from library');
-    }
-  };
-
-  const handleDownloadPDF = async (book: SavedBook['books']) => {
+  const handleDownloadPDF = async (book: SavedBook["books"]) => {
     if (!book) return;
-    
     setDownloadingId(book.id);
     try {
       const bookData: BookData = {
         title: book.title,
-        displayTitle: book.title.split(' ').slice(0, 5).join(' '),
+        displayTitle: book.title.split(" ").slice(0, 5).join(" "),
         subtitle: `A Comprehensive Guide to ${book.topic}`,
         tableOfContents: book.table_of_contents || [],
         chapter1Content: book.chapter1_content,
@@ -121,10 +76,8 @@ const Dashboard = () => {
       };
 
       setPdfBookData(bookData);
-      
-      // Give the browser time to render the high-res images
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       if (hiddenContainerRef.current) {
         await generateGuidePDF({
           title: bookData.displayTitle,
@@ -133,20 +86,79 @@ const Dashboard = () => {
           previewElement: hiddenContainerRef.current,
         });
       }
-      
-      toast.success('PDF downloaded!');
+      toast.success("PDF downloaded!");
     } catch (error) {
-      console.error('PDF generation error:', error);
-      toast.error('Failed to generate PDF');
+      toast.error("Failed to generate PDF");
     } finally {
       setDownloadingId(null);
-      // We keep pdfBookData set to avoid unmounting the element mid-generation
     }
   };
 
-  const handleDownloadKindle = async (book: SavedBook['books']) => {
-    if (!book) return;
-    
-    setDownloadingId(book.id + '-kindle');
-    try {
-      const
+  if (loading) return <div className="p-10 text-center">Loading Studio...</div>;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/50">
+        <div className="container flex items-center justify-between h-16">
+          <Link to="/">
+            <Logo />
+          </Link>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="hidden sm:flex gap-2">
+              <Plus className="h-4 w-4" /> New Guide
+            </Button>
+            <Avatar className="h-8 w-8 border">
+              <AvatarImage src={profile?.avatar_url} />
+              <AvatarFallback>U</AvatarFallback>
+            </Avatar>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-12">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="font-serif text-3xl mb-8">Your Library</h1>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {savedBooks.map((saved) => (
+              <div key={saved.id} className="bg-card border rounded-lg p-5 flex flex-col justify-between h-[200px]">
+                <h3 className="font-serif text-lg mb-2 line-clamp-2">{saved.books?.title}</h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-auto"
+                  onClick={() => handleDownloadPDF(saved.books)}
+                  disabled={downloadingId === saved.books?.id}
+                >
+                  <Download className="h-3 w-3 mr-1" />{" "}
+                  {downloadingId === saved.books?.id ? "Processing..." : "Download PDF"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+
+      {pdfBookData && (
+        <div
+          ref={hiddenContainerRef}
+          className="fixed bg-white"
+          style={{ left: "-10000px", top: "0", width: "800px", visibility: "visible", zIndex: -1 }}
+        >
+          <BookCover title={pdfBookData.displayTitle} topic={pdfBookData.title} />
+          <div className="p-10">
+            <TableOfContents topic={pdfBookData.title} chapters={pdfBookData.tableOfContents} />
+          </div>
+          <div className="p-10">
+            <ChapterContent
+              topic={pdfBookData.title}
+              content={pdfBookData.chapter1Content}
+              tableOfContents={pdfBookData.tableOfContents}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;
