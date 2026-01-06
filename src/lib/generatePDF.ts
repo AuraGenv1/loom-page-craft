@@ -1,114 +1,54 @@
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { BookData } from "@/lib/bookTypes";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 
-interface GeneratePDFOptions {
-  title: string;
-  topic: string;
-  bookData: BookData;
-  previewElement?: HTMLElement;
-  isAdmin?: boolean;
-}
-
-const waitForImages = async (container: HTMLElement): Promise<void> => {
-  const images = Array.from(container.querySelectorAll("img"));
-  const promises = images.map((img) => {
-    if (img.complete) return Promise.resolve();
-    return new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  });
-  await Promise.all(promises);
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-export const generateGuidePDF = async ({
-  title,
-  topic,
-  bookData,
-  previewElement,
-  isAdmin = false,
-}: GeneratePDFOptions) => {
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-
-  // FALLBACK: If the UI ref fails, at least give them a styled text version
-  if (!previewElement) {
-    doc.setFont("times", "bold"); // More "Artisan" than Helvetica
-    doc.setFontSize(28);
-    doc.text(title, pageWidth / 2, 40, { align: "center" });
-
-    doc.setFont("times", "italic");
-    doc.setFontSize(14);
-    doc.text(`A Custom Artisan Guide for ${topic}`, pageWidth / 2, 52, { align: "center" });
-
-    if (bookData.chapter1Content) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      const lines = doc.splitTextToSize(bookData.chapter1Content, pageWidth - 40);
-      doc.text(lines, 20, 80);
-    }
-
-    const safeTitle = topic.toLowerCase().replace(/\s+/g, "-");
-    doc.save(`${safeTitle}-artisan-guide.pdf`);
-    return;
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  // PREPARATION: Capture the high-res UI
-  await waitForImages(previewElement);
+  try {
+    const { topic } = await req.json();
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
 
-  const canvas = await html2canvas(previewElement, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
-    onclone: (clonedDoc) => {
-      // PDF-ONLY STYLING: Ensure the PDF looks like a clean book
-      const el = clonedDoc.querySelector(".animate-fade-in") as HTMLElement;
-      if (el) el.style.animation = "none";
+    if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
-      if (isAdmin) {
-        const blurred = clonedDoc.querySelectorAll('[class*="blur"]');
-        blurred.forEach((el) => {
-          (el as HTMLElement).style.filter = "none";
-          (el as HTMLElement).style.backdropFilter = "none";
-        });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const restricted = clonedDoc.querySelectorAll('[class*="max-h-"], [class*="overflow-hidden"]');
-        restricted.forEach((el) => {
-          (el as HTMLElement).style.maxHeight = "none";
-          (el as HTMLElement).style.overflow = "visible";
-        });
+    const prompt = `
+      Create a comprehensive artisan how-to guide about: ${topic}.
+      Return the response as a valid JSON object:
+      {
+        "title": "Title",
+        "preface": "Intro",
+        "chapters": [{"title": "Ch1", "description": "Content"}]
       }
-    },
-  });
+    `;
 
-  const imgData = canvas.toDataURL("image/jpeg", 0.95);
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response
+      .text()
+      .replace(/```json|```/g, "")
+      .trim();
+    const jsonResponse = JSON.parse(text);
 
-  let heightLeft = imgHeight;
-  let position = 0;
-
-  // Add first page
-  doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
-  heightLeft -= pageHeight;
-
-  // Add subsequent pages if content is long
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    doc.addPage();
-    doc.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
-    heightLeft -= pageHeight;
+    return new Response(JSON.stringify({ content: jsonResponse }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (error: any) {
+    // Type casting to 'any' or checking instance fixes the TS18046 error
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    console.error("Edge Function Error:", errorMessage);
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
   }
-
-  const safeTitle = topic.toLowerCase().replace(/\s+/g, "-");
-  doc.save(`${safeTitle}-artisan-guide.pdf`);
-};
+});
