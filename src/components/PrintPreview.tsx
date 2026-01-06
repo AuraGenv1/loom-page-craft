@@ -45,7 +45,7 @@ export const PrintPreview: React.FC<PrintPreviewProps> = ({ data, isAdmin = fals
         {data.tableOfContents && <TableOfContents chapters={data.tableOfContents} topic={data.topic} />}
 
         {data.chapters.map((chapter, index) => (
-          <ChapterContent key={index} title={chapter.title} description={chapter.description} />
+          <ChapterContent key={index} chapter={chapter} />
         ))}
 
         {data.localResources && data.localResources.length > 0 && (
