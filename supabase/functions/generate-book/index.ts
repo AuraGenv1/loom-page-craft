@@ -5,38 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function fetchLocalResources(topic: string, apiKey: string) {
-  const searchQuery = `${topic} specialized expert service`;
-  try {
-    const response = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.displayName,places.primaryType,places.formattedAddress,places.id,places.rating",
-      },
-      body: JSON.stringify({ textQuery: searchQuery, maxResultCount: 4 }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return (
-        data.places?.map((place: any) => ({
-          name: place.displayName?.text || "Specialist Provider",
-          type: place.primaryType || "Artisan Service",
-          description: `Premier local specialist offering bespoke services for ${topic}.`,
-          address: place.formattedAddress,
-          placeId: place.id,
-          rating: place.rating,
-        })) || []
-      );
-    }
-  } catch (e) {
-    console.error("Places API error", e);
-  }
-  return [];
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -44,31 +12,25 @@ serve(async (req) => {
     const { topic } = await req.json();
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const FAL_KEY = Deno.env.get("FAL_KEY");
-    const PLACES_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
 
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
-    const systemPrompt = `You are the Lead Architect at Loom & Page, a publisher of ultra-luxury, high-end coffee table books. 
-
-CRITICAL RULES:
-1. Writing Style: Sophisticated, cinematic, and authoritative. NO conversational filler.
-2. Tone: Like a luxury magazine (Vogue, Robb Report) or a premium automotive journal.
-3. Content: Each chapter must have at least 600 words of rich, instructional narrative.
-
-IMAGE DESCRIPTION RULES:
-- Every "imageDescription" MUST be a prompt for a breathtaking 8k realistic photograph.
-- Use words like: "Professional studio lighting", "Cinematic rim light", "Shallow depth of field".
-
-JSON STRUCTURE REQUIRED:
-{
-  "title": "The Full Title",
-  "displayTitle": "Short Title (5 words max)",
-  "subtitle": "An elegant luxury subtitle",
-  "tableOfContents": [
-    { "chapter": 1, "title": "...", "imageDescription": "A professional 8k studio photo of..." }
-  ],
-  "chapter1Content": "Detailed Markdown content here..."
-}`;
+    const systemPrompt = `You are the Lead Architect at Loom & Page. 
+    Topic: ${topic}.
+    
+    INSTRUCTIONAL GUIDELINES:
+    1. Provide a detailed, cinematic narrative (min 800 words).
+    2. DIAGRAM RULES: When describing technical components, you MUST provide explicit text labels. 
+    3. Image Descriptions: Descriptions for AI generation must include "Labeled technical diagram with clear text callouts pointing to specific parts".
+    
+    Return JSON: 
+    {
+      "title": "Full Book Title",
+      "displayTitle": "Short Cover Title",
+      "subtitle": "Luxury subtitle",
+      "tableOfContents": [{"chapter": 1, "title": "Chapter Title", "imageDescription": "8k technical diagram of [part] with labeled text callouts, studio lighting"}],
+      "chapter1Content": "Markdown content here..."
+    }`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -76,7 +38,7 @@ JSON STRUCTURE REQUIRED:
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemPrompt}\n\nGenerate for: ${topic}` }] }],
+          contents: [{ parts: [{ text: systemPrompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 15000 },
         }),
       },
@@ -85,14 +47,14 @@ JSON STRUCTURE REQUIRED:
     const data = await response.json();
     const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
     const jsonStr = rawContent.match(/```json\s+([\s\S]*?)\s+```/)?.[1] || rawContent;
-    const bookData = JSON.parse(jsonStr.trim());
+    const bookData = JSON.parse(jsonStr);
 
     if (FAL_KEY && bookData.tableOfContents?.[0]?.imageDescription) {
       const falRes = await fetch("https://fal.run/fal-ai/flux/schnell", {
         method: "POST",
         headers: { Authorization: `Key ${FAL_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `${bookData.tableOfContents[0].imageDescription}. Cinematic 8k photography, professional studio setup.`,
+          prompt: `${bookData.tableOfContents[0].imageDescription}. High-resolution photography, technical labels visible.`,
           image_size: "square_hd",
         }),
       });
@@ -100,10 +62,6 @@ JSON STRUCTURE REQUIRED:
         const falData = await falRes.json();
         bookData.coverImageUrl = falData.images[0].url;
       }
-    }
-
-    if (PLACES_KEY) {
-      bookData.localResources = await fetchLocalResources(topic, PLACES_KEY);
     }
 
     return new Response(JSON.stringify(bookData), {
