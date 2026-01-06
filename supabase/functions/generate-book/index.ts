@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // 1. Handle CORS for the browser
+  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -16,52 +16,59 @@ serve(async (req) => {
     const { topic } = await req.json();
     const apiKey = Deno.env.get("GEMINI_API_KEY");
 
-    if (!apiKey) throw new Error("Missing GEMINI_API_KEY environment variable");
+    if (!apiKey) {
+      throw new Error("Missing GEMINI_API_KEY environment variable");
+    }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // We use gemini-1.5-flash for speed and reliability
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
-      Create a comprehensive artisan how-to guide about: ${topic}.
+      Generate a comprehensive artisan guide about: ${topic}.
       
-      IMPORTANT: You must return ONLY a valid JSON object. Do not include markdown formatting or backticks.
+      You must return ONLY a raw JSON object. 
+      Do NOT include markdown formatting like \`\`\`json.
+      
       Structure:
       {
-        "title": "A professional title",
-        "preface": "A brief introduction",
+        "title": "Title",
+        "displayTitle": "Main Title",
+        "subtitle": "Subtitle",
+        "preface": "Intro text",
+        "topic": "${topic}",
         "chapters": [
           {
-            "title": "Chapter 1 Name",
-            "description": "Detailed chapter content"
+            "title": "Chapter 1",
+            "description": "Content here..."
           }
-        ]
+        ],
+        "tableOfContents": [
+          { "chapter": 1, "title": "Chapter 1" }
+        ],
+        "hasDisclaimer": true
       }
     `;
 
+    // Fixed: Removed generation_config with response_mime_type to prevent 500 error
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    let text = response.text();
+    const text = response.text();
 
-    // 2. Clean up the response to ensure it is valid JSON
-    // This removes markdown code blocks if the AI accidentally adds them
-    const cleanText = text
+    // Safety check: Remove any accidental markdown backticks from the AI
+    const cleanJsonString = text
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    const jsonResponse = JSON.parse(cleanText);
+    const parsedContent = JSON.parse(cleanJsonString);
 
-    return new Response(JSON.stringify({ content: jsonResponse }), {
+    return new Response(JSON.stringify({ content: parsedContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: unknown) {
-    // 3. Fixes the 'error is of type unknown' TypeScript error
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Edge Function Error:", errorMessage);
-
-    return new Response(JSON.stringify({ error: errorMessage }), {
+  } catch (error: any) {
+    console.error("Edge Function Error:", error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
