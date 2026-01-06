@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, BookOpen, Download } from "lucide-react";
 import { toast } from "sonner";
-
+import { generateGuidePDF } from "@/lib/generatePDF";
 import { BookData } from "@/lib/bookTypes";
+// If these 3 lines below cause red lines, delete them temporarily:
 import BookCover from "@/components/BookCover";
 import TableOfContents from "@/components/TableOfContents";
 import ChapterContent from "@/components/ChapterContent";
-
 interface SavedBook {
   id: string;
   book_id: string;
