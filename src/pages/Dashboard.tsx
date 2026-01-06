@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
@@ -17,6 +17,9 @@ import { toast } from 'sonner';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
 import { BookData } from '@/lib/bookTypes';
+import BookCover from '@/components/BookCover';
+import TableOfContents from '@/components/TableOfContents';
+import ChapterContent from '@/components/ChapterContent';
 
 interface SavedBook {
   id: string;
@@ -39,6 +42,8 @@ const Dashboard = () => {
   const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [pdfBookData, setPdfBookData] = useState<BookData | null>(null);
+  const hiddenContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -115,16 +120,35 @@ const Dashboard = () => {
         hasDisclaimer: book.has_disclaimer,
       };
 
-      await generateGuidePDF({
-        title: bookData.displayTitle,
-        topic: book.topic,
-        bookData,
-      });
+      // Set the book data and wait for the hidden container to render
+      setPdfBookData(bookData);
+      
+      // Wait for DOM to paint the hidden container
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (hiddenContainerRef.current) {
+        await generateGuidePDF({
+          title: bookData.displayTitle,
+          topic: book.topic,
+          bookData,
+          previewElement: hiddenContainerRef.current,
+        });
+      } else {
+        // Fallback to text-only PDF
+        await generateGuidePDF({
+          title: bookData.displayTitle,
+          topic: book.topic,
+          bookData,
+        });
+      }
+      
       toast.success('PDF downloaded!');
     } catch (error) {
+      console.error('PDF generation error:', error);
       toast.error('Failed to generate PDF');
     } finally {
       setDownloadingId(null);
+      setPdfBookData(null);
     }
   };
 
@@ -423,6 +447,43 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+
+      {/* Hidden Container for PDF Rendering */}
+      {pdfBookData && (
+        <div 
+          ref={hiddenContainerRef}
+          className="fixed left-[-9999px] top-0 w-[800px] bg-white"
+          style={{ visibility: 'hidden' }}
+        >
+          {/* Book Cover */}
+          <div className="mb-8">
+            <BookCover 
+              title={pdfBookData.displayTitle} 
+              topic={pdfBookData.title} 
+              coverImageUrl={pdfBookData.coverImageUrl}
+              coverStyle={pdfBookData.coverStyle}
+            />
+          </div>
+          
+          {/* Table of Contents */}
+          <div className="mb-8 p-8">
+            <h2 className="text-2xl font-serif mb-4">Table of Contents</h2>
+            <TableOfContents 
+              topic={pdfBookData.title}
+              chapters={pdfBookData.tableOfContents} 
+            />
+          </div>
+          
+          {/* Chapter 1 Content */}
+          <div className="p-8">
+            <ChapterContent 
+              topic={pdfBookData.title}
+              content={pdfBookData.chapter1Content}
+              tableOfContents={pdfBookData.tableOfContents}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

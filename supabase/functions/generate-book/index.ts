@@ -208,6 +208,23 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const chapterCount = fullBook ? 12 : 10;
     const contentLength = fullBook ? 1200 : 600;
 
+    // Build image description instructions based on topic type
+    const imageDescriptionInstructions = isAutomotiveTopic
+      ? `CRITICAL IMAGE DESCRIPTION RULES:
+- Each chapter's "imageDescription" must be a HIGH-END ARTISTIC PHOTO CAPTION
+- Write as if describing a breathtaking photograph for a luxury automotive magazine
+- Example format: "A breathtaking, realistic 8k photo of [specific car detail/angle] in a professional studio setting with dramatic rim lighting and reflective black floor"
+- Focus on: dramatic angles, studio lighting, reflection, chrome details, leather textures, engineering beauty
+- NEVER use words like: Plate, Diagram, Illustration, Figure, Technical, Instructional, Blueprint
+- Each description should evoke the feeling of a $50,000 photography shoot`
+      : `CRITICAL IMAGE DESCRIPTION RULES:
+- Each chapter's "imageDescription" must be a HIGH-END ARTISTIC CAPTION suitable for fine art photography
+- Write as if describing a stunning photograph for an upscale coffee table book
+- Example format: "A beautifully composed 8k photograph of [specific subject] with soft natural lighting and elegant composition"
+- Focus on: beauty, craftsmanship, texture, atmosphere, professional studio quality
+- NEVER use words like: Plate, Diagram, Illustration, Figure, Technical, Instructional, Blueprint
+- Each description should feel like fine art, not a textbook`;
+
     const systemPrompt = `You are the Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined book content.
 
 CRITICAL RULES:
@@ -234,8 +251,8 @@ You must respond with a JSON object in this exact format:
   "displayTitle": "Short Cover Title",
   "subtitle": "A longer descriptive subtitle explaining the book's contents",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title", "imageDescription": "A clear instructional diagram showing..." },
-    { "chapter": 2, "title": "Chapter title", "imageDescription": "An illustration depicting..." },
+    { "chapter": 1, "title": "Chapter title", "imageDescription": "High-end artistic photo description..." },
+    { "chapter": 2, "title": "Chapter title", "imageDescription": "Stunning visual caption..." },
     ... (exactly ${chapterCount} chapters)
   ],
   "chapter1Content": "Full markdown content of chapter 1...",
@@ -257,11 +274,7 @@ You must respond with a JSON object in this exact format:
   ]
 }
 
-IMPORTANT FOR TABLE OF CONTENTS:
-- Each chapter MUST include an "imageDescription" field that describes a clear, instructional diagram or illustration for that chapter
-- The imageDescription should be specific and describe what the diagram shows (e.g., "A labeled diagram showing the parts of a sourdough starter jar with temperature zones")
-- For instructional topics, describe diagrams, step-by-step visuals, or annotated illustrations
-- Avoid generic descriptions - be specific to the chapter content
+${imageDescriptionInstructions}
 
 Chapter requirements:
 - Minimum ${contentLength} words of substantive instructional content per chapter
@@ -421,10 +434,16 @@ Chapter requirements:
       try {
         console.log('Generating cover image with Fal.ai...');
         
-        // Build prompt based on topic type
+        // Use the AI-generated imageDescription from the first chapter as the base prompt
+        const aiImageDescription = bookData.tableOfContents?.[0]?.imageDescription || topic;
+        
+        // Build prompt based on topic type - always use the AI description
         const imagePrompt = isAutomotiveTopic
-          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic.`
-          : `Clean technical manual illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework.`;
+          ? `${aiImageDescription}. Professional 8k cinematic studio photography, dramatic automotive lighting, shallow depth of field, high-end commercial quality, ultra high resolution, photorealistic.`
+          : `${aiImageDescription}. Stunning 8k fine art photography, soft natural lighting, elegant composition, professional studio quality, ultra high resolution.`;
+        
+        // Mark as photography style for the frontend
+        bookData.coverStyle = isAutomotiveTopic ? 'automotive-photography' : 'artistic-photography';
         
         const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
           method: 'POST',
@@ -443,10 +462,11 @@ Chapter requirements:
 
         if (falResponse.ok) {
           const falData = await falResponse.json();
+          // Fal.ai returns the permanent URL directly in images[0].url
           const imageUrl = falData.images?.[0]?.url;
           if (imageUrl) {
             bookData.coverImageUrl = imageUrl;
-            console.log('Fal.ai cover image generated successfully');
+            console.log('Fal.ai cover image generated successfully:', imageUrl);
           }
         } else {
           const errorText = await falResponse.text();
