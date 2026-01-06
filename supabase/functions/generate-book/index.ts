@@ -204,7 +204,7 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     console.log('High-risk topic detected:', isHighRisk);
 
-    // Determine chapter count based on fullBook flag
+    // Strictly generate 10 chapters for all books (fullBook adds 2 more for 12 total)
     const chapterCount = fullBook ? 12 : 10;
     const contentLength = fullBook ? 1200 : 600;
 
@@ -236,7 +236,16 @@ You must respond with a JSON object in this exact format:
   "tableOfContents": [
     { "chapter": 1, "title": "Chapter title", "imageDescription": "A clear instructional diagram showing..." },
     { "chapter": 2, "title": "Chapter title", "imageDescription": "An illustration depicting..." },
-    ... (exactly ${chapterCount} chapters)
+    { "chapter": 3, "title": "...", "imageDescription": "..." },
+    { "chapter": 4, "title": "...", "imageDescription": "..." },
+    { "chapter": 5, "title": "...", "imageDescription": "..." },
+    { "chapter": 6, "title": "...", "imageDescription": "..." },
+    { "chapter": 7, "title": "...", "imageDescription": "..." },
+    { "chapter": 8, "title": "...", "imageDescription": "..." },
+    { "chapter": 9, "title": "...", "imageDescription": "..." },
+    { "chapter": 10, "title": "...", "imageDescription": "..." }${fullBook ? `,
+    { "chapter": 11, "title": "...", "imageDescription": "..." },
+    { "chapter": 12, "title": "...", "imageDescription": "..." }` : ''}
   ],
   "chapter1Content": "Full markdown content of chapter 1...",
   ${fullBook ? `"chapter2Content": "Full markdown content of chapter 2...",
