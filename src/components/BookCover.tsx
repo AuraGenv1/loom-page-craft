@@ -17,8 +17,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
 
-    const isPhotographyStyle = true; // Forcing premium style
-
     useEffect(() => {
       setImageLoaded(false);
       setImageFailed(false);
@@ -39,9 +37,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ref={ref}
         className="w-full max-w-md mx-auto aspect-[3/4] bg-white rounded-sm shadow-2xl p-10 md:p-12 flex flex-col justify-between relative overflow-hidden border border-black/5"
       >
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
-          {/* AI-Generated Cover Image */}
           <div className="relative w-full max-w-[220px] aspect-square mb-10 shadow-xl">
             {isLoadingImage ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/10">
@@ -70,7 +66,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             )}
           </div>
 
-          {/* Luxury Typography */}
           <h1 className="font-serif text-3xl md:text-4xl font-light text-foreground leading-tight text-center tracking-tight mb-4 italic">
             {title}
           </h1>
@@ -78,16 +73,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           <div className="w-16 h-[0.5px] bg-foreground/30 mb-6" />
 
           <p className="text-[10px] md:text-[11px] uppercase tracking-[0.4em] text-foreground/60 font-serif font-light px-4">
-            {subtitle || "A Definitive Visual Narrative"}
+            {subtitle || "An Artisan Instructional Narrative"}
           </p>
         </div>
 
-        {/* Publisher Branding */}
+        {/* Simplified Branding */}
         <div className="text-center flex flex-col items-center gap-3 pt-8 border-t border-black/5">
           <p className="text-[11px] tracking-[0.6em] text-foreground font-serif font-semibold uppercase">LOOM & PAGE</p>
-          <p className="text-[8px] tracking-[0.2em] text-muted-foreground/60 uppercase italic font-serif">
-            London • New York • Milan
-          </p>
         </div>
       </div>
     );
