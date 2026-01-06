@@ -7,40 +7,43 @@ import LocalResources from "./LocalResources";
 
 interface PrintPreviewProps {
   bookData: BookData;
+  topic?: string;
+  displayTitle?: string;
+  diagramImages?: Record<string, string>;
 }
 
-const PrintPreview = forwardRef<HTMLDivElement, PrintPreviewProps>(({ bookData }, ref) => {
+const PrintPreview = forwardRef<HTMLDivElement, PrintPreviewProps>(({ bookData, topic, displayTitle }, ref) => {
   if (!bookData) return null;
 
   return (
-    <div ref={ref} className="bg-white text-black p-0 m-0 w-full">
-      {/* PAGE 1: COVER */}
-      <div className="print-section min-h-[297mm] flex flex-col justify-center">
+    <div ref={ref} className="bg-white text-black p-0 m-0 w-full overflow-visible">
+      {/* SECTION 1: THE LUXURY COVER */}
+      <div className="print-section min-h-[297mm] w-full flex flex-col items-center justify-center bg-white border-b border-gray-100">
         <BookCover
-          title={bookData.displayTitle || bookData.title}
-          topic={bookData.title}
+          title={displayTitle || bookData.displayTitle || bookData.title}
+          topic={topic || bookData.title}
           coverImageUrl={bookData.coverImageUrl}
         />
       </div>
 
-      {/* PAGE 2: TABLE OF CONTENTS */}
-      <div className="print-section p-16 min-h-[297mm]">
-        <TableOfContents topic={bookData.title} chapters={bookData.tableOfContents} />
+      {/* SECTION 2: TABLE OF CONTENTS */}
+      <div className="print-section p-16 min-h-[297mm] w-full bg-white border-b border-gray-100">
+        <TableOfContents topic={topic || bookData.title} chapters={bookData.tableOfContents || []} />
       </div>
 
-      {/* PAGE 3+: CHAPTER CONTENT */}
-      <div className="print-section p-16 min-h-[297mm]">
+      {/* SECTION 3: MAIN INSTRUCTIONAL CONTENT */}
+      <div className="print-section p-16 min-h-[297mm] w-full bg-white border-b border-gray-100">
         <ChapterContent
-          topic={bookData.title}
+          topic={topic || bookData.title}
           content={bookData.chapter1Content}
-          tableOfContents={bookData.tableOfContents}
+          tableOfContents={bookData.tableOfContents || []}
         />
       </div>
 
-      {/* PAGE 4+: LOCAL RESOURCES */}
+      {/* SECTION 4: CURATED LOCAL RESOURCES (GOOGLE PLACES) */}
       {bookData.localResources && bookData.localResources.length > 0 && (
-        <div className="print-section p-16 min-h-[297mm]">
-          <LocalResources topic={bookData.title} resources={bookData.localResources} />
+        <div className="print-section p-16 min-h-[297mm] w-full bg-white">
+          <LocalResources topic={topic || bookData.title} resources={bookData.localResources} />
         </div>
       )}
     </div>
@@ -48,4 +51,5 @@ const PrintPreview = forwardRef<HTMLDivElement, PrintPreviewProps>(({ bookData }
 });
 
 PrintPreview.displayName = "PrintPreview";
+
 export default PrintPreview;
