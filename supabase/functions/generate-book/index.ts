@@ -22,44 +22,49 @@ serve(async (req) => {
       throw new Error("Missing or invalid topic");
     }
 
-    // Use prompt-based JSON enforcement instead of response_mime_type
+    // Use prompt-based JSON enforcement - require 10-20 detailed chapters
     const prompt = `You are a professional book author. Generate a comprehensive artisan guide about: "${topic}".
 
 CRITICAL: You MUST return ONLY a valid JSON object. Do NOT include any text before or after the JSON.
 Do NOT wrap the JSON in markdown code blocks or backticks.
 Start your response with { and end with }.
 
+IMPORTANT: Generate between 10 to 20 detailed chapters that weave together a cohesive narrative about ${topic}.
+
 The JSON structure must be EXACTLY:
 {
   "title": "The main title of the book",
   "displayTitle": "A beautiful display title",
   "subtitle": "A compelling subtitle under 100 characters",
-  "preface": "A 2-3 paragraph introduction to the subject matter",
+  "preface": "A 2-3 paragraph introduction to the subject matter that sets the stage for the journey ahead",
   "topic": "${topic}",
   "chapters": [
     {
       "title": "Chapter 1 Title",
-      "description": "Full detailed content for this chapter, at least 500 words with practical guidance"
+      "description": "Full detailed content for this chapter, at least 800 words with practical guidance, examples, and insights"
     },
     {
       "title": "Chapter 2 Title", 
-      "description": "Full detailed content for chapter 2"
+      "description": "Full detailed content for chapter 2, continuing the narrative thread"
     },
-    {
-      "title": "Chapter 3 Title",
-      "description": "Full detailed content for chapter 3"
-    }
+    ... continue for 10-20 total chapters ...
   ],
   "tableOfContents": [
     { "chapter": 1, "title": "Chapter 1 Title" },
     { "chapter": 2, "title": "Chapter 2 Title" },
-    { "chapter": 3, "title": "Chapter 3 Title" }
+    ... matching entries for all chapters ...
   ],
   "localResources": [],
   "hasDisclaimer": true
 }
 
-Generate at least 3 detailed chapters with rich, educational content about ${topic}.`;
+Requirements:
+- Generate EXACTLY between 10 and 20 chapters (minimum 10, maximum 20)
+- Each chapter must have at least 800 words of detailed, educational content
+- The narrative must weave consistently across all chapters, building upon previous concepts
+- Include practical examples, tips, and real-world applications
+- The tableOfContents must list ALL chapters in order
+- Make the content feel like a professionally authored artisan guide`;
 
     console.log("Calling Gemini API for topic:", topic);
 
@@ -70,6 +75,10 @@ Generate at least 3 detailed chapters with rich, educational content about ${top
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            maxOutputTokens: 32000,
+            temperature: 0.7,
+          },
           safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -130,7 +139,9 @@ Generate at least 3 detailed chapters with rich, educational content about ${top
       throw new Error("Failed to parse JSON from Gemini response");
     }
 
-    console.log("Successfully parsed book content");
+    // Validate chapter count
+    const chapterCount = parsedContent.chapters?.length || 0;
+    console.log(`Successfully parsed book content with ${chapterCount} chapters`);
 
     return new Response(JSON.stringify({ content: parsedContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

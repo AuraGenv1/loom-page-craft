@@ -38,13 +38,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
             {isLoadingImage ? (
               <div className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-foreground/10 bg-secondary/20">
-                <WeavingLoader text="Weaving..." className="w-full px-4" />
+                <WeavingLoader text="Weaving your masterpiece..." className="w-full px-4" />
               </div>
             ) : coverImageUrl ? (
               <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
                 {!imageLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <WeavingLoader text="Loading..." className="w-full px-4" />
+                    <WeavingLoader text="Weaving your masterpiece..." className="w-full px-4" />
                   </div>
                 )}
                 <img

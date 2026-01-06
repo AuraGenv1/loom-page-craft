@@ -229,8 +229,15 @@
     animation-delay: 400ms;
   }
 
-  /* Hide Lovable branding for white-label */
-  .lovable-badge,
+  /* PDF page break utilities */
+  .pdf-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .pdf-content {
+    background: white;
+  }
   .lovable-watermark,
   .lovable-branding,
   [data-lovable-badge],

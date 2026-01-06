@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Plus, ShoppingCart, Book, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Book, Loader2, RefreshCw } from "lucide-react";
 import Logo from "@/components/Logo";
 import { toast } from "sonner";
 
@@ -144,13 +144,13 @@ const Dashboard = () => {
                     <Button
                       onClick={() => handlePurchase(book.id)}
                       size="sm"
-                      className="flex-1 gap-1"
+                      className="flex-1 gap-1 bg-slate-900 hover:bg-slate-800 text-white"
                     >
-                      <ShoppingCart className="w-3 h-3" />
-                      Buy
+                      Purchase
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      View
+                    <Button variant="outline" size="sm" className="flex-1 gap-1">
+                      <RefreshCw className="w-3 h-3" />
+                      Update
                     </Button>
                   </div>
                 </div>

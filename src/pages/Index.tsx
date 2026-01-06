@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BookData } from "@/lib/bookTypes";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateGuidePDF } from "@/lib/generatePDF";
-import { Download, ShoppingCart } from "lucide-react";
+import { Download } from "lucide-react";
 
 type ViewState = "landing" | "loading" | "book";
 
@@ -222,51 +222,49 @@ const Index = () => {
         {viewState === "loading" && <LoadingAnimation />}
 
         {viewState === "book" && bookData && (
-          <div ref={bookRef} className="py-12 animate-fade-in">
-            {/* Purchase Button - Top */}
-            <div className="flex justify-center mb-8">
-              <Button onClick={handlePurchase} size="lg" className="gap-2 gradient-warm text-white">
-                <ShoppingCart className="w-5 h-5" />
-                Purchase Full Book
-              </Button>
+          <div className="py-12 animate-fade-in">
+            {/* Book Cover with page break for PDF */}
+            <div ref={bookRef} className="pdf-content">
+              <div className="pdf-page-break">
+                <BookCover
+                  title={bookData.displayTitle || bookData.title}
+                  subtitle={bookData.subtitle}
+                  topic={topic}
+                  coverImageUrl={coverImageUrl}
+                  isLoadingImage={isLoadingCoverImage}
+                />
+              </div>
+
+              {/* Action Buttons - Top */}
+              <div className="flex flex-col sm:flex-row items-center justify-center mt-8 gap-4 no-pdf-capture">
+                <Button onClick={handleDownloadPDF} variant="outline" className="gap-2">
+                  <Download className="w-4 h-4" /> Download Preview PDF
+                </Button>
+                <Button onClick={handlePurchase} size="lg" className="gap-2 bg-slate-900 hover:bg-slate-800 text-white">
+                  Purchase Full Book
+                </Button>
+              </div>
+
+              {/* Table of Contents with page break */}
+              <section className="mt-12 mb-8 pdf-page-break">
+                <TableOfContents topic={topic} chapters={bookData.tableOfContents} />
+              </section>
+
+              {/* Chapter 1 Content */}
+              <section className="pdf-page-break">
+                <ChapterContent
+                  topic={topic}
+                  content={bookData.chapter1Content}
+                  localResources={bookData.localResources}
+                  hasDisclaimer={bookData.hasDisclaimer}
+                  isGenerating={false}
+                />
+              </section>
             </div>
 
-            {/* Book Cover */}
-            <BookCover
-              title={bookData.displayTitle || bookData.title}
-              subtitle={bookData.subtitle}
-              topic={topic}
-              coverImageUrl={coverImageUrl}
-              isLoadingImage={isLoadingCoverImage}
-            />
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center mt-8 gap-4">
-              <Button onClick={handleDownloadPDF} variant="outline" className="gap-2">
-                <Download className="w-4 h-4" /> Download PDF
-              </Button>
-            </div>
-
-            {/* Table of Contents */}
-            <section className="mt-12 mb-8">
-              <TableOfContents topic={topic} chapters={bookData.tableOfContents} />
-            </section>
-
-            {/* Chapter 1 Content */}
-            <section>
-              <ChapterContent
-                topic={topic}
-                content={bookData.chapter1Content}
-                localResources={bookData.localResources}
-                hasDisclaimer={bookData.hasDisclaimer}
-                isGenerating={false}
-              />
-            </section>
-
-            {/* Purchase Button - Bottom */}
-            <div className="flex justify-center mt-12 pt-8 border-t border-border">
-              <Button onClick={handlePurchase} size="lg" className="gap-2 gradient-warm text-white">
-                <ShoppingCart className="w-5 h-5" />
+            {/* Large Purchase Button - Bottom (outside PDF capture) */}
+            <div className="flex justify-center mt-16 pt-8 border-t border-border no-pdf-capture">
+              <Button onClick={handlePurchase} size="lg" className="gap-2 bg-slate-900 hover:bg-slate-800 text-white text-lg px-12 py-6">
                 Purchase Full Book - Unlock All Chapters
               </Button>
             </div>
