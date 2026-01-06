@@ -29,7 +29,7 @@ const AppRoutes = () => {
       // Only redirect to reset-password for recovery type
       if (hash.includes("type=recovery")) {
         // Use window.location.replace to ensure a hard redirect
-        window.location.replace('/reset-password' + window.location.hash);
+        window.location.replace("/reset-password" + window.location.hash);
         return;
       }
     }
