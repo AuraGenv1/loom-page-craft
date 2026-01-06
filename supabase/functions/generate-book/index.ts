@@ -7,7 +7,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -16,47 +15,38 @@ serve(async (req) => {
     const { topic } = await req.json();
     const apiKey = Deno.env.get("GEMINI_API_KEY");
 
-    if (!apiKey) {
-      throw new Error("Missing GEMINI_API_KEY environment variable");
-    }
+    if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Using gemini-1.5-flash which is faster and supports JSON better
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       Create a comprehensive artisan how-to guide about: ${topic}.
-      Return the response as a valid JSON object with the following structure:
+      Return the response as a valid JSON object:
       {
-        "title": "A professional title for the guide",
-        "preface": "A brief introduction (2-3 sentences)",
-        "chapters": [
-          {
-            "title": "Chapter Title",
-            "description": "Full detailed content for this chapter (at least 3 paragraphs)"
-          }
-        ]
+        "title": "Title",
+        "preface": "Intro",
+        "chapters": [{"title": "Ch1", "description": "Content"}]
       }
-      Provide at least 3 chapters.
     `;
 
-    // We remove response_mime_type and instead instruct the model via prompt
-    // to ensure compatibility with all API versions.
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
-
-    // Clean the response text in case Gemini adds markdown backticks
-    const cleanText = text.replace(/```json|```/g, "").trim();
-    const jsonResponse = JSON.parse(cleanText);
+    const text = response
+      .text()
+      .replace(/```json|```/g, "")
+      .trim();
+    const jsonResponse = JSON.parse(text);
 
     return new Response(JSON.stringify({ content: jsonResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error) {
-    console.error("Edge Function Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: any) {
+    // Type casting to 'any' or checking instance fixes the TS18046 error
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    console.error("Edge Function Error:", errorMessage);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
