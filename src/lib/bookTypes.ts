@@ -33,4 +33,6 @@ export interface BookData {
   chapter12Content?: string;
   localResources: LocalResource[];
   hasDisclaimer?: boolean;
+  coverImageUrl?: string | null;
+  coverStyle?: string; // 'automotive-photography' | 'artistic-photography' | undefined
 }

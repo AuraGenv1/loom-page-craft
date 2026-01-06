@@ -8,13 +8,17 @@ interface BookCoverProps {
   topic?: string;
   coverImageUrl?: string | null;
   isLoadingImage?: boolean;
+  coverStyle?: string; // 'automotive-photography' | 'artistic-photography' | undefined
 }
 
 const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
-  ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage }, ref) => {
+  ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage, coverStyle }, ref) => {
     const TopicIcon = getTopicIcon(topic || title);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
+    
+    // Determine if this is a photography style (no blueprint overlay)
+    const isPhotographyStyle = coverStyle?.includes('photography') || false;
 
     useEffect(() => {
       setImageLoaded(false);
@@ -38,13 +42,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ref={ref}
         className="w-full max-w-md mx-auto aspect-[3/4] gradient-paper rounded-sm shadow-book p-10 md:p-12 flex flex-col justify-between animate-page-turn relative overflow-hidden border border-border/30"
       >
-        {/* Deckle edge effect */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
-          <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
-          <div className="absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
-        </div>
+        {/* Deckle edge effect - only show for non-photography styles */}
+        {!isPhotographyStyle && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-foreground/5 to-transparent" />
+            <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
+            <div className="absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-foreground/5 to-transparent" />
+          </div>
+        )}
 
         {/* Main Content Area - Vertical layout: Image on top, text below */}
         <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
