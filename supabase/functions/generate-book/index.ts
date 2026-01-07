@@ -426,36 +426,51 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
     // Parse the JSON from the response - with robust error handling
     let bookData;
     try {
-      let jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      let jsonStr = jsonMatch[1] || content;
+      // First, try to extract JSON from markdown code blocks if present
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      let jsonStr = jsonMatch ? jsonMatch[1] : content;
       
-      // Clean control characters that break JSON parsing
-      jsonStr = jsonStr
-        .replace(/[\x00-\x1F\x7F]/g, (char: string) => {
-          // Keep newlines, tabs, and carriage returns as escaped versions
-          if (char === '\n') return '\\n';
-          if (char === '\r') return '\\r';
-          if (char === '\t') return '\\t';
-          return ''; // Remove other control characters
-        })
-        .trim();
+      // Trim whitespace
+      jsonStr = jsonStr.trim();
       
-      // Try to extract just the JSON object if there's extra text
+      // Try to extract just the JSON object if there's extra text before/after
       const jsonStart = jsonStr.indexOf('{');
       const jsonEnd = jsonStr.lastIndexOf('}');
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
       }
       
-      bookData = JSON.parse(jsonStr);
+      // First attempt: try parsing as-is
+      try {
+        bookData = JSON.parse(jsonStr);
+      } catch (firstError) {
+        console.log('First parse attempt failed, trying to fix common issues...');
+        
+        // Second attempt: fix unescaped control characters inside string values
+        // This regex finds string values and escapes problematic characters within them
+        let fixedJson = jsonStr;
+        
+        // Replace literal newlines inside strings with escaped newlines
+        // Match content between quotes and fix internal newlines
+        fixedJson = fixedJson.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match: string) => {
+          // Within the matched string, replace unescaped newlines
+          return match
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+        });
+        
+        bookData = JSON.parse(fixedJson);
+      }
     } catch (parseError) {
       console.error('Failed to parse AI response as JSON:', parseError);
       console.error('Raw content length:', content.length);
+      console.error('Content preview:', content.substring(0, 500));
       
       // Return a more helpful error instead of 400
       return new Response(
         JSON.stringify({ 
-          error: 'The AI generated content that could not be processed. Please try again with a simpler topic description.' 
+          error: 'The AI generated content that could not be processed. Please try again.' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
