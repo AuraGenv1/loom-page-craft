@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -19,6 +19,7 @@ interface AllChaptersContentProps {
     hasDisclaimer?: boolean;
     tableOfContents?: ChapterInfo[];
   };
+  loadingChapter?: number | null;
 }
 
 export interface AllChaptersContentHandle {
@@ -27,7 +28,7 @@ export interface AllChaptersContentHandle {
 }
 
 const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersContentProps>(
-  ({ topic, bookData }, ref) => {
+  ({ topic, bookData, loadingChapter }, ref) => {
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
 
     useImperativeHandle(ref, () => ({
@@ -59,12 +60,28 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       return tocEntry?.title || `Chapter ${chapterNumber}`;
     };
 
-    const renderContent = (content: string | undefined, hasDisclaimer?: boolean) => {
+    const renderContent = (content: string | undefined, chapterNumber: number, hasDisclaimer?: boolean) => {
+      const isLoading = loadingChapter === chapterNumber;
+      
       if (!content) {
         return (
-          <p className="text-base md:text-lg text-muted-foreground italic">
-            Content for this chapter is being prepared...
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            {isLoading ? (
+              <>
+                <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mb-4" />
+                <p className="text-base md:text-lg text-muted-foreground italic font-serif">
+                  Weaving chapter content...
+                </p>
+                <p className="text-sm text-muted-foreground/60 mt-2">
+                  This may take a moment for comprehensive content
+                </p>
+              </>
+            ) : (
+              <p className="text-base md:text-lg text-muted-foreground italic font-serif">
+                This chapter will be generated when you unlock the full guide.
+              </p>
+            )}
+          </div>
         );
       }
 
@@ -201,7 +218,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
             {/* Chapter content */}
             <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
-              {renderContent(chapter.content, idx === 0 && bookData.hasDisclaimer)}
+              {renderContent(chapter.content, chapter.number, idx === 0 && bookData.hasDisclaimer)}
             </div>
           </article>
         ))}

@@ -3,6 +3,9 @@ project_id = "biggyamzmxtwgowxqkdn"
 [functions.generate-book]
 verify_jwt = false
 
+[functions.generate-chapter]
+verify_jwt = false
+
 [functions.generate-cover-image]
 verify_jwt = false
 

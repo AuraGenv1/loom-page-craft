@@ -423,31 +423,55 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       throw new Error('No content generated');
     }
 
-    // Parse the JSON from the response
+    // Parse the JSON from the response - with robust error handling
     let bookData;
     try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      const jsonStr = jsonMatch[1] || content;
-      bookData = JSON.parse(jsonStr.trim());
+      let jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+      let jsonStr = jsonMatch[1] || content;
+      
+      // Clean control characters that break JSON parsing
+      jsonStr = jsonStr
+        .replace(/[\x00-\x1F\x7F]/g, (char: string) => {
+          // Keep newlines, tabs, and carriage returns as escaped versions
+          if (char === '\n') return '\\n';
+          if (char === '\r') return '\\r';
+          if (char === '\t') return '\\t';
+          return ''; // Remove other control characters
+        })
+        .trim();
+      
+      // Try to extract just the JSON object if there's extra text
+      const jsonStart = jsonStr.indexOf('{');
+      const jsonEnd = jsonStr.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+      }
+      
+      bookData = JSON.parse(jsonStr);
     } catch (parseError) {
-      console.error('Failed to parse AI response as JSON:', parseError, content);
-      // If parsing fails, it might be nonsense input
+      console.error('Failed to parse AI response as JSON:', parseError);
+      console.error('Raw content length:', content.length);
+      
+      // Return a more helpful error instead of 400
       return new Response(
         JSON.stringify({ 
-          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
+          error: 'The AI generated content that could not be processed. Please try again with a simpler topic description.' 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Validate the response structure
     if (!bookData.title || !bookData.tableOfContents || !bookData.chapter1Content) {
-      console.error('Invalid book structure:', bookData);
+      console.error('Invalid book structure - missing required fields');
+      console.error('Has title:', !!bookData.title);
+      console.error('Has TOC:', !!bookData.tableOfContents);
+      console.error('Has chapter1:', !!bookData.chapter1Content);
       return new Response(
         JSON.stringify({ 
-          error: 'Loom & Page is unable to weave a guide on this specific topic. Please try a different instructional area.' 
+          error: 'The AI response was incomplete. Please try again.' 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

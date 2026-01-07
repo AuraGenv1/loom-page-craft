@@ -89,6 +89,8 @@ const Index = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
+  const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
+  const [isGeneratingChapters, setIsGeneratingChapters] = useState(false);
   const allChaptersRef = useRef<AllChaptersContentHandle>(null);
   const chapter1Ref = useRef<HTMLElement>(null);
 
@@ -298,6 +300,82 @@ const Index = () => {
     };
   }, [viewState, bookData?.title, topic]);
 
+  // Generate missing chapters progressively for full access users
+  useEffect(() => {
+    if (!isPaid || !bookId || !bookData || viewState !== 'book' || isGeneratingChapters) return;
+
+    const missingChapters: number[] = [];
+    const chapterContents = [
+      bookData.chapter2Content,
+      bookData.chapter3Content,
+      bookData.chapter4Content,
+      bookData.chapter5Content,
+      bookData.chapter6Content,
+      bookData.chapter7Content,
+      bookData.chapter8Content,
+      bookData.chapter9Content,
+      bookData.chapter10Content,
+    ];
+
+    chapterContents.forEach((content, idx) => {
+      if (!content) {
+        missingChapters.push(idx + 2); // Chapters 2-10
+      }
+    });
+
+    if (missingChapters.length === 0) return;
+
+    let cancelled = false;
+
+    const generateMissingChapters = async () => {
+      setIsGeneratingChapters(true);
+
+      for (const chapterNum of missingChapters) {
+        if (cancelled) break;
+
+        const tocEntry = bookData.tableOfContents?.find(ch => ch.chapter === chapterNum);
+        if (!tocEntry) continue;
+
+        setLoadingChapter(chapterNum);
+
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-chapter', {
+            body: {
+              bookId,
+              chapterNumber: chapterNum,
+              chapterTitle: tocEntry.title,
+              topic,
+            },
+          });
+
+          if (cancelled) break;
+
+          if (!error && data?.content) {
+            // Update local state with the new chapter content
+            setBookData(prev => {
+              if (!prev) return prev;
+              const key = `chapter${chapterNum}Content` as keyof BookData;
+              return { ...prev, [key]: data.content };
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to generate chapter ${chapterNum}:`, err);
+        }
+      }
+
+      if (!cancelled) {
+        setLoadingChapter(null);
+        setIsGeneratingChapters(false);
+      }
+    };
+
+    generateMissingChapters();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPaid, bookId, bookData?.tableOfContents, viewState, isGeneratingChapters]);
+
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');
@@ -305,6 +383,8 @@ const Index = () => {
     setDiagramImages({});
     setIsGeneratingDiagrams(false);
     setIsSavedToLibrary(false); // Reset for new book
+    setLoadingChapter(null);
+    setIsGeneratingChapters(false);
 
 
     try {
@@ -795,6 +875,7 @@ const Index = () => {
                 <AllChaptersContent
                   ref={allChaptersRef}
                   topic={topic}
+                  loadingChapter={loadingChapter}
                   bookData={{
                     chapter1Content: bookData?.chapter1Content,
                     chapter2Content: bookData?.chapter2Content,
