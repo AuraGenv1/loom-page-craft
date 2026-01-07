@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
@@ -6,6 +6,7 @@ import LoadingAnimation from '@/components/LoadingAnimation';
 import BookCover from '@/components/BookCover';
 import TableOfContents from '@/components/TableOfContents';
 import ChapterContent from '@/components/ChapterContent';
+import AllChaptersContent, { AllChaptersContentHandle } from '@/components/AllChaptersContent';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import SaveToCloudBanner from '@/components/SaveToCloudBanner';
@@ -87,6 +88,9 @@ const Index = () => {
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
+  const [activeChapter, setActiveChapter] = useState(1);
+  const allChaptersRef = useRef<AllChaptersContentHandle>(null);
+  const chapter1Ref = useRef<HTMLElement>(null);
 
   // Check if user is admin via database role - run immediately when user changes
   useEffect(() => {
@@ -129,6 +133,41 @@ const Index = () => {
 
   // Content is unlocked for admins, paid users, or if book is purchased
   const isPaid = isTestMode || isPurchased;
+
+  // Handle chapter click from TOC - smooth scroll
+  const handleChapterClick = useCallback((chapterNumber: number) => {
+    if (isPaid && allChaptersRef.current) {
+      allChaptersRef.current.scrollToChapter(chapterNumber);
+    } else if (chapterNumber === 1 && chapter1Ref.current) {
+      chapter1Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [isPaid]);
+
+  // Track active chapter on scroll for full view
+  useEffect(() => {
+    if (!isPaid || viewState !== 'book') return;
+
+    const handleScroll = () => {
+      const refs = allChaptersRef.current?.getChapterRefs();
+      if (!refs) return;
+
+      const scrollTop = window.scrollY + 150; // Offset for header
+      let current = 1;
+
+      refs.forEach((el, idx) => {
+        if (el && el.offsetTop <= scrollTop) {
+          current = idx + 1;
+        }
+      });
+
+      setActiveChapter(current);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // Initial check
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isPaid, viewState]);
 
   const handleOpenAuthModal = () => {
     setAuthModalOpen(true);
@@ -721,7 +760,13 @@ const Index = () => {
 
             {/* Table of Contents - pass isPaid to unlock all for admins/purchased */}
             <section className="mb-8">
-              <TableOfContents topic={topic} chapters={bookData?.tableOfContents} allUnlocked={isPaid} />
+              <TableOfContents 
+                topic={topic} 
+                chapters={bookData?.tableOfContents} 
+                allUnlocked={isPaid}
+                onChapterClick={handleChapterClick}
+                activeChapter={isPaid ? activeChapter : 1}
+              />
             </section>
 
             {/* Divider */}
@@ -735,22 +780,49 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Chapter 1 Content */}
-            <section>
-              <ChapterContent 
-                topic={topic} 
-                content={bookData?.chapter1Content}
-                localResources={bookData?.localResources}
-                hasDisclaimer={bookData?.hasDisclaimer}
-                materials={extractMaterials(bookData?.chapter1Content)}
-                isGenerating={isGeneratingDiagrams}
-                diagramImages={diagramImages}
-                tableOfContents={bookData?.tableOfContents}
-              />
-            </section>
+            {/* Full Chapters (for paid/admin) or Chapter 1 Only (for free) */}
+            {isPaid ? (
+              <section>
+                <AllChaptersContent
+                  ref={allChaptersRef}
+                  topic={topic}
+                  bookData={{
+                    chapter1Content: bookData?.chapter1Content,
+                    chapter2Content: bookData?.chapter2Content,
+                    chapter3Content: bookData?.chapter3Content,
+                    chapter4Content: bookData?.chapter4Content,
+                    chapter5Content: bookData?.chapter5Content,
+                    chapter6Content: bookData?.chapter6Content,
+                    chapter7Content: bookData?.chapter7Content,
+                    chapter8Content: bookData?.chapter8Content,
+                    chapter9Content: bookData?.chapter9Content,
+                    chapter10Content: bookData?.chapter10Content,
+                    localResources: bookData?.localResources,
+                    hasDisclaimer: bookData?.hasDisclaimer,
+                    tableOfContents: bookData?.tableOfContents,
+                  }}
+                />
+              </section>
+            ) : (
+              <>
+                <section>
+                  <ChapterContent 
+                    ref={chapter1Ref}
+                    topic={topic} 
+                    content={bookData?.chapter1Content}
+                    localResources={bookData?.localResources}
+                    hasDisclaimer={bookData?.hasDisclaimer}
+                    materials={extractMaterials(bookData?.chapter1Content)}
+                    isGenerating={isGeneratingDiagrams}
+                    diagramImages={diagramImages}
+                    tableOfContents={bookData?.tableOfContents}
+                  />
+                </section>
 
-            {/* Paywall - only show if not paid */}
-            {!isPaid && <PaywallOverlay onPurchase={handlePurchase} onDownload={handleDownloadPDF} />}
+                {/* Paywall - only show if not paid */}
+                <PaywallOverlay onPurchase={handlePurchase} onDownload={handleDownloadPDF} />
+              </>
+            )}
           </div>
         )}
       </main>
