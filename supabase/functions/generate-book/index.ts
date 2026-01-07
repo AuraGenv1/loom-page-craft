@@ -364,7 +364,7 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
             generationConfig: {
               temperature: 0.8,
-              maxOutputTokens: 16384,
+              maxOutputTokens: 4000, // Optimized for speed while maintaining depth
             },
           }),
           signal: controller.signal,
@@ -411,7 +411,7 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate chapters 2-10 in PARALLEL BATCHES for speed
+// Background task to generate ALL chapters with STAGGERED PARALLEL starts for maximum speed
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
@@ -422,54 +422,46 @@ async function generateChaptersInBackground(
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] Starting PARALLEL chapter generation for book ${bookId}`);
+  console.log(`[Background] Starting TURBO PARALLEL chapter generation for book ${bookId}`);
   
   // Short initial delay to let the main request complete
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Generate chapters in parallel batches of 3 to balance speed vs rate limits
-  const batchSize = 3;
   const chapters = [2, 3, 4, 5, 6, 7, 8, 9, 10];
   
-  for (let i = 0; i < chapters.length; i += batchSize) {
-    const batch = chapters.slice(i, i + batchSize);
-    console.log(`[Background] Starting batch: chapters ${batch.join(', ')}`);
+  // Launch ALL chapters simultaneously with 2-second staggered starts to avoid 429 bursts
+  const chapterPromises = chapters.map(async (chapterNum, index) => {
+    // Stagger start: 2 seconds between each chapter launch
+    const staggerDelay = index * 2000;
+    await new Promise(resolve => setTimeout(resolve, staggerDelay));
     
-    // Generate batch in parallel
-    const batchPromises = batch.map(async (chapterNum) => {
-      const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
-      const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
-      const imageDesc = tocEntry?.imageDescription || '';
+    const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
+    const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
+    const imageDesc = tocEntry?.imageDescription || '';
+    
+    console.log(`[Background] Launching chapter ${chapterNum}: ${chapterTitle} (stagger: ${staggerDelay}ms)`);
+    
+    const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey, imageDesc);
+    
+    if (content) {
+      const columnName = `chapter${chapterNum}_content`;
+      const { error } = await supabase
+        .from('books')
+        .update({ [columnName]: content })
+        .eq('id', bookId);
       
-      console.log(`[Background] Generating chapter ${chapterNum}: ${chapterTitle}`);
-      
-      const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey, imageDesc);
-      
-      if (content) {
-        const columnName = `chapter${chapterNum}_content`;
-        const { error } = await supabase
-          .from('books')
-          .update({ [columnName]: content })
-          .eq('id', bookId);
-        
-        if (error) {
-          console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
-        } else {
-          console.log(`[Background] Chapter ${chapterNum} saved successfully (${content.length} chars)`);
-        }
+      if (error) {
+        console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
       } else {
-        console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
+        console.log(`[Background] Chapter ${chapterNum} saved successfully (${content.length} chars)`);
       }
-    });
-    
-    await Promise.all(batchPromises);
-    
-    // Pause between batches to avoid rate limits (only if more batches remain)
-    if (i + batchSize < chapters.length) {
-      console.log(`[Background] Batch complete. Waiting 4 seconds before next batch...`);
-      await new Promise(resolve => setTimeout(resolve, 4000));
+    } else {
+      console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
     }
-  }
+  });
+  
+  // Wait for all chapters to complete
+  await Promise.all(chapterPromises);
   
   console.log(`[Background] Completed all chapters for book ${bookId}`);
 }

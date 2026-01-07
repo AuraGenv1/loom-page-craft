@@ -94,6 +94,15 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         );
       }
 
+      // Pre-process content to fix common markdown issues
+      // 1. Ensure \n sequences are actual line breaks
+      // 2. Fix unclosed bold markers
+      const processedContent = content
+        .replace(/\\n/g, '\n')  // Convert literal \n to actual newlines
+        .replace(/\*\*([^*]+)$/gm, '**$1**')  // Close unclosed bold at end of line
+        .replace(/\*\*\s*\n/g, '**\n')  // Ensure bold markers close before newlines
+        .trim();
+
       // Use ReactMarkdown for proper bold/italic rendering
       return (
         <div className="markdown-content">
@@ -115,7 +124,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                 </h3>
               ),
               p: ({ children }) => (
-                <p className="text-base md:text-lg mb-6">{children}</p>
+                <p className="text-base md:text-lg mb-6 leading-relaxed">{children}</p>
               ),
               strong: ({ children }) => (
                 <strong className="font-semibold text-foreground">{children}</strong>
@@ -128,10 +137,15 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                   {children}
                 </ul>
               ),
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-6 space-y-3 text-foreground/75 my-6">
+                  {children}
+                </ol>
+              ),
               li: ({ children }) => (
-                <li className="flex items-start gap-4">
+                <li className="flex items-start gap-4 mb-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-foreground/30 shrink-0 mt-2.5" />
-                  <span>{children}</span>
+                  <span className="leading-relaxed">{children}</span>
                 </li>
               ),
               blockquote: ({ children }) => (
@@ -139,9 +153,10 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                   {children}
                 </blockquote>
               ),
+              br: () => <br className="my-2" />,
             }}
           >
-            {content}
+            {processedContent}
           </ReactMarkdown>
           {/* Disclaimer handling */}
           {hasDisclaimer && content.includes('⚠️') && (
