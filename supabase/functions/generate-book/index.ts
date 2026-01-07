@@ -411,7 +411,7 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate ALL chapters with STAGGERED PARALLEL starts for maximum speed
+// Background task to generate ALL chapters with TURBO PARALLEL starts for maximum speed
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
@@ -422,17 +422,15 @@ async function generateChaptersInBackground(
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] Starting TURBO PARALLEL chapter generation for book ${bookId}`);
+  console.log(`[Background] TURBO MODE: Launching ALL chapters simultaneously for book ${bookId}`);
   
-  // Short initial delay to let the main request complete
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
+  // NO initial delay - start immediately for maximum speed
   const chapters = [2, 3, 4, 5, 6, 7, 8, 9, 10];
   
-  // Launch ALL chapters simultaneously with 2-second staggered starts to avoid 429 bursts
+  // Launch ALL chapters with minimal 500ms stagger (just enough to avoid instant 429)
   const chapterPromises = chapters.map(async (chapterNum, index) => {
-    // Stagger start: 2 seconds between each chapter launch
-    const staggerDelay = index * 2000;
+    // Minimal stagger: 500ms between each launch for turbo speed
+    const staggerDelay = index * 500;
     await new Promise(resolve => setTimeout(resolve, staggerDelay));
     
     const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
