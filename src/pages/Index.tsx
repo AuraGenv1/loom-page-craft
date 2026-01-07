@@ -592,12 +592,24 @@ const Index = () => {
         }
       }
 
+      // Enter book view IMMEDIATELY - chapters will stream in via realtime
       setViewState('book');
 
       // Use cover image from generate-book response (Fal.ai) if available
       if (generatedBook.coverImageUrl) {
         setCoverImageUrl(generatedBook.coverImageUrl);
         setIsLoadingCoverImage(false);
+        
+        // Update cover_image_url in database if not already set
+        if (savedBookId) {
+          supabase
+            .from('books')
+            .update({ cover_image_url: generatedBook.coverImageUrl })
+            .eq('id', savedBookId)
+            .then(({ error }) => {
+              if (error) console.error('Failed to save cover URL:', error);
+            });
+        }
       } else {
         // Fallback to separate cover image generation
         setIsLoadingCoverImage(true);
@@ -610,10 +622,34 @@ const Index = () => {
             setIsLoadingCoverImage(false);
             if (!imageError && imageData?.imageUrl) {
               setCoverImageUrl(imageData.imageUrl);
+              // Save to database
+              if (savedBookId) {
+                supabase
+                  .from('books')
+                  .update({ cover_image_url: imageData.imageUrl })
+                  .eq('id', savedBookId)
+                  .then(({ error }) => {
+                    if (error) console.error('Failed to save cover URL:', error);
+                  });
+              }
             } else {
               console.log('Cover image generation skipped or failed:', imageError);
             }
           });
+      }
+      
+      // Trigger background chapter generation by calling generate-book again with bookId
+      if (savedBookId) {
+        const sessionIdForBg = getSessionId();
+        supabase.functions.invoke('generate-book', {
+          body: { topic: query, sessionId: sessionIdForBg, bookId: savedBookId }
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Background chapter generation trigger failed:', error);
+          } else {
+            console.log('Background chapter generation started');
+          }
+        });
       }
 
     } catch (err) {
