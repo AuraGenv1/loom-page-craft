@@ -52,6 +52,23 @@ const Dashboard = () => {
   const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin via database role
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin',
+      });
+      setIsAdmin(data === true);
+    };
+    checkAdminRole();
+  }, [user]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -185,8 +202,11 @@ const Dashboard = () => {
   const handleUpdateEdition = async (saved: SavedBook) => {
     if (!saved.books || !user) return;
     
-    // Only allow updates for purchased guides
-    if (!saved.books.is_purchased) {
+    // Check effective purchase status (admins bypass)
+    const effectivelyPurchased = saved.books.is_purchased || isAdmin;
+    
+    // Only allow updates for purchased guides (or admins)
+    if (!effectivelyPurchased) {
       toast.error('Please unlock the full guide first');
       return;
     }
@@ -287,11 +307,14 @@ const Dashboard = () => {
   const handleViewGuide = (saved: SavedBook) => {
     if (!saved.books) return;
     
+    // Check effective purchase status (admins bypass)
+    const effectivelyPurchased = saved.books.is_purchased || isAdmin;
+    
     // Navigate to Index with book data
-    // If purchased, pass fullView=true; otherwise show preview
+    // If purchased (or admin), pass fullView=true; otherwise show preview
     const params = new URLSearchParams({
       bookId: saved.books.id,
-      view: saved.books.is_purchased ? 'full' : 'preview'
+      view: effectivelyPurchased ? 'full' : 'preview'
     });
     navigate(`/?${params.toString()}`);
   };
@@ -499,8 +522,8 @@ const Dashboard = () => {
                       </div>
                     )}
                     
-                    {/* Purchase status badge */}
-                    {!saved.books?.is_purchased && (
+                    {/* Purchase status badge - admins see as purchased */}
+                    {!saved.books?.is_purchased && !isAdmin && (
                       <div className="absolute bottom-2 left-2 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs px-2 py-0.5 rounded font-medium">
                         Preview
                       </div>
@@ -518,7 +541,7 @@ const Dashboard = () => {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                          {saved.books?.is_purchased && (
+                          {(saved.books?.is_purchased || isAdmin) && (
                             <>
                               <DropdownMenuItem 
                                 onClick={() => handleDownloadPDF(saved.books)}
@@ -576,9 +599,9 @@ const Dashboard = () => {
                       </span>
                     </div>
                     
-                    {/* Action buttons based on purchase status */}
+                    {/* Action buttons based on purchase status (admins see as purchased) */}
                     <div className="space-y-2">
-                      {saved.books?.is_purchased ? (
+                      {(saved.books?.is_purchased || isAdmin) ? (
                         <>
                           {/* Primary action row for purchased */}
                           <div className="flex gap-2">
