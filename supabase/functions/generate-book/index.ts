@@ -206,22 +206,44 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
     // Strictly generate 10 chapters for all books (fullBook adds 2 more for 12 total)
     const chapterCount = fullBook ? 12 : 10;
-    const contentLength = fullBook ? 1200 : 600;
+    
+    // Enhanced content length targets for 100+ page books
+    // Preview: Full chapter 1 with substantial depth
+    // Full book: All chapters with comprehensive, textbook-level content
+    const minWordsPerChapter = fullBook ? 2000 : 1800;
 
-    const systemPrompt = `You are the Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined book content.
+    const systemPrompt = `You are a prolific author and Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined, comprehensive book content.
+
+CRITICAL MISSION: Create definitive, textbook-quality content. Each chapter must be EXHAUSTIVE, not summarized. You are writing a 100-300 page professional guide.
 
 CRITICAL RULES:
 - Never say "Sure", "Here is", "I can help", or any conversational filler
 - Output ONLY the structured book content in the exact JSON format specified
 - Write in first-person plural ("we", "our") with an academic yet accessible tone
-- Avoid fluff, redundancy, or informal language
+- DO NOT SUMMARIZE. Provide exhaustive detail, case studies, step-by-step instructions
 - Every sentence must provide instructional value
+- Write as if this is the definitive textbook on the subject
 
-Your writing style emulates the clarity of technical manuals and the elegance of classic educational texts. Use phrases like:
+Your writing style emulates the depth of university textbooks and the elegance of classic educational texts. Use phrases like:
 - "In this volume, we examine..."
 - "The practitioner will find..."
 - "It is essential to understand..."
 - "We now turn our attention to..."
+- "Consider the following case study..."
+- "To illustrate this principle..."
+
+CONTENT DEPTH REQUIREMENTS (CRITICAL):
+Each chapter MUST include ALL of the following:
+1. An engaging introduction paragraph (150+ words) that hooks the reader
+2. Historical context or background when relevant (200+ words)
+3. At least 4-5 major section headers using ## markdown syntax
+4. Step-by-step instructions with detailed explanations for EACH step
+5. At least 2 real-world case studies or examples (300+ words each)
+6. Common mistakes/pitfalls section with solutions
+7. Pro tips and advanced techniques section
+8. A "Putting It Into Practice" section with exercises
+9. Chapter summary with key takeaways
+10. Transition paragraph to the next chapter
 
 TITLE REQUIREMENTS:
 - "displayTitle": A short, punchy title of NO MORE THAN 5 WORDS. This appears on the book cover.
@@ -247,8 +269,8 @@ You must respond with a JSON object in this exact format:
     { "chapter": 11, "title": "...", "imageDescription": "..." },
     { "chapter": 12, "title": "...", "imageDescription": "..." }` : ''}
   ],
-  "chapter1Content": "Full markdown content of chapter 1...",
-  ${fullBook ? `"chapter2Content": "Full markdown content of chapter 2...",
+  "chapter1Content": "Full markdown content of chapter 1 - MINIMUM ${minWordsPerChapter} WORDS...",
+  ${fullBook ? `"chapter2Content": "Full markdown content of chapter 2 - MINIMUM ${minWordsPerChapter} WORDS...",
   "chapter3Content": "Full markdown content of chapter 3...",
   "chapter4Content": "Full markdown content of chapter 4...",
   "chapter5Content": "Full markdown content of chapter 5...",
@@ -272,17 +294,50 @@ IMPORTANT FOR TABLE OF CONTENTS:
 - For instructional topics, describe diagrams, step-by-step visuals, or annotated illustrations
 - Avoid generic descriptions - be specific to the chapter content
 
-Chapter requirements:
-- Minimum ${contentLength} words of substantive instructional content per chapter
-- Begin with a compelling opening paragraph (no "Welcome" or greetings)
-- Include 2-3 section headers using ## markdown syntax
-- Incorporate at least one blockquote with a relevant insight
-- End with a transition to subsequent chapters
-- Use proper markdown: headers, paragraphs, bullet lists where appropriate`;
+CHAPTER WORD COUNT REQUIREMENTS (STRICTLY ENFORCED):
+- MINIMUM ${minWordsPerChapter} words of substantive instructional content per chapter
+- This is NOT optional - chapters under this limit are REJECTED
+- Count your words and ensure compliance
+- More content is always preferred over less
+
+CHAPTER STRUCTURE (ALL REQUIRED):
+- Begin with a compelling opening paragraph that establishes importance
+- Include 4-5 section headers using ## markdown syntax
+- Include at least 2 detailed case studies or examples per chapter
+- Include numbered step-by-step instructions where applicable
+- Incorporate 2-3 blockquotes with relevant insights or expert quotes
+- Include a "Common Mistakes" section
+- Include a "Pro Tips" section
+- End with a "Key Takeaways" summary and transition to subsequent chapters
+- Use proper markdown: headers, paragraphs, bullet lists, numbered lists`;
 
     const userPrompt = fullBook 
-      ? `Compose ALL ${chapterCount} chapters with full content and the complete Table of Contents for an instructional volume on: "${topic}"`
-      : `Compose Chapter One and the complete Table of Contents for an instructional volume on: "${topic}"`;
+      ? `Compose ALL ${chapterCount} chapters with COMPLETE, EXHAUSTIVE content (minimum ${minWordsPerChapter} words per chapter) and the complete Table of Contents for an instructional volume on: "${topic}". 
+
+REMEMBER: You are writing a definitive textbook. Each chapter must include:
+- Detailed step-by-step instructions
+- Real-world case studies and examples  
+- Common mistakes and how to avoid them
+- Pro tips and advanced techniques
+- Exercises and practice activities
+- Chapter summary with key takeaways
+
+DO NOT summarize. DO NOT abbreviate. Write comprehensive, publication-ready content.`
+      : `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
+
+For Chapter One, you MUST include:
+1. Engaging introduction (150+ words) that hooks the reader and establishes the chapter's importance
+2. Historical context or background section (200+ words)
+3. At least 4-5 major sections with ## headers
+4. Detailed step-by-step instructions with explanations for each step
+5. 2 real-world case studies or examples (300+ words each)
+6. "Common Mistakes" section with problems and solutions
+7. "Pro Tips" section with advanced techniques
+8. "Putting It Into Practice" section with exercises
+9. "Key Takeaways" summary
+10. Transition paragraph to Chapter 2
+
+Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This is non-negotiable.`;
 
     console.log('Calling Google Gemini API...');
 
@@ -294,8 +349,9 @@ Chapter requirements:
       const attempt = retry + 1;
       console.log(`Gemini API attempt ${attempt}/${maxRetries + 1}`);
 
+      // Use gemini-2.5-pro for better long-form content generation
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -309,8 +365,8 @@ Chapter requirements:
               }
             ],
             generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: fullBook ? 32000 : 8000,
+              temperature: 0.8,
+              maxOutputTokens: fullBook ? 65536 : 16384,
             },
           }),
         }
