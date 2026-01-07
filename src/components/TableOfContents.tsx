@@ -5,27 +5,29 @@ import { ChapterInfo } from '@/lib/bookTypes';
 interface TableOfContentsProps {
   topic: string;
   chapters?: ChapterInfo[];
+  allUnlocked?: boolean; // When true (admin/purchased), all chapters show as unlocked
 }
 
-const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(({ topic, chapters }, ref) => {
+const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(({ topic, chapters, allUnlocked = false }, ref) => {
   // Use AI-generated chapters or fallback to defaults
+  // If allUnlocked is true (admin or purchased), mark all as unlocked
   const displayChapters = chapters?.length
     ? chapters.map((ch, idx) => ({
         number: ch.chapter,
         title: ch.title,
-        isUnlocked: idx === 0,
+        isUnlocked: allUnlocked || idx === 0,
       }))
     : [
         { number: 1, title: `Introduction to ${topic}`, isUnlocked: true },
-        { number: 2, title: 'Understanding the Fundamentals', isUnlocked: false },
-        { number: 3, title: 'Essential Tools & Materials', isUnlocked: false },
-        { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: false },
-        { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: false },
-        { number: 6, title: 'Advanced Techniques', isUnlocked: false },
-        { number: 7, title: 'Troubleshooting Guide', isUnlocked: false },
-        { number: 8, title: 'Expert Tips & Tricks', isUnlocked: false },
-        { number: 9, title: 'Real-World Applications', isUnlocked: false },
-        { number: 10, title: 'Your Next Steps', isUnlocked: false },
+        { number: 2, title: 'Understanding the Fundamentals', isUnlocked: allUnlocked },
+        { number: 3, title: 'Essential Tools & Materials', isUnlocked: allUnlocked },
+        { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: allUnlocked },
+        { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: allUnlocked },
+        { number: 6, title: 'Advanced Techniques', isUnlocked: allUnlocked },
+        { number: 7, title: 'Troubleshooting Guide', isUnlocked: allUnlocked },
+        { number: 8, title: 'Expert Tips & Tricks', isUnlocked: allUnlocked },
+        { number: 9, title: 'Real-World Applications', isUnlocked: allUnlocked },
+        { number: 10, title: 'Your Next Steps', isUnlocked: allUnlocked },
       ];
 
   return (
