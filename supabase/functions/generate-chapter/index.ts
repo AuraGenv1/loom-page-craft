@@ -59,25 +59,79 @@ This chapter MUST be at least 2,000 words. Include:
 
 Begin writing the chapter content now. No preamble, no JSON - just the chapter text in markdown format.`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 8192,
-          },
-        }),
-      }
-    );
+    // Exponential backoff on rate limits (429): 5s, 10s, 20s
+    const maxRetries = 3;
+    const baseWaitMs = 5000;
+    let response: Response | null = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`AI service error: ${response.status}`);
+    for (let retry = 0; retry <= maxRetries; retry++) {
+      const attempt = retry + 1;
+      console.log(`Gemini API attempt ${attempt}/${maxRetries + 1} for chapter ${chapterNumber}`);
+
+      try {
+        // Use AbortController for timeout (90 seconds for chapter generation)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+              generationConfig: {
+                temperature: 0.8,
+                maxOutputTokens: 8192,
+              },
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          break;
+        }
+
+        const errorText = await response.text();
+        console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
+
+        if (response.status === 429 && retry < maxRetries) {
+          const waitTimeMs = baseWaitMs * Math.pow(2, retry); // 5s, 10s, 20s
+          console.log(`Rate limited. Waiting ${waitTimeMs}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+          continue;
+        }
+
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ error: 'The Loom is busy. Please wait and try again.' }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        throw new Error(`AI service error: ${response.status}`);
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.error(`Gemini API timeout (attempt ${attempt})`);
+          if (retry < maxRetries) {
+            const waitTimeMs = baseWaitMs * Math.pow(2, retry);
+            console.log(`Timeout occurred. Waiting ${waitTimeMs}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+            continue;
+          }
+        }
+        throw fetchError;
+      }
+    }
+
+    if (!response || !response.ok) {
+      return new Response(
+        JSON.stringify({ error: 'The Loom is busy. Please wait and try again.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const data = await response.json();
