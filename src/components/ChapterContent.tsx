@@ -1,8 +1,15 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 import TechnicalDiagram from './TechnicalDiagram';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
 import { AlertTriangle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface DiagramMarker {
+  index: number;
+  description: string;
+  plateNumber: string;
+}
 
 interface ChapterContentProps {
   topic: string;
@@ -13,10 +20,75 @@ interface ChapterContentProps {
   isGenerating?: boolean;
   diagramImages?: Record<string, string | undefined>;
   tableOfContents?: Array<{ chapter: number; title: string; imageDescription?: string }>;
+  sessionId?: string;
 }
 
 const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
-  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents }, ref) => {
+  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents, sessionId }, ref) => {
+    const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
+    const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
+
+    // Extract [DIAGRAM: ...] markers from content
+    const extractDiagramMarkers = (text: string): DiagramMarker[] => {
+      const markers: DiagramMarker[] = [];
+      const regex = /\[DIAGRAM:\s*([^\]]+)\]/gi;
+      let match;
+      let diagramIndex = 0;
+
+      while ((match = regex.exec(text)) !== null) {
+        markers.push({
+          index: match.index,
+          description: match[1].trim(),
+          plateNumber: `inline-${diagramIndex}`,
+        });
+        diagramIndex++;
+      }
+
+      return markers;
+    };
+
+    // Generate inline diagrams when markers are found
+    useEffect(() => {
+      if (!content || !sessionId) return;
+
+      const markers = extractDiagramMarkers(content);
+      if (markers.length === 0) return;
+
+      const generateDiagram = async (marker: DiagramMarker) => {
+        if (inlineDiagramImages[marker.plateNumber] || loadingDiagrams.has(marker.plateNumber)) return;
+
+        setLoadingDiagrams(prev => new Set(prev).add(marker.plateNumber));
+
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+            body: {
+              topic,
+              caption: marker.description,
+              variant: 'diagram',
+              sessionId,
+            },
+          });
+
+          if (!error && data?.imageUrl) {
+            setInlineDiagramImages(prev => ({ ...prev, [marker.plateNumber]: data.imageUrl }));
+          }
+        } catch (err) {
+          console.error('Failed to generate inline diagram:', err);
+        } finally {
+          setLoadingDiagrams(prev => {
+            const next = new Set(prev);
+            next.delete(marker.plateNumber);
+            return next;
+          });
+        }
+      };
+
+      // Generate diagrams in sequence to avoid overloading
+      markers.forEach((marker, idx) => {
+        setTimeout(() => generateDiagram(marker), idx * 2000);
+      });
+    }, [content, topic, sessionId]);
+
     // Parse markdown content into sections (simplified rendering)
     const renderContent = () => {
       if (!content) {
@@ -37,33 +109,62 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         );
       }
 
+      // Extract diagram markers and split content around them
+      const diagramMarkers = extractDiagramMarkers(content);
+      
       // Split content by paragraphs and render with proper styling
       const paragraphs = content.split('\n\n').filter((p) => p.trim());
+      const elements: React.ReactNode[] = [];
 
-      return paragraphs.map((paragraph, index) => {
+      paragraphs.forEach((paragraph, index) => {
         const trimmed = paragraph.trim();
+
+        // Check for [DIAGRAM: ...] markers and render inline diagrams
+        const diagramMatch = trimmed.match(/\[DIAGRAM:\s*([^\]]+)\]/i);
+        if (diagramMatch) {
+          const markerIndex = diagramMarkers.findIndex(m => m.description === diagramMatch[1].trim());
+          const plateNumber = markerIndex >= 0 ? `inline-${markerIndex}` : `inline-${index}`;
+          const imageUrl = inlineDiagramImages[plateNumber];
+          const isLoading = loadingDiagrams.has(plateNumber);
+          
+          elements.push(
+            <TechnicalDiagram
+              key={`diagram-${index}`}
+              caption={diagramMatch[1].trim()}
+              plateNumber={plateNumber}
+              topic={topic}
+              isGenerating={isLoading}
+              imageUrl={imageUrl ?? null}
+              imageDescription={diagramMatch[1].trim()}
+            />
+          );
+          return;
+        }
 
         // Check for headers
         if (trimmed.startsWith('### ')) {
-          return (
+          elements.push(
             <h3 key={index} className="font-serif text-xl md:text-2xl font-semibold mt-10 mb-4 text-foreground">
               {trimmed.replace('### ', '')}
             </h3>
           );
+          return;
         }
         if (trimmed.startsWith('## ')) {
-          return (
+          elements.push(
             <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
               {trimmed.replace('## ', '')}
             </h2>
           );
+          return;
         }
         if (trimmed.startsWith('# ')) {
-          return (
+          elements.push(
             <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
               {trimmed.replace('# ', '')}
             </h2>
           );
+          return;
         }
 
         // Check for bullet points
@@ -71,7 +172,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           const items = trimmed
             .split('\n')
             .filter((line) => line.trim().startsWith('-') || line.trim().startsWith('*'));
-          return (
+          elements.push(
             <ul key={index} className="list-none pl-0 space-y-3 text-foreground/75 my-6">
               {items.map((item, i) => (
                 <li key={i} className="flex items-start gap-4">
@@ -81,11 +182,12 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               ))}
             </ul>
           );
+          return;
         }
 
         // Check for blockquote
         if (trimmed.startsWith('>')) {
-          return (
+          elements.push(
             <blockquote
               key={index}
               className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl"
@@ -93,11 +195,12 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               {trimmed.replace(/^>\s*/gm, '')}
             </blockquote>
           );
+          return;
         }
 
         // Check for disclaimer (starts with warning emoji)
         if (trimmed.startsWith('⚠️')) {
-          return (
+          elements.push(
             <div
               key={index}
               className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8"
@@ -110,11 +213,12 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               </div>
             </div>
           );
+          return;
         }
 
         // Regular paragraph - first one gets drop cap
         if (index === 0 || (hasDisclaimer && index === 1)) {
-          return (
+          elements.push(
             <p
               key={index}
               className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground"
@@ -122,14 +226,17 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               {trimmed}
             </p>
           );
+          return;
         }
 
-        return (
+        elements.push(
           <p key={index} className="text-base md:text-lg">
             {trimmed}
           </p>
         );
       });
+
+      return elements;
     };
 
     return (

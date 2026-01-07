@@ -1,9 +1,11 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
 import { AlertTriangle } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
+import TechnicalDiagram from '@/components/TechnicalDiagram';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -24,6 +26,7 @@ interface AllChaptersContentProps {
   };
   loadingChapter?: number | null;
   isFullAccess?: boolean;
+  sessionId?: string;
 }
 
 export interface AllChaptersContentHandle {
@@ -32,8 +35,10 @@ export interface AllChaptersContentHandle {
 }
 
 const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersContentProps>(
-  ({ topic, bookData, loadingChapter, isFullAccess }, ref) => {
+  ({ topic, bookData, loadingChapter, isFullAccess, sessionId }, ref) => {
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
+    const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
+    const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (chapterNumber: number) => {
@@ -45,6 +50,85 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       },
       getChapterRefs: () => chapterRefs.current,
     }));
+
+    // Extract [DIAGRAM: ...] markers from all content
+    const extractDiagramMarkers = (text: string, chapterNum: number): Array<{ description: string; plateNumber: string }> => {
+      const markers: Array<{ description: string; plateNumber: string }> = [];
+      const regex = /\[DIAGRAM:\s*([^\]]+)\]/gi;
+      let match;
+      let diagramIndex = 0;
+
+      while ((match = regex.exec(text)) !== null) {
+        markers.push({
+          description: match[1].trim(),
+          plateNumber: `ch${chapterNum}-inline-${diagramIndex}`,
+        });
+        diagramIndex++;
+      }
+
+      return markers;
+    };
+
+    // Generate inline diagrams when markers are found
+    useEffect(() => {
+      if (!sessionId) return;
+
+      const allContent = [
+        bookData.chapter1Content,
+        bookData.chapter2Content,
+        bookData.chapter3Content,
+        bookData.chapter4Content,
+        bookData.chapter5Content,
+        bookData.chapter6Content,
+        bookData.chapter7Content,
+        bookData.chapter8Content,
+        bookData.chapter9Content,
+        bookData.chapter10Content,
+      ];
+
+      const allMarkers: Array<{ description: string; plateNumber: string }> = [];
+      allContent.forEach((content, idx) => {
+        if (content) {
+          allMarkers.push(...extractDiagramMarkers(content, idx + 1));
+        }
+      });
+
+      if (allMarkers.length === 0) return;
+
+      const generateDiagram = async (marker: { description: string; plateNumber: string }) => {
+        if (inlineDiagramImages[marker.plateNumber] || loadingDiagrams.has(marker.plateNumber)) return;
+
+        setLoadingDiagrams(prev => new Set(prev).add(marker.plateNumber));
+
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+            body: {
+              topic,
+              caption: marker.description,
+              variant: 'diagram',
+              sessionId,
+            },
+          });
+
+          if (!error && data?.imageUrl) {
+            setInlineDiagramImages(prev => ({ ...prev, [marker.plateNumber]: data.imageUrl }));
+          }
+        } catch (err) {
+          console.error('Failed to generate inline diagram:', err);
+        } finally {
+          setLoadingDiagrams(prev => {
+            const next = new Set(prev);
+            next.delete(marker.plateNumber);
+            return next;
+          });
+        }
+      };
+
+      // Generate diagrams in sequence to avoid overloading
+      allMarkers.forEach((marker, idx) => {
+        setTimeout(() => generateDiagram(marker), idx * 3000);
+      });
+    }, [bookData, topic, sessionId]);
 
     const chapters = [
       { number: 1, content: bookData.chapter1Content },
@@ -97,6 +181,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       // Pre-process content to fix common markdown issues
       // 1. Ensure \n sequences are actual line breaks
       // 2. Aggressively strip trailing asterisks and fix unclosed bold markers
+      // 3. Remove [DIAGRAM: ...] markers (they'll be rendered separately)
       const processedContent = content
         .replace(/\\n/g, '\n')  // Convert literal \n to actual newlines
         .replace(/\*{2,}\s*$/gm, '')  // Strip 2+ trailing asterisks at end of lines
@@ -104,7 +189,11 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         .replace(/\*\*([^*\n]+)\*?\s*$/gm, '**$1**')  // Fix unclosed bold (add closing **)
         .replace(/\s*\*{1,2}\s*\n/g, '\n')  // Remove orphan asterisks before newlines
         .replace(/\*\*\*+/g, '**')  // Collapse 3+ asterisks to 2
+        .replace(/\[DIAGRAM:\s*([^\]]+)\]/gi, '')  // Remove DIAGRAM markers (rendered separately)
         .trim();
+
+      // Find inline diagram markers for this chapter
+      const chapterMarkers = extractDiagramMarkers(content, chapterNumber);
 
       // Use ReactMarkdown for proper bold/italic rendering
       return (
@@ -161,6 +250,24 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           >
             {processedContent}
           </ReactMarkdown>
+          
+          {/* Render inline diagrams for this chapter */}
+          {chapterMarkers.map((marker) => {
+            const imageUrl = inlineDiagramImages[marker.plateNumber];
+            const isLoading = loadingDiagrams.has(marker.plateNumber);
+            return (
+              <TechnicalDiagram
+                key={marker.plateNumber}
+                caption={marker.description}
+                plateNumber={marker.plateNumber}
+                topic={topic}
+                isGenerating={isLoading}
+                imageUrl={imageUrl ?? null}
+                imageDescription={marker.description}
+              />
+            );
+          })}
+          
           {/* Disclaimer handling */}
           {hasDisclaimer && content.includes('⚠️') && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8">
