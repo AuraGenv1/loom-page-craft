@@ -876,6 +876,7 @@ const Index = () => {
                   ref={allChaptersRef}
                   topic={topic}
                   loadingChapter={loadingChapter}
+                  isFullAccess={isPaid}
                   bookData={{
                     chapter1Content: bookData?.chapter1Content,
                     chapter2Content: bookData?.chapter2Content,

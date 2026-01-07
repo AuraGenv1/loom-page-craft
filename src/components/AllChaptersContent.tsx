@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import WeavingLoader from '@/components/WeavingLoader';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -20,6 +21,7 @@ interface AllChaptersContentProps {
     tableOfContents?: ChapterInfo[];
   };
   loadingChapter?: number | null;
+  isFullAccess?: boolean;
 }
 
 export interface AllChaptersContentHandle {
@@ -28,7 +30,7 @@ export interface AllChaptersContentHandle {
 }
 
 const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersContentProps>(
-  ({ topic, bookData, loadingChapter }, ref) => {
+  ({ topic, bookData, loadingChapter, isFullAccess }, ref) => {
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
 
     useImperativeHandle(ref, () => ({
@@ -64,23 +66,28 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       const isLoading = loadingChapter === chapterNumber;
       
       if (!content) {
+        // For full access users (admins/purchased), show weaving state
+        if (isFullAccess) {
+          return (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              {isLoading ? (
+                <WeavingLoader text="Weaving chapter content..." className="w-full max-w-md" />
+              ) : (
+                <WeavingLoader text="Preparing to weave this chapter..." className="w-full max-w-md" />
+              )}
+              <p className="text-sm text-muted-foreground/60 mt-4">
+                This may take a moment for comprehensive content
+              </p>
+            </div>
+          );
+        }
+        
+        // Non-paid users see unlock message
         return (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            {isLoading ? (
-              <>
-                <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mb-4" />
-                <p className="text-base md:text-lg text-muted-foreground italic font-serif">
-                  Weaving chapter content...
-                </p>
-                <p className="text-sm text-muted-foreground/60 mt-2">
-                  This may take a moment for comprehensive content
-                </p>
-              </>
-            ) : (
-              <p className="text-base md:text-lg text-muted-foreground italic font-serif">
-                This chapter will be generated when you unlock the full guide.
-              </p>
-            )}
+            <p className="text-base md:text-lg text-muted-foreground italic font-serif">
+              This chapter will be generated when you unlock the full guide.
+            </p>
           </div>
         );
       }
