@@ -2,6 +2,8 @@ import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
 import { AlertTriangle } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
+import ReactMarkdown from 'react-markdown';
+import LocalResources from '@/components/LocalResources';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -92,98 +94,68 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         );
       }
 
-      const paragraphs = content.split('\n\n').filter((p) => p.trim());
-
-      return paragraphs.map((paragraph, index) => {
-        const trimmed = paragraph.trim();
-
-        // Check for headers
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h3 key={index} className="font-serif text-xl md:text-2xl font-semibold mt-10 mb-4 text-foreground">
-              {trimmed.replace('### ', '')}
-            </h3>
-          );
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
-              {trimmed.replace('## ', '')}
-            </h2>
-          );
-        }
-        if (trimmed.startsWith('# ')) {
-          return (
-            <h2 key={index} className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
-              {trimmed.replace('# ', '')}
-            </h2>
-          );
-        }
-
-        // Check for bullet points
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const items = trimmed
-            .split('\n')
-            .filter((line) => line.trim().startsWith('-') || line.trim().startsWith('*'));
-          return (
-            <ul key={index} className="list-none pl-0 space-y-3 text-foreground/75 my-6">
-              {items.map((item, i) => (
-                <li key={i} className="flex items-start gap-4">
+      // Use ReactMarkdown for proper bold/italic rendering
+      return (
+        <div className="markdown-content">
+          <ReactMarkdown
+            components={{
+              h1: ({ children }) => (
+                <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
+                  {children}
+                </h2>
+              ),
+              h2: ({ children }) => (
+                <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="font-serif text-xl md:text-2xl font-semibold mt-10 mb-4 text-foreground">
+                  {children}
+                </h3>
+              ),
+              p: ({ children }) => (
+                <p className="text-base md:text-lg mb-6">{children}</p>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-foreground">{children}</strong>
+              ),
+              em: ({ children }) => (
+                <em className="italic font-serif">{children}</em>
+              ),
+              ul: ({ children }) => (
+                <ul className="list-none pl-0 space-y-3 text-foreground/75 my-6">
+                  {children}
+                </ul>
+              ),
+              li: ({ children }) => (
+                <li className="flex items-start gap-4">
                   <span className="w-1.5 h-1.5 rounded-full bg-foreground/30 shrink-0 mt-2.5" />
-                  <span>{item.replace(/^[-*]\s*/, '')}</span>
+                  <span>{children}</span>
                 </li>
-              ))}
-            </ul>
-          );
-        }
-
-        // Check for blockquote
-        if (trimmed.startsWith('>')) {
-          return (
-            <blockquote
-              key={index}
-              className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl"
-            >
-              {trimmed.replace(/^>\s*/gm, '')}
-            </blockquote>
-          );
-        }
-
-        // Check for disclaimer (starts with warning emoji)
-        if (trimmed.startsWith('⚠️')) {
-          return (
-            <div
-              key={index}
-              className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8"
-            >
+              ),
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
+                  {children}
+                </blockquote>
+              ),
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+          {/* Disclaimer handling */}
+          {hasDisclaimer && content.includes('⚠️') && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8">
               <div className="flex items-start gap-4">
                 <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-amber-800 dark:text-amber-200 text-sm leading-relaxed">
-                  {trimmed.replace('⚠️ ', '')}
+                  {content.split('⚠️')[1]?.split('\n')[0]?.trim()}
                 </div>
               </div>
             </div>
-          );
-        }
-
-        // Regular paragraph - first one gets drop cap
-        if (index === 0 || (hasDisclaimer && index === 1)) {
-          return (
-            <p
-              key={index}
-              className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground"
-            >
-              {trimmed}
-            </p>
-          );
-        }
-
-        return (
-          <p key={index} className="text-base md:text-lg">
-            {trimmed}
-          </p>
-        );
-      });
+          )}
+        </div>
+      );
     };
 
     const formatChapterNumber = (num: number): string => {
@@ -227,6 +199,14 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
               {renderContent(chapter.content, chapter.number, idx === 0 && bookData.hasDisclaimer)}
             </div>
+            
+            {/* Local Resources at the end of the last chapter */}
+            {chapter.number === 10 && chapter.content && (
+              <LocalResources 
+                topic={topic} 
+                resources={bookData.localResources}
+              />
+            )}
           </article>
         ))}
       </div>

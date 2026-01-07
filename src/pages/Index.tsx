@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsHttpError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
@@ -299,6 +299,65 @@ const Index = () => {
       cancelled = true;
     };
   }, [viewState, bookData?.title, topic]);
+
+  // Real-time subscription for chapter updates
+  useEffect(() => {
+    if (!bookId || viewState !== 'book') return;
+
+    let channel: RealtimeChannel | null = null;
+
+    const setupRealtime = () => {
+      channel = supabase
+        .channel(`book-updates-${bookId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'books',
+            filter: `id=eq.${bookId}`,
+          },
+          (payload) => {
+            const updated = payload.new as Record<string, unknown>;
+            
+            // Update local state with any new chapter content
+            setBookData(prev => {
+              if (!prev) return prev;
+              
+              const updates: Partial<BookData> = {};
+              
+              for (let i = 1; i <= 10; i++) {
+                const dbKey = `chapter${i}_content`;
+                const stateKey = `chapter${i}Content` as keyof BookData;
+                if (updated[dbKey] && !prev[stateKey]) {
+                  (updates as Record<string, string>)[stateKey] = updated[dbKey] as string;
+                }
+              }
+              
+              // Update cover image if it changed
+              if (updated.cover_image_url && !prev.coverImageUrl) {
+                updates.coverImageUrl = updated.cover_image_url as string;
+                setCoverImageUrl(updated.cover_image_url as string);
+              }
+              
+              if (Object.keys(updates).length > 0) {
+                return { ...prev, ...updates };
+              }
+              return prev;
+            });
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [bookId, viewState]);
 
   // Generate missing chapters progressively for full access users
   useEffect(() => {

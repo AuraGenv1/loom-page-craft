@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from 'react';
 import { getTopicIcon } from '@/lib/iconMap';
 import WeavingLoader from '@/components/WeavingLoader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface BookCoverProps {
   title: string;
@@ -48,18 +49,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
         {/* Main Content Area - Vertical layout: Image on top, text below */}
         <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
-          {/* AI-Generated Cover Image - Top */}
+        {/* AI-Generated Cover Image - Top */}
           <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
             {isLoadingImage ? (
-              <div className="w-full h-full flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-foreground/10 bg-secondary/20">
-                <WeavingLoader text="Weaving..." className="w-full px-4" />
-              </div>
+              <Skeleton className="w-full h-full rounded-lg" />
             ) : coverImageUrl && !imageFailed ? (
               <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
                 {!imageLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <WeavingLoader text="Loading..." className="w-full px-4" />
-                  </div>
+                  <Skeleton className="absolute inset-0 rounded-lg" />
                 )}
                 <img
                   src={coverImageUrl}
@@ -76,9 +73,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 />
               </div>
             ) : (
-              <div className="w-full h-full rounded-lg border-2 border-dashed border-foreground/10 flex items-center justify-center bg-secondary/20">
-                <TopicIcon className="w-16 h-16 md:w-20 md:h-20 text-foreground/30 stroke-[0.5]" />
-              </div>
+              <Skeleton className="w-full h-full rounded-lg" />
             )}
           </div>
 
