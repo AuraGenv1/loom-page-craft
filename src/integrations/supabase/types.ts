@@ -33,6 +33,8 @@ export type Database = {
           id: string
           is_purchased: boolean
           local_resources: Json
+          location_lat: number | null
+          location_lng: number | null
           session_id: string
           table_of_contents: Json
           title: string
@@ -57,6 +59,8 @@ export type Database = {
           id?: string
           is_purchased?: boolean
           local_resources?: Json
+          location_lat?: number | null
+          location_lng?: number | null
           session_id: string
           table_of_contents?: Json
           title: string
@@ -81,6 +85,8 @@ export type Database = {
           id?: string
           is_purchased?: boolean
           local_resources?: Json
+          location_lat?: number | null
+          location_lng?: number | null
           session_id?: string
           table_of_contents?: Json
           title?: string
@@ -265,6 +271,8 @@ export type Database = {
           id: string
           is_purchased: boolean
           local_resources: Json
+          location_lat: number | null
+          location_lng: number | null
           session_id: string
           table_of_contents: Json
           title: string
