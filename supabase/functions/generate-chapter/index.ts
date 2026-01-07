@@ -47,10 +47,15 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 8. "Key Takeaways" summary
 9. Transition to the next chapter
 
+MANDATORY DIAGRAM REQUIREMENT:
+- You are REQUIRED to include exactly ONE diagram marker in this chapter using the syntax: [DIAGRAM: descriptive prompt]
+- The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text
+- Place this marker at the most instructional point in the chapter
+
 CRITICAL FORMATTING RULES:
 - DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs
-- Use plain text only. Avoid trailing asterisks at the end of any line
-- Write naturally without excessive bold formatting
+- NEVER end any line with asterisks (**) - this is strictly forbidden
+- Use plain text only. Write naturally without excessive bold formatting
 
 DO NOT include any JSON. Write ONLY markdown content.`;
 
@@ -61,6 +66,7 @@ This chapter MUST be at least 2,000 words. Include:
 - Real examples and case studies
 - Step-by-step instructions where applicable
 - Expert tips and common pitfalls
+- MANDATORY: Exactly ONE [DIAGRAM: description] marker for a black-and-white technical illustration (no text on diagram)
 
 Begin writing the chapter content now. No preamble, no JSON - just the chapter text in markdown format.`;
 

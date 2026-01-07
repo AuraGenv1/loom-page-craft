@@ -312,8 +312,8 @@ async function generateChapterContent(
   
   // MANDATORY DIAGRAM requirement in prompt
   const diagramInstruction = imageDescription 
-    ? `\n\nMANDATORY DIAGRAM: This chapter MUST include a Technical Diagram placeholder. Use the marker: [DIAGRAM: ${imageDescription}] - place this at the most relevant point in the chapter (after the introduction or at a key concept).`
-    : `\n\nMANDATORY DIAGRAM: This chapter MUST include at least one Technical Diagram placeholder. Use the format: [DIAGRAM: Description of what the diagram shows] - be specific about the instructional content.`;
+    ? `\n\nMANDATORY DIAGRAM: You are REQUIRED to include one diagram marker in every chapter using the syntax: [DIAGRAM: ${imageDescription}] - The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text.`
+    : `\n\nMANDATORY DIAGRAM: You are REQUIRED to include one diagram marker in every chapter using the syntax: [DIAGRAM: descriptive prompt]. The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text.`;
   
 const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
 
@@ -328,12 +328,12 @@ CRITICAL RULES:
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
 - End with "Key Takeaways" summary
-- IMPORTANT: Include exactly ONE diagram placeholder using [DIAGRAM: description] format
-- CRITICAL FORMATTING: DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs. Use plain text only. Avoid trailing asterisks.${diagramInstruction}`;
+- MANDATORY: You are REQUIRED to include exactly ONE diagram placeholder using [DIAGRAM: description] format - this is non-negotiable
+- CRITICAL FORMATTING: DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs. Use plain text only. NEVER end a line with asterisks.${diagramInstruction}`;
 
   const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for a comprehensive guide on "${topic}".
 
-Include:
+REQUIRED ELEMENTS (ALL MANDATORY):
 1. Engaging introduction (150+ words)
 2. At least 4-5 major sections with ## headers
 3. Detailed step-by-step instructions
@@ -341,7 +341,7 @@ Include:
 5. "Common Mistakes" section with problems and solutions
 6. "Pro Tips" section with advanced techniques
 7. "Key Takeaways" summary
-8. ONE [DIAGRAM: ...] placeholder at the most instructional point
+8. MANDATORY: Include exactly ONE [DIAGRAM: description] marker - describe a black-and-white technical illustration with no text
 
 MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown format.`;
 
@@ -773,14 +773,24 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     const bookData: any = parsedBookData ?? {};
 
-    // Normalize required fields
+    // Normalize required fields - ensure titles are complete (not truncated)
     if (!bookData.title || typeof bookData.title !== 'string') {
-      bookData.title = `Guide to ${topic}`;
+      bookData.title = `The Complete Guide to ${topic}`;
+    }
+    // Fix truncated titles (ending with common truncation patterns)
+    if (bookData.title.match(/:\s*\w+ing\s+a?$/i) || bookData.title.match(/:\s*\w+$/) && bookData.title.split(' ').length < 4) {
+      bookData.title = `The Complete Guide to ${topic}`;
     }
 
     if (!bookData.displayTitle || typeof bookData.displayTitle !== 'string') {
-      const words = bookData.title.split(' ');
-      bookData.displayTitle = words.slice(0, 5).join(' ');
+      // Create a clean display title (max 5 words, no trailing prepositions)
+      const words = bookData.title.split(/[:\-–—]/)[0].trim().split(' ');
+      let displayWords = words.slice(0, 5);
+      // Remove trailing prepositions/articles that look like truncation
+      while (displayWords.length > 1 && /^(a|an|the|to|for|with|and|of|in|on)$/i.test(displayWords[displayWords.length - 1])) {
+        displayWords.pop();
+      }
+      bookData.displayTitle = displayWords.join(' ');
     }
 
     if (!bookData.subtitle || typeof bookData.subtitle !== 'string') {
@@ -824,9 +834,11 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       try {
         console.log('Generating cover image with Fal.ai...');
         
+        const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles";
+        
         const imagePrompt = isAutomotiveTopic
-          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS.`
-          : `Elegant, minimalist vector illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, NO LABELS.`;
+          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic. NO TEXT ON IMAGE.`
+          : `Macro photography, shallow depth of field, minimalist composition. Professional cookbook aesthetic. Subject: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Soft natural lighting, elegant styling, premium quality. NO TEXT ON IMAGE.`;
         
         const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
           method: 'POST',
@@ -836,6 +848,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
           },
           body: JSON.stringify({
             prompt: imagePrompt,
+            negative_prompt: NEGATIVE_PROMPT,
             image_size: 'square_hd',
             num_inference_steps: 4,
             num_images: 1,
