@@ -179,17 +179,20 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       }
 
       // Pre-process content to fix common markdown issues
-      // 1. Ensure \n sequences are actual line breaks
-      // 2. Aggressively strip trailing asterisks and fix unclosed bold markers
-      // 3. Remove [DIAGRAM: ...] markers (they'll be rendered separately)
+      // Aggressive asterisk stripping and formatting cleanup
       const processedContent = content
         .replace(/\\n/g, '\n')  // Convert literal \n to actual newlines
         .replace(/\*{2,}\s*$/gm, '')  // Strip 2+ trailing asterisks at end of lines
         .replace(/\*{2,}$/g, '')  // Strip trailing ** at end of content
+        .replace(/\*\*\s*\n/g, '\n')  // Remove ** before newlines
+        .replace(/\s\*\*\s*$/gm, '')  // Remove space+** at end of lines
+        .replace(/([.!?:,])\s*\*{1,2}\s*$/gm, '$1')  // Remove asterisks after punctuation at end
         .replace(/\*\*([^*\n]+)\*?\s*$/gm, '**$1**')  // Fix unclosed bold (add closing **)
         .replace(/\s*\*{1,2}\s*\n/g, '\n')  // Remove orphan asterisks before newlines
         .replace(/\*\*\*+/g, '**')  // Collapse 3+ asterisks to 2
         .replace(/\[DIAGRAM:\s*([^\]]+)\]/gi, '')  // Remove DIAGRAM markers (rendered separately)
+        .replace(/^\*{1,2}\s*/gm, '')  // Remove leading asterisks at start of lines (orphaned)
+        .replace(/\*{1,2}$/gm, '')  // Final pass: remove any remaining trailing asterisks
         .trim();
 
       // Find inline diagram markers for this chapter
