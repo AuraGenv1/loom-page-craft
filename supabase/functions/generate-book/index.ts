@@ -412,8 +412,9 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate chapters in PAIRS ("Pair-Breeze" staggered parallelism)
-// This avoids connection hanging by not overwhelming the API with 9 concurrent requests
+// Background task to generate chapters in 3 BURSTS ("Stream & Snap" staggered parallelism)
+// Bursts: [2,3,4] -> [5,6,7] -> [8,9,10] with 2s delays between bursts
+// This ensures shell returns in <3s while chapters stream in smoothly
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
@@ -424,15 +425,13 @@ async function generateChaptersInBackground(
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] PAIR-BREEZE MODE: Launching chapters in pairs for book ${bookId}`);
+  console.log(`[Background] STREAM & SNAP MODE: Launching chapters in 3 bursts for book ${bookId}`);
   
-  // Define pairs: [2,3], [4,5], [6,7], [8,9], [10]
-  const chapterPairs = [
-    [2, 3],
-    [4, 5],
-    [6, 7],
-    [8, 9],
-    [10],
+  // Define 3 bursts: [2,3,4], [5,6,7], [8,9,10]
+  const chapterBursts = [
+    [2, 3, 4],
+    [5, 6, 7],
+    [8, 9, 10],
   ];
   
   // Helper to generate and save a single chapter
@@ -462,17 +461,17 @@ async function generateChaptersInBackground(
     }
   };
   
-  // Process pairs sequentially, but chapters within each pair run in parallel
-  for (let i = 0; i < chapterPairs.length; i++) {
-    const pair = chapterPairs[i];
-    console.log(`[Background] Launching pair ${i + 1}/${chapterPairs.length}: chapters [${pair.join(', ')}]`);
+  // Process bursts sequentially, but chapters within each burst run in parallel
+  for (let i = 0; i < chapterBursts.length; i++) {
+    const burst = chapterBursts[i];
+    console.log(`[Background] Launching burst ${i + 1}/${chapterBursts.length}: chapters [${burst.join(', ')}]`);
     
-    // Run chapters in this pair in parallel
-    await Promise.all(pair.map(chapterNum => generateAndSaveChapter(chapterNum)));
+    // Run chapters in this burst in parallel
+    await Promise.all(burst.map(chapterNum => generateAndSaveChapter(chapterNum)));
     
-    // Wait 2 seconds before starting the next pair (except after the last pair)
-    if (i < chapterPairs.length - 1) {
-      console.log(`[Background] Pair complete. Waiting 2s before next pair...`);
+    // Wait 2 seconds before starting the next burst (except after the last burst)
+    if (i < chapterBursts.length - 1) {
+      console.log(`[Background] Burst complete. Waiting 2s before next burst...`);
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }

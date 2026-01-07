@@ -11,20 +11,26 @@ interface TableOfContentsProps {
   activeChapter?: number;
   chapterStatuses?: Record<number, 'drafting' | 'complete'>; // Track drafting state
   loadingChapter?: number | null; // Currently generating chapter
+  chapterContent?: Record<number, string | undefined>; // Actual chapter content for realtime sync
 }
 
 const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
-  ({ topic, chapters, allUnlocked = false, onChapterClick, activeChapter, chapterStatuses = {}, loadingChapter }, ref) => {
+  ({ topic, chapters, allUnlocked = false, onChapterClick, activeChapter, chapterStatuses = {}, loadingChapter, chapterContent = {} }, ref) => {
     // Use AI-generated chapters or fallback to defaults
     // If allUnlocked is true (admin or purchased), mark all as unlocked
+    // REALTIME SYNC: Use chapterContent to determine if chapter has content (ready)
     const displayChapters = chapters?.length
-      ? chapters.map((ch, idx) => ({
-          number: ch.chapter,
-          title: ch.title,
-          isUnlocked: allUnlocked || idx === 0,
-          status: chapterStatuses[ch.chapter] || (idx === 0 ? 'complete' : undefined),
-          isLoading: loadingChapter === ch.chapter,
-        }))
+      ? chapters.map((ch, idx) => {
+          const hasContent = idx === 0 || !!chapterContent[ch.chapter];
+          return {
+            number: ch.chapter,
+            title: ch.title,
+            isUnlocked: allUnlocked || idx === 0,
+            // Status is 'complete' if content exists, otherwise use passed status
+            status: hasContent ? 'complete' as const : (chapterStatuses[ch.chapter] || undefined),
+            isLoading: loadingChapter === ch.chapter,
+          };
+        })
       : [
           { number: 1, title: `Introduction to ${topic}`, isUnlocked: true, status: 'complete' as const, isLoading: false },
           { number: 2, title: 'Understanding the Fundamentals', isUnlocked: allUnlocked, status: undefined, isLoading: false },

@@ -101,18 +101,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           </p>
         </div>
 
-        {/* Bottom branding */}
-        <div className="text-center flex flex-col items-center gap-2 pt-4">
-          <div className="flex items-center gap-2 opacity-50">
-            <div className="flex items-center gap-[2px]">
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-              <div className="w-[1.5px] h-3.5 bg-foreground/50 rounded-full" />
-            </div>
-            <div className="w-2.5 h-[1px] bg-foreground/50 -ml-[5px]" />
+        {/* Bottom branding - matches header logo exactly */}
+        <div className="text-center flex flex-col items-center gap-3 pt-4">
+          {/* Logo icon matching Logo.tsx */}
+          <div className="relative w-8 h-8 opacity-60">
+            {/* Vertical loom lines */}
+            <div className="absolute left-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+            <div className="absolute right-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+            {/* Horizontal page fold */}
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-foreground rounded-full" />
+            {/* Corner fold detail */}
+            <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
           </div>
-          <p className="text-[9px] tracking-[0.3em] text-muted-foreground/40 uppercase font-serif">
+          {/* Brand name */}
+          <span className="font-serif text-sm font-normal tracking-tight text-muted-foreground/50">
             Loom & Page
+          </span>
+          {/* Disclaimer */}
+          <p className="text-[8px] text-center text-muted-foreground/40 leading-relaxed max-w-[200px] italic">
+            AI-generated content for creative inspiration only. Not professional advice.
           </p>
         </div>
       </div>

@@ -4,15 +4,21 @@ const Footer = () => {
   return (
     <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border/30 py-3 px-4 z-50">
       <div className="max-w-4xl mx-auto flex flex-col items-center gap-2">
-        {/* Mini loom logo */}
+        {/* Logo matching header exactly */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-[2px]">
-            <div className="w-[1.5px] h-3 bg-foreground/40 rounded-full" />
-            <div className="w-[1.5px] h-3 bg-foreground/40 rounded-full" />
-            <div className="w-[1.5px] h-3 bg-foreground/40 rounded-full" />
+          {/* CSS-based loom + page icon - smaller version */}
+          <div className="relative w-5 h-5 opacity-50">
+            {/* Vertical loom lines */}
+            <div className="absolute left-0.5 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
+            <div className="absolute right-0.5 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
+            {/* Horizontal page fold */}
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
+            {/* Corner fold detail */}
+            <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
           </div>
-          <div className="w-2 h-[1px] bg-foreground/40 -ml-[5px]" />
-          <span className="text-[10px] tracking-[0.15em] text-muted-foreground uppercase font-serif ml-1">
+          {/* Brand name */}
+          <span className="font-serif text-xs font-normal tracking-tight text-muted-foreground">
             Loom & Page
           </span>
         </div>
