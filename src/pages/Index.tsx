@@ -961,25 +961,26 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Table of Contents - pass chapter statuses */}
+            {/* Table of Contents - pass chapter statuses and content for realtime sync */}
             <section className="mb-8">
               {(() => {
                 // Build chapter statuses
                 const statuses: Record<number, 'drafting' | 'complete'> = {};
-                const chapterContents = [
-                  bookData?.chapter1Content,
-                  bookData?.chapter2Content,
-                  bookData?.chapter3Content,
-                  bookData?.chapter4Content,
-                  bookData?.chapter5Content,
-                  bookData?.chapter6Content,
-                  bookData?.chapter7Content,
-                  bookData?.chapter8Content,
-                  bookData?.chapter9Content,
-                  bookData?.chapter10Content,
-                ];
-                chapterContents.forEach((content, idx) => {
-                  statuses[idx + 1] = content ? 'complete' : 'drafting';
+                const chapterContentMap: Record<number, string | undefined> = {
+                  1: bookData?.chapter1Content,
+                  2: bookData?.chapter2Content,
+                  3: bookData?.chapter3Content,
+                  4: bookData?.chapter4Content,
+                  5: bookData?.chapter5Content,
+                  6: bookData?.chapter6Content,
+                  7: bookData?.chapter7Content,
+                  8: bookData?.chapter8Content,
+                  9: bookData?.chapter9Content,
+                  10: bookData?.chapter10Content,
+                };
+                
+                Object.entries(chapterContentMap).forEach(([num, content]) => {
+                  statuses[parseInt(num)] = content ? 'complete' : 'drafting';
                 });
                 // Chapter 1 is always complete after initial load
                 if (bookData?.chapter1Content) statuses[1] = 'complete';
@@ -993,6 +994,7 @@ const Index = () => {
                     activeChapter={isPaid ? activeChapter : 1}
                     chapterStatuses={statuses}
                     loadingChapter={loadingChapter}
+                    chapterContent={chapterContentMap}
                   />
                 );
               })()}
