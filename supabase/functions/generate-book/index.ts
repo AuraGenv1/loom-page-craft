@@ -117,6 +117,188 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
   return [];
 }
 
+// ---- Robust JSON extraction/parsing helpers (Deno-safe) ----
+const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+
+function sanitizeJsonText(input: string): string {
+  return input.replace(/\uFEFF/g, '').replace(CONTROL_CHARS_REGEX, '');
+}
+
+function extractJsonObjectFromText(text: string): string | null {
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first === -1 || last === -1 || last <= first) return null;
+  return text.slice(first, last + 1);
+}
+
+function sliceBalanced(
+  src: string,
+  startIdx: number,
+  openChar: string,
+  closeChar: string
+): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIdx; i < src.length; i++) {
+    const ch = src[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === openChar) depth++;
+    if (ch === closeChar) depth--;
+
+    if (depth === 0) {
+      return src.slice(startIdx, i + 1);
+    }
+  }
+
+  return null;
+}
+
+function extractJsonStringValue(src: string, key: string): string | null {
+  const keyIdx = src.indexOf(`"${key}"`);
+  if (keyIdx === -1) return null;
+  const colonIdx = src.indexOf(':', keyIdx);
+  if (colonIdx === -1) return null;
+
+  let i = colonIdx + 1;
+  while (i < src.length && /\s/.test(src[i])) i++;
+  if (src[i] !== '"') return null;
+  i++; // after opening quote
+
+  let raw = '';
+  let escaped = false;
+
+  for (; i < src.length; i++) {
+    const ch = src[i];
+
+    if (escaped) {
+      // preserve escape sequences as-is
+      raw += `\\${ch}`;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      // end of string
+      try {
+        return JSON.parse(`"${raw}"`);
+      } catch {
+        return raw;
+      }
+    }
+
+    // Fix unescaped newlines inside strings
+    if (ch === '\n') raw += '\\n';
+    else if (ch === '\r') raw += '\\r';
+    else if (ch === '\t') raw += '\\t';
+    else raw += ch;
+  }
+
+  return null;
+}
+
+function extractJsonArrayValue(src: string, key: string): unknown[] | null {
+  const keyIdx = src.indexOf(`"${key}"`);
+  if (keyIdx === -1) return null;
+  const colonIdx = src.indexOf(':', keyIdx);
+  if (colonIdx === -1) return null;
+
+  let i = colonIdx + 1;
+  while (i < src.length && /\s/.test(src[i])) i++;
+  if (src[i] !== '[') return null;
+
+  const slice = sliceBalanced(src, i, '[', ']');
+  if (!slice) return null;
+
+  try {
+    return JSON.parse(sanitizeJsonText(slice));
+  } catch {
+    return null;
+  }
+}
+
+function partialParseBookData(src: string, topic: string): { bookData: any; warnings: string[] } {
+  const warnings: string[] = ['partial_parse_used'];
+
+  const title = extractJsonStringValue(src, 'title');
+  const displayTitle = extractJsonStringValue(src, 'displayTitle');
+  const subtitle = extractJsonStringValue(src, 'subtitle');
+
+  const tableOfContents = extractJsonArrayValue(src, 'tableOfContents');
+
+  const bookData: any = {
+    title: title ?? `Guide to ${topic}`,
+    displayTitle: displayTitle ?? (title ? title.split(' ').slice(0, 5).join(' ') : `Guide to ${topic}`.split(' ').slice(0, 5).join(' ')),
+    subtitle: subtitle ?? `A Comprehensive Guide to ${topic}`,
+    tableOfContents: Array.isArray(tableOfContents) ? tableOfContents : Array.from({ length: 10 }, (_, i) => ({
+      chapter: i + 1,
+      title: `Chapter ${i + 1}`,
+      imageDescription: `A minimalist diagram illustrating core concepts of ${topic}.`,
+    })),
+    chapter1Content: extractJsonStringValue(src, 'chapter1Content') ?? '',
+    localResources: extractJsonArrayValue(src, 'localResources') ?? [],
+  };
+
+  // Recover as many chapters as we can (if present)
+  for (let n = 2; n <= 12; n++) {
+    const key = `chapter${n}Content`;
+    const val = extractJsonStringValue(src, key);
+    if (val) bookData[key] = val;
+  }
+
+  // If chapter1 still missing, fall back to a trimmed version of the raw AI output
+  if (!bookData.chapter1Content) {
+    warnings.push('chapter1_fallback_from_raw');
+    bookData.chapter1Content = `## Draft Output\n\n${src.slice(0, 12000)}`;
+  }
+
+  return { bookData, warnings };
+}
+
+function parseBookDataFromModelText(text: string, topic: string): { bookData: any; warnings: string[] } {
+  const warnings: string[] = [];
+
+  const extracted = extractJsonObjectFromText(text);
+  if (!extracted) warnings.push('no_brace_delimited_json_found');
+
+  const candidate = sanitizeJsonText(extracted ?? text);
+
+  try {
+    const parsed = JSON.parse(candidate);
+    return { bookData: parsed, warnings };
+  } catch (e) {
+    warnings.push('json_parse_failed');
+    console.error('JSON.parse failed:', e);
+    return partialParseBookData(candidate, topic);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -366,6 +548,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
             ],
             generationConfig: {
               temperature: 0.8,
+              // Force the model to stay in JSON mode
+              responseMimeType: 'application/json',
               maxOutputTokens: fullBook ? 65536 : 16384,
             },
           }),
@@ -423,71 +607,39 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       throw new Error('No content generated');
     }
 
-    // Parse the JSON from the response - with robust error handling
-    let bookData;
-    try {
-      // First, try to extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      let jsonStr = jsonMatch ? jsonMatch[1] : content;
-      
-      // Trim whitespace
-      jsonStr = jsonStr.trim();
-      
-      // Try to extract just the JSON object if there's extra text before/after
-      const jsonStart = jsonStr.indexOf('{');
-      const jsonEnd = jsonStr.lastIndexOf('}');
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
-      }
-      
-      // First attempt: try parsing as-is
-      try {
-        bookData = JSON.parse(jsonStr);
-      } catch (firstError) {
-        console.log('First parse attempt failed, trying to fix common issues...');
-        
-        // Second attempt: fix unescaped control characters inside string values
-        // This regex finds string values and escapes problematic characters within them
-        let fixedJson = jsonStr;
-        
-        // Replace literal newlines inside strings with escaped newlines
-        // Match content between quotes and fix internal newlines
-        fixedJson = fixedJson.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match: string) => {
-          // Within the matched string, replace unescaped newlines
-          return match
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-        });
-        
-        bookData = JSON.parse(fixedJson);
-      }
-    } catch (parseError) {
-      console.error('Failed to parse AI response as JSON:', parseError);
-      console.error('Raw content length:', content.length);
-      console.error('Content preview:', content.substring(0, 500));
-      
-      // Return a more helpful error instead of 400
-      return new Response(
-        JSON.stringify({ 
-          error: 'The AI generated content that could not be processed. Please try again.' 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Robust extraction + sanitization + partial-parse fallback (never 500 for parse issues)
+    const { bookData: parsedBookData, warnings } = parseBookDataFromModelText(content, topic);
+    if (warnings.length) {
+      console.log('Book JSON parse warnings:', warnings.join(', '));
     }
 
-    // Validate the response structure
-    if (!bookData.title || !bookData.tableOfContents || !bookData.chapter1Content) {
-      console.error('Invalid book structure - missing required fields');
-      console.error('Has title:', !!bookData.title);
-      console.error('Has TOC:', !!bookData.tableOfContents);
-      console.error('Has chapter1:', !!bookData.chapter1Content);
-      return new Response(
-        JSON.stringify({ 
-          error: 'The AI response was incomplete. Please try again.' 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const bookData: any = parsedBookData ?? {};
+
+    // Normalize required fields (avoid hard failures)
+    if (!bookData.title || typeof bookData.title !== 'string') {
+      bookData.title = `Guide to ${topic}`;
+    }
+
+    if (!bookData.displayTitle || typeof bookData.displayTitle !== 'string') {
+      const words = bookData.title.split(' ');
+      bookData.displayTitle = words.slice(0, 5).join(' ');
+    }
+
+    if (!bookData.subtitle || typeof bookData.subtitle !== 'string') {
+      bookData.subtitle = `A Comprehensive Guide to ${topic}`;
+    }
+
+    if (!Array.isArray(bookData.tableOfContents)) {
+      bookData.tableOfContents = Array.from({ length: 10 }, (_, i) => ({
+        chapter: i + 1,
+        title: `Chapter ${i + 1}`,
+        imageDescription: `A minimalist diagram illustrating core concepts of ${topic}.`,
+      }));
+    }
+
+    if (!bookData.chapter1Content || typeof bookData.chapter1Content !== 'string') {
+      // Last resort: use the raw model output as readable chapter text
+      bookData.chapter1Content = `## Draft Output\n\n${sanitizeJsonText(content).slice(0, 12000)}`;
     }
 
     // Ensure displayTitle and subtitle exist (fallback for backwards compatibility)
