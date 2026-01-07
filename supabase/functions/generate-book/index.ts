@@ -349,9 +349,9 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       const attempt = retry + 1;
       console.log(`Gemini API attempt ${attempt}/${maxRetries + 1}`);
 
-      // Use gemini-2.5-pro for better long-form content generation
+      // Use gemini-2.0-flash for content generation
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
