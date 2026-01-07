@@ -315,7 +315,7 @@ async function generateChapterContent(
     ? `\n\nMANDATORY DIAGRAM: This chapter MUST include a Technical Diagram placeholder. Use the marker: [DIAGRAM: ${imageDescription}] - place this at the most relevant point in the chapter (after the introduction or at a key concept).`
     : `\n\nMANDATORY DIAGRAM: This chapter MUST include at least one Technical Diagram placeholder. Use the format: [DIAGRAM: Description of what the diagram shows] - be specific about the instructional content.`;
   
-  const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
+const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
 
 CRITICAL RULES:
 - Never say "Sure", "Here is", or any conversational filler
@@ -328,7 +328,8 @@ CRITICAL RULES:
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
 - End with "Key Takeaways" summary
-- IMPORTANT: Include exactly ONE diagram placeholder using [DIAGRAM: description] format${diagramInstruction}`;
+- IMPORTANT: Include exactly ONE diagram placeholder using [DIAGRAM: description] format
+- CRITICAL FORMATTING: DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs. Use plain text only. Avoid trailing asterisks.${diagramInstruction}`;
 
   const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for a comprehensive guide on "${topic}".
 
@@ -411,7 +412,8 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate ALL chapters with TURBO PARALLEL starts for maximum speed
+// Background task to generate chapters in PAIRS ("Pair-Breeze" staggered parallelism)
+// This avoids connection hanging by not overwhelming the API with 9 concurrent requests
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
@@ -422,22 +424,24 @@ async function generateChaptersInBackground(
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] TURBO MODE: Launching ALL chapters simultaneously for book ${bookId}`);
+  console.log(`[Background] PAIR-BREEZE MODE: Launching chapters in pairs for book ${bookId}`);
   
-  // NO initial delay - start immediately for maximum speed
-  const chapters = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+  // Define pairs: [2,3], [4,5], [6,7], [8,9], [10]
+  const chapterPairs = [
+    [2, 3],
+    [4, 5],
+    [6, 7],
+    [8, 9],
+    [10],
+  ];
   
-  // Launch ALL chapters with minimal 500ms stagger (just enough to avoid instant 429)
-  const chapterPromises = chapters.map(async (chapterNum, index) => {
-    // Minimal stagger: 500ms between each launch for turbo speed
-    const staggerDelay = index * 500;
-    await new Promise(resolve => setTimeout(resolve, staggerDelay));
-    
+  // Helper to generate and save a single chapter
+  const generateAndSaveChapter = async (chapterNum: number) => {
     const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
     const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
     const imageDesc = tocEntry?.imageDescription || '';
     
-    console.log(`[Background] Launching chapter ${chapterNum}: ${chapterTitle} (stagger: ${staggerDelay}ms)`);
+    console.log(`[Background] Starting chapter ${chapterNum}: ${chapterTitle}`);
     
     const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey, imageDesc);
     
@@ -456,10 +460,22 @@ async function generateChaptersInBackground(
     } else {
       console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
     }
-  });
+  };
   
-  // Wait for all chapters to complete
-  await Promise.all(chapterPromises);
+  // Process pairs sequentially, but chapters within each pair run in parallel
+  for (let i = 0; i < chapterPairs.length; i++) {
+    const pair = chapterPairs[i];
+    console.log(`[Background] Launching pair ${i + 1}/${chapterPairs.length}: chapters [${pair.join(', ')}]`);
+    
+    // Run chapters in this pair in parallel
+    await Promise.all(pair.map(chapterNum => generateAndSaveChapter(chapterNum)));
+    
+    // Wait 2 seconds before starting the next pair (except after the last pair)
+    if (i < chapterPairs.length - 1) {
+      console.log(`[Background] Pair complete. Waiting 2s before next pair...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
   
   console.log(`[Background] Completed all chapters for book ${bookId}`);
 }
