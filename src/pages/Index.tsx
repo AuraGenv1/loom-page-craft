@@ -870,39 +870,67 @@ const Index = () => {
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
-                <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap">
-                  {isPaid ? (
-                    <Button
-                      onClick={handleDownloadPDF}
-                      variant="default"
-                      size="lg"
-                      className="gap-2 font-serif"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download Full Guide (PDF)
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        onClick={handleDownloadPDF}
-                        variant="outline"
-                        size="lg"
-                        className="gap-2 font-serif"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download Free Sample (PDF)
-                      </Button>
-                      <Button
-                        size="lg"
-                        className="gap-2 font-serif bg-slate-900 hover:bg-slate-800 text-white"
-                        onClick={handlePurchase}
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Unlock Full Artisan Guide
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {/* Calculate chapter completion */}
+                {(() => {
+                  const completedChapters = [
+                    bookData?.chapter1Content,
+                    bookData?.chapter2Content,
+                    bookData?.chapter3Content,
+                    bookData?.chapter4Content,
+                    bookData?.chapter5Content,
+                    bookData?.chapter6Content,
+                    bookData?.chapter7Content,
+                    bookData?.chapter8Content,
+                    bookData?.chapter9Content,
+                    bookData?.chapter10Content,
+                  ].filter(Boolean).length;
+                  const allChaptersComplete = completedChapters === 10;
+                  const isWeaving = isPaid && !allChaptersComplete && completedChapters < 10;
+                  
+                  return (
+                    <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap">
+                      {isPaid ? (
+                        <div className="relative group">
+                          <Button
+                            onClick={handleDownloadPDF}
+                            variant="default"
+                            size="lg"
+                            disabled={!allChaptersComplete}
+                            className="gap-2 font-serif"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Full Guide (PDF)
+                          </Button>
+                          {!allChaptersComplete && (
+                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-amber-600 dark:text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                              ✨ Weaving chapter {completedChapters + 1} of 10...
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={handleDownloadPDF}
+                            variant="outline"
+                            size="lg"
+                            className="gap-2 font-serif"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Free Sample (PDF)
+                          </Button>
+                          <Button
+                            size="lg"
+                            className="gap-2 font-serif bg-slate-900 hover:bg-slate-800 text-white"
+                            onClick={handlePurchase}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            Unlock Full Artisan Guide
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
                 {!isPaid && (
                   <p className="text-xs text-muted-foreground text-center max-w-md">
                     Sample includes Step 1 and the material list. The full $4.99 guide unlocks all steps, pro tips, and the local supplier map.
@@ -910,7 +938,18 @@ const Index = () => {
                 )}
                 {isPaid && (
                   <p className="text-xs text-accent text-center max-w-md font-medium">
-                    ✓ Full access unlocked — All 10 chapters available
+                    ✓ Full access unlocked — {[
+                      bookData?.chapter1Content,
+                      bookData?.chapter2Content,
+                      bookData?.chapter3Content,
+                      bookData?.chapter4Content,
+                      bookData?.chapter5Content,
+                      bookData?.chapter6Content,
+                      bookData?.chapter7Content,
+                      bookData?.chapter8Content,
+                      bookData?.chapter9Content,
+                      bookData?.chapter10Content,
+                    ].filter(Boolean).length} of 10 chapters ready
                   </p>
                 )}
                 {/* Save to Library Button */}
@@ -932,15 +971,41 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Table of Contents - pass isPaid to unlock all for admins/purchased */}
+            {/* Table of Contents - pass chapter statuses */}
             <section className="mb-8">
-              <TableOfContents 
-                topic={topic} 
-                chapters={bookData?.tableOfContents} 
-                allUnlocked={isPaid}
-                onChapterClick={handleChapterClick}
-                activeChapter={isPaid ? activeChapter : 1}
-              />
+              {(() => {
+                // Build chapter statuses
+                const statuses: Record<number, 'drafting' | 'complete'> = {};
+                const chapterContents = [
+                  bookData?.chapter1Content,
+                  bookData?.chapter2Content,
+                  bookData?.chapter3Content,
+                  bookData?.chapter4Content,
+                  bookData?.chapter5Content,
+                  bookData?.chapter6Content,
+                  bookData?.chapter7Content,
+                  bookData?.chapter8Content,
+                  bookData?.chapter9Content,
+                  bookData?.chapter10Content,
+                ];
+                chapterContents.forEach((content, idx) => {
+                  statuses[idx + 1] = content ? 'complete' : 'drafting';
+                });
+                // Chapter 1 is always complete after initial load
+                if (bookData?.chapter1Content) statuses[1] = 'complete';
+                
+                return (
+                  <TableOfContents 
+                    topic={topic} 
+                    chapters={bookData?.tableOfContents} 
+                    allUnlocked={isPaid}
+                    onChapterClick={handleChapterClick}
+                    activeChapter={isPaid ? activeChapter : 1}
+                    chapterStatuses={statuses}
+                    loadingChapter={loadingChapter}
+                  />
+                );
+              })()}
             </section>
 
             {/* Divider */}

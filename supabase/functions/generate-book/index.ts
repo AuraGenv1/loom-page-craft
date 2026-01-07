@@ -305,9 +305,15 @@ async function generateChapterContent(
   chapterNumber: number,
   chapterTitle: string,
   topic: string,
-  geminiApiKey: string
+  geminiApiKey: string,
+  imageDescription?: string
 ): Promise<string | null> {
   const minWordsPerChapter = 2000;
+  
+  // MANDATORY DIAGRAM requirement in prompt
+  const diagramInstruction = imageDescription 
+    ? `\n\nMANDATORY DIAGRAM: This chapter MUST include a Technical Diagram placeholder. Use the marker: [DIAGRAM: ${imageDescription}] - place this at the most relevant point in the chapter (after the introduction or at a key concept).`
+    : `\n\nMANDATORY DIAGRAM: This chapter MUST include at least one Technical Diagram placeholder. Use the format: [DIAGRAM: Description of what the diagram shows] - be specific about the instructional content.`;
   
   const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
 
@@ -321,7 +327,8 @@ CRITICAL RULES:
 - Include numbered step-by-step instructions where applicable
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
-- End with "Key Takeaways" summary`;
+- End with "Key Takeaways" summary
+- IMPORTANT: Include exactly ONE diagram placeholder using [DIAGRAM: description] format${diagramInstruction}`;
 
   const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for a comprehensive guide on "${topic}".
 
@@ -333,6 +340,7 @@ Include:
 5. "Common Mistakes" section with problems and solutions
 6. "Pro Tips" section with advanced techniques
 7. "Key Takeaways" summary
+8. ONE [DIAGRAM: ...] placeholder at the most instructional point
 
 MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown format.`;
 
@@ -403,50 +411,63 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate chapters 2-10 and update the database
+// Background task to generate chapters 2-10 in PARALLEL BATCHES for speed
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
-  tableOfContents: Array<{ chapter: number; title: string }>,
+  tableOfContents: Array<{ chapter: number; title: string; imageDescription?: string }>,
   geminiApiKey: string,
   supabaseUrl: string,
   supabaseServiceKey: string
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] Starting chapter generation for book ${bookId}`);
+  console.log(`[Background] Starting PARALLEL chapter generation for book ${bookId}`);
   
-  // Longer initial delay to let the main request complete and avoid immediate rate limits
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Short initial delay to let the main request complete
+  await new Promise(resolve => setTimeout(resolve, 2000));
   
-  for (let chapterNum = 2; chapterNum <= 10; chapterNum++) {
-    const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
-    const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
+  // Generate chapters in parallel batches of 3 to balance speed vs rate limits
+  const batchSize = 3;
+  const chapters = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+  
+  for (let i = 0; i < chapters.length; i += batchSize) {
+    const batch = chapters.slice(i, i + batchSize);
+    console.log(`[Background] Starting batch: chapters ${batch.join(', ')}`);
     
-    console.log(`[Background] Generating chapter ${chapterNum}: ${chapterTitle}`);
-    
-    // Add a 6-second pause between chapters to avoid rate limits (more conservative)
-    if (chapterNum > 2) {
-      console.log(`[Background] Waiting 6 seconds before chapter ${chapterNum}...`);
-      await new Promise(resolve => setTimeout(resolve, 6000));
-    }
-    
-    const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey);
-    
-    if (content) {
-      const columnName = `chapter${chapterNum}_content`;
-      const { error } = await supabase
-        .from('books')
-        .update({ [columnName]: content })
-        .eq('id', bookId);
+    // Generate batch in parallel
+    const batchPromises = batch.map(async (chapterNum) => {
+      const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
+      const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
+      const imageDesc = tocEntry?.imageDescription || '';
       
-      if (error) {
-        console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
+      console.log(`[Background] Generating chapter ${chapterNum}: ${chapterTitle}`);
+      
+      const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey, imageDesc);
+      
+      if (content) {
+        const columnName = `chapter${chapterNum}_content`;
+        const { error } = await supabase
+          .from('books')
+          .update({ [columnName]: content })
+          .eq('id', bookId);
+        
+        if (error) {
+          console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
+        } else {
+          console.log(`[Background] Chapter ${chapterNum} saved successfully (${content.length} chars)`);
+        }
       } else {
-        console.log(`[Background] Chapter ${chapterNum} saved successfully (${content.length} chars)`);
+        console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
       }
-    } else {
-      console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
+    });
+    
+    await Promise.all(batchPromises);
+    
+    // Pause between batches to avoid rate limits (only if more batches remain)
+    if (i + batchSize < chapters.length) {
+      console.log(`[Background] Batch complete. Waiting 4 seconds before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, 4000));
     }
   }
   
