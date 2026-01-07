@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import PrintPreview from '@/components/PrintPreview';
 import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
+import ProgressDownloadButton from '@/components/ProgressDownloadButton';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
@@ -888,25 +889,14 @@ const Index = () => {
                   const isWeaving = isPaid && !allChaptersComplete && completedChapters < 10;
                   
                   return (
-                    <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap">
+                    <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap items-center">
                       {isPaid ? (
-                        <div className="relative group">
-                          <Button
-                            onClick={handleDownloadPDF}
-                            variant="default"
-                            size="lg"
-                            disabled={!allChaptersComplete}
-                            className="gap-2 font-serif"
-                          >
-                            <Download className="w-4 h-4" />
-                            Download Full Guide (PDF)
-                          </Button>
-                          {!allChaptersComplete && (
-                            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-amber-600 dark:text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                              ✨ Weaving chapter {completedChapters + 1} of 10...
-                            </div>
-                          )}
-                        </div>
+                        <ProgressDownloadButton
+                          completedChapters={completedChapters}
+                          totalChapters={10}
+                          onClick={handleDownloadPDF}
+                          disabled={!allChaptersComplete}
+                        />
                       ) : (
                         <>
                           <Button
