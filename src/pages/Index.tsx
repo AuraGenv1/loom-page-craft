@@ -86,6 +86,7 @@ const Index = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPurchased, setIsPurchased] = useState(false);
 
   // Check if user is admin via database role
   useEffect(() => {
@@ -115,8 +116,8 @@ const Index = () => {
     return isAdmin;
   }, [searchParams, isAdmin]);
 
-  // Content is unlocked for admins or paid users (payment integration TODO)
-  const isPaid = isTestMode;
+  // Content is unlocked for admins, paid users, or if book is purchased
+  const isPaid = isTestMode || isPurchased;
 
   const handleOpenAuthModal = () => {
     setAuthModalOpen(true);
@@ -132,58 +133,75 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Check for existing book on mount
-  // For authenticated users: query their books directly
-  // For guests: clear state to show landing page (fix Groundhog Day bug)
+  // Check for existing book on mount or load from URL params (Dashboard navigation)
   useEffect(() => {
     if (authLoading) return;
     
-    const checkExistingBook = async () => {
+    const loadBook = async () => {
+      // Check if navigating from Dashboard with specific book
+      const bookIdParam = searchParams.get('bookId');
+      const viewMode = searchParams.get('view');
+      
+      if (bookIdParam && user) {
+        // Load specific book from Dashboard
+        const { data, error } = await supabase
+          .from('books')
+          .select('*')
+          .eq('id', bookIdParam)
+          .eq('user_id', user.id)
+          .single();
+        
+        if (data && !error) {
+          const words = data.title.split(' ');
+          const fallbackDisplayTitle = words.slice(0, 5).join(' ');
+          
+          setBookData({
+            title: data.title,
+            displayTitle: fallbackDisplayTitle,
+            subtitle: `A Comprehensive Guide to ${data.topic}`,
+            tableOfContents: data.table_of_contents as unknown as BookData['tableOfContents'],
+            chapter1Content: data.chapter1_content,
+            chapter2Content: data.chapter2_content || undefined,
+            chapter3Content: data.chapter3_content || undefined,
+            chapter4Content: data.chapter4_content || undefined,
+            chapter5Content: data.chapter5_content || undefined,
+            chapter6Content: data.chapter6_content || undefined,
+            chapter7Content: data.chapter7_content || undefined,
+            chapter8Content: data.chapter8_content || undefined,
+            chapter9Content: data.chapter9_content || undefined,
+            chapter10Content: data.chapter10_content || undefined,
+            localResources: data.local_resources as unknown as BookData['localResources'],
+            hasDisclaimer: data.has_disclaimer ?? false,
+            coverImageUrl: data.cover_image_url || undefined,
+          });
+          setTopic(data.topic);
+          setBookId(data.id);
+          setCoverImageUrl(data.cover_image_url || null);
+          setIsPurchased(data.is_purchased || false);
+          setIsSavedToLibrary(true);
+          setViewState('book');
+          return;
+        }
+      }
+      
       // Guest users should always see the landing page on fresh load
       // Clear any stale session data to prevent "Groundhog Day" effect
       if (!user) {
-        // Reset to landing for guests - they start fresh each time
         setViewState('landing');
         setBookData(null);
         setBookId(null);
         setCoverImageUrl(null);
+        setIsPurchased(false);
         return;
       }
 
-      // Authenticated user: query their books directly (RLS allows this)
-      const result = await supabase
-        .from('books')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      const data = result.data;
-      const error = result.error;
-
-      if (data && !error) {
-        // Generate fallback displayTitle from stored title
-        const words = data.title.split(' ');
-        const fallbackDisplayTitle = words.slice(0, 5).join(' ');
-        
-        setBookData({
-          title: data.title,
-          displayTitle: fallbackDisplayTitle,
-          subtitle: `A Comprehensive Guide to ${data.topic}`,
-          tableOfContents: data.table_of_contents as unknown as BookData['tableOfContents'],
-          chapter1Content: data.chapter1_content,
-          localResources: data.local_resources as unknown as BookData['localResources'],
-          hasDisclaimer: data.has_disclaimer ?? false,
-        });
-        setTopic(data.topic);
-        setBookId(data.id);
-        setViewState('book');
-      }
+      // No specific book requested - show landing for fresh start
+      // Remove auto-loading last book to avoid confusion
+      setViewState('landing');
     };
 
-    checkExistingBook();
-  }, [user, authLoading]);
+    loadBook();
+  }, [user, authLoading, searchParams]);
 
   // Generate chapter diagrams in background (never show blank boxes)
   useEffect(() => {
@@ -289,8 +307,19 @@ const Index = () => {
               title: generatedBook.title,
               table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
               chapter1_content: generatedBook.chapter1Content,
+              chapter2_content: generatedBook.chapter2Content || null,
+              chapter3_content: generatedBook.chapter3Content || null,
+              chapter4_content: generatedBook.chapter4Content || null,
+              chapter5_content: generatedBook.chapter5Content || null,
+              chapter6_content: generatedBook.chapter6Content || null,
+              chapter7_content: generatedBook.chapter7Content || null,
+              chapter8_content: generatedBook.chapter8Content || null,
+              chapter9_content: generatedBook.chapter9Content || null,
+              chapter10_content: generatedBook.chapter10Content || null,
               local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
               has_disclaimer: generatedBook.hasDisclaimer || false,
+              cover_image_url: generatedBook.coverImageUrl || null,
+              is_purchased: false,
               session_id: sessionId,
               user_id: user.id,
             },
@@ -314,8 +343,19 @@ const Index = () => {
             title: generatedBook.title,
             table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
             chapter1_content: generatedBook.chapter1Content,
+            chapter2_content: generatedBook.chapter2Content || null,
+            chapter3_content: generatedBook.chapter3Content || null,
+            chapter4_content: generatedBook.chapter4Content || null,
+            chapter5_content: generatedBook.chapter5Content || null,
+            chapter6_content: generatedBook.chapter6Content || null,
+            chapter7_content: generatedBook.chapter7Content || null,
+            chapter8_content: generatedBook.chapter8Content || null,
+            chapter9_content: generatedBook.chapter9Content || null,
+            chapter10_content: generatedBook.chapter10Content || null,
             local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
             has_disclaimer: generatedBook.hasDisclaimer || false,
+            cover_image_url: generatedBook.coverImageUrl || null,
+            is_purchased: false,
             session_id: sessionId,
             user_id: null,
           },
@@ -437,6 +477,9 @@ const Index = () => {
     setCoverImageUrl(null);
     setIsLoadingCoverImage(false);
     setIsSavedToLibrary(false);
+    setIsPurchased(false);
+    // Clear URL params when starting over
+    navigate('/', { replace: true });
   };
 
   const handleSaveToLibrary = async () => {
