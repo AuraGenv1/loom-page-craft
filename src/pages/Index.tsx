@@ -542,6 +542,9 @@ const Index = () => {
       return;
     }
 
+    // Already saved - no action needed, no toast
+    if (isSavedToLibrary) return;
+
     setIsSaving(true);
     try {
       // Check if this exact bookId is already saved (not just same topic)
@@ -553,9 +556,8 @@ const Index = () => {
         .maybeSingle();
 
       if (existing) {
-        // Only show "already saved" if exact same book ID
+        // Silently mark as saved, no toast spam
         setIsSavedToLibrary(true);
-        toast.info('This guide is already in your library!');
         return;
       }
 
@@ -563,7 +565,14 @@ const Index = () => {
         .from('saved_projects')
         .insert([{ user_id: user.id, book_id: bookId }]);
 
-      if (error) throw error;
+      if (error) {
+        // Check for unique constraint violation (duplicate)
+        if (error.code === '23505') {
+          setIsSavedToLibrary(true);
+          return;
+        }
+        throw error;
+      }
       
       setIsSavedToLibrary(true);
       toast.success('Saved to your library!');
