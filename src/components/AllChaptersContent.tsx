@@ -96,13 +96,14 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
       // Pre-process content to fix common markdown issues
       // 1. Ensure \n sequences are actual line breaks
-      // 2. Fix unclosed bold markers and strip trailing **
+      // 2. Aggressively strip trailing asterisks and fix unclosed bold markers
       const processedContent = content
         .replace(/\\n/g, '\n')  // Convert literal \n to actual newlines
-        .replace(/\*\*([^*]+)$/gm, '**$1**')  // Close unclosed bold at end of line
-        .replace(/\*\*\s*\n/g, '**\n')  // Ensure bold markers close before newlines
-        .replace(/\*\*\s*$/gm, '')  // Strip trailing ** at end of lines
-        .replace(/\*\*$/g, '')  // Strip trailing ** at end of content
+        .replace(/\*{2,}\s*$/gm, '')  // Strip 2+ trailing asterisks at end of lines
+        .replace(/\*{2,}$/g, '')  // Strip trailing ** at end of content
+        .replace(/\*\*([^*\n]+)\*?\s*$/gm, '**$1**')  // Fix unclosed bold (add closing **)
+        .replace(/\s*\*{1,2}\s*\n/g, '\n')  // Remove orphan asterisks before newlines
+        .replace(/\*\*\*+/g, '**')  // Collapse 3+ asterisks to 2
         .trim();
 
       // Use ReactMarkdown for proper bold/italic rendering

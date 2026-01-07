@@ -28,7 +28,7 @@ serve(async (req) => {
       throw new Error('AI service is not configured');
     }
 
-    const systemPrompt = `You are a prolific author creating a comprehensive instructional textbook. Write ONLY the chapter content - no JSON, no metadata, just pure markdown content.
+const systemPrompt = `You are a prolific author creating a comprehensive instructional textbook. Write ONLY the chapter content - no JSON, no metadata, just pure markdown content.
 
 CRITICAL REQUIREMENTS:
 - Write MINIMUM 2,000 words of substantive instructional content
@@ -46,6 +46,11 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 7. "Pro Tips" section with advanced techniques
 8. "Key Takeaways" summary
 9. Transition to the next chapter
+
+CRITICAL FORMATTING RULES:
+- DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs
+- Use plain text only. Avoid trailing asterisks at the end of any line
+- Write naturally without excessive bold formatting
 
 DO NOT include any JSON. Write ONLY markdown content.`;
 

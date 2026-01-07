@@ -40,16 +40,16 @@ const ProgressDownloadButton = ({
           }}
         />
         
-        {/* Button text with mix-blend for contrast */}
+        {/* Button text - use mix-blend-mode for automatic contrast */}
         <span 
-          className="relative z-10 flex items-center justify-center gap-2 h-full px-6"
+          className="relative z-10 flex items-center justify-center gap-2 h-full px-6 font-serif"
           style={{
             mixBlendMode: 'difference',
-            color: 'hsl(var(--muted))',
+            color: 'white',
           }}
         >
           <Download className="w-4 h-4" />
-          <span>Download Full Guide (PDF)</span>
+          <span className="font-medium">Download Full Guide (PDF)</span>
         </span>
       </button>
       
