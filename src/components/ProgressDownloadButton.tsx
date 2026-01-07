@@ -1,5 +1,4 @@
-import { Button } from '@/components/ui/button';
-import { Download, Loader2 } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface ProgressDownloadButtonProps {
@@ -23,38 +22,41 @@ const ProgressDownloadButton = ({
   const isWeaving = completedChapters < totalChapters;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative">
-        <Button
-          onClick={onClick}
-          size="lg"
-          disabled={disabled || !isComplete}
-          className="relative overflow-hidden gap-2 font-serif min-w-[260px] transition-all duration-500"
+    <div className="flex flex-col items-center gap-4">
+      {/* Progress Button with left-to-right fill */}
+      <button
+        onClick={onClick}
+        disabled={disabled || !isComplete}
+        className="relative overflow-hidden min-w-[280px] h-12 rounded border border-foreground/20 font-serif text-base transition-all duration-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-90"
+        style={{
+          background: 'hsl(var(--muted))',
+        }}
+      >
+        {/* Progress fill bar - moves left to right */}
+        <div 
+          className="absolute inset-0 bg-foreground transition-all duration-700 ease-out"
           style={{
-            background: isComplete 
-              ? undefined 
-              : `linear-gradient(to right, hsl(var(--foreground)) ${progress}%, hsl(var(--muted)) ${progress}%)`,
-            color: isComplete ? undefined : progress > 50 ? 'hsl(var(--background))' : 'hsl(var(--foreground))',
+            width: `${progress}%`,
+          }}
+        />
+        
+        {/* Button text with mix-blend for contrast */}
+        <span 
+          className="relative z-10 flex items-center justify-center gap-2 h-full px-6"
+          style={{
+            mixBlendMode: 'difference',
+            color: 'hsl(var(--muted))',
           }}
         >
-          {isWeaving ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Weaving Guide...</span>
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              <span>Download Full Guide (PDF)</span>
-            </>
-          )}
-        </Button>
-      </div>
+          <Download className="w-4 h-4" />
+          <span>Download Full Guide (PDF)</span>
+        </span>
+      </button>
       
-      {/* Status text - clearly separated below button */}
+      {/* Elegant italic status text - centered below button */}
       {isWeaving && (
-        <p className="text-sm text-amber-600 dark:text-amber-400 font-medium animate-pulse">
-          ✨ {completedChapters} of {totalChapters} chapters ready
+        <p className="text-sm text-muted-foreground font-serif italic text-center">
+          Our Artisan is weaving your custom details...
         </p>
       )}
     </div>
