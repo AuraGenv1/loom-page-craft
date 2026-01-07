@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -299,13 +300,153 @@ function parseBookDataFromModelText(text: string, topic: string): { bookData: an
   }
 }
 
+// Helper to generate a single chapter with retry logic
+async function generateChapterContent(
+  chapterNumber: number,
+  chapterTitle: string,
+  topic: string,
+  geminiApiKey: string
+): Promise<string | null> {
+  const minWordsPerChapter = 2000;
+  
+  const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
+
+CRITICAL RULES:
+- Never say "Sure", "Here is", or any conversational filler
+- Output ONLY the markdown content for this chapter
+- Write in first-person plural ("we", "our") with an academic yet accessible tone
+- Minimum ${minWordsPerChapter} words of substantive instructional content
+- Include 4-5 section headers using ## markdown syntax
+- Include at least 2 detailed case studies or examples
+- Include numbered step-by-step instructions where applicable
+- Include a "Common Mistakes" section
+- Include a "Pro Tips" section
+- End with "Key Takeaways" summary`;
+
+  const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for a comprehensive guide on "${topic}".
+
+Include:
+1. Engaging introduction (150+ words)
+2. At least 4-5 major sections with ## headers
+3. Detailed step-by-step instructions
+4. 2 real-world case studies or examples (300+ words each)
+5. "Common Mistakes" section with problems and solutions
+6. "Pro Tips" section with advanced techniques
+7. "Key Takeaways" summary
+
+MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown format.`;
+
+  const maxRetries = 3;
+  const baseWaitMs = 5000;
+
+  for (let retry = 0; retry <= maxRetries; retry++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+            generationConfig: {
+              temperature: 0.8,
+              maxOutputTokens: 16384,
+            },
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (content) {
+          // Clean up any code blocks wrapping
+          return content.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
+        }
+      }
+
+      if (response.status === 429 && retry < maxRetries) {
+        const waitTimeMs = baseWaitMs * Math.pow(2, retry);
+        console.log(`Chapter ${chapterNumber} rate limited. Waiting ${waitTimeMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTimeMs));
+        continue;
+      }
+
+      console.error(`Chapter ${chapterNumber} generation failed:`, response.status);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error(`Chapter ${chapterNumber} timeout on attempt ${retry + 1}`);
+        if (retry < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, baseWaitMs * Math.pow(2, retry)));
+          continue;
+        }
+      }
+      console.error(`Chapter ${chapterNumber} error:`, error);
+    }
+  }
+
+  return null;
+}
+
+// Background task to generate chapters 2-10 and update the database
+async function generateChaptersInBackground(
+  bookId: string,
+  topic: string,
+  tableOfContents: Array<{ chapter: number; title: string }>,
+  geminiApiKey: string,
+  supabaseUrl: string,
+  supabaseServiceKey: string
+) {
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  
+  console.log(`[Background] Starting chapter generation for book ${bookId}`);
+  
+  for (let chapterNum = 2; chapterNum <= 10; chapterNum++) {
+    const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
+    const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
+    
+    console.log(`[Background] Generating chapter ${chapterNum}: ${chapterTitle}`);
+    
+    // Add a 3-second pause between chapters to avoid rate limits
+    if (chapterNum > 2) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    
+    const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey);
+    
+    if (content) {
+      const columnName = `chapter${chapterNum}_content`;
+      const { error } = await supabase
+        .from('books')
+        .update({ [columnName]: content })
+        .eq('id', bookId);
+      
+      if (error) {
+        console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
+      } else {
+        console.log(`[Background] Chapter ${chapterNum} saved successfully`);
+      }
+    } else {
+      console.error(`[Background] Failed to generate chapter ${chapterNum}`);
+    }
+  }
+  
+  console.log(`[Background] Completed all chapters for book ${bookId}`);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { topic, sessionId, fullBook = false } = await req.json();
+    const { topic, sessionId, fullBook = false, bookId: existingBookId } = await req.json();
     
     // Validate session_id to prevent bot abuse
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
@@ -369,7 +510,7 @@ serve(async (req) => {
       );
     }
 
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not configured');
       throw new Error('AI service is not configured');
@@ -377,6 +518,8 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
     const FAL_KEY = Deno.env.get('FAL_KEY');
     const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     // Determine if topic is automotive/luxury for photography style
     const isAutomotiveTopic = /\b(car|cars|vehicle|vehicles|automotive|ferrari|lamborghini|porsche|maserati|bugatti|mercedes|bmw|audi|luxury|supercar|hypercar|sports car|muscle car|classic car)\b/i.test(topic);
@@ -386,13 +529,8 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     console.log('High-risk topic detected:', isHighRisk);
 
-    // Strictly generate 10 chapters for all books (fullBook adds 2 more for 12 total)
-    const chapterCount = fullBook ? 12 : 10;
-    
-    // Enhanced content length targets for 100+ page books
-    // Preview: Full chapter 1 with substantial depth
-    // Full book: All chapters with comprehensive, textbook-level content
-    const minWordsPerChapter = fullBook ? 2000 : 1800;
+    // SHELL-FIRST: Generate only TOC and Chapter 1, then return immediately
+    const minWordsPerChapter = 1800;
 
     const systemPrompt = `You are a prolific author and Lead Architect at Loom & Page, a distinguished publisher of elegant instructional volumes. You do not engage in conversation—you only produce refined, comprehensive book content.
 
@@ -447,22 +585,9 @@ You must respond with a JSON object in this exact format:
     { "chapter": 7, "title": "...", "imageDescription": "..." },
     { "chapter": 8, "title": "...", "imageDescription": "..." },
     { "chapter": 9, "title": "...", "imageDescription": "..." },
-    { "chapter": 10, "title": "...", "imageDescription": "..." }${fullBook ? `,
-    { "chapter": 11, "title": "...", "imageDescription": "..." },
-    { "chapter": 12, "title": "...", "imageDescription": "..." }` : ''}
+    { "chapter": 10, "title": "...", "imageDescription": "..." }
   ],
   "chapter1Content": "Full markdown content of chapter 1 - MINIMUM ${minWordsPerChapter} WORDS...",
-  ${fullBook ? `"chapter2Content": "Full markdown content of chapter 2 - MINIMUM ${minWordsPerChapter} WORDS...",
-  "chapter3Content": "Full markdown content of chapter 3...",
-  "chapter4Content": "Full markdown content of chapter 4...",
-  "chapter5Content": "Full markdown content of chapter 5...",
-  "chapter6Content": "Full markdown content of chapter 6...",
-  "chapter7Content": "Full markdown content of chapter 7...",
-  "chapter8Content": "Full markdown content of chapter 8...",
-  "chapter9Content": "Full markdown content of chapter 9...",
-  "chapter10Content": "Full markdown content of chapter 10...",
-  "chapter11Content": "Full markdown content of chapter 11...",
-  "chapter12Content": "Full markdown content of chapter 12...",` : ''}
   "localResources": [
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" },
@@ -493,19 +618,7 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - End with a "Key Takeaways" summary and transition to subsequent chapters
 - Use proper markdown: headers, paragraphs, bullet lists, numbered lists`;
 
-    const userPrompt = fullBook 
-      ? `Compose ALL ${chapterCount} chapters with COMPLETE, EXHAUSTIVE content (minimum ${minWordsPerChapter} words per chapter) and the complete Table of Contents for an instructional volume on: "${topic}". 
-
-REMEMBER: You are writing a definitive textbook. Each chapter must include:
-- Detailed step-by-step instructions
-- Real-world case studies and examples  
-- Common mistakes and how to avoid them
-- Pro tips and advanced techniques
-- Exercises and practice activities
-- Chapter summary with key takeaways
-
-DO NOT summarize. DO NOT abbreviate. Write comprehensive, publication-ready content.`
-      : `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
+    const userPrompt = `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
 
 For Chapter One, you MUST include:
 1. Engaging introduction (150+ words) that hooks the reader and establishes the chapter's importance
@@ -521,11 +634,11 @@ For Chapter One, you MUST include:
 
 Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This is non-negotiable.`;
 
-    console.log('Calling Google Gemini API...');
+    console.log('Calling Google Gemini API for shell (TOC + Chapter 1)...');
 
     // Exponential backoff on rate limits (429): 5s, 10s, 20s (3 retries + initial attempt)
     const maxRetries = 3;
-    const baseWaitMs = 5000; // Start with 5 seconds
+    const baseWaitMs = 5000;
     let response: Response | null = null;
 
     for (let retry = 0; retry <= maxRetries; retry++) {
@@ -533,30 +646,20 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       console.log(`Gemini API attempt ${attempt}/${maxRetries + 1}`);
 
       try {
-        // Use AbortController for timeout (120 seconds for large content generation)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-        // Use gemini-2.0-flash for content generation
         response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [
-                {
-                  role: 'user',
-                  parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
-                }
-              ],
+              contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
               generationConfig: {
                 temperature: 0.8,
-                // Force the model to stay in JSON mode
                 responseMimeType: 'application/json',
-                maxOutputTokens: fullBook ? 65536 : 16384,
+                maxOutputTokens: 16384,
               },
             }),
             signal: controller.signal,
@@ -565,25 +668,21 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
         clearTimeout(timeoutId);
 
-        if (response.ok) {
-          break;
-        }
+        if (response.ok) break;
 
         const errorText = await response.text();
         console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
 
         if (response.status === 429 && retry < maxRetries) {
-          const waitTimeMs = baseWaitMs * Math.pow(2, retry); // 5s, 10s, 20s
+          const waitTimeMs = baseWaitMs * Math.pow(2, retry);
           console.log(`Rate limited. Waiting ${waitTimeMs}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+          await new Promise(resolve => setTimeout(resolve, waitTimeMs));
           continue;
         }
 
         if (response.status === 429) {
           return new Response(
-            JSON.stringify({
-              error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.',
-            }),
+            JSON.stringify({ error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.' }),
             { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -602,7 +701,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
           if (retry < maxRetries) {
             const waitTimeMs = baseWaitMs * Math.pow(2, retry);
             console.log(`Timeout occurred. Waiting ${waitTimeMs}ms before retry...`);
-            await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+            await new Promise(resolve => setTimeout(resolve, waitTimeMs));
             continue;
           }
         }
@@ -612,9 +711,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     if (!response || !response.ok) {
       return new Response(
-        JSON.stringify({
-          error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.',
-        }),
+        JSON.stringify({ error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -628,7 +725,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       throw new Error('No content generated');
     }
 
-    // Robust extraction + sanitization + partial-parse fallback (never 500 for parse issues)
+    // Robust extraction + sanitization + partial-parse fallback
     const { bookData: parsedBookData, warnings } = parseBookDataFromModelText(content, topic);
     if (warnings.length) {
       console.log('Book JSON parse warnings:', warnings.join(', '));
@@ -636,7 +733,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     const bookData: any = parsedBookData ?? {};
 
-    // Normalize required fields (avoid hard failures)
+    // Normalize required fields
     if (!bookData.title || typeof bookData.title !== 'string') {
       bookData.title = `Guide to ${topic}`;
     }
@@ -659,18 +756,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
     }
 
     if (!bookData.chapter1Content || typeof bookData.chapter1Content !== 'string') {
-      // Last resort: use the raw model output as readable chapter text
       bookData.chapter1Content = `## Draft Output\n\n${sanitizeJsonText(content).slice(0, 12000)}`;
-    }
-
-    // Ensure displayTitle and subtitle exist (fallback for backwards compatibility)
-    if (!bookData.displayTitle) {
-      // Generate a short display title from the full title (first 5 words)
-      const words = bookData.title.split(' ');
-      bookData.displayTitle = words.slice(0, 5).join(' ');
-    }
-    if (!bookData.subtitle) {
-      bookData.subtitle = `A Comprehensive Guide to ${topic}`;
     }
 
     // Fetch real local resources from Google Places API if key is configured
@@ -698,7 +784,6 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       try {
         console.log('Generating cover image with Fal.ai...');
         
-        // Build prompt based on topic type
         const imagePrompt = isAutomotiveTopic
           ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic.`
           : `Clean technical manual illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework.`;
@@ -731,13 +816,30 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         }
       } catch (falError) {
         console.error('Fal.ai image generation failed:', falError);
-        // Continue without cover image - not critical
       }
     } else {
       console.log('FAL_KEY not configured, skipping cover image generation');
     }
 
-    console.log('Successfully generated book:', bookData.title);
+    console.log('Successfully generated book shell:', bookData.title);
+
+    // If we have a bookId AND background generation is requested, kick off chapter generation
+    // This allows the frontend to save the book first, then call back with the bookId
+    if (existingBookId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && GEMINI_API_KEY) {
+      console.log('Starting background chapter generation for book:', existingBookId);
+      
+      // Use EdgeRuntime.waitUntil for background processing
+      (globalThis as any).EdgeRuntime?.waitUntil?.(
+        generateChaptersInBackground(
+          existingBookId,
+          topic,
+          bookData.tableOfContents,
+          GEMINI_API_KEY,
+          SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY
+        )
+      );
+    }
 
     return new Response(
       JSON.stringify(bookData),

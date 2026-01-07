@@ -16,23 +16,33 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const TopicIcon = getTopicIcon(topic || title);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageFailed, setImageFailed] = useState(false);
+    
+    // Once we have a valid cover URL, lock it in to prevent flicker
+    const [lockedCoverUrl, setLockedCoverUrl] = useState<string | null>(null);
 
     useEffect(() => {
-      setImageLoaded(false);
-      setImageFailed(false);
-      
+      // Only update locked URL if we get a new valid URL and don't have one yet
+      if (coverImageUrl && !lockedCoverUrl) {
+        setLockedCoverUrl(coverImageUrl);
+        setImageLoaded(false);
+        setImageFailed(false);
+      }
+    }, [coverImageUrl, lockedCoverUrl]);
+    
+    // Use locked URL for display to prevent flicker
+    const displayUrl = lockedCoverUrl || coverImageUrl;
+    
+    useEffect(() => {
       // Timeout fallback: if image doesn't load in 15s, show fallback
-      if (coverImageUrl) {
+      if (displayUrl && !imageLoaded) {
         const timeout = setTimeout(() => {
-          if (!imageLoaded) {
-            console.warn('Cover image load timeout, showing fallback');
-            setImageFailed(true);
-            setImageLoaded(true);
-          }
+          console.warn('Cover image load timeout, showing fallback');
+          setImageFailed(true);
+          setImageLoaded(true);
         }, 15000);
         return () => clearTimeout(timeout);
       }
-    }, [coverImageUrl]);
+    }, [displayUrl, imageLoaded]);
 
     return (
       <div
@@ -51,15 +61,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         <div className="flex-1 flex flex-col items-center justify-start pt-4 text-center">
         {/* AI-Generated Cover Image - Top */}
           <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
-            {isLoadingImage ? (
+            {isLoadingImage && !displayUrl ? (
               <Skeleton className="w-full h-full rounded-lg" />
-            ) : coverImageUrl && !imageFailed ? (
+            ) : displayUrl && !imageFailed ? (
               <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
                 {!imageLoaded && (
                   <Skeleton className="absolute inset-0 rounded-lg" />
                 )}
                 <img
-                  src={coverImageUrl}
+                  src={displayUrl}
                   alt={`Cover illustration for ${title}`}
                   className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   onLoad={() => setImageLoaded(true)}
