@@ -523,70 +523,91 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     console.log('Calling Google Gemini API...');
 
-    // Exponential backoff on rate limits (429): 2s, 4s, 8s (3 retries + initial attempt)
+    // Exponential backoff on rate limits (429): 5s, 10s, 20s (3 retries + initial attempt)
     const maxRetries = 3;
+    const baseWaitMs = 5000; // Start with 5 seconds
     let response: Response | null = null;
 
     for (let retry = 0; retry <= maxRetries; retry++) {
       const attempt = retry + 1;
       console.log(`Gemini API attempt ${attempt}/${maxRetries + 1}`);
 
-      // Use gemini-2.0-flash for content generation
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.8,
-              // Force the model to stay in JSON mode
-              responseMimeType: 'application/json',
-              maxOutputTokens: fullBook ? 65536 : 16384,
+      try {
+        // Use AbortController for timeout (120 seconds for large content generation)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+        // Use gemini-2.0-flash for content generation
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
             },
-          }),
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
+                }
+              ],
+              generationConfig: {
+                temperature: 0.8,
+                // Force the model to stay in JSON mode
+                responseMimeType: 'application/json',
+                maxOutputTokens: fullBook ? 65536 : 16384,
+              },
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          break;
         }
-      );
 
-      if (response.ok) {
-        break;
+        const errorText = await response.text();
+        console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
+
+        if (response.status === 429 && retry < maxRetries) {
+          const waitTimeMs = baseWaitMs * Math.pow(2, retry); // 5s, 10s, 20s
+          console.log(`Rate limited. Waiting ${waitTimeMs}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+          continue;
+        }
+
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({
+              error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.',
+            }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (response.status === 400) {
+          return new Response(
+            JSON.stringify({ error: 'Invalid request to AI service.' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        throw new Error(`AI service error: ${response.status}`);
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.error(`Gemini API timeout (attempt ${attempt})`);
+          if (retry < maxRetries) {
+            const waitTimeMs = baseWaitMs * Math.pow(2, retry);
+            console.log(`Timeout occurred. Waiting ${waitTimeMs}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+            continue;
+          }
+        }
+        throw fetchError;
       }
-
-      const errorText = await response.text();
-      console.error(`Gemini API error (attempt ${attempt}):`, response.status, errorText);
-
-      if (response.status === 429 && retry < maxRetries) {
-        const waitTimeMs = Math.pow(2, retry + 1) * 1000; // 2s, 4s, 8s
-        console.log(`Rate limited. Waiting ${waitTimeMs}ms before retry...`);
-        await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
-        continue;
-      }
-
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({
-            error: 'The Loom is busy weaving other guides. Please wait 30 seconds and try again.',
-          }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (response.status === 400) {
-        return new Response(
-          JSON.stringify({ error: 'Invalid request to AI service.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      throw new Error(`AI service error: ${response.status}`);
     }
 
     if (!response || !response.ok) {
