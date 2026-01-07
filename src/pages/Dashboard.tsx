@@ -28,9 +28,21 @@ interface SavedBook {
     title: string;
     topic: string;
     chapter1_content: string;
+    chapter2_content: string | null;
+    chapter3_content: string | null;
+    chapter4_content: string | null;
+    chapter5_content: string | null;
+    chapter6_content: string | null;
+    chapter7_content: string | null;
+    chapter8_content: string | null;
+    chapter9_content: string | null;
+    chapter10_content: string | null;
     table_of_contents: any;
     local_resources: any;
     has_disclaimer: boolean;
+    cover_image_url: string | null;
+    is_purchased: boolean;
+    edition_year: number | null;
   } | null;
 }
 
@@ -63,9 +75,21 @@ const Dashboard = () => {
             title,
             topic,
             chapter1_content,
+            chapter2_content,
+            chapter3_content,
+            chapter4_content,
+            chapter5_content,
+            chapter6_content,
+            chapter7_content,
+            chapter8_content,
+            chapter9_content,
+            chapter10_content,
             table_of_contents,
             local_resources,
-            has_disclaimer
+            has_disclaimer,
+            cover_image_url,
+            is_purchased,
+            edition_year
           )
         `)
         .eq('user_id', user.id)
@@ -158,21 +182,128 @@ const Dashboard = () => {
     }
   };
 
-  const handleUpdateEdition = async (book: SavedBook['books']) => {
-    if (!book) return;
+  const handleUpdateEdition = async (saved: SavedBook) => {
+    if (!saved.books || !user) return;
+    
+    // Only allow updates for purchased guides
+    if (!saved.books.is_purchased) {
+      toast.error('Please unlock the full guide first');
+      return;
+    }
     
     const currentYear = new Date().getFullYear();
-    toast.success(`Guide updated to ${currentYear} Edition!`, {
-      description: 'Your new cover will display the current year.',
-    });
-    // The cover generation will use the current year automatically
+    const originalTopic = saved.books.topic;
+    
+    setDownloadingId(saved.books.id + '-update');
+    
+    try {
+      toast.loading('Weaving your updated edition...', { id: 'update-edition' });
+      
+      // Call generate-book with fullBook=true to get all chapters
+      const { data, error } = await supabase.functions.invoke('generate-book', {
+        body: { 
+          topic: originalTopic, 
+          sessionId: crypto.randomUUID(),
+          fullBook: true 
+        }
+      });
+      
+      if (error || data?.error) {
+        throw new Error(data?.error || 'Failed to generate updated edition');
+      }
+      
+      // Save as NEW entry with current year edition
+      const { data: newBook, error: saveError } = await supabase
+        .from('books')
+        .insert([
+          {
+            topic: originalTopic,
+            title: `${data.displayTitle || data.title} — ${currentYear} Edition`,
+            table_of_contents: JSON.parse(JSON.stringify(data.tableOfContents)),
+            chapter1_content: data.chapter1Content,
+            chapter2_content: data.chapter2Content || null,
+            chapter3_content: data.chapter3Content || null,
+            chapter4_content: data.chapter4Content || null,
+            chapter5_content: data.chapter5Content || null,
+            chapter6_content: data.chapter6Content || null,
+            chapter7_content: data.chapter7Content || null,
+            chapter8_content: data.chapter8Content || null,
+            chapter9_content: data.chapter9Content || null,
+            chapter10_content: data.chapter10Content || null,
+            local_resources: JSON.parse(JSON.stringify(data.localResources || [])),
+            has_disclaimer: data.hasDisclaimer || false,
+            cover_image_url: data.coverImageUrl || null,
+            is_purchased: true, // Inherit purchased status
+            edition_year: currentYear,
+            session_id: crypto.randomUUID(),
+            user_id: user.id,
+          },
+        ])
+        .select()
+        .single();
+      
+      if (saveError || !newBook) {
+        throw new Error('Failed to save updated edition');
+      }
+      
+      // Add to saved_projects
+      await supabase
+        .from('saved_projects')
+        .insert([{ user_id: user.id, book_id: newBook.id }]);
+      
+      // Refresh the books list
+      const { data: refreshedData } = await supabase
+        .from('saved_projects')
+        .select(`
+          id,
+          book_id,
+          created_at,
+          books (
+            id, title, topic, chapter1_content, chapter2_content, chapter3_content,
+            chapter4_content, chapter5_content, chapter6_content, chapter7_content,
+            chapter8_content, chapter9_content, chapter10_content, table_of_contents,
+            local_resources, has_disclaimer, cover_image_url, is_purchased, edition_year
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (refreshedData) {
+        setSavedBooks(refreshedData as SavedBook[]);
+      }
+      
+      toast.success(`${currentYear} Edition created!`, { 
+        id: 'update-edition',
+        description: 'Your original guide is preserved.' 
+      });
+    } catch (err) {
+      console.error('Update edition error:', err);
+      toast.error('Failed to create updated edition', { id: 'update-edition' });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
-  const handleUnlockGuide = () => {
-    // TODO: Integrate Stripe checkout
-    toast.info('Payment integration coming soon!', {
-      description: 'Full guide unlock will be available shortly.',
+  const handleViewGuide = (saved: SavedBook) => {
+    if (!saved.books) return;
+    
+    // Navigate to Index with book data
+    // If purchased, pass fullView=true; otherwise show preview
+    const params = new URLSearchParams({
+      bookId: saved.books.id,
+      view: saved.books.is_purchased ? 'full' : 'preview'
     });
+    navigate(`/?${params.toString()}`);
+  };
+
+  const handleUnlockGuide = (saved: SavedBook) => {
+    if (!saved.books) return;
+    // Navigate to preview mode with unlock prompt
+    const params = new URLSearchParams({
+      bookId: saved.books.id,
+      view: 'preview'
+    });
+    navigate(`/?${params.toString()}`);
   };
 
   const getInitials = (name: string | null) => {
@@ -326,55 +457,94 @@ const Dashboard = () => {
                   key={saved.id}
                   className="group relative bg-card border border-border rounded-lg overflow-hidden hover:shadow-card transition-all duration-300"
                 >
-                  {/* Card Header */}
-                  <div className="aspect-[4/3] bg-gradient-to-br from-secondary/50 to-secondary flex items-center justify-center relative">
-                    {/* Blueprint pattern */}
-                    <div className="absolute inset-0 opacity-[0.03]" style={{
-                      backgroundImage: `
-                        linear-gradient(to right, currentColor 1px, transparent 1px),
-                        linear-gradient(to bottom, currentColor 1px, transparent 1px)
-                      `,
-                      backgroundSize: '15px 15px'
-                    }} />
+                  {/* Card Header - Cover Image or Placeholder */}
+                  <div 
+                    className="aspect-[4/3] bg-secondary flex items-center justify-center relative cursor-pointer overflow-hidden"
+                    onClick={() => handleViewGuide(saved)}
+                  >
+                    {saved.books?.cover_image_url ? (
+                      <img 
+                        src={saved.books.cover_image_url} 
+                        alt={saved.books.title}
+                        crossOrigin="anonymous"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <>
+                        {/* Blueprint pattern for placeholder */}
+                        <div className="absolute inset-0 opacity-[0.03]" style={{
+                          backgroundImage: `
+                            linear-gradient(to right, currentColor 1px, transparent 1px),
+                            linear-gradient(to bottom, currentColor 1px, transparent 1px)
+                          `,
+                          backgroundSize: '15px 15px'
+                        }} />
+                        
+                        {/* Placeholder with title */}
+                        <div className="relative text-center p-4">
+                          <div className="w-12 h-12 mx-auto mb-2 rounded-full border border-foreground/10 flex items-center justify-center">
+                            <BookOpen className="h-5 w-5 text-foreground/30" />
+                          </div>
+                          <p className="text-xs text-muted-foreground font-serif line-clamp-2">
+                            {saved.books?.title || 'Untitled'}
+                          </p>
+                        </div>
+                      </>
+                    )}
                     
-                    {/* Center icon */}
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-full border border-foreground/10 flex items-center justify-center">
-                        <BookOpen className="h-7 w-7 text-foreground/30" />
+                    {/* Edition badge */}
+                    {saved.books?.edition_year && (
+                      <div className="absolute top-2 right-2 bg-background/90 text-xs px-2 py-0.5 rounded font-serif">
+                        {saved.books.edition_year} Edition
                       </div>
-                    </div>
+                    )}
+                    
+                    {/* Purchase status badge */}
+                    {!saved.books?.is_purchased && (
+                      <div className="absolute bottom-2 left-2 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs px-2 py-0.5 rounded font-medium">
+                        Preview
+                      </div>
+                    )}
 
                     {/* Actions dropdown */}
                     <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-full bg-background/80 hover:bg-background transition-colors">
+                          <button 
+                            className="p-1.5 rounded-full bg-background/80 hover:bg-background transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreVertical className="h-4 w-4 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                          <DropdownMenuItem 
-                            onClick={() => handleDownloadPDF(saved.books)}
-                            disabled={downloadingId === saved.books?.id}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDownloadKindle(saved.books)}
-                            disabled={downloadingId === saved.books?.id + '-kindle'}
-                          >
-                            <FileText className="h-4 w-4 mr-2" />
-                            Download Kindle
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleUpdateEdition(saved.books)}
-                          >
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Update Edition
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {saved.books?.is_purchased && (
+                            <>
+                              <DropdownMenuItem 
+                                onClick={() => handleDownloadPDF(saved.books)}
+                                disabled={downloadingId === saved.books?.id}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDownloadKindle(saved.books)}
+                                disabled={downloadingId === saved.books?.id + '-kindle'}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Download Kindle
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => handleUpdateEdition(saved)}
+                                disabled={downloadingId === saved.books?.id + '-update'}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Update Edition
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem 
                             onClick={() => handleDeleteBook(saved.id)}
                             className="text-destructive focus:text-destructive"
@@ -406,55 +576,57 @@ const Dashboard = () => {
                       </span>
                     </div>
                     
-                    {/* Action buttons - TODO: isPurchased check when payment is integrated */}
-                    {/* For now, show unlock button as default since purchases aren't implemented */}
+                    {/* Action buttons based on purchase status */}
                     <div className="space-y-2">
-                      {/* Primary action row */}
-                      <div className="flex gap-2">
+                      {saved.books?.is_purchased ? (
+                        <>
+                          {/* Primary action row for purchased */}
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 gap-1.5 text-xs"
+                              onClick={() => handleDownloadPDF(saved.books)}
+                              disabled={downloadingId === saved.books?.id}
+                            >
+                              <Download className="h-3 w-3" />
+                              PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 gap-1.5 text-xs"
+                              onClick={() => handleDownloadKindle(saved.books)}
+                              disabled={downloadingId === saved.books?.id + '-kindle'}
+                            >
+                              <FileText className="h-3 w-3" />
+                              Kindle
+                            </Button>
+                          </div>
+                          
+                          {/* Secondary action row */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full gap-1.5 text-xs"
+                            onClick={() => handleUpdateEdition(saved)}
+                            disabled={downloadingId === saved.books?.id + '-update'}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            {downloadingId === saved.books?.id + '-update' ? 'Updating...' : 'Update Edition'}
+                          </Button>
+                        </>
+                      ) : (
+                        /* Unlock button for unpurchased guides */
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="flex-1 gap-1.5 text-xs"
-                          onClick={() => handleDownloadPDF(saved.books)}
-                          disabled={downloadingId === saved.books?.id}
+                          className="w-full gap-1.5 text-xs bg-slate-900 hover:bg-slate-800 text-white"
+                          onClick={() => handleUnlockGuide(saved)}
                         >
-                          <Download className="h-3 w-3" />
-                          PDF
+                          <Sparkles className="h-3 w-3" />
+                          Unlock Full Guide
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 gap-1.5 text-xs"
-                          onClick={() => handleDownloadKindle(saved.books)}
-                          disabled={downloadingId === saved.books?.id + '-kindle'}
-                        >
-                          <FileText className="h-3 w-3" />
-                          Kindle
-                        </Button>
-                      </div>
-                      
-                      {/* Secondary action row */}
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 gap-1.5 text-xs"
-                          onClick={() => handleUpdateEdition(saved.books)}
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                          Update Edition
-                        </Button>
-                      </div>
-                      
-                      {/* Unlock button for unpurchased guides - will be conditional when payment is added */}
-                      {/* <Button
-                        size="sm"
-                        className="w-full gap-1.5 text-xs bg-slate-900 hover:bg-slate-800 text-white"
-                        onClick={handleUnlockGuide}
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        Unlock Full Guide
-                      </Button> */}
+                      )}
                     </div>
                   </div>
                 </div>

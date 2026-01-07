@@ -17,9 +17,21 @@ export type Database = {
       books: {
         Row: {
           chapter1_content: string
+          chapter10_content: string | null
+          chapter2_content: string | null
+          chapter3_content: string | null
+          chapter4_content: string | null
+          chapter5_content: string | null
+          chapter6_content: string | null
+          chapter7_content: string | null
+          chapter8_content: string | null
+          chapter9_content: string | null
+          cover_image_url: string | null
           created_at: string
+          edition_year: number | null
           has_disclaimer: boolean
           id: string
+          is_purchased: boolean
           local_resources: Json
           session_id: string
           table_of_contents: Json
@@ -29,9 +41,21 @@ export type Database = {
         }
         Insert: {
           chapter1_content: string
+          chapter10_content?: string | null
+          chapter2_content?: string | null
+          chapter3_content?: string | null
+          chapter4_content?: string | null
+          chapter5_content?: string | null
+          chapter6_content?: string | null
+          chapter7_content?: string | null
+          chapter8_content?: string | null
+          chapter9_content?: string | null
+          cover_image_url?: string | null
           created_at?: string
+          edition_year?: number | null
           has_disclaimer?: boolean
           id?: string
+          is_purchased?: boolean
           local_resources?: Json
           session_id: string
           table_of_contents?: Json
@@ -41,9 +65,21 @@ export type Database = {
         }
         Update: {
           chapter1_content?: string
+          chapter10_content?: string | null
+          chapter2_content?: string | null
+          chapter3_content?: string | null
+          chapter4_content?: string | null
+          chapter5_content?: string | null
+          chapter6_content?: string | null
+          chapter7_content?: string | null
+          chapter8_content?: string | null
+          chapter9_content?: string | null
+          cover_image_url?: string | null
           created_at?: string
+          edition_year?: number | null
           has_disclaimer?: boolean
           id?: string
+          is_purchased?: boolean
           local_resources?: Json
           session_id?: string
           table_of_contents?: Json
@@ -213,9 +249,21 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: {
           chapter1_content: string
+          chapter10_content: string | null
+          chapter2_content: string | null
+          chapter3_content: string | null
+          chapter4_content: string | null
+          chapter5_content: string | null
+          chapter6_content: string | null
+          chapter7_content: string | null
+          chapter8_content: string | null
+          chapter9_content: string | null
+          cover_image_url: string | null
           created_at: string
+          edition_year: number | null
           has_disclaimer: boolean
           id: string
+          is_purchased: boolean
           local_resources: Json
           session_id: string
           table_of_contents: Json
