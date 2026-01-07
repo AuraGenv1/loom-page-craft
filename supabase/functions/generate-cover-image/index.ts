@@ -13,8 +13,8 @@ const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) =
     return `Ultra clean black and white instructional technical diagram of: ${caption || topicOrTitle}. Blueprint / engineering schematic style. Clear shapes, arrows and callouts WITHOUT any letters, numbers, labels or text. High contrast, thin precise lines, white background. No shading, no gradients, no watercolor, no realism.`;
   }
 
-  // Cover (existing style)
-  return `Minimalist black and white technical line art of ${topicOrTitle}, isolated on white background, architectural sketch style, no shading, high contrast. No text, no words, no letters. Clean precise thin lines only.`;
+  // Cover - Minimalist artisan aesthetic
+  return `Minimalist black and white line art on a white background: ${topicOrTitle}. Clean precise thin lines, architectural sketch style, no shading, high contrast. No text, no words, no letters. Professional instructional manual illustration.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
@@ -80,42 +80,53 @@ serve(async (req) => {
     console.log(`Generating ${resolvedVariant} image for: ${subject}`);
 
     const prompt = buildPrompt(resolvedVariant, subject, caption);
+    
+    // Use FAL.AI directly with FAL_KEY
+    const FAL_KEY = Deno.env.get("FAL_KEY");
+    if (!FAL_KEY) {
+      console.error("FAL_KEY not configured");
+      return new Response(JSON.stringify({ error: "Image service not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("Calling FAL.AI flux/dev endpoint...");
 
     const response = await fetchWithRetry(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://fal.run/fal-ai/flux/dev",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
+          "Authorization": `Key ${FAL_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          modalities: ["image", "text"],
+          prompt: prompt,
+          image_size: "square_hd",
+          num_inference_steps: 28,
+          num_images: 1,
+          enable_safety_checker: true,
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI API error:", response.status, errorText);
-      throw new Error(`AI API error: ${response.status}`);
+      console.error("FAL.AI API error:", response.status, errorText);
+      throw new Error(`FAL.AI API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const imageUrl = data.images?.[0]?.url;
 
     if (!imageUrl) {
+      console.error("No image URL in FAL.AI response:", data);
       throw new Error("No image generated");
     }
 
-    // Return base64 data URL directly (no CORS, no storage policy issues)
+    console.log("FAL.AI image generated successfully");
+
     return new Response(JSON.stringify({ imageUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
