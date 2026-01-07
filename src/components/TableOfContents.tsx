@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useState } from 'react';
-import { Check, Lock } from 'lucide-react';
+import { forwardRef } from 'react';
+import { Check, Lock, Loader2 } from 'lucide-react';
 import { ChapterInfo } from '@/lib/bookTypes';
+import WeavingLoader from './WeavingLoader';
 
 interface TableOfContentsProps {
   topic: string;
@@ -8,10 +9,12 @@ interface TableOfContentsProps {
   allUnlocked?: boolean; // When true (admin/purchased), all chapters show as unlocked
   onChapterClick?: (chapterNumber: number) => void;
   activeChapter?: number;
+  chapterStatuses?: Record<number, 'drafting' | 'complete'>; // Track drafting state
+  loadingChapter?: number | null; // Currently generating chapter
 }
 
 const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
-  ({ topic, chapters, allUnlocked = false, onChapterClick, activeChapter }, ref) => {
+  ({ topic, chapters, allUnlocked = false, onChapterClick, activeChapter, chapterStatuses = {}, loadingChapter }, ref) => {
     // Use AI-generated chapters or fallback to defaults
     // If allUnlocked is true (admin or purchased), mark all as unlocked
     const displayChapters = chapters?.length
@@ -19,22 +22,25 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
           number: ch.chapter,
           title: ch.title,
           isUnlocked: allUnlocked || idx === 0,
+          status: chapterStatuses[ch.chapter] || (idx === 0 ? 'complete' : undefined),
+          isLoading: loadingChapter === ch.chapter,
         }))
       : [
-          { number: 1, title: `Introduction to ${topic}`, isUnlocked: true },
-          { number: 2, title: 'Understanding the Fundamentals', isUnlocked: allUnlocked },
-          { number: 3, title: 'Essential Tools & Materials', isUnlocked: allUnlocked },
-          { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: allUnlocked },
-          { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: allUnlocked },
-          { number: 6, title: 'Advanced Techniques', isUnlocked: allUnlocked },
-          { number: 7, title: 'Troubleshooting Guide', isUnlocked: allUnlocked },
-          { number: 8, title: 'Expert Tips & Tricks', isUnlocked: allUnlocked },
-          { number: 9, title: 'Real-World Applications', isUnlocked: allUnlocked },
-          { number: 10, title: 'Your Next Steps', isUnlocked: allUnlocked },
+          { number: 1, title: `Introduction to ${topic}`, isUnlocked: true, status: 'complete' as const, isLoading: false },
+          { number: 2, title: 'Understanding the Fundamentals', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 3, title: 'Essential Tools & Materials', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 4, title: 'Getting Started: Step-by-Step', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 5, title: 'Common Mistakes to Avoid', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 6, title: 'Advanced Techniques', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 7, title: 'Troubleshooting Guide', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 8, title: 'Expert Tips & Tricks', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 9, title: 'Real-World Applications', isUnlocked: allUnlocked, status: undefined, isLoading: false },
+          { number: 10, title: 'Your Next Steps', isUnlocked: allUnlocked, status: undefined, isLoading: false },
         ];
 
-    const handleChapterClick = (chapter: { number: number; isUnlocked: boolean }) => {
-      if (chapter.isUnlocked && onChapterClick) {
+    const handleChapterClick = (chapter: { number: number; isUnlocked: boolean; status?: string }) => {
+      // Only allow click if chapter is unlocked AND has content (complete)
+      if (chapter.isUnlocked && chapter.status === 'complete' && onChapterClick) {
         onChapterClick(chapter.number);
       }
     };
@@ -56,33 +62,47 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
         <div className="space-y-1 border-t border-b border-border/30 py-6">
           {displayChapters.map((chapter) => {
             const isActive = activeChapter === chapter.number;
+            const isDrafting = chapter.isLoading || (chapter.isUnlocked && chapter.status !== 'complete' && chapter.number > 1);
+            const isComplete = chapter.status === 'complete';
+            const canClick = chapter.isUnlocked && isComplete;
+            
             return (
               <div
                 key={chapter.number}
                 onClick={() => handleChapterClick(chapter)}
                 className={`group flex items-center justify-between py-4 px-5 rounded-lg transition-all duration-200 ${
-                  chapter.isUnlocked ? 'hover:bg-secondary/60 cursor-pointer' : 'opacity-60'
+                  canClick ? 'hover:bg-secondary/60 cursor-pointer' : isDrafting ? 'opacity-80' : 'opacity-60'
                 } ${isActive ? 'bg-secondary/80 ring-1 ring-accent/20' : ''}`}
               >
                 <div className="flex items-center gap-5">
                   <span className={`font-serif text-xl md:text-2xl w-10 tabular-nums ${
-                    isActive ? 'text-accent' : 'text-muted-foreground/60'
+                    isActive ? 'text-accent' : isDrafting ? 'text-amber-500/70' : 'text-muted-foreground/60'
                   }`}>
                     {chapter.number.toString().padStart(2, '0')}
                   </span>
                   <div className="flex flex-col">
                     <span
                       className={`font-serif text-base md:text-lg ${
-                        chapter.isUnlocked ? 'text-foreground' : 'text-muted-foreground'
+                        canClick ? 'text-foreground' : isDrafting ? 'text-foreground/80' : 'text-muted-foreground'
                       } ${isActive ? 'font-medium' : ''}`}
                     >
                       {chapter.title}
                     </span>
-                    {chapter.isUnlocked && !isActive && (
-                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">Available</span>
+                    {/* Status badges */}
+                    {isDrafting && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
+                        <span className="text-[10px] uppercase tracking-widest text-amber-500 font-medium">Drafting...</span>
+                      </div>
+                    )}
+                    {isComplete && chapter.isUnlocked && !isActive && (
+                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">Expand →</span>
                     )}
                     {isActive && (
                       <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5 font-medium">Reading</span>
+                    )}
+                    {!chapter.isUnlocked && !isDrafting && (
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-0.5">Locked</span>
                     )}
                   </div>
                 </div>
@@ -93,7 +113,11 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                       <div key={i} className="w-0.5 h-0.5 rounded-full bg-foreground/40" />
                     ))}
                   </div>
-                  {chapter.isUnlocked ? (
+                  {isDrafting ? (
+                    <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
+                    </div>
+                  ) : isComplete && chapter.isUnlocked ? (
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
                       isActive ? 'bg-accent/20' : 'bg-accent/10'
                     }`}>
