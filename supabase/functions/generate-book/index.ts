@@ -412,9 +412,9 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// Background task to generate chapters in 3 BURSTS ("Stream & Snap" staggered parallelism)
-// Bursts: [2,3,4] -> [5,6,7] -> [8,9,10] with 2s delays between bursts
-// This ensures shell returns in <3s while chapters stream in smoothly
+// Background task to generate chapters in 4 BURSTS ("Pair-Breeze" staggered parallelism)
+// Bursts: [2,3] -> [4,5] -> [6,7] -> [8,9,10] with 5s delays between bursts
+// This reduces initial network load and prevents Chapter 3 from hanging
 async function generateChaptersInBackground(
   bookId: string,
   topic: string,
@@ -425,12 +425,13 @@ async function generateChaptersInBackground(
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Background] STREAM & SNAP MODE: Launching chapters in 3 bursts for book ${bookId}`);
+  console.log(`[Background] PAIR-BREEZE MODE: Launching chapters in 4 bursts for book ${bookId}`);
   
-  // Define 3 bursts: [2,3,4], [5,6,7], [8,9,10]
+  // Define 4 bursts: [2,3], [4,5], [6,7], [8,9,10] - pairs reduce network load
   const chapterBursts = [
-    [2, 3, 4],
-    [5, 6, 7],
+    [2, 3],
+    [4, 5],
+    [6, 7],
     [8, 9, 10],
   ];
   
@@ -469,10 +470,10 @@ async function generateChaptersInBackground(
     // Run chapters in this burst in parallel
     await Promise.all(burst.map(chapterNum => generateAndSaveChapter(chapterNum)));
     
-    // Wait 2 seconds before starting the next burst (except after the last burst)
+    // Wait 5 seconds before starting the next burst (except after the last burst)
     if (i < chapterBursts.length - 1) {
-      console.log(`[Background] Burst complete. Waiting 2s before next burst...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log(`[Background] Burst complete. Waiting 5s before next burst...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
   }
   
@@ -824,8 +825,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         console.log('Generating cover image with Fal.ai...');
         
         const imagePrompt = isAutomotiveTopic
-          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic.`
-          : `Clean technical manual illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework.`;
+          ? `Professional 8k cinematic studio photography of ${topic}. Dramatic automotive photography with perfect lighting, shallow depth of field, high-end commercial quality. Ultra high resolution, photorealistic. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS.`
+          : `Elegant, minimalist vector illustration on white background: ${bookData.tableOfContents?.[0]?.imageDescription || topic}. Professional instructional diagram style, blueprint aesthetic, precise linework. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, NO LABELS.`;
         
         const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
           method: 'POST',

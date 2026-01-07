@@ -1019,6 +1019,7 @@ const Index = () => {
                   topic={topic}
                   loadingChapter={loadingChapter}
                   isFullAccess={isPaid}
+                  sessionId={getSessionId()}
                   bookData={{
                     chapter1Content: bookData?.chapter1Content,
                     chapter2Content: bookData?.chapter2Content,
@@ -1049,6 +1050,7 @@ const Index = () => {
                     isGenerating={isGeneratingDiagrams}
                     diagramImages={diagramImages}
                     tableOfContents={bookData?.tableOfContents}
+                    sessionId={getSessionId()}
                   />
                 </section>
 

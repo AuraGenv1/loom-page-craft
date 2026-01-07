@@ -10,11 +10,11 @@ type Variant = "cover" | "diagram";
 const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
   if (variant === "diagram") {
     // Clear, instructive illustration (no text) for chapters.
-    return `Ultra clean black and white instructional technical diagram of: ${caption || topicOrTitle}. Blueprint / engineering schematic style. Clear shapes, arrows and callouts WITHOUT any letters, numbers, labels or text. High contrast, thin precise lines, white background. No shading, no gradients, no watercolor, no realism.`;
+    return `Ultra clean black and white instructional technical diagram of: ${caption || topicOrTitle}. Blueprint / engineering schematic style. Clear shapes, arrows and callouts. High contrast, thin precise lines, white background. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS, NO LABELS. No shading, no gradients, no watercolor, no realism.`;
   }
 
-  // Cover - Minimalist artisan aesthetic
-  return `Minimalist black and white line art on a white background: ${topicOrTitle}. Clean precise thin lines, architectural sketch style, no shading, high contrast. No text, no words, no letters. Professional instructional manual illustration.`;
+  // Cover - Elegant, minimalist vector illustration (non-automotive default)
+  return `Elegant, minimalist vector illustration on white background: ${topicOrTitle}. Clean precise thin lines, architectural sketch style, no shading, high contrast. NO TEXT, NO LETTERS, NO WORDS, NO NUMBERS. Professional instructional manual aesthetic.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
