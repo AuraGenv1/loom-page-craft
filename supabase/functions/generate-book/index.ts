@@ -336,13 +336,16 @@ Include:
 
 MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown format.`;
 
-  const maxRetries = 3;
-  const baseWaitMs = 5000;
+  // More aggressive retry with longer waits for rate limits
+  const maxRetries = 5;
+  const baseWaitMs = 10000; // Start with 10 seconds
 
   for (let retry = 0; retry <= maxRetries; retry++) {
     try {
+      console.log(`[Chapter ${chapterNumber}] Attempt ${retry + 1}/${maxRetries + 1}`);
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
@@ -366,31 +369,37 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
         const data = await response.json();
         const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (content) {
+          console.log(`[Chapter ${chapterNumber}] Generated successfully`);
           // Clean up any code blocks wrapping
           return content.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
         }
       }
 
       if (response.status === 429 && retry < maxRetries) {
+        // Exponential backoff: 10s, 20s, 40s, 80s, 160s
         const waitTimeMs = baseWaitMs * Math.pow(2, retry);
-        console.log(`Chapter ${chapterNumber} rate limited. Waiting ${waitTimeMs}ms...`);
+        console.log(`[Chapter ${chapterNumber}] Rate limited (429). Waiting ${waitTimeMs / 1000}s before retry...`);
         await new Promise(resolve => setTimeout(resolve, waitTimeMs));
         continue;
       }
 
-      console.error(`Chapter ${chapterNumber} generation failed:`, response.status);
+      const errorText = await response.text().catch(() => 'unknown');
+      console.error(`[Chapter ${chapterNumber}] Generation failed: ${response.status} - ${errorText}`);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        console.error(`Chapter ${chapterNumber} timeout on attempt ${retry + 1}`);
+        console.error(`[Chapter ${chapterNumber}] Timeout on attempt ${retry + 1}`);
         if (retry < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, baseWaitMs * Math.pow(2, retry)));
+          const waitTimeMs = baseWaitMs * Math.pow(2, retry);
+          console.log(`[Chapter ${chapterNumber}] Waiting ${waitTimeMs / 1000}s after timeout...`);
+          await new Promise(resolve => setTimeout(resolve, waitTimeMs));
           continue;
         }
       }
-      console.error(`Chapter ${chapterNumber} error:`, error);
+      console.error(`[Chapter ${chapterNumber}] Error:`, error);
     }
   }
 
+  console.error(`[Chapter ${chapterNumber}] Failed after all ${maxRetries + 1} attempts`);
   return null;
 }
 
@@ -407,15 +416,19 @@ async function generateChaptersInBackground(
   
   console.log(`[Background] Starting chapter generation for book ${bookId}`);
   
+  // Longer initial delay to let the main request complete and avoid immediate rate limits
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
   for (let chapterNum = 2; chapterNum <= 10; chapterNum++) {
     const tocEntry = tableOfContents.find(ch => ch.chapter === chapterNum);
     const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
     
     console.log(`[Background] Generating chapter ${chapterNum}: ${chapterTitle}`);
     
-    // Add a 3-second pause between chapters to avoid rate limits
+    // Add a 6-second pause between chapters to avoid rate limits (more conservative)
     if (chapterNum > 2) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log(`[Background] Waiting 6 seconds before chapter ${chapterNum}...`);
+      await new Promise(resolve => setTimeout(resolve, 6000));
     }
     
     const content = await generateChapterContent(chapterNum, chapterTitle, topic, geminiApiKey);
@@ -430,10 +443,10 @@ async function generateChaptersInBackground(
       if (error) {
         console.error(`[Background] Failed to save chapter ${chapterNum}:`, error);
       } else {
-        console.log(`[Background] Chapter ${chapterNum} saved successfully`);
+        console.log(`[Background] Chapter ${chapterNum} saved successfully (${content.length} chars)`);
       }
     } else {
-      console.error(`[Background] Failed to generate chapter ${chapterNum}`);
+      console.error(`[Background] Failed to generate chapter ${chapterNum} after all retries`);
     }
   }
   
