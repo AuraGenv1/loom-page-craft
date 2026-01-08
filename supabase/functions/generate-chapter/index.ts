@@ -49,9 +49,12 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 9. "Key Takeaways" summary
 10. Transition to the next chapter
 
-MANDATORY DIAGRAM REQUIREMENT:
-- You are REQUIRED to include exactly ONE diagram marker in this chapter using the syntax: [DIAGRAM: descriptive prompt]
-- The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text
+MANDATORY VISUAL REQUIREMENT:
+- You are REQUIRED to include exactly ONE visual marker in this chapter using the syntax: [VISUAL: descriptive prompt]
+- This is a UNIVERSAL marker that works for ANY topic:
+  - For travel: "[VISUAL: Illustrated map of the neighborhood with key landmarks]"
+  - For technical: "[VISUAL: Exploded view diagram of the mechanism]"
+  - For cooking: "[VISUAL: Step-by-step plating arrangement illustration]"
 - Place this marker at the most instructional point in the chapter
 
 CRITICAL FORMATTING RULES - STRICTLY ENFORCED:
@@ -70,7 +73,7 @@ This chapter MUST be at least 2,000 words. Include:
 - Real examples and case studies
 - Step-by-step instructions where applicable
 - Expert tips and common pitfalls
-- MANDATORY: Exactly ONE [DIAGRAM: description] marker for a black-and-white technical illustration (no text on diagram)
+- MANDATORY: Exactly ONE [VISUAL: description] marker - this universal marker works for maps, diagrams, illustrations, or any visual aid
 
 Begin writing the chapter content now. No preamble, no JSON - just the chapter text in markdown format.`;
 
