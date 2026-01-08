@@ -49,23 +49,19 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 3. At least 4-5 major sections with ## headers
 4. Step-by-step instructions with SPECIFIC names, prices, recommendations
 5. 2 real-world examples with actual data (not "research this")
-6. "Common Mistakes" section with solutions
-7. "Pro Tips" section with insider knowledge
-8. MANDATORY: Include exactly ONE "Pro-Tip" callout box using: [PRO-TIP: Expert advice]
-9. "Key Takeaways" summary
-10. Transition to the next chapter
+6. "Common Mistakes" section with ## header, then ### subheaders for each mistake, followed by **Solution:** format
+7. MANDATORY: Include exactly ONE "Pro-Tip" callout using: [PRO-TIP: Expert advice] - the UI will render this as a styled box
 
 SMART VISUAL SYSTEM:
-- Include exactly ONE illustration marker ONLY if it adds real instructional value
-- Use the tag: [ILLUSTRATION: Extremely specific prompt for the image generator]
-- The prompt must be HIGHLY SPECIFIC, for example:
-  - "[ILLUSTRATION: Navy-blue line-art map of central Paris showing the 1st-8th arrondissements with Louvre, Champs-Élysées, and Eiffel Tower marked]"
-  - "[ILLUSTRATION: Exploded technical diagram of a Rolex Submariner crown and stem assembly showing gaskets and threading]"
-- If no illustration would genuinely help, omit it
+- Include exactly ONE image marker ONLY if it adds real instructional value
+- Use the tag: [IMAGE: Extremely specific prompt for high-end travel journalism photograph]
+- The prompt must include GEOGRAPHIC LOCATION and be HIGHLY SPECIFIC
+- Example: "[IMAGE: Authentic editorial photography of the Champs-Élysées at golden hour with Arc de Triomphe in the distance, Paris, France]"
+- NEVER use diagrams, blueprints, or technical illustrations
 
 CRITICAL FORMATTING RULES:
-- DO NOT use bold (**text**) or italic (*text*) syntax anywhere
-- DO NOT use asterisks for any purpose
+- DO NOT write "Pro Tips" or "Key Takeaways" as section headers - the UI handles these via [PRO-TIP:] tags
+- DO NOT use bold (**text**) or italic (*text*) syntax anywhere except **Solution:**
 - Write in plain text only
 - NEVER end any line with asterisks
 
@@ -78,10 +74,12 @@ This chapter MUST be at least 2,000 words. Include:
 - Real examples with actual names, prices (2026), and expert guidance
 - Step-by-step instructions where applicable
 - Expert tips and common pitfalls
-- MANDATORY: Exactly ONE [PRO-TIP: ...] callout box
-- OPTIONAL: One [ILLUSTRATION: very specific prompt] marker if it adds value
+- MANDATORY: Exactly ONE [PRO-TIP: ...] callout (the UI renders this as a styled box)
+- OPTIONAL: One [IMAGE: very specific prompt with location] marker if it adds value
 
 EXPERT REQUIREMENT: Be the expert. Not "check online" but provide the actual answer. If discussing St. Barths, name the ferry company from St. Martin, the price ($100-150 round trip), and the top 3 car rental agencies (Turbe, Top Loc, Barthloc).
+
+FORMATTING: Do NOT write "Pro Tips" or "Key Takeaways" as section headers. Use [PRO-TIP:] tags instead - the UI will render them beautifully.
 
 Begin writing the chapter content now. No preamble, no JSON - just the chapter text in markdown format.`;
 

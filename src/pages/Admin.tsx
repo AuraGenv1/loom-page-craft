@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -23,11 +22,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield, BookOpen, Download, Loader2, FileText } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield } from 'lucide-react';
 import Logo from '@/components/Logo';
-import { BookData } from '@/lib/bookTypes';
-import { generateGuidePDF } from '@/lib/generatePDF';
-import { generateGuideEPUB } from '@/lib/generateEPUB';
 
 interface PromoCode {
   id: string;
@@ -48,13 +44,6 @@ const Admin = () => {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [loadingCodes, setLoadingCodes] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [bookDialogOpen, setBookDialogOpen] = useState(false);
-  const [bookTopic, setBookTopic] = useState('');
-  const [fullBookMode, setFullBookMode] = useState(true);
-  const [generatingBook, setGeneratingBook] = useState(false);
-  const [generatedBook, setGeneratedBook] = useState<BookData | null>(null);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
-  const [downloadingKindle, setDownloadingKindle] = useState(false);
   const [newCode, setNewCode] = useState({
     code: '',
     discount_percent: 10,
@@ -167,83 +156,6 @@ const Admin = () => {
     toast.success('Promo code deleted');
     }
   };
-
-  const handleGenerateBook = async () => {
-    if (!bookTopic.trim()) {
-      toast.error('Please enter a topic');
-      return;
-    }
-
-    setGeneratingBook(true);
-    setGeneratedBook(null);
-
-    try {
-      const sessionId = crypto.randomUUID();
-      const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { topic: bookTopic, sessionId, fullBook: fullBookMode }
-      });
-
-      if (error) {
-        toast.error('Failed to generate book');
-        console.error('Book generation error:', error);
-        return;
-      }
-
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      setGeneratedBook(data as BookData);
-      toast.success(`Book generated successfully! (${fullBookMode ? 'Full 12 chapters' : 'Sample'})`);
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      toast.error('Something went wrong');
-    } finally {
-      setGeneratingBook(false);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    if (!generatedBook) return;
-
-    setDownloadingPDF(true);
-    try {
-      toast.loading('Generating PDF...', { id: 'admin-pdf' });
-      await generateGuidePDF({
-        title: generatedBook.displayTitle || generatedBook.title,
-        topic: bookTopic,
-        bookData: generatedBook,
-      });
-      toast.success('PDF downloaded!', { id: 'admin-pdf' });
-    } catch (error) {
-      console.error('PDF error:', error);
-      toast.error('Failed to generate PDF', { id: 'admin-pdf' });
-    } finally {
-      setDownloadingPDF(false);
-    }
-  };
-
-  const handleDownloadKindle = async () => {
-    if (!generatedBook) return;
-
-    setDownloadingKindle(true);
-    try {
-      toast.loading('Generating Kindle file...', { id: 'admin-kindle' });
-      await generateGuideEPUB({
-        title: generatedBook.displayTitle || generatedBook.title,
-        topic: bookTopic,
-        bookData: generatedBook,
-      });
-      toast.success('Kindle file downloaded!', { id: 'admin-kindle' });
-    } catch (error) {
-      console.error('Kindle error:', error);
-      toast.error('Failed to generate Kindle file', { id: 'admin-kindle' });
-    } finally {
-      setDownloadingKindle(false);
-    }
-  };
-
   // Loading state
   if (authLoading || checkingRole) {
     return (
@@ -306,104 +218,17 @@ const Admin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl space-y-12">
-        {/* Generate Full Book Section */}
+        {/* Quick Actions Section */}
         <section>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-serif text-2xl text-foreground">Generate Full Book</h2>
-            <Dialog open={bookDialogOpen} onOpenChange={setBookDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="secondary">
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  New Book
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle className="font-serif">Generate Full Book (Admin)</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div>
-                    <Label htmlFor="book-topic">Topic</Label>
-                    <Input
-                      id="book-topic"
-                      value={bookTopic}
-                      onChange={e => setBookTopic(e.target.value)}
-                      placeholder="e.g., Ferrari 308 GTB Restoration"
-                      disabled={generatingBook}
-                    />
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="full-book"
-                      checked={fullBookMode}
-                      onCheckedChange={(checked) => setFullBookMode(checked === true)}
-                      disabled={generatingBook}
-                    />
-                    <Label htmlFor="full-book" className="text-sm font-normal cursor-pointer">
-                      Generate Full Book (12 chapters with complete content)
-                    </Label>
-                  </div>
-                  
-                  <Button
-                    onClick={handleGenerateBook}
-                    className="w-full"
-                    disabled={generatingBook || !bookTopic.trim()}
-                  >
-                    {generatingBook ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Generating {fullBookMode ? 'Full Book' : 'Sample'}...
-                      </>
-                    ) : (
-                      `Generate ${fullBookMode ? 'Full Book' : 'Sample'}`
-                    )}
-                  </Button>
-
-                  {generatedBook && (
-                    <div className="pt-4 border-t space-y-3">
-                      <div className="text-sm">
-                        <span className="font-medium">Title:</span>{' '}
-                        {generatedBook.displayTitle || generatedBook.title}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {generatedBook.tableOfContents?.length || 0} chapters generated
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          onClick={handleDownloadPDF} 
-                          className="flex-1 gap-2"
-                          disabled={downloadingPDF}
-                        >
-                          {downloadingPDF ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Download className="w-4 h-4" />
-                          )}
-                          PDF
-                        </Button>
-                        <Button 
-                          onClick={handleDownloadKindle} 
-                          variant="outline"
-                          className="flex-1 gap-2"
-                          disabled={downloadingKindle}
-                        >
-                          {downloadingKindle ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <FileText className="w-4 h-4" />
-                          )}
-                          Kindle (.epub)
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <h2 className="font-serif text-2xl text-foreground">Quick Actions</h2>
+            <Button onClick={() => navigate('/')} variant="secondary">
+              <Plus className="w-4 h-4 mr-2" />
+              New Guide
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            As an admin, you can generate complete 12-chapter books and download them in PDF or Kindle format without restrictions.
+            Create new guides directly from the homepage. Manage promo codes below.
           </p>
         </section>
 

@@ -531,9 +531,9 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
   return null;
 }
 
-// DECOUPLED WEAVER: Each chapter is an INDEPENDENT background worker
-// This prevents the "Chapter 3 bug" - if one fails, others continue
-async function spawnChapterWorker(
+// ATOMIC GENERATION: Each chapter saves IMMEDIATELY to database upon completion
+// This ensures real-time progress and prevents "Chapter 3" timeout bugs
+async function generateAndSaveChapterAtomically(
   chapterNum: number,
   chapterTitle: string,
   topic: string,
@@ -542,15 +542,16 @@ async function spawnChapterWorker(
   geminiApiKey: string,
   supabaseUrl: string,
   supabaseServiceKey: string
-) {
+): Promise<void> {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  console.log(`[Worker ${chapterNum}] Starting independent generation for: ${chapterTitle}`);
+  console.log(`[ATOMIC ${chapterNum}] Starting generation for: ${chapterTitle}`);
   
   try {
     const content = await generateSingleChapter(chapterNum, chapterTitle, topic, topicType, geminiApiKey);
     
     if (content) {
+      // ATOMIC SAVE: Immediately upsert to database
       const columnName = `chapter${chapterNum}_content`;
       const { error } = await supabase
         .from('books')
@@ -558,15 +559,16 @@ async function spawnChapterWorker(
         .eq('id', bookId);
       
       if (error) {
-        console.error(`[Worker ${chapterNum}] DB save failed:`, error);
+        console.error(`[ATOMIC ${chapterNum}] DB save failed:`, error);
       } else {
-        console.log(`[Worker ${chapterNum}] SUCCESS - ${content.length} chars saved`);
+        console.log(`[ATOMIC ${chapterNum}] ✓ SAVED - ${content.length} chars`);
       }
     } else {
-      console.error(`[Worker ${chapterNum}] Generation returned null after all retries`);
+      console.error(`[ATOMIC ${chapterNum}] Generation returned null after all retries`);
     }
   } catch (err) {
-    console.error(`[Worker ${chapterNum}] Unhandled error:`, err);
+    console.error(`[ATOMIC ${chapterNum}] Error (others will continue):`, err);
+    // Don't throw - allow other chapters to continue
   }
 }
 
@@ -718,26 +720,22 @@ Each chapter MUST include ALL of the following:
 3. At least 4-5 major section headers using ## markdown syntax CORRECTLY
 4. Step-by-step instructions with SPECIFIC details for each step
 5. At least 2 real examples with SPECIFIC names, prices, and recommendations
-6. "Common Mistakes" section with proper formatting:
-   
-   ## Common Mistakes
-   
-   ### Mistake 1: [Name]
-   
-   [Paragraph explaining the mistake]
-   
-   **Solution:** [Paragraph with the fix]
-   
-7. "Pro Tips" section with insider knowledge
-8. "Key Takeaways" summary
+6. "Common Mistakes" section with ## header, then ### subheaders for each mistake, followed by **Solution:** format
+7. MANDATORY: Include exactly ONE "Pro-Tip" callout using: [PRO-TIP: Expert advice] - the UI renders this as a styled box
 
 FORMATTING RULES (STRICTLY ENFORCED):
 - Use Markdown headers (# and ##) ONLY at the start of lines, never mid-sentence
 - Every step in an itinerary or list MUST be on its own bulleted line
 - After every ### header, add a BLANK LINE before the paragraph
 - DO NOT use ** or * for emphasis (except **Solution:**)
+- DO NOT write "Pro Tips" or "Key Takeaways" as section headers - use [PRO-TIP:] tags instead
 - Write in plain text only - no emphasis markers
 - Ensure ALL titles are complete - never truncate mid-word
+
+${topicType === 'LIFESTYLE' ? `IMAGE REQUIREMENT:
+- Include exactly ONE [IMAGE: prompt] marker at the TOP of Chapter 1 content (before the first paragraph)
+- The prompt must include GEOGRAPHIC LOCATION and be highly specific
+- Example: [IMAGE: Authentic editorial photography of the Eiffel Tower at golden hour, Paris, France]` : ''}
 
 You must respond with a JSON object in this exact format:
 {
@@ -745,7 +743,7 @@ You must respond with a JSON object in this exact format:
   "displayTitle": "Short Cover Title",
   "subtitle": "${classifiedSubtitle}",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title", "imageDescription": "EXTREMELY specific illustration prompt..." },
+    { "chapter": 1, "title": "Chapter title", "imageDescription": "EXTREMELY specific prompt for high-end travel photography..." },
     { "chapter": 2, "title": "Chapter title", "imageDescription": "..." },
     ...through chapter 10
   ],
@@ -762,25 +760,25 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - 4-5 section headers using ## markdown syntax (at line start only)
 - 2 detailed examples with SPECIFIC names, prices, recommendations
 - Numbered step-by-step instructions where applicable
-- "Common Mistakes" section with ### subheaders
-- "Pro Tips" section with expert insights
-- MANDATORY: Include exactly ONE "Pro-Tip" callout using: [PRO-TIP: Expert advice here]
-${topicType === 'LIFESTYLE' ? '- Include ONE [IMAGE: extremely specific prompt for stunning photograph]' : '- NO images for technical content'}
-- "Key Takeaways" summary at end`;
+- "Common Mistakes" section with ### subheaders and **Solution:** format
+- MANDATORY: Exactly ONE [PRO-TIP: Expert advice here] callout (UI renders this as styled box)
+${topicType === 'LIFESTYLE' ? '- Include ONE [IMAGE: extremely specific prompt with location for stunning photograph]' : '- NO images for technical content'}`;
 
     const userPrompt = `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
 
 For Chapter One, you MUST include:
-1. Engaging introduction (150+ words) that hooks the reader and establishes the chapter's importance
-2. Historical context or background section (200+ words)
-3. At least 4-5 major sections with ## headers
-4. Detailed step-by-step instructions with explanations for each step
-5. 2 real-world case studies or examples (300+ words each)
-6. "Common Mistakes" section with problems and solutions (use ### subheaders and **Solution:** format)
-7. "Pro Tips" section with advanced techniques
-8. "Putting It Into Practice" section with exercises
-9. "Key Takeaways" summary
+1. ${topicType === 'LIFESTYLE' ? 'ONE [IMAGE: prompt with geographic location] at the TOP of the chapter, before text' : 'NO images for technical content'}
+2. Engaging introduction (150+ words) that hooks the reader and establishes the chapter's importance
+3. Historical context or background section (200+ words)
+4. At least 4-5 major sections with ## headers
+5. Detailed step-by-step instructions with explanations for each step
+6. 2 real-world case studies or examples (300+ words each)
+7. "Common Mistakes" section with ## header, then ### subheaders for each mistake, then **Solution:** format
+8. MANDATORY: Exactly ONE [PRO-TIP: ...] callout (the UI renders this as a styled box)
+9. "Putting It Into Practice" section with exercises
 10. Transition paragraph to Chapter 2
+
+FORMATTING: Do NOT write "Pro Tips" or "Key Takeaways" as section headers. Use [PRO-TIP:] tags instead - the UI will render them beautifully.
 
 Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This is non-negotiable.`;
 
@@ -945,10 +943,14 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         
         const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, open books, diagrams, people, faces, hands";
         
-        // Completely dynamic prompt based on topic - NO hardcoded manual references
+        // TRAVEL JOURNALISM STYLE - No "cinematic" AI look
+        // Extract geographic location for grounding
+        const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+        const location = locationMatch ? locationMatch[2] : topic;
+        
         const imagePrompt = isAutomotiveTopic
-          ? `A breathtaking, professional 8k travel photograph of ${topic}. Cinematic lighting, wide angle, high resolution. Strictly NO text, NO open books, NO diagrams, NO people.`
-          : `A breathtaking, professional 8k ${topicType === 'LIFESTYLE' ? 'travel' : 'product'} photograph of ${topic}. Cinematic lighting, wide angle, high resolution. Strictly NO text, NO open books, NO diagrams, NO people.`;
+          ? `Authentic editorial automotive photography of ${topic}. High-end car magazine style, shot on Hasselblad, natural lighting, 8k resolution. NO text, NO people.`
+          : `Authentic editorial travel journalism photography of ${location}. High-end travel magazine style, shot on Hasselblad, natural golden hour lighting, real location landmarks. NO text, NO people, NO illustrations.`;
         
         const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
           method: 'POST',
@@ -986,21 +988,21 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     console.log('Successfully generated book shell:', bookData.title);
 
-    // DECOUPLED WEAVER: Spawn 9 INDEPENDENT background workers for chapters 2-10
-    // Each worker is isolated - if one fails, others continue independently
+    // ATOMIC GENERATION: Each chapter saves IMMEDIATELY upon completion
+    // This ensures real-time progress visibility and prevents timeout bugs
     if (existingBookId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && GEMINI_API_KEY) {
-      console.log('DECOUPLED WEAVER: Spawning 9 independent chapter workers for book:', existingBookId);
+      console.log('ATOMIC WEAVER: Spawning 9 independent chapter generators for book:', existingBookId);
       
       const toc = bookData.tableOfContents || [];
       
-      // Spawn each chapter as an INDEPENDENT background task
+      // Spawn ALL chapters simultaneously - each saves atomically to DB
       for (let chapterNum = 2; chapterNum <= 10; chapterNum++) {
         const tocEntry = toc.find((ch: { chapter: number }) => ch.chapter === chapterNum);
         const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
         
-        // Each worker runs completely independently via EdgeRuntime.waitUntil
+        // Each chapter runs independently and saves IMMEDIATELY on completion
         (globalThis as any).EdgeRuntime?.waitUntil?.(
-          spawnChapterWorker(
+          generateAndSaveChapterAtomically(
             chapterNum,
             chapterTitle,
             topic,
@@ -1013,7 +1015,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         );
       }
       
-      console.log('All 9 chapter workers spawned independently');
+      console.log('All 9 atomic chapter generators spawned - each saves immediately on completion');
     }
 
     return new Response(

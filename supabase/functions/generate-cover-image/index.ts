@@ -9,15 +9,32 @@ type Variant = "cover" | "diagram";
 
 const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles";
 
+// Geographic extraction helper - finds city/state/country from topic
+const extractGeographicLocation = (topic: string): string | null => {
+  // Common travel/location patterns
+  const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+)?)/i);
+  if (locationMatch) return locationMatch[2];
+  
+  // Direct location mentions (e.g., "Paris Travel Guide", "Aspen Colorado")
+  const directMatch = topic.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+  if (directMatch) return directMatch[1];
+  
+  return null;
+};
+
 const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
+  // Extract geographic location if present for grounding
+  const location = extractGeographicLocation(topicOrTitle);
+  const locationClause = location ? `authentic ${location} landmarks and scenery, ` : '';
+  
   if (variant === "diagram") {
-    // High-end infographic style for [IMAGE:] tags
-    return `High-end professional photograph, 8k resolution: ${caption || topicOrTitle}. Cinematic lighting, sharp focus, magazine quality. NO TEXT ON IMAGE. No diagrams, no illustrations, no people.`;
+    // High-end travel journalism photography for [IMAGE:] tags
+    return `High-end travel journalism photography: ${caption || topicOrTitle}. ${locationClause}Editorial magazine quality, authentic location photography, natural lighting. NO text, NO diagrams, NO illustrations, NO people. Shot on professional camera.`;
   }
 
-  // Cover - Breathtaking professional photography
-  // NO books, NO diagrams, NO people, just stunning imagery of the topic
-  return `A breathtaking, professional 8k travel photograph of ${topicOrTitle}. Cinematic lighting, wide angle, high resolution, vibrant colors, magazine cover quality. Strictly NO text, NO open books, NO diagrams, NO people, NO illustrations. Just pure stunning photography of the location or subject.`;
+  // Cover - Travel journalism style photography (NOT cinematic/AI look)
+  // REMOVED: "book", "cover", "layout" words
+  return `Authentic editorial travel photography of ${topicOrTitle}. ${locationClause}High-end travel journalism style, shot on Hasselblad, natural golden hour lighting, 8k resolution. NO text, NO open books, NO diagrams, NO people, NO illustrations. Pure authentic location photography.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
