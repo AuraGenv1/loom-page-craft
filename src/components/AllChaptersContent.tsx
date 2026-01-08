@@ -130,6 +130,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       });
     }, [bookData, topic, sessionId]);
 
+    // ORDERED LOAD: Ensure chapters display in numerical order (1, 2, 3...)
+    // even if they finish saving out of order from background workers
     const chapters = [
       { number: 1, content: bookData.chapter1Content },
       { number: 2, content: bookData.chapter2Content },
@@ -141,7 +143,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       { number: 8, content: bookData.chapter8Content },
       { number: 9, content: bookData.chapter9Content },
       { number: 10, content: bookData.chapter10Content },
-    ];
+    ].sort((a, b) => a.number - b.number); // Explicit sort ensures numerical order
 
     const getChapterTitle = (chapterNumber: number): string => {
       const tocEntry = bookData.tableOfContents?.find(ch => ch.chapter === chapterNumber);
@@ -215,6 +217,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       }
 
       // THE REGEX SHIELD - Clean all content before rendering
+      // LABEL STRIPPING: Remove "Pro Tip:" and "Key Takeaway:" prefixes to avoid double-labeling
       const getCleanedContent = (text: string): string => {
         return text
           .replace(/\\n/g, '\n')                     // Convert literal \n to actual newlines
@@ -225,6 +228,11 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
           .replace(/\[IMAGE:\s*([^\]]+)\]/gi, '')    // Remove image markers (rendered separately)
           .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '')  // Remove PRO-TIP markers (rendered separately)
+          // LABEL STRIPPING: Strip redundant labels when text starts with them
+          .replace(/^Pro[- ]?Tip:\s*/gim, '')        // Strip "Pro Tip:" or "Pro-Tip:" from start of lines
+          .replace(/^Key Takeaway[s]?:\s*/gim, '')   // Strip "Key Takeaway:" from start of lines
+          .replace(/^Expert Tip:\s*/gim, '')         // Strip "Expert Tip:" from start of lines
+          .replace(/^Insider Tip:\s*/gim, '')        // Strip "Insider Tip:" from start of lines
           .trim();
       };
 
