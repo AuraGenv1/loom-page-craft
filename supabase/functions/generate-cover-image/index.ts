@@ -11,19 +11,13 @@ const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, wate
 
 const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
   if (variant === "diagram") {
-    // High-end travel infographic style - minimalist architectural line-art
-    return `High-end travel infographic, minimalist architectural line-art illustration of: ${caption || topicOrTitle}. Navy blue lines on white background. Clean geometric shapes, elegant thin precise lines. Professional editorial style. NO TEXT ON IMAGE. No shading, no gradients, no photos.`;
+    // High-end infographic style for [IMAGE:] tags
+    return `High-end professional photograph, 8k resolution: ${caption || topicOrTitle}. Cinematic lighting, sharp focus, magazine quality. NO TEXT ON IMAGE. No diagrams, no illustrations, no people.`;
   }
 
-  // Cover - Cinematic street photography for travel, macro for crafts
-  const isTravelTopic = /\b(travel|trip|guide|city|country|vacation|tour|destination|london|paris|tokyo|rome|barcelona|new york|bangkok|dubai)\b/i.test(topicOrTitle);
-  
-  if (isTravelTopic) {
-    return `Cinematic street photography, 8k resolution, shallow depth of field, blurred background. Iconic landmark of ${topicOrTitle} in focus. Golden hour lighting, vibrant colors, professional travel magazine cover aesthetic. NO TEXT ON IMAGE.`;
-  }
-
-  // Default - Macro photography for crafts/hobbies
-  return `Macro photography, shallow depth of field, minimalist composition. Professional cookbook aesthetic. Subject: ${topicOrTitle}. Soft natural lighting, elegant styling, premium quality. NO TEXT ON IMAGE.`;
+  // Cover - Breathtaking professional photography
+  // NO books, NO diagrams, NO people, just stunning imagery of the topic
+  return `A breathtaking, professional 8k travel photograph of ${topicOrTitle}. Cinematic lighting, wide angle, high resolution, vibrant colors, magazine cover quality. Strictly NO text, NO open books, NO diagrams, NO people, NO illustrations. Just pure stunning photography of the location or subject.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {

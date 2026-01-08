@@ -1,11 +1,11 @@
 import { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ImageIcon } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
-import TechnicalDiagram from '@/components/TechnicalDiagram';
 import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -37,8 +37,8 @@ export interface AllChaptersContentHandle {
 const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersContentProps>(
   ({ topic, bookData, loadingChapter, isFullAccess, sessionId }, ref) => {
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
-    const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
-    const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
+    const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
+    const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (chapterNumber: number) => {
@@ -51,26 +51,25 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       getChapterRefs: () => chapterRefs.current,
     }));
 
-    // Extract [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
-    const extractDiagramMarkers = (text: string, chapterNum: number): Array<{ description: string; plateNumber: string }> => {
-      const markers: Array<{ description: string; plateNumber: string }> = [];
-      // Match [ILLUSTRATION: ...], [VISUAL: ...], and [DIAGRAM: ...] for backwards compatibility
-      const regex = /\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
+    // Extract [IMAGE: ...] markers
+    const extractImageMarkers = (text: string, chapterNum: number): Array<{ description: string; id: string }> => {
+      const markers: Array<{ description: string; id: string }> = [];
+      const regex = /\[IMAGE:\s*([^\]]+)\]/gi;
       let match;
-      let diagramIndex = 0;
+      let imageIndex = 0;
 
       while ((match = regex.exec(text)) !== null) {
         markers.push({
-          description: match[2].trim(),
-          plateNumber: `ch${chapterNum}-inline-${diagramIndex}`,
+          description: match[1].trim(),
+          id: `ch${chapterNum}-img-${imageIndex}`,
         });
-        diagramIndex++;
+        imageIndex++;
       }
 
       return markers;
     };
 
-    // Generate inline diagrams when markers are found
+    // Generate inline images when markers are found
     useEffect(() => {
       if (!sessionId) return;
 
@@ -87,19 +86,19 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         bookData.chapter10Content,
       ];
 
-      const allMarkers: Array<{ description: string; plateNumber: string }> = [];
+      const allMarkers: Array<{ description: string; id: string }> = [];
       allContent.forEach((content, idx) => {
         if (content) {
-          allMarkers.push(...extractDiagramMarkers(content, idx + 1));
+          allMarkers.push(...extractImageMarkers(content, idx + 1));
         }
       });
 
       if (allMarkers.length === 0) return;
 
-      const generateDiagram = async (marker: { description: string; plateNumber: string }) => {
-        if (inlineDiagramImages[marker.plateNumber] || loadingDiagrams.has(marker.plateNumber)) return;
+      const generateImage = async (marker: { description: string; id: string }) => {
+        if (inlineImages[marker.id] || loadingImages.has(marker.id)) return;
 
-        setLoadingDiagrams(prev => new Set(prev).add(marker.plateNumber));
+        setLoadingImages(prev => new Set(prev).add(marker.id));
 
         try {
           const { data, error } = await supabase.functions.invoke('generate-cover-image', {
@@ -112,22 +111,22 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           });
 
           if (!error && data?.imageUrl) {
-            setInlineDiagramImages(prev => ({ ...prev, [marker.plateNumber]: data.imageUrl }));
+            setInlineImages(prev => ({ ...prev, [marker.id]: data.imageUrl }));
           }
         } catch (err) {
-          console.error('Failed to generate inline diagram:', err);
+          console.error('Failed to generate inline image:', err);
         } finally {
-          setLoadingDiagrams(prev => {
+          setLoadingImages(prev => {
             const next = new Set(prev);
-            next.delete(marker.plateNumber);
+            next.delete(marker.id);
             return next;
           });
         }
       };
 
-      // Generate diagrams in sequence to avoid overloading
+      // Generate images in sequence to avoid overloading
       allMarkers.forEach((marker, idx) => {
-        setTimeout(() => generateDiagram(marker), idx * 3000);
+        setTimeout(() => generateImage(marker), idx * 3000);
       });
     }, [bookData, topic, sessionId]);
 
@@ -147,6 +146,42 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const getChapterTitle = (chapterNumber: number): string => {
       const tocEntry = bookData.tableOfContents?.find(ch => ch.chapter === chapterNumber);
       return tocEntry?.title || `Chapter ${chapterNumber}`;
+    };
+
+    // Render an inline image placeholder or actual image
+    const renderInlineImage = (description: string, markerId: string) => {
+      const imageUrl = inlineImages[markerId];
+      const isLoading = loadingImages.has(markerId);
+
+      return (
+        <figure key={markerId} className="my-10 text-center">
+          <div className="relative w-full max-w-2xl mx-auto aspect-video bg-secondary/20 rounded-lg overflow-hidden border border-border/30">
+            {isLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Skeleton className="w-full h-full" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <ImageIcon className="w-8 h-8 text-muted-foreground/40 animate-pulse" />
+                  <span className="text-xs text-muted-foreground">Generating image...</span>
+                </div>
+              </div>
+            ) : imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={description}
+                className="w-full h-full object-cover"
+                crossOrigin="anonymous"
+              />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10">
+                <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
+              </div>
+            )}
+          </div>
+          <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+            {description}
+          </figcaption>
+        </figure>
+      );
     };
 
     const renderContent = (content: string | undefined, chapterNumber: number, hasDisclaimer?: boolean) => {
@@ -188,7 +223,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           .replace(/---+/g, '')                      // Remove horizontal line artifacts
           .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
-          .replace(/\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi, '')  // Remove visual markers (rendered separately)
+          .replace(/\[IMAGE:\s*([^\]]+)\]/gi, '')    // Remove image markers (rendered separately)
           .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '')  // Remove PRO-TIP markers (rendered separately)
           .trim();
       };
@@ -202,8 +237,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         id: `protip-${chapterNumber}-${i}`
       }));
 
-      // Find inline diagram markers for this chapter
-      const chapterMarkers = extractDiagramMarkers(content, chapterNumber);
+      // Find inline image markers for this chapter
+      const chapterMarkers = extractImageMarkers(content, chapterNumber);
 
       // Use ReactMarkdown for proper bold/italic rendering
       return (
@@ -276,25 +311,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             </div>
           ))}
           
-          {/* Render inline diagrams for this chapter with Artisan styling */}
-          {chapterMarkers.map((marker) => {
-            const imageUrl = inlineDiagramImages[marker.plateNumber];
-            const isLoading = loadingDiagrams.has(marker.plateNumber);
-            return (
-              <div key={marker.plateNumber} className="flex justify-center py-8">
-                <div className="w-full max-w-2xl border border-border/30 rounded-sm shadow-sm">
-                  <TechnicalDiagram
-                    caption={marker.description}
-                    plateNumber={marker.plateNumber}
-                    topic={topic}
-                    isGenerating={isLoading}
-                    imageUrl={imageUrl ?? null}
-                    imageDescription={marker.description}
-                  />
-                </div>
-              </div>
-            );
-          })}
+          {/* Render inline images for this chapter */}
+          {chapterMarkers.map((marker) => renderInlineImage(marker.description, marker.id))}
           
           {/* Disclaimer handling */}
           {hasDisclaimer && content.includes('⚠️') && (
