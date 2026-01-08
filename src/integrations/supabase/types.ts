@@ -95,6 +95,50 @@ export type Database = {
         }
         Relationships: []
       }
+      chapters: {
+        Row: {
+          book_id: string
+          chapter_number: number
+          content: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          book_id: string
+          chapter_number: number
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          book_id?: string
+          chapter_number?: number
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapters_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
