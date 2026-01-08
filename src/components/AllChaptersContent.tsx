@@ -51,11 +51,11 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       getChapterRefs: () => chapterRefs.current,
     }));
 
-    // Extract [VISUAL: ...] or [DIAGRAM: ...] markers from all content (unified marker system)
+    // Extract [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
     const extractDiagramMarkers = (text: string, chapterNum: number): Array<{ description: string; plateNumber: string }> => {
       const markers: Array<{ description: string; plateNumber: string }> = [];
-      // Match both [VISUAL: ...] and [DIAGRAM: ...] for backwards compatibility
-      const regex = /\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
+      // Match [ILLUSTRATION: ...], [VISUAL: ...], and [DIAGRAM: ...] for backwards compatibility
+      const regex = /\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
       let match;
       let diagramIndex = 0;
 
@@ -188,7 +188,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           .replace(/---+/g, '')                      // Remove horizontal line artifacts
           .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
-          .replace(/\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi, '')  // Remove VISUAL/DIAGRAM markers (rendered separately)
+          .replace(/\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi, '')  // Remove visual markers (rendered separately)
           .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '')  // Remove PRO-TIP markers (rendered separately)
           .trim();
       };
@@ -261,14 +261,14 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             {processedContent}
           </ReactMarkdown>
           
-          {/* Render Pro-Tips with gold styling and bulb icon */}
+          {/* Render Pro-Tips with light grey styling and charcoal border */}
           {proTips.map((tip) => (
-            <div key={tip.id} className="my-8 p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div key={tip.id} className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
               <div className="flex items-start gap-4">
-                <span className="text-2xl flex-shrink-0">💡</span>
+                <span className="text-xl flex-shrink-0">💡</span>
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 font-semibold mb-2">Pro-Tip</p>
-                  <p className="text-amber-900 dark:text-amber-100 italic font-serif leading-relaxed">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pro-Tip</p>
+                  <p className="text-foreground/80 dark:text-foreground/70 italic font-serif leading-relaxed text-[1.1rem]" style={{ lineHeight: '1.6' }}>
                     {tip.text}
                   </p>
                 </div>

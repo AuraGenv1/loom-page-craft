@@ -28,11 +28,11 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
     const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
     const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
 
-    // Extract [VISUAL: ...] or [DIAGRAM: ...] markers from content (unified marker system)
+    // Extract [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
     const extractDiagramMarkers = (text: string): DiagramMarker[] => {
       const markers: DiagramMarker[] = [];
-      // Match both [VISUAL: ...] and [DIAGRAM: ...] for backwards compatibility
-      const regex = /\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
+      // Match [ILLUSTRATION: ...], [VISUAL: ...], and [DIAGRAM: ...] for backwards compatibility
+      const regex = /\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
       let match;
       let diagramIndex = 0;
 
@@ -153,8 +153,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           return;
         }
 
-        // Check for [VISUAL: ...] or [DIAGRAM: ...] markers and render inline diagrams with Artisan styling
-        const diagramMatch = trimmed.match(/\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/i);
+        // Check for [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
+        const diagramMatch = trimmed.match(/\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/i);
         if (diagramMatch) {
           const visualDescription = diagramMatch[2].trim();
           const markerIndex = diagramMarkers.findIndex(m => m.description === visualDescription);
