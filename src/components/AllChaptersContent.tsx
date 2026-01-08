@@ -51,16 +51,17 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       getChapterRefs: () => chapterRefs.current,
     }));
 
-    // Extract [DIAGRAM: ...] markers from all content
+    // Extract [VISUAL: ...] or [DIAGRAM: ...] markers from all content (unified marker system)
     const extractDiagramMarkers = (text: string, chapterNum: number): Array<{ description: string; plateNumber: string }> => {
       const markers: Array<{ description: string; plateNumber: string }> = [];
-      const regex = /\[DIAGRAM:\s*([^\]]+)\]/gi;
+      // Match both [VISUAL: ...] and [DIAGRAM: ...] for backwards compatibility
+      const regex = /\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
       let match;
       let diagramIndex = 0;
 
       while ((match = regex.exec(text)) !== null) {
         markers.push({
-          description: match[1].trim(),
+          description: match[2].trim(),
           plateNumber: `ch${chapterNum}-inline-${diagramIndex}`,
         });
         diagramIndex++;
@@ -187,7 +188,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           .replace(/---+/g, '')                      // Remove horizontal line artifacts
           .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
-          .replace(/\[DIAGRAM:\s*([^\]]+)\]/gi, '')  // Remove DIAGRAM markers (rendered separately)
+          .replace(/\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi, '')  // Remove VISUAL/DIAGRAM markers (rendered separately)
           .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '')  // Remove PRO-TIP markers (rendered separately)
           .trim();
       };

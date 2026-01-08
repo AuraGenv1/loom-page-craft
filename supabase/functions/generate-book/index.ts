@@ -369,10 +369,10 @@ async function generateChapterContent(
 ): Promise<string | null> {
   const minWordsPerChapter = 2000;
   
-  // MANDATORY DIAGRAM requirement in prompt
-  const diagramInstruction = imageDescription 
-    ? `\n\nMANDATORY DIAGRAM: You are REQUIRED to include one diagram marker in every chapter using the syntax: [DIAGRAM: ${imageDescription}] - The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text.`
-    : `\n\nMANDATORY DIAGRAM: You are REQUIRED to include one diagram marker in every chapter using the syntax: [DIAGRAM: descriptive prompt]. The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text.`;
+  // MANDATORY VISUAL requirement in prompt (unified marker system)
+  const visualInstruction = imageDescription 
+    ? `\n\nMANDATORY VISUAL: You are REQUIRED to include one visual marker in every chapter using the syntax: [VISUAL: ${imageDescription}] - This universal marker works for maps, diagrams, illustrations, or any visual aid.`
+    : `\n\nMANDATORY VISUAL: You are REQUIRED to include one visual marker in every chapter using the syntax: [VISUAL: descriptive prompt]. This universal marker works for maps, diagrams, illustrations, or any visual aid.`;
   
 const systemPrompt = `You are a prolific author at Loom & Page. Write comprehensive, textbook-quality chapter content.
 
@@ -387,8 +387,8 @@ CRITICAL RULES:
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
 - End with "Key Takeaways" summary
-- MANDATORY: You are REQUIRED to include exactly ONE diagram placeholder using [DIAGRAM: description] format - this is non-negotiable
-- CRITICAL FORMATTING: DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs. Use plain text only. NEVER end a line with asterisks.${diagramInstruction}`;
+- MANDATORY: You are REQUIRED to include exactly ONE visual placeholder using [VISUAL: description] format - this is non-negotiable
+- CRITICAL FORMATTING: DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs. Use plain text only. NEVER end a line with asterisks.${visualInstruction}`;
 
   const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for a comprehensive guide on "${topic}".
 
@@ -400,7 +400,7 @@ REQUIRED ELEMENTS (ALL MANDATORY):
 5. "Common Mistakes" section with problems and solutions
 6. "Pro Tips" section with advanced techniques
 7. "Key Takeaways" summary
-8. MANDATORY: Include exactly ONE [DIAGRAM: description] marker - describe a black-and-white technical illustration with no text
+8. MANDATORY: Include exactly ONE [VISUAL: description] marker - this universal marker works for maps, diagrams, illustrations, etc.
 
 MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown format.`;
 
@@ -621,19 +621,57 @@ serve(async (req) => {
     // SHELL-FIRST: Generate only TOC and Chapter 1, then return immediately
     const minWordsPerChapter = 1800;
 
+// INTENT ROUTER: Classify the topic type dynamically
+const classifyTopicType = (topicText: string): { type: 'TECHNICAL' | 'LIFESTYLE' | 'ACADEMIC'; subtitle: string } => {
+  const lower = topicText.toLowerCase();
+  
+  // TECHNICAL: repair, building, engineering, mechanics, craftsmanship
+  const technicalPatterns = /\b(repair|fix|restore|build|construct|assemble|mechanic|engine|plumbing|electrical|wiring|carpentry|woodwork|metalwork|welding|solder|circuit|watch|clock|automotive|transmission|calibrat|tool|machine)\b/i;
+  
+  // ACADEMIC: history, science, theory, study, analysis
+  const academicPatterns = /\b(history|histor|theory|theor|philosophy|science|scientific|study|research|analysis|psychology|sociology|economics|politic|literature|academic|education|learning|university|course)\b/i;
+  
+  // LIFESTYLE: travel, cooking, wellness, hobbies, lifestyle
+  const lifestylePatterns = /\b(travel|trip|vacation|tour|visit|cuisine|cook|bak|recipe|food|restaurant|hotel|flight|wellness|fitness|yoga|meditation|garden|photography|art|paint|craft|hobby|fashion|style|decor|home)\b/i;
+  
+  if (technicalPatterns.test(lower)) {
+    return { type: 'TECHNICAL', subtitle: 'A Technical Manual' };
+  }
+  if (academicPatterns.test(lower)) {
+    return { type: 'ACADEMIC', subtitle: 'An Educational Series' };
+  }
+  if (lifestylePatterns.test(lower)) {
+    return { type: 'LIFESTYLE', subtitle: 'A Curated Guide' };
+  }
+  
+  // Default to LIFESTYLE for general topics
+  return { type: 'LIFESTYLE', subtitle: 'A Curated Guide' };
+};
+
+const topicClassification = classifyTopicType(topic);
+const classifiedSubtitle = topicClassification.subtitle;
+const topicType = topicClassification.type;
+
+console.log('Topic classified as:', topicType, '- Using subtitle:', classifiedSubtitle);
+
 const systemPrompt = `You are a world-class expert writer, travel journalist, and subject matter specialist. You do NOT engage in conversation—you only produce refined, comprehensive guide content.
+
+TOPIC CLASSIFICATION: ${topicType}
+${topicType === 'TECHNICAL' ? '- Focus on: Tools, parts, step-by-step repair/building procedures, technical specifications, safety protocols' : ''}
+${topicType === 'LIFESTYLE' ? '- Focus on: Recommendations, curated lists, prices (2026), insider tips, experiential guidance' : ''}
+${topicType === 'ACADEMIC' ? '- Focus on: Historical context, theoretical frameworks, research citations, analytical depth' : ''}
 
 CRITICAL PERSONA:
 - You are an EXPERT, not an assistant. You provide SPECIFIC data, recommendations, and prices (current for 2026).
 - NEVER give "homework" to readers. NEVER say "research online" or "check local listings."
-- NEVER use phrases like "Technical Manual" for non-technical topics.
-- For travel guides: Include specific hotel names, restaurant recommendations, price ranges in local currency and USD, and neighborhood tips.
-- For craft/hobby guides: Include specific product brands, supplier names, and typical price ranges.
+- For travel/lifestyle guides: Include specific hotel names, restaurant recommendations, price ranges in local currency and USD, and neighborhood tips.
+- For technical guides: Include specific tool brands, part numbers where applicable, and supplier recommendations.
+- For academic guides: Include historical timelines, key figures, and analytical frameworks.
 
 TITLE REQUIREMENTS (CRITICAL):
-- The title MUST directly reflect the user's prompt. If they say "London Travel Bible", title it "The London Travel Bible" — NOT "London Unveiled" or generic alternatives.
+- The title MUST directly reflect the user's prompt. If they say "London Travel Bible", title it "The London Travel Bible".
 - "displayTitle": A short, punchy title of NO MORE THAN 5 WORDS matching the user's intent.
-- "subtitle": A descriptive subtitle (8-15 words) that adds value.
+- "subtitle": "${classifiedSubtitle}" - Use this exact subtitle classification.
 - "title": The full combined title for reference.
 
 CRITICAL RULES:
@@ -645,10 +683,9 @@ CRITICAL RULES:
 
 Your writing style is that of an expert friend who knows everything. Use phrases like:
 - "The best option is..."
-- "We recommend booking at..."
+- "We recommend booking at..." / "We recommend using..."
 - "Expect to pay around $X for..."
-- "Insider tip: locals know that..."
-- "Skip the tourist trap at X and instead try Y..."
+- "Insider tip: locals know that..." / "Pro tip: experienced practitioners..."
 
 CONTENT DEPTH REQUIREMENTS:
 Each chapter MUST include ALL of the following:
@@ -668,13 +705,17 @@ FORMATTING RULES (STRICTLY ENFORCED):
 - Write in plain text only - no emphasis markers
 - Ensure ALL titles are complete - never truncate mid-word
 
+VISUAL MARKERS (MANDATORY):
+- Include exactly ONE visual marker per chapter using: [VISUAL: descriptive prompt for illustration]
+- This works for ANY topic: "[VISUAL: Map of central Milan showing key neighborhoods]" or "[VISUAL: Exploded view of watch movement gears]"
+
 You must respond with a JSON object in this exact format:
 {
-  "title": "The Full Combined Title: With Subtitle",
+  "title": "The Full Combined Title: ${classifiedSubtitle}",
   "displayTitle": "Short Cover Title",
-  "subtitle": "A longer descriptive subtitle explaining the book's contents",
+  "subtitle": "${classifiedSubtitle}",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title", "imageDescription": "A clear instructional diagram showing..." },
+    { "chapter": 1, "title": "Chapter title", "imageDescription": "A clear illustration showing..." },
     { "chapter": 2, "title": "Chapter title", "imageDescription": "An illustration depicting..." },
     { "chapter": 3, "title": "...", "imageDescription": "..." },
     { "chapter": 4, "title": "...", "imageDescription": "..." },
@@ -703,6 +744,7 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - "Common Mistakes" section
 - "Pro Tips" section with expert insights
 - MANDATORY: Include exactly ONE "Pro-Tip" callout using: [PRO-TIP: Expert advice here]
+- MANDATORY: Include exactly ONE visual marker using: [VISUAL: descriptive prompt]
 - "Key Takeaways" summary at end`;
 
     const userPrompt = `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".

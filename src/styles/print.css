@@ -1,19 +1,39 @@
-/* Print CSS for Professional PDF Export */
-/* Forces page breaks, 1-inch margins, and consistent branding */
+/* Print CSS for Professional PDF Export via window.print() */
+/* Ensures 100% visual parity between screen and PDF output */
 
 @media print {
   /* Reset and base styles */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
+  /* Hide ALL non-essential UI elements */
+  header,
+  footer,
+  nav,
+  .no-print,
+  button,
+  .sticky,
+  [class*="sticky"],
+  .paywall-overlay,
+  .save-to-cloud-banner,
+  .test-mode-indicator,
+  [role="dialog"],
+  [role="alertdialog"],
+  .fixed,
+  [class*="fixed"] {
+    display: none !important;
+  }
+
+  /* Reset body for clean print */
   body {
     font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    font-size: 12pt;
+    font-size: 11pt;
     line-height: 1.6;
-    color: #1a1a1a;
-    background: white;
+    color: #1a1a1a !important;
+    background: white !important;
     margin: 0;
     padding: 0;
   }
@@ -24,240 +44,320 @@
     margin: 1in;
   }
 
-  /* Force page breaks before chapter titles */
-  .print-chapter-break,
-  .chapter-header,
-  [data-chapter-start] {
+  /* First page (cover) - no margin adjustments needed */
+  @page :first {
+    margin: 1in;
+  }
+
+  /* Container reset */
+  .container,
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ===== BOOK COVER ===== */
+  /* Force cover to be its own page */
+  section:first-of-type {
+    page-break-after: always !important;
+    break-after: page !important;
+    min-height: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Cover content centering */
+  [class*="BookCover"],
+  .book-cover {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    min-height: 80vh !important;
+  }
+
+  /* Cover image styling */
+  [class*="BookCover"] img,
+  .book-cover img {
+    max-width: 300px !important;
+    max-height: 300px !important;
+    margin: 2rem auto !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  /* Cover title */
+  [class*="BookCover"] h1,
+  .book-cover h1 {
+    font-size: 32pt !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.5rem !important;
+    color: #1a1a1a !important;
+  }
+
+  /* Cover subtitle */
+  [class*="BookCover"] p,
+  .book-cover p {
+    font-size: 12pt !important;
+    font-style: italic !important;
+    color: #666 !important;
+  }
+
+  /* ===== TABLE OF CONTENTS ===== */
+  [class*="TableOfContents"],
+  .table-of-contents {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  [class*="TableOfContents"] h2,
+  .table-of-contents h2 {
+    font-size: 20pt !important;
+    text-align: center !important;
+    margin-bottom: 2rem !important;
+    color: #1a1a1a !important;
+  }
+
+  /* TOC chapter list */
+  [class*="TableOfContents"] [class*="chapter"],
+  .table-of-contents li {
+    display: flex !important;
+    justify-content: space-between !important;
+    padding: 0.5rem 0 !important;
+    border-bottom: 1px dotted #ddd !important;
+    font-size: 11pt !important;
+  }
+
+  /* ===== CHAPTER STYLING ===== */
+  /* Force page break before each chapter */
+  article,
+  [id^="chapter-"],
+  .print-chapter-break {
     page-break-before: always !important;
     break-before: page !important;
   }
 
-  /* Prevent orphans and widows */
-  p, li, blockquote {
-    orphans: 3;
-    widows: 3;
+  /* First article (Chapter 1) - no break before */
+  article:first-of-type,
+  [id="chapter-1"] {
+    page-break-before: auto !important;
+    break-before: auto !important;
   }
 
-  /* Keep headings with following content */
-  h1, h2, h3, h4, h5, h6 {
+  /* Chapter header styling */
+  article header,
+  [id^="chapter-"] header {
+    text-align: center !important;
+    margin-bottom: 2rem !important;
+  }
+
+  /* Chapter number */
+  article header p:first-child,
+  [class*="tracking-"] {
+    font-size: 9pt !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.25em !important;
+    color: #888 !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  /* Chapter title */
+  article h1,
+  [id^="chapter-"] h1 {
+    font-size: 22pt !important;
+    font-weight: 600 !important;
+    color: #1a1a1a !important;
+    margin-bottom: 1.5rem !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
 
-  /* Keep images with captions */
-  figure, .diagram-container {
+  /* Section headers */
+  h2 {
+    font-size: 14pt !important;
+    font-weight: 600 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+    color: #333 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  h3 {
+    font-size: 12pt !important;
+    font-weight: 600 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 0.5rem !important;
+    color: #444 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* ===== CONTENT STYLING ===== */
+  /* Paragraphs */
+  p {
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    margin-bottom: 0.75rem !important;
+    text-align: justify !important;
+    orphans: 3 !important;
+    widows: 3 !important;
+  }
+
+  /* First paragraph of chapter - drop cap removed for cleaner print */
+  article p:first-of-type {
+    text-indent: 0 !important;
+  }
+
+  /* Subsequent paragraphs */
+  article p + p {
+    text-indent: 1.5em !important;
+  }
+
+  /* Lists */
+  ul, ol {
+    margin: 1rem 0 !important;
+    padding-left: 1.5rem !important;
+  }
+
+  li {
+    font-size: 11pt !important;
+    margin-bottom: 0.4rem !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Blockquotes */
+  blockquote {
+    margin: 1.5rem 2rem !important;
+    padding: 0.5rem 1rem !important;
+    border-left: 3px solid #ddd !important;
+    font-style: italic !important;
+    color: #555 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* Hide non-essential UI elements */
-  .no-print,
-  button,
-  .download-button,
-  nav,
-  footer,
-  .paywall-overlay {
-    display: none !important;
+  /* ===== PRO-TIP BOXES ===== */
+  [class*="pro-tip"],
+  div[class*="bg-"][class*="border-l"] {
+    background: #f8f9fa !important;
+    border-left: 4px solid #333 !important;
+    padding: 1rem !important;
+    margin: 1.5rem 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border-radius: 0 4px 4px 0 !important;
   }
 
-  /* Loom & Page footer on every page */
-  .print-page {
-    position: relative;
-    min-height: calc(100vh - 2in);
-    padding-bottom: 60px;
+  [class*="pro-tip"] p,
+  div[class*="bg-"][class*="border-l"] p {
+    font-style: italic !important;
+    color: #444 !important;
+    margin: 0 !important;
+    text-indent: 0 !important;
   }
 
-  .print-page::after {
+  /* ===== DIAGRAMS/VISUALS ===== */
+  [class*="TechnicalDiagram"],
+  [class*="diagram"],
+  figure {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 1.5rem auto !important;
+    text-align: center !important;
+  }
+
+  [class*="TechnicalDiagram"] img,
+  [class*="diagram"] img,
+  figure img {
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 400px !important;
+    border: 1px solid #eee !important;
+  }
+
+  /* Diagram captions */
+  [class*="TechnicalDiagram"] [class*="caption"],
+  figcaption {
+    font-size: 9pt !important;
+    font-style: italic !important;
+    color: #666 !important;
+    margin-top: 0.5rem !important;
+    padding: 0.5rem !important;
+    background: #f9f9f9 !important;
+  }
+
+  /* ===== LOOM & PAGE FOOTER BRANDING ===== */
+  /* Add Loom & Page footer to every printed page */
+  body::after {
     content: 'LOOM & PAGE';
     position: fixed;
-    bottom: 0.5in;
+    bottom: 0.4in;
     left: 50%;
     transform: translateX(-50%);
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 9pt;
+    font-size: 8pt;
     letter-spacing: 0.2em;
     color: #999;
     text-align: center;
   }
 
-  /* Cover page styling */
-  .print-cover {
-    page-break-after: always !important;
-    break-after: page !important;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: calc(100vh - 2in);
-    text-align: center;
+  /* ===== UTILITY CLASSES ===== */
+  /* Hide decorative elements */
+  [class*="deckle"],
+  [class*="gradient"],
+  [class*="shadow-paper"],
+  [class*="animate-"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    animation: none !important;
   }
 
-  .print-cover-title {
-    font-size: 36pt;
-    font-weight: 600;
-    margin-bottom: 0.5em;
-    color: #1a1a1a;
+  /* Remove all borders and shadows from articles for cleaner look */
+  article {
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
-  .print-cover-subtitle {
-    font-size: 14pt;
-    font-style: italic;
-    color: #666;
-    margin-bottom: 2em;
+  /* Ensure images don't overflow */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
   }
 
-  .print-cover-image {
-    max-width: 300px;
-    max-height: 300px;
-    margin: 2em auto;
-    border-radius: 4px;
+  /* Links - show URL or just use text color */
+  a {
+    color: #1a1a1a !important;
+    text-decoration: none !important;
   }
 
-  /* Table of Contents */
-  .print-toc {
-    page-break-after: always !important;
-    break-after: page !important;
+  /* Hide loading states, spinners */
+  [class*="loading"],
+  [class*="spinner"],
+  [class*="skeleton"],
+  [class*="Loader"] {
+    display: none !important;
   }
 
-  .print-toc-title {
-    font-size: 24pt;
-    text-align: center;
-    margin-bottom: 2em;
+  /* Ensure prose max-width is removed for print */
+  .prose {
+    max-width: 100% !important;
   }
 
-  .print-toc-list {
-    list-style: none;
-    padding: 0;
-  }
-
-  .print-toc-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 0.5em 0;
-    border-bottom: 1px dotted #ddd;
-  }
-
-  .print-toc-chapter {
-    font-weight: 600;
-  }
-
-  /* Chapter styling */
-  .print-chapter {
-    page-break-before: always !important;
-    break-before: page !important;
-  }
-
-  .print-chapter-number {
-    font-size: 10pt;
-    text-transform: uppercase;
-    letter-spacing: 0.3em;
-    color: #888;
-    margin-bottom: 0.5em;
-    text-align: center;
-  }
-
-  .print-chapter-title {
-    font-size: 24pt;
-    text-align: center;
-    margin-bottom: 1.5em;
-    color: #1a1a1a;
-  }
-
-  /* Content styling */
-  .print-content h2 {
-    font-size: 16pt;
-    margin-top: 2em;
-    margin-bottom: 1em;
-    color: #333;
-    page-break-after: avoid;
-  }
-
-  .print-content h3 {
-    font-size: 14pt;
-    margin-top: 1.5em;
-    margin-bottom: 0.75em;
-    color: #444;
-  }
-
-  .print-content p {
-    text-indent: 1.5em;
-    margin-bottom: 0.8em;
-    text-align: justify;
-  }
-
-  .print-content p:first-of-type {
-    text-indent: 0;
-  }
-
-  .print-content blockquote {
-    margin: 1.5em 2em;
-    padding: 0.5em 1em;
-    border-left: 3px solid #ddd;
-    font-style: italic;
-    color: #555;
-  }
-
-  .print-content ul,
-  .print-content ol {
-    margin: 1em 0;
-    padding-left: 2em;
-  }
-
-  .print-content li {
-    margin-bottom: 0.5em;
-  }
-
-  /* Diagram/Image styling */
-  .print-diagram {
-    page-break-inside: avoid;
-    margin: 2em 0;
-    text-align: center;
-  }
-
-  .print-diagram img {
-    max-width: 100%;
-    height: auto;
-    border: 1px solid #eee;
-  }
-
-  .print-diagram-caption {
-    font-size: 10pt;
-    font-style: italic;
-    color: #666;
-    margin-top: 0.5em;
-    padding: 0.5em;
-    background: #f9f9f9;
-  }
-
-  /* Certificate page */
-  .print-certificate {
-    page-break-before: always;
-    text-align: center;
-    padding-top: 3em;
-  }
-
-  .print-certificate-title {
-    font-size: 20pt;
-    margin-bottom: 1.5em;
-  }
-
-  .print-certificate-content {
-    max-width: 400px;
-    margin: 0 auto;
-    text-align: left;
-  }
-
-  /* Logo footer element */
-  .print-footer-logo {
-    width: 24px;
-    height: 24px;
-    margin: 0 auto 0.5em;
-    opacity: 0.6;
+  /* Keep key takeaways together */
+  [class*="takeaway"],
+  [class*="summary"] {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 
-/* Screen styles for print preview component */
+/* Screen styles for print preview (if used) */
 .print-preview-container {
   background: white;
   color: #1a1a1a;
@@ -266,7 +366,7 @@
 
 .print-page-marker {
   border-top: 2px dashed #ddd;
-  margin: 2em 0;
-  padding-top: 1em;
+  margin: 2rem 0;
+  padding-top: 1rem;
   page-break-before: always;
 }

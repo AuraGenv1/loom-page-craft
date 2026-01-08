@@ -28,17 +28,18 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
     const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
     const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
 
-    // Extract [DIAGRAM: ...] markers from content
+    // Extract [VISUAL: ...] or [DIAGRAM: ...] markers from content (unified marker system)
     const extractDiagramMarkers = (text: string): DiagramMarker[] => {
       const markers: DiagramMarker[] = [];
-      const regex = /\[DIAGRAM:\s*([^\]]+)\]/gi;
+      // Match both [VISUAL: ...] and [DIAGRAM: ...] for backwards compatibility
+      const regex = /\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
       let match;
       let diagramIndex = 0;
 
       while ((match = regex.exec(text)) !== null) {
         markers.push({
           index: match.index,
-          description: match[1].trim(),
+          description: match[2].trim(),
           plateNumber: `inline-${diagramIndex}`,
         });
         diagramIndex++;
@@ -152,10 +153,11 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           return;
         }
 
-        // Check for [DIAGRAM: ...] markers and render inline diagrams with Artisan styling
-        const diagramMatch = trimmed.match(/\[DIAGRAM:\s*([^\]]+)\]/i);
+        // Check for [VISUAL: ...] or [DIAGRAM: ...] markers and render inline diagrams with Artisan styling
+        const diagramMatch = trimmed.match(/\[(VISUAL|DIAGRAM):\s*([^\]]+)\]/i);
         if (diagramMatch) {
-          const markerIndex = diagramMarkers.findIndex(m => m.description === diagramMatch[1].trim());
+          const visualDescription = diagramMatch[2].trim();
+          const markerIndex = diagramMarkers.findIndex(m => m.description === visualDescription);
           const plateNumber = markerIndex >= 0 ? `inline-${markerIndex}` : `inline-${index}`;
           const imageUrl = inlineDiagramImages[plateNumber];
           const isLoading = loadingDiagrams.has(plateNumber);
@@ -164,12 +166,12 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             <div key={`diagram-wrapper-${index}`} className="flex justify-center py-8">
               <div className="w-full max-w-2xl border border-border/30 rounded-sm shadow-sm">
                 <TechnicalDiagram
-                  caption={diagramMatch[1].trim()}
+                  caption={visualDescription}
                   plateNumber={plateNumber}
                   topic={topic}
                   isGenerating={isLoading}
                   imageUrl={imageUrl ?? null}
-                  imageDescription={diagramMatch[1].trim()}
+                  imageDescription={visualDescription}
                 />
               </div>
             </div>
