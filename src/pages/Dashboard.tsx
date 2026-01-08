@@ -147,24 +147,37 @@ const Dashboard = () => {
     
     setDownloadingId(book.id);
     try {
+      // Build complete BookData with ALL chapters for proper PDF
       const bookData: BookData = {
         title: book.title,
         displayTitle: book.title.split(' ').slice(0, 5).join(' '),
-        subtitle: `A Comprehensive Guide to ${book.topic}`,
+        subtitle: `A Curated Guide`,
         tableOfContents: book.table_of_contents || [],
         chapter1Content: book.chapter1_content,
+        chapter2Content: book.chapter2_content || undefined,
+        chapter3Content: book.chapter3_content || undefined,
+        chapter4Content: book.chapter4_content || undefined,
+        chapter5Content: book.chapter5_content || undefined,
+        chapter6Content: book.chapter6_content || undefined,
+        chapter7Content: book.chapter7_content || undefined,
+        chapter8Content: book.chapter8_content || undefined,
+        chapter9Content: book.chapter9_content || undefined,
+        chapter10Content: book.chapter10_content || undefined,
         localResources: book.local_resources || [],
         hasDisclaimer: book.has_disclaimer,
+        coverImageUrl: book.cover_image_url || undefined,
       };
 
+      toast.loading('Generating PDF from your guide...', { id: 'pdf-gen' });
       await generateGuidePDF({
         title: bookData.displayTitle,
         topic: book.topic,
         bookData,
       });
-      toast.success('PDF downloaded!');
+      toast.success('PDF downloaded!', { id: 'pdf-gen' });
     } catch (error) {
-      toast.error('Failed to generate PDF');
+      console.error('PDF generation error:', error);
+      toast.error('Failed to generate PDF', { id: 'pdf-gen' });
     } finally {
       setDownloadingId(null);
     }
@@ -175,25 +188,38 @@ const Dashboard = () => {
     
     setDownloadingId(book.id + '-kindle');
     try {
+      // Build complete BookData with ALL chapters
       const bookData: BookData = {
         title: book.title,
         displayTitle: book.title.split(' ').slice(0, 5).join(' '),
-        subtitle: `A Comprehensive Guide to ${book.topic}`,
+        subtitle: `A Curated Guide`,
         tableOfContents: book.table_of_contents || [],
         chapter1Content: book.chapter1_content,
+        chapter2Content: book.chapter2_content || undefined,
+        chapter3Content: book.chapter3_content || undefined,
+        chapter4Content: book.chapter4_content || undefined,
+        chapter5Content: book.chapter5_content || undefined,
+        chapter6Content: book.chapter6_content || undefined,
+        chapter7Content: book.chapter7_content || undefined,
+        chapter8Content: book.chapter8_content || undefined,
+        chapter9Content: book.chapter9_content || undefined,
+        chapter10Content: book.chapter10_content || undefined,
         localResources: book.local_resources || [],
         hasDisclaimer: book.has_disclaimer,
+        coverImageUrl: book.cover_image_url || undefined,
       };
 
       // Use Kindle-optimized HTML export
+      toast.loading('Generating Kindle file...', { id: 'kindle-gen' });
       await generateKindleHTML({
         title: bookData.displayTitle,
         topic: book.topic,
         bookData,
       });
-      toast.success('Kindle file downloaded!');
+      toast.success('Kindle file downloaded!', { id: 'kindle-gen' });
     } catch (error) {
-      toast.error('Failed to generate Kindle file');
+      console.error('Kindle generation error:', error);
+      toast.error('Failed to generate Kindle file', { id: 'kindle-gen' });
     } finally {
       setDownloadingId(null);
     }
