@@ -16,10 +16,15 @@ type OrientationType = 'portrait' | 'landscape';
 
 /**
  * Ensures all images are fully loaded before capturing.
+ * Uses CORS-safe image loading for Fal.ai images.
  */
 const waitForImages = async (container: HTMLElement): Promise<void> => {
   const images = Array.from(container.querySelectorAll("img"));
   const promises = images.map((img) => {
+    // Set crossOrigin to ensure CORS compatibility for external images
+    if (!img.crossOrigin) {
+      img.crossOrigin = 'anonymous';
+    }
     if (img.complete) return Promise.resolve();
     return new Promise((resolve) => {
       img.onload = resolve;
@@ -44,6 +49,7 @@ const cleanMarkdownForPDF = (content: string): string => {
 
 /**
  * Generate PDF using html2pdf.js - captures the book-preview element exactly as displayed
+ * Professional PDF Engine: Direct download, clean margins, CORS-safe images
  */
 export const generateGuidePDF = async ({
   title,
@@ -52,42 +58,61 @@ export const generateGuidePDF = async ({
   previewElement,
   isAdmin = false,
 }: GeneratePDFOptions) => {
-  // Find the book preview container if not provided
-  const elementToCapture = previewElement || document.querySelector('.book-preview') as HTMLElement;
+  // Find the book preview container - try multiple selectors
+  const elementToCapture = previewElement 
+    || document.querySelector('.book-preview') as HTMLElement
+    || document.querySelector('[class*="book-view"]') as HTMLElement
+    || document.querySelector('main') as HTMLElement;
   
   if (!elementToCapture) {
     console.error('No preview element found for PDF generation');
     throw new Error('No preview element found');
   }
 
-  // Wait for all images to load
+  // Add print-clean class to strip unwanted elements
+  document.body.classList.add('print-clean');
+
+  // Wait for all images to load with CORS support
   await waitForImages(elementToCapture);
   
   // Additional wait for rendering
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 800));
 
-  // Configure html2pdf.js
+  // PROFESSIONAL PDF CONFIG: 1-inch margins, direct download
   const opt = {
-    margin: 10,
+    margin: [25.4, 25.4, 25.4, 25.4] as [number, number, number, number], // 1 inch = 25.4mm
     filename: `${topic.toLowerCase().replace(/\s+/g, '-')}-artisan-guide.pdf`,
     image: { type: 'jpeg' as ImageType, quality: 0.98 },
     html2canvas: { 
       scale: 2,
-      useCORS: true,
+      useCORS: true,  // CRITICAL: Enable CORS for Fal.ai images
       allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
+      removeContainer: true,
+      imageTimeout: 15000, // Wait up to 15s for images
     },
     jsPDF: { 
       unit: 'mm', 
       format: 'a4', 
-      orientation: 'portrait' as OrientationType
+      orientation: 'portrait' as OrientationType,
+      compress: true,
     },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    pagebreak: { 
+      mode: ['avoid-all', 'css', 'legacy'],
+      before: '.chapter-break',
+      after: '.page-break',
+      avoid: ['img', 'figure', 'table', '.pro-tip-box']
+    }
   };
 
-  // Generate PDF
-  return html2pdf().set(opt).from(elementToCapture).save();
+  try {
+    // Generate and save PDF directly (no print preview)
+    await html2pdf().set(opt).from(elementToCapture).save();
+  } finally {
+    // Clean up print-clean class
+    document.body.classList.remove('print-clean');
+  }
 };
 
 /**

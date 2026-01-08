@@ -8,6 +8,8 @@ interface ProgressDownloadButtonProps {
   disabled?: boolean;
   isPurchased?: boolean;
   isCompiling?: boolean;
+  /** When true, shows the full progress dashboard experience */
+  showProgress?: boolean;
 }
 
 const ProgressDownloadButton = ({
