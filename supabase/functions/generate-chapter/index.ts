@@ -52,12 +52,14 @@ MANDATORY DIAGRAM REQUIREMENT:
 - The description must be for a high-quality black-and-white technical line-art drawing that explains the concept without using any text
 - Place this marker at the most instructional point in the chapter
 
-CRITICAL FORMATTING RULES:
-- DO NOT use double asterisks (**) for emphasis at the end of sentences or paragraphs
-- NEVER end any line with asterisks (**) - this is strictly forbidden
-- Use plain text only. Write naturally without excessive bold formatting
+CRITICAL FORMATTING RULES - STRICTLY ENFORCED:
+- DO NOT use bold (**text**) or italic (*text*) syntax anywhere
+- DO NOT use asterisks for any purpose - no emphasis markers allowed
+- Write in plain text only - natural prose without formatting markers
+- NEVER end any line with asterisks or special characters
+- This is non-negotiable - asterisks will be stripped and content rejected
 
-DO NOT include any JSON. Write ONLY markdown content.`;
+DO NOT include any JSON. Write ONLY markdown content in plain text.`;
 
     const userPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the instructional guide on "${topic}".
 

@@ -89,6 +89,22 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       });
     }, [content, topic, sessionId]);
 
+    // Clean content helper - the "Regex Shield"
+    const cleanContent = (text: string): string => {
+      return text
+        .replace(/\*{2,}\s*$/gm, '')           // Strip 2+ trailing asterisks at end of lines
+        .replace(/\*{2,}$/g, '')               // Strip trailing ** at end of content
+        .replace(/\*\*\s*\n/g, '\n')           // Remove ** before newlines
+        .replace(/\s\*\*\s*$/gm, '')           // Remove space+** at end of lines
+        .replace(/([.!?:,])\s*\*{1,2}\s*$/gm, '$1')  // Remove asterisks after punctuation
+        .replace(/\*\*\*+/g, '')               // Remove 3+ asterisks entirely
+        .replace(/^\*{1,2}\s*/gm, '')          // Remove leading asterisks
+        .replace(/\*{1,2}$/gm, '')             // Remove trailing asterisks
+        .replace(/---+\s*$/gm, '')             // Remove trailing ---
+        .replace(/\s{3,}/g, '  ')              // Collapse excessive whitespace
+        .trim();
+    };
+
     // Parse markdown content into sections (simplified rendering)
     const renderContent = () => {
       if (!content) {
@@ -109,11 +125,14 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         );
       }
 
+      // Apply the Regex Shield to clean content
+      const processedContent = cleanContent(content);
+
       // Extract diagram markers and split content around them
-      const diagramMarkers = extractDiagramMarkers(content);
+      const diagramMarkers = extractDiagramMarkers(processedContent);
       
       // Split content by paragraphs and render with proper styling
-      const paragraphs = content.split('\n\n').filter((p) => p.trim());
+      const paragraphs = processedContent.split('\n\n').filter((p) => p.trim());
       const elements: React.ReactNode[] = [];
 
       paragraphs.forEach((paragraph, index) => {

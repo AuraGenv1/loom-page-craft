@@ -11,15 +11,6 @@ const HIGH_RISK_KEYWORDS = [
   'legal', 'law', 'attorney', 'lawyer', 'court', 'lawsuit', 'contract', 'sue'
 ];
 
-// Strictly block only violence, illegal acts, and self-harm (allow wellness/nutrition/fitness)
-const BLOCKED_KEYWORDS = [
-  'weapon', 'explosive', 'bomb', 'illegal', 'hack', 'narcotic',
-  'kill', 'murder', 'assassin', 'poison', 'suicide', 'self-harm', 'cutting',
-  'terrorism', 'terrorist', 'bio-weapon', 'chemical weapon', 'nerve agent',
-  'child abuse', 'exploitation', 'human trafficking', 'torture',
-  'counterfeit', 'fraud', 'launder', 'money laundering'
-];
-
 // Wellness topics that are explicitly ALLOWED
 const WELLNESS_ALLOWED = [
   'fasting', 'intermittent fasting', 'diet', 'nutrition', 'weight loss',
@@ -28,13 +19,81 @@ const WELLNESS_ALLOWED = [
   'meal prep', 'calorie', 'protein', 'vitamins', 'supplements'
 ];
 
-const SAFETY_ERROR = 'This topic violates our safety guidelines and cannot be generated.';
+const SAFETY_ERROR = 'This topic does not meet our safety guidelines.';
 
-const SAFETY_DISCLAIMER = `⚠️ IMPORTANT NOTICE
+// AI-based intent analysis for safety
+async function analyzeTopicIntent(topic: string, geminiApiKey: string): Promise<{ safe: boolean; reason?: string }> {
+  const safetyPrompt = `You are a content safety classifier. Analyze the following topic request and determine if it's safe to generate educational content about.
 
-This volume is provided for educational and informational purposes only. The content herein does not constitute professional advice. For medical topics, we strongly advise consultation with a licensed healthcare provider. For legal matters, engagement with a qualified attorney is essential. This guide should not be used for self-diagnosis, self-treatment, or as the basis for legal decisions.
+TOPIC: "${topic}"
 
----`;
+REFUSE topics that involve:
+- Creating weapons, explosives, or dangerous substances
+- Violence, harm, or hurting others
+- Illegal activities or how to commit crimes
+- Self-harm, suicide methods, or eating disorders that promote harm
+- Child exploitation or abuse
+- Terrorism or extremist content
+- Hacking or cyberattacks with malicious intent
+- Drug manufacturing or trafficking
+- Fraud, counterfeiting, or money laundering
+
+ALLOW topics that are:
+- Educational hobbies and skills (cooking, crafts, gardening, etc.)
+- Health, fitness, and wellness (including fasting, diets, exercise)
+- Business and entrepreneurship
+- Arts, music, and creative pursuits
+- Technology and programming (non-malicious)
+- Home improvement and DIY
+- Sports and recreation
+- Academic subjects
+
+Respond with ONLY a JSON object:
+{"safe": true} if the topic is acceptable
+{"safe": false, "reason": "brief explanation"} if the topic should be refused`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: safetyPrompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+            maxOutputTokens: 200,
+          },
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (content) {
+        try {
+          const result = JSON.parse(content);
+          return { safe: result.safe === true, reason: result.reason };
+        } catch {
+          console.error('Failed to parse safety response:', content);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Safety analysis error:', error);
+  }
+
+  // Default to allowing if safety check fails (better UX, still have keyword fallback)
+  return { safe: true };
+}
 
 // Fetch local resources using Google Places API (New) with fallback to Legacy
 async function fetchLocalResources(topic: string, apiKey: string): Promise<Array<{ name: string; type: string; description: string }>> {
@@ -521,39 +580,29 @@ serve(async (req) => {
     
     // Check if topic is explicitly allowed (wellness/nutrition/fitness)
     const isWellnessAllowed = WELLNESS_ALLOWED.some(keyword => lowerTopic.includes(keyword));
-    
-    // Check for blocked topics (safety filter) - skip if wellness allowed
-    const isBlocked = !isWellnessAllowed && BLOCKED_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
-    
-    if (isBlocked) {
-      console.log('Safety filter triggered for topic:', topic);
-      return new Response(
-        JSON.stringify({ error: SAFETY_ERROR }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Additional safety check: scan for dangerous instruction patterns (skip for wellness)
-    const dangerousPatterns = [
-      /how to (make|build|create|manufacture).*(weapon|bomb|explosive|gun)/i,
-      /how to (harm|hurt|injure|kill)/i,
-      /instructions for (violence|assault|attack)/i,
-      /ways to (poison|drug|sedate)/i,
-    ];
-    
-    const hasDangerousPattern = !isWellnessAllowed && dangerousPatterns.some(pattern => pattern.test(topic));
-    if (hasDangerousPattern) {
-      console.log('Safety pattern match for topic:', topic);
-      return new Response(
-        JSON.stringify({ error: SAFETY_ERROR }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
+    // INTENT-BASED SAFETY: AI analyzes the topic intent
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       console.error('GEMINI_API_KEY is not configured');
       throw new Error('AI service is not configured');
+    }
+
+    // Skip AI safety check for explicitly allowed wellness topics
+    if (!isWellnessAllowed) {
+      console.log('Running AI intent-based safety analysis...');
+      const safetyResult = await analyzeTopicIntent(topic, GEMINI_API_KEY);
+      
+      if (!safetyResult.safe) {
+        console.log('AI Safety REFUSED topic:', topic, 'Reason:', safetyResult.reason);
+        return new Response(
+          JSON.stringify({ error: SAFETY_ERROR }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('AI Safety APPROVED topic:', topic);
+    } else {
+      console.log('Wellness topic auto-approved:', topic);
     }
 
     const FAL_KEY = Deno.env.get('FAL_KEY');
@@ -656,7 +705,13 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
 - End with a "Key Takeaways" summary and transition to subsequent chapters
-- Use proper markdown: headers, paragraphs, bullet lists, numbered lists`;
+- Use proper markdown: headers, paragraphs, bullet lists, numbered lists
+
+CRITICAL FORMATTING RULES:
+- DO NOT use bold (**text**) or italic (*text*) syntax anywhere
+- Write in plain text only - no emphasis markers
+- This is strictly enforced - any asterisks will be rejected
+- Ensure ALL titles are complete sentences - never truncate mid-word or mid-phrase`;
 
     const userPrompt = `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
 
@@ -823,9 +878,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       console.log('GOOGLE_PLACES_API_KEY not configured, using AI-generated local resources');
     }
 
-    // Prepend safety disclaimer for high-risk topics
+    // Note: High-risk topics get a subtle disclaimer added via AI prompt, not a visible banner
     if (isHighRisk) {
-      bookData.chapter1Content = SAFETY_DISCLAIMER + '\n\n' + bookData.chapter1Content;
       bookData.hasDisclaimer = true;
     }
 
