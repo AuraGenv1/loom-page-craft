@@ -107,9 +107,9 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
 
       return (
         <figure key={`image-${index}`} className="my-10 text-center">
-          <div className="relative w-full max-w-2xl mx-auto aspect-video bg-secondary/20 rounded-lg overflow-hidden border border-border/30">
+          <div className="relative w-full max-w-2xl mx-auto aspect-video bg-secondary/20 rounded-lg overflow-hidden border border-border/30 print:opacity-100 print:filter-none">
             {isLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center print:hidden">
                 <Skeleton className="w-full h-full" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <ImageIcon className="w-8 h-8 text-muted-foreground/40 animate-pulse" />
@@ -120,11 +120,11 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               <img
                 src={imageUrl}
                 alt={description}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover print:opacity-100 print:filter-none"
                 crossOrigin="anonymous"
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10 print:hidden">
                 <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
               </div>
             )}

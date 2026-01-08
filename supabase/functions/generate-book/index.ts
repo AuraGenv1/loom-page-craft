@@ -988,10 +988,10 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
     console.log('Successfully generated book shell:', bookData.title);
 
-    // ATOMIC GENERATION: Each chapter saves IMMEDIATELY upon completion
-    // This ensures real-time progress visibility and prevents timeout bugs
-    if (existingBookId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && GEMINI_API_KEY) {
-      console.log('ATOMIC WEAVER: Spawning 9 independent chapter generators for book:', existingBookId);
+    // COST OPTIMIZATION: Only generate remaining chapters if user is purchasing (fullBook=true)
+    // For guests (unpaid), we only generate Cover + Chapter 1 to save API costs
+    if (fullBook && existingBookId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && GEMINI_API_KEY) {
+      console.log('FULL BOOK REQUESTED: Spawning 9 independent chapter generators for book:', existingBookId);
       
       const toc = bookData.tableOfContents || [];
       
@@ -1016,6 +1016,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       }
       
       console.log('All 9 atomic chapter generators spawned - each saves immediately on completion');
+    } else if (!fullBook) {
+      console.log('GUEST MODE: Only generating Cover + Chapter 1 to save costs. Remaining chapters require payment.');
     }
 
     return new Response(

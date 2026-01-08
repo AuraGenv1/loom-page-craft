@@ -324,10 +324,12 @@
     margin: 0 !important;
   }
 
-  /* Ensure images don't overflow */
+  /* Ensure images don't overflow AND are 100% visible */
   img {
     max-width: 100% !important;
     height: auto !important;
+    opacity: 1 !important;
+    filter: none !important;
   }
 
   /* Links - show URL or just use text color */

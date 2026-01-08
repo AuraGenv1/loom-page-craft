@@ -159,7 +159,8 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
         </div>
       )}
 
-      {locationError && !displayResources && (
+      {/* Only show error if search is 100% finished (not loading) AND results are empty */}
+      {locationError && !displayResources && hasAttemptedFetch && !isLoading && (
         <div className="bg-secondary/30 border border-border rounded-lg p-6 text-center mb-8">
           <MapPinOff className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground mb-4">{locationError}</p>
