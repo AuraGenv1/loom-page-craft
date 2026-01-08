@@ -7,34 +7,57 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram";
 
-const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles";
+const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, book, cover, book mockup, frame, bar graph, tropical, palm trees, generic resort";
 
 // Geographic extraction helper - finds city/state/country from topic
+// Returns "City, State/Country" format for geographic grounding
 const extractGeographicLocation = (topic: string): string | null => {
-  // Common travel/location patterns
-  const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+)?)/i);
-  if (locationMatch) return locationMatch[2];
+  // Match patterns like "Aspen Colorado", "Paris France", "Tokyo Japan"
+  const patterns = [
+    // "travel to Paris, France" or "guide to Aspen, Colorado"
+    /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)?)/i,
+    // "Paris Travel Guide" or "Aspen Colorado Guide"
+    /^([A-Z][a-z]+(?:,?\s+[A-Z][a-z]+)*)/,
+  ];
   
-  // Direct location mentions (e.g., "Paris Travel Guide", "Aspen Colorado")
-  const directMatch = topic.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-  if (directMatch) return directMatch[1];
+  for (const pattern of patterns) {
+    const match = topic.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
   
   return null;
 };
 
+// Detect if topic is travel-related for geographic locking
+const isTravelTopic = (topic: string): boolean => {
+  const travelPatterns = /\b(travel|trip|vacation|tour|visit|guide|destination|city|country|explore|journey|getaway|resort|hotel|tourism)\b/i;
+  return travelPatterns.test(topic);
+};
+
 const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
-  // Extract geographic location if present for grounding
   const location = extractGeographicLocation(topicOrTitle);
-  const locationClause = location ? `authentic ${location} landmarks and scenery, ` : '';
+  const isTravel = isTravelTopic(topicOrTitle);
+  
+  // GEOGRAPHIC LOCK: For travel, MUST include specific city/state
+  // Explicitly forbid generic tropical/resort elements
+  const locationClause = location 
+    ? `authentic ${location} landmarks and scenery, specific to ${location}, ` 
+    : '';
+  
+  const antiGenericClause = isTravel 
+    ? 'NOT tropical, NOT palm trees, NOT generic resort, authentic local architecture, ' 
+    : '';
   
   if (variant === "diagram") {
-    // High-end travel journalism photography for [IMAGE:] tags
-    return `High-end travel journalism photography: ${caption || topicOrTitle}. ${locationClause}Editorial magazine quality, authentic location photography, natural lighting. NO text, NO diagrams, NO illustrations, NO people. Shot on professional camera.`;
+    // High-end travel journalism for [IMAGE:] tags - with geographic grounding
+    return `High-end travel journalism photography: ${caption || topicOrTitle}. ${locationClause}${antiGenericClause}Editorial magazine quality, authentic location photography, natural lighting. Strictly NO text, NO diagrams, NO illustrations, NO people. Shot on professional camera.`;
   }
 
-  // Cover - Travel journalism style photography (NOT cinematic/AI look)
-  // REMOVED: "book", "cover", "layout" words
-  return `Authentic editorial travel photography of ${topicOrTitle}. ${locationClause}High-end travel journalism style, shot on Hasselblad, natural golden hour lighting, 8k resolution. NO text, NO open books, NO diagrams, NO people, NO illustrations. Pure authentic location photography.`;
+  // COVER PROMPT: Full-bleed professional editorial photograph
+  // REMOVED: "book", "cover", "layout", "cinematic" words
+  return `A full-bleed, professional editorial photograph of ${topicOrTitle}. ${locationClause}${antiGenericClause}High-end travel journalism style, shot on Hasselblad, natural golden hour lighting, 8k resolution. Strictly NO text, NO book mockups, NO frames, NO bar graphs, NO diagrams, NO people, NO illustrations. Pure authentic location photography.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
