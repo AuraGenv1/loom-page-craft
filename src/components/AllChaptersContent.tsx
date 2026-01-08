@@ -188,10 +188,18 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
           .replace(/\[DIAGRAM:\s*([^\]]+)\]/gi, '')  // Remove DIAGRAM markers (rendered separately)
+          .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '')  // Remove PRO-TIP markers (rendered separately)
           .trim();
       };
 
       const processedContent = getCleanedContent(content);
+
+      // Extract Pro-Tips from content
+      const proTipMatches = [...content.matchAll(/\[PRO-TIP:\s*([^\]]+)\]/gi)];
+      const proTips = proTipMatches.map((match, i) => ({
+        text: match[1].trim(),
+        id: `protip-${chapterNumber}-${i}`
+      }));
 
       // Find inline diagram markers for this chapter
       const chapterMarkers = extractDiagramMarkers(content, chapterNumber);
@@ -251,6 +259,21 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           >
             {processedContent}
           </ReactMarkdown>
+          
+          {/* Render Pro-Tips with gold styling and bulb icon */}
+          {proTips.map((tip) => (
+            <div key={tip.id} className="my-8 p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-4">
+                <span className="text-2xl flex-shrink-0">💡</span>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 font-semibold mb-2">Pro-Tip</p>
+                  <p className="text-amber-900 dark:text-amber-100 italic font-serif leading-relaxed">
+                    {tip.text}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
           
           {/* Render inline diagrams for this chapter with Artisan styling */}
           {chapterMarkers.map((marker) => {

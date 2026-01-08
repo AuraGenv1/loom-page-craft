@@ -704,6 +704,8 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - Incorporate 2-3 blockquotes with relevant insights or expert quotes
 - Include a "Common Mistakes" section
 - Include a "Pro Tips" section
+- MANDATORY: Include exactly ONE "Pro-Tip" callout box per chapter using this format:
+  [PRO-TIP: Expert-level advice related to the chapter topic goes here]
 - End with a "Key Takeaways" summary and transition to subsequent chapters
 - Use proper markdown: headers, paragraphs, bullet lists, numbered lists
 

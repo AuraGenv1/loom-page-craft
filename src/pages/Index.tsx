@@ -914,7 +914,7 @@ const Index = () => {
                             onClick={handlePurchase}
                           >
                             <Sparkles className="w-4 h-4" />
-                            Unlock Full Artisan Guide
+                            Unlock Full Artisan Guide — $4.99
                           </Button>
                         </>
                       )}
@@ -923,7 +923,7 @@ const Index = () => {
                 })()}
                 {!isPaid && (
                   <p className="text-xs text-muted-foreground text-center max-w-md">
-                    Sample includes Step 1 and the material list. The full $4.99 guide unlocks all steps, pro tips, and the local supplier map.
+                    The free sample includes the Cover, Table of Contents, and Chapter 1. The full $4.99 guide unlocks all 10 chapters, including detailed diagrams and the complete instructional series.
                   </p>
                 )}
                 {isPaid && (
