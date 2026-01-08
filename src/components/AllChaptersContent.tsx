@@ -178,25 +178,20 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         );
       }
 
-      // The "Regex Shield" - clean content helper
-      const cleanContent = (text: string): string => {
+      // THE REGEX SHIELD - Clean all content before rendering
+      const getCleanedContent = (text: string): string => {
         return text
           .replace(/\\n/g, '\n')                     // Convert literal \n to actual newlines
-          .replace(/\*{2,}\s*$/gm, '')               // Strip 2+ trailing asterisks at end of lines
-          .replace(/\*{2,}$/g, '')                   // Strip trailing ** at end of content
-          .replace(/\*\*\s*\n/g, '\n')               // Remove ** before newlines
-          .replace(/\s\*\*\s*$/gm, '')               // Remove space+** at end of lines
-          .replace(/([.!?:,])\s*\*{1,2}\s*$/gm, '$1')  // Remove asterisks after punctuation
-          .replace(/\*\*\*+/g, '')                   // Remove 3+ asterisks entirely
-          .replace(/^\*{1,2}\s*/gm, '')              // Remove leading asterisks
-          .replace(/\*{1,2}$/gm, '')                 // Remove trailing asterisks
-          .replace(/---+\s*$/gm, '')                 // Remove trailing --- artifacts
+          .replace(/\*\*/g, '')                      // Remove all double asterisks
+          .replace(/\*/g, '')                        // Remove all single asterisks  
+          .replace(/---+/g, '')                      // Remove horizontal line artifacts
+          .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
           .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
           .replace(/\[DIAGRAM:\s*([^\]]+)\]/gi, '')  // Remove DIAGRAM markers (rendered separately)
           .trim();
       };
 
-      const processedContent = cleanContent(content);
+      const processedContent = getCleanedContent(content);
 
       // Find inline diagram markers for this chapter
       const chapterMarkers = extractDiagramMarkers(content, chapterNumber);
@@ -257,20 +252,23 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             {processedContent}
           </ReactMarkdown>
           
-          {/* Render inline diagrams for this chapter */}
+          {/* Render inline diagrams for this chapter with Artisan styling */}
           {chapterMarkers.map((marker) => {
             const imageUrl = inlineDiagramImages[marker.plateNumber];
             const isLoading = loadingDiagrams.has(marker.plateNumber);
             return (
-              <TechnicalDiagram
-                key={marker.plateNumber}
-                caption={marker.description}
-                plateNumber={marker.plateNumber}
-                topic={topic}
-                isGenerating={isLoading}
-                imageUrl={imageUrl ?? null}
-                imageDescription={marker.description}
-              />
+              <div key={marker.plateNumber} className="flex justify-center py-8">
+                <div className="w-full max-w-2xl border border-border/30 rounded-sm shadow-sm">
+                  <TechnicalDiagram
+                    caption={marker.description}
+                    plateNumber={marker.plateNumber}
+                    topic={topic}
+                    isGenerating={isLoading}
+                    imageUrl={imageUrl ?? null}
+                    imageDescription={marker.description}
+                  />
+                </div>
+              </div>
             );
           })}
           
