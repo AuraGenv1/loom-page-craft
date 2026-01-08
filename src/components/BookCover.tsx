@@ -77,14 +77,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             {isLoadingImage && !displayUrl ? (
               <Skeleton className="w-full h-full rounded-lg" />
             ) : displayUrl && !imageFailed ? (
-              <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
+              <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10 print:opacity-100 print:filter-none">
                 {!imageLoaded && (
-                  <Skeleton className="absolute inset-0 rounded-lg" />
+                  <Skeleton className="absolute inset-0 rounded-lg print:hidden" />
                 )}
                 <img
                   src={displayUrl}
                   alt={`Cover illustration for ${title}`}
-                  className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'} print:opacity-100 print:filter-none`}
                   onLoad={() => setImageLoaded(true)}
                   onError={() => {
                     console.warn('Cover image failed to load, showing fallback');

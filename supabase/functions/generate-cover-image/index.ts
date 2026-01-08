@@ -7,7 +7,7 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram";
 
-const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, book, cover, book mockup, frame, bar graph, tropical, palm trees, generic resort";
+const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, book, cover, book mockup, frame, bar graph, tropical, palm trees, generic resort, sports car, luxury car, hyper-realistic, 8k, CGI, digital art, illustration";
 
 // Geographic extraction helper - finds city/state/country from topic
 // Returns "City, State/Country" format for geographic grounding
@@ -51,13 +51,13 @@ const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) =
     : '';
   
   if (variant === "diagram") {
-    // High-end travel journalism for [IMAGE:] tags - with geographic grounding
-    return `High-end travel journalism photography: ${caption || topicOrTitle}. ${locationClause}${antiGenericClause}Editorial magazine quality, authentic location photography, natural lighting. Strictly NO text, NO diagrams, NO illustrations, NO people. Shot on professional camera.`;
+    // Candid 35mm film photography for [IMAGE:] tags - with geographic grounding and known landmarks
+    return `Candid photography, shot on 35mm film, natural sunlight, unpolished, authentic everyday scene: ${caption || topicOrTitle}. ${locationClause}${antiGenericClause}Architectural landmark visible. Editorial magazine quality. Strictly NO text, NO diagrams, NO illustrations, NO people, NO sports cars.`;
   }
 
-  // COVER PROMPT: Full-bleed professional editorial photograph
-  // REMOVED: "book", "cover", "layout", "cinematic" words
-  return `A full-bleed, professional editorial photograph of ${topicOrTitle}. ${locationClause}${antiGenericClause}High-end travel journalism style, shot on Hasselblad, natural golden hour lighting, 8k resolution. Strictly NO text, NO book mockups, NO frames, NO bar graphs, NO diagrams, NO people, NO illustrations. Pure authentic location photography.`;
+  // COVER PROMPT: Full-bleed authentic location photograph
+  // Uses candid 35mm film style - NOT hyper-realistic or 8k (which look like AI)
+  return `A full-bleed, professional editorial photograph of ${topicOrTitle}. ${locationClause}${antiGenericClause}Candid photography, shot on 35mm film, natural sunlight, unpolished, authentic everyday scene, known local architectural landmark. Strictly NO text, NO book mockups, NO frames, NO bar graphs, NO diagrams, NO people, NO illustrations, NO sports cars.`;
 };
 
 async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
