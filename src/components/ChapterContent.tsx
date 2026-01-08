@@ -133,6 +133,25 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       paragraphs.forEach((paragraph, index) => {
         const trimmed = paragraph.trim();
 
+        // Check for [PRO-TIP: ...] callout boxes - render with gold styling and bulb icon
+        const proTipMatch = trimmed.match(/\[PRO-TIP:\s*([^\]]+)\]/i);
+        if (proTipMatch) {
+          elements.push(
+            <div key={`protip-${index}`} className="my-8 p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-4">
+                <span className="text-2xl flex-shrink-0">💡</span>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 font-semibold mb-2">Pro-Tip</p>
+                  <p className="text-amber-900 dark:text-amber-100 italic font-serif leading-relaxed">
+                    {proTipMatch[1].trim()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+          return;
+        }
+
         // Check for [DIAGRAM: ...] markers and render inline diagrams with Artisan styling
         const diagramMatch = trimmed.match(/\[DIAGRAM:\s*([^\]]+)\]/i);
         if (diagramMatch) {

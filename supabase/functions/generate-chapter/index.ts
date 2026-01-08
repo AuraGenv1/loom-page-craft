@@ -44,8 +44,10 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 5. 2 real-world case studies (300+ words each)
 6. "Common Mistakes" section with solutions
 7. "Pro Tips" section with advanced techniques
-8. "Key Takeaways" summary
-9. Transition to the next chapter
+8. MANDATORY: Include exactly ONE "Pro-Tip" callout box using this format:
+   [PRO-TIP: Expert-level advice specific to this chapter's topic]
+9. "Key Takeaways" summary
+10. Transition to the next chapter
 
 MANDATORY DIAGRAM REQUIREMENT:
 - You are REQUIRED to include exactly ONE diagram marker in this chapter using the syntax: [DIAGRAM: descriptive prompt]
