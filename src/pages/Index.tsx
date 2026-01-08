@@ -673,22 +673,25 @@ const Index = () => {
     if (!bookData) return;
     
     try {
-      toast.info('Opening print dialog...', { 
+      toast.info('Generating PDF...', { 
         id: 'pdf-download',
-        description: 'Choose "Save as PDF" to download your guide.' 
+        description: 'This may take a moment.' 
       });
       
-      // Use window.print() for 100% visual parity
-      // The print.css handles all formatting
-      window.print();
+      // Use html2pdf.js for real PDF generation
+      await generateGuidePDF({
+        title: displayTitle,
+        topic,
+        bookData,
+      });
       
-      toast.success('Print dialog opened!', { 
+      toast.success('PDF downloaded!', { 
         id: 'pdf-download',
-        description: 'Select "Save as PDF" in your print dialog.' 
+        description: 'Your guide has been saved.' 
       });
     } catch (error) {
-      console.error('Print error:', error);
-      toast.error('Failed to open print dialog. Please try again.', { id: 'pdf-download' });
+      console.error('PDF error:', error);
+      toast.error('Failed to generate PDF. Please try again.', { id: 'pdf-download' });
     }
   };
 

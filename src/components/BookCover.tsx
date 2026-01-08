@@ -121,10 +121,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           {/* Decorative divider */}
           <div className="w-10 h-[1px] bg-foreground/20 mb-3" />
 
-          {/* Subtitle */}
-          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif">
-            An Artisan Series Technical Manual
-          </p>
+          {/* Subtitle - Use dynamic subtitle from props */}
+          {subtitle && (
+            <p className="text-[9px] md:text-[10px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif">
+              {subtitle}
+            </p>
+          )}
         </div>
 
         {/* Bottom branding - matches header logo exactly */}

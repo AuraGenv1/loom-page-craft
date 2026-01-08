@@ -1,14 +1,14 @@
 import { forwardRef, useState, useEffect } from 'react';
-import TechnicalDiagram from './TechnicalDiagram';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface DiagramMarker {
+interface ImageMarker {
   index: number;
   description: string;
-  plateNumber: string;
+  id: string;
 }
 
 interface ChapterContentProps {
@@ -25,40 +25,39 @@ interface ChapterContentProps {
 
 const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
   ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents, sessionId }, ref) => {
-    const [inlineDiagramImages, setInlineDiagramImages] = useState<Record<string, string>>({});
-    const [loadingDiagrams, setLoadingDiagrams] = useState<Set<string>>(new Set());
+    const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
+    const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
 
-    // Extract [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
-    const extractDiagramMarkers = (text: string): DiagramMarker[] => {
-      const markers: DiagramMarker[] = [];
-      // Match [ILLUSTRATION: ...], [VISUAL: ...], and [DIAGRAM: ...] for backwards compatibility
-      const regex = /\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/gi;
+    // Extract [IMAGE: ...] markers (Smart Visual System)
+    const extractImageMarkers = (text: string): ImageMarker[] => {
+      const markers: ImageMarker[] = [];
+      const regex = /\[IMAGE:\s*([^\]]+)\]/gi;
       let match;
-      let diagramIndex = 0;
+      let imageIndex = 0;
 
       while ((match = regex.exec(text)) !== null) {
         markers.push({
           index: match.index,
-          description: match[2].trim(),
-          plateNumber: `inline-${diagramIndex}`,
+          description: match[1].trim(),
+          id: `img-${imageIndex}`,
         });
-        diagramIndex++;
+        imageIndex++;
       }
 
       return markers;
     };
 
-    // Generate inline diagrams when markers are found
+    // Generate inline images when markers are found
     useEffect(() => {
       if (!content || !sessionId) return;
 
-      const markers = extractDiagramMarkers(content);
+      const markers = extractImageMarkers(content);
       if (markers.length === 0) return;
 
-      const generateDiagram = async (marker: DiagramMarker) => {
-        if (inlineDiagramImages[marker.plateNumber] || loadingDiagrams.has(marker.plateNumber)) return;
+      const generateImage = async (marker: ImageMarker) => {
+        if (inlineImages[marker.id] || loadingImages.has(marker.id)) return;
 
-        setLoadingDiagrams(prev => new Set(prev).add(marker.plateNumber));
+        setLoadingImages(prev => new Set(prev).add(marker.id));
 
         try {
           const { data, error } = await supabase.functions.invoke('generate-cover-image', {
@@ -71,22 +70,22 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           });
 
           if (!error && data?.imageUrl) {
-            setInlineDiagramImages(prev => ({ ...prev, [marker.plateNumber]: data.imageUrl }));
+            setInlineImages(prev => ({ ...prev, [marker.id]: data.imageUrl }));
           }
         } catch (err) {
-          console.error('Failed to generate inline diagram:', err);
+          console.error('Failed to generate inline image:', err);
         } finally {
-          setLoadingDiagrams(prev => {
+          setLoadingImages(prev => {
             const next = new Set(prev);
-            next.delete(marker.plateNumber);
+            next.delete(marker.id);
             return next;
           });
         }
       };
 
-      // Generate diagrams in sequence to avoid overloading
+      // Generate images in sequence to avoid overloading
       markers.forEach((marker, idx) => {
-        setTimeout(() => generateDiagram(marker), idx * 2000);
+        setTimeout(() => generateImage(marker), idx * 2000);
       });
     }, [content, topic, sessionId]);
 
@@ -99,6 +98,42 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
         .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
         .trim();
+    };
+
+    // Render an inline image placeholder or actual image
+    const renderInlineImage = (description: string, markerId: string, index: number) => {
+      const imageUrl = inlineImages[markerId];
+      const isLoading = loadingImages.has(markerId);
+
+      return (
+        <figure key={`image-${index}`} className="my-10 text-center">
+          <div className="relative w-full max-w-2xl mx-auto aspect-video bg-secondary/20 rounded-lg overflow-hidden border border-border/30">
+            {isLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Skeleton className="w-full h-full" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <ImageIcon className="w-8 h-8 text-muted-foreground/40 animate-pulse" />
+                  <span className="text-xs text-muted-foreground">Generating image...</span>
+                </div>
+              </div>
+            ) : imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={description}
+                className="w-full h-full object-cover"
+                crossOrigin="anonymous"
+              />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10">
+                <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
+              </div>
+            )}
+          </div>
+          <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+            {description}
+          </figcaption>
+        </figure>
+      );
     };
 
     // Parse markdown content into sections (simplified rendering)
@@ -124,8 +159,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       // Apply the Regex Shield to clean content
       const processedContent = getCleanedContent(content);
 
-      // Extract diagram markers
-      const diagramMarkers = extractDiagramMarkers(processedContent);
+      // Extract image markers
+      const imageMarkers = extractImageMarkers(processedContent);
       
       // Split content by paragraphs and render with proper styling
       const paragraphs = processedContent.split('\n\n').filter((p) => p.trim());
@@ -153,29 +188,14 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           return;
         }
 
-        // Check for [ILLUSTRATION: ...], [VISUAL: ...], or [DIAGRAM: ...] markers (Smart Visual System)
-        const diagramMatch = trimmed.match(/\[(ILLUSTRATION|VISUAL|DIAGRAM):\s*([^\]]+)\]/i);
-        if (diagramMatch) {
-          const visualDescription = diagramMatch[2].trim();
-          const markerIndex = diagramMarkers.findIndex(m => m.description === visualDescription);
-          const plateNumber = markerIndex >= 0 ? `inline-${markerIndex}` : `inline-${index}`;
-          const imageUrl = inlineDiagramImages[plateNumber];
-          const isLoading = loadingDiagrams.has(plateNumber);
+        // Check for [IMAGE: ...] markers
+        const imageMatch = trimmed.match(/\[IMAGE:\s*([^\]]+)\]/i);
+        if (imageMatch) {
+          const imageDescription = imageMatch[1].trim();
+          const markerIndex = imageMarkers.findIndex(m => m.description === imageDescription);
+          const markerId = markerIndex >= 0 ? `img-${markerIndex}` : `img-${index}`;
           
-          elements.push(
-            <div key={`diagram-wrapper-${index}`} className="flex justify-center py-8">
-              <div className="w-full max-w-2xl border border-border/30 rounded-sm shadow-sm">
-                <TechnicalDiagram
-                  caption={visualDescription}
-                  plateNumber={plateNumber}
-                  topic={topic}
-                  isGenerating={isLoading}
-                  imageUrl={imageUrl ?? null}
-                  imageDescription={visualDescription}
-                />
-              </div>
-            </div>
-          );
+          elements.push(renderInlineImage(imageDescription, markerId, index));
           return;
         }
 
@@ -313,18 +333,6 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
           {renderContent()}
 
-          <TechnicalDiagram
-            caption={`Core concepts of ${topic} visualized`}
-            plateNumber="1.1"
-            topic={topic}
-            isGenerating={isGenerating}
-            imageUrl={diagramImages?.['1.1'] ?? null}
-            imageDescription={
-              tableOfContents?.[0]?.imageDescription || 
-              `A detailed instructional diagram illustrating the core concepts and fundamentals of ${topic}.`
-            }
-          />
-
           {!content && (
             <>
               <h2 className="font-serif text-2xl md:text-3xl font-semibold mt-14 mb-6 text-foreground">
@@ -344,15 +352,6 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               </blockquote>
             </>
           )}
-
-          <TechnicalDiagram
-            caption={`Essential tools and materials for ${topic}`}
-            plateNumber="1.2"
-            topic={topic}
-            isGenerating={isGenerating}
-            imageUrl={diagramImages?.['1.2'] ?? null}
-            imageDescription={`Essential tools, materials, and equipment needed for mastering ${topic}.`}
-          />
         </div>
 
         {/* Local Resources Section */}
@@ -365,4 +364,3 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
 ChapterContent.displayName = 'ChapterContent';
 
 export default ChapterContent;
-
