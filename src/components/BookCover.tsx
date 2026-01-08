@@ -20,17 +20,30 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // Once we have a valid cover URL, lock it in to prevent flicker
     const [lockedCoverUrl, setLockedCoverUrl] = useState<string | null>(null);
 
+    // FIX: On mount, if coverImageUrl exists from database, use it immediately
     useEffect(() => {
-      // Only update locked URL if we get a new valid URL and don't have one yet
       if (coverImageUrl && !lockedCoverUrl) {
+        // Database cover URL takes priority - lock it immediately
         setLockedCoverUrl(coverImageUrl);
         setImageLoaded(false);
         setImageFailed(false);
       }
-    }, [coverImageUrl, lockedCoverUrl]);
+    }, [coverImageUrl]); // Remove lockedCoverUrl from deps to allow DB override
     
-    // Use locked URL for display to prevent flicker
-    const displayUrl = lockedCoverUrl || coverImageUrl;
+    // Use locked URL for display to prevent flicker, but always prefer fresh DB URL
+    const displayUrl = coverImageUrl || lockedCoverUrl;
+    
+    // Parse title for premium magazine styling (Category: Main Title)
+    const parsedTitle = (() => {
+      if (title.includes(':')) {
+        const [category, ...rest] = title.split(':');
+        return {
+          category: category.trim(),
+          mainTitle: rest.join(':').trim()
+        };
+      }
+      return { category: null, mainTitle: title };
+    })();
     
     useEffect(() => {
       // Timeout fallback: if image doesn't load in 15s, show fallback
@@ -87,10 +100,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             )}
           </div>
 
-          {/* Main Title - Below Image */}
-          <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-medium text-foreground leading-tight text-center tracking-wide mb-3">
-            {title}
-          </h1>
+          {/* Premium Magazine Title Layout */}
+          {parsedTitle.category ? (
+            <>
+              {/* Category Label */}
+              <p className="text-[9px] md:text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 font-sans font-medium mb-2">
+                {parsedTitle.category}
+              </p>
+              {/* Main Title */}
+              <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-medium text-foreground leading-tight text-center tracking-wide mb-3">
+                {parsedTitle.mainTitle}
+              </h1>
+            </>
+          ) : (
+            <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-medium text-foreground leading-tight text-center tracking-wide mb-3">
+              {parsedTitle.mainTitle}
+            </h1>
+          )}
 
           {/* Decorative divider */}
           <div className="w-10 h-[1px] bg-foreground/20 mb-3" />

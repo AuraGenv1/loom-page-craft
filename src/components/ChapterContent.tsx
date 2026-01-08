@@ -89,19 +89,14 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       });
     }, [content, topic, sessionId]);
 
-    // Clean content helper - the "Regex Shield"
-    const cleanContent = (text: string): string => {
+    // THE REGEX SHIELD - Clean all content before rendering
+    const getCleanedContent = (text: string): string => {
       return text
-        .replace(/\*{2,}\s*$/gm, '')           // Strip 2+ trailing asterisks at end of lines
-        .replace(/\*{2,}$/g, '')               // Strip trailing ** at end of content
-        .replace(/\*\*\s*\n/g, '\n')           // Remove ** before newlines
-        .replace(/\s\*\*\s*$/gm, '')           // Remove space+** at end of lines
-        .replace(/([.!?:,])\s*\*{1,2}\s*$/gm, '$1')  // Remove asterisks after punctuation
-        .replace(/\*\*\*+/g, '')               // Remove 3+ asterisks entirely
-        .replace(/^\*{1,2}\s*/gm, '')          // Remove leading asterisks
-        .replace(/\*{1,2}$/gm, '')             // Remove trailing asterisks
-        .replace(/---+\s*$/gm, '')             // Remove trailing ---
-        .replace(/\s{3,}/g, '  ')              // Collapse excessive whitespace
+        .replace(/\*\*/g, '')                      // Remove all double asterisks
+        .replace(/\*/g, '')                        // Remove all single asterisks
+        .replace(/---+/g, '')                      // Remove horizontal line artifacts
+        .replace(/^\s*[-*]\s*$/gm, '')             // Remove orphan bullet markers
+        .replace(/\s{3,}/g, '  ')                  // Collapse excessive whitespace
         .trim();
     };
 
@@ -126,9 +121,9 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       }
 
       // Apply the Regex Shield to clean content
-      const processedContent = cleanContent(content);
+      const processedContent = getCleanedContent(content);
 
-      // Extract diagram markers and split content around them
+      // Extract diagram markers
       const diagramMarkers = extractDiagramMarkers(processedContent);
       
       // Split content by paragraphs and render with proper styling
@@ -138,7 +133,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       paragraphs.forEach((paragraph, index) => {
         const trimmed = paragraph.trim();
 
-        // Check for [DIAGRAM: ...] markers and render inline diagrams
+        // Check for [DIAGRAM: ...] markers and render inline diagrams with Artisan styling
         const diagramMatch = trimmed.match(/\[DIAGRAM:\s*([^\]]+)\]/i);
         if (diagramMatch) {
           const markerIndex = diagramMarkers.findIndex(m => m.description === diagramMatch[1].trim());
@@ -147,15 +142,18 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           const isLoading = loadingDiagrams.has(plateNumber);
           
           elements.push(
-            <TechnicalDiagram
-              key={`diagram-${index}`}
-              caption={diagramMatch[1].trim()}
-              plateNumber={plateNumber}
-              topic={topic}
-              isGenerating={isLoading}
-              imageUrl={imageUrl ?? null}
-              imageDescription={diagramMatch[1].trim()}
-            />
+            <div key={`diagram-wrapper-${index}`} className="flex justify-center py-8">
+              <div className="w-full max-w-2xl border border-border/30 rounded-sm shadow-sm">
+                <TechnicalDiagram
+                  caption={diagramMatch[1].trim()}
+                  plateNumber={plateNumber}
+                  topic={topic}
+                  isGenerating={isLoading}
+                  imageUrl={imageUrl ?? null}
+                  imageDescription={diagramMatch[1].trim()}
+                />
+              </div>
+            </div>
           );
           return;
         }
