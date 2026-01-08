@@ -21,15 +21,15 @@ const TechnicalDiagram = forwardRef<HTMLDivElement, TechnicalDiagramProps>(
       <div ref={ref} className="w-full my-12 relative">
         {/* Plate container - no padding for full-bleed images */}
         <div className="bg-secondary/20 border border-border/50 shadow-sm overflow-hidden">
-          {/* Plate header */}
-          <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-border/30">
-            <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-medium">
-              Technical Plate {plateNumber}
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
-              Instructional Diagram
-            </span>
-          </div>
+        {/* Plate header */}
+        <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-border/30">
+          <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-medium">
+            Plate {plateNumber}
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
+            Illustration
+          </span>
+        </div>
 
           {/* Full-width image container - completely fills width, no margins */}
           <div className="w-full aspect-video bg-background/50 flex flex-col items-center justify-center relative overflow-hidden">

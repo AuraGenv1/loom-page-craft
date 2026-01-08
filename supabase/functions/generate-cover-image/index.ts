@@ -11,11 +11,18 @@ const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, wate
 
 const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
   if (variant === "diagram") {
-    // Clear, instructive illustration (no text) for chapters.
-    return `Ultra clean black and white instructional technical diagram of: ${caption || topicOrTitle}. Blueprint / engineering schematic style. Clear shapes, arrows and callouts. High contrast, thin precise lines, white background. NO TEXT ON IMAGE. No shading, no gradients, no watercolor, no realism.`;
+    // High-end travel infographic style - minimalist architectural line-art
+    return `High-end travel infographic, minimalist architectural line-art illustration of: ${caption || topicOrTitle}. Navy blue lines on white background. Clean geometric shapes, elegant thin precise lines. Professional editorial style. NO TEXT ON IMAGE. No shading, no gradients, no photos.`;
   }
 
-  // Cover - Macro photography style with cookbook aesthetic
+  // Cover - Cinematic street photography for travel, macro for crafts
+  const isTravelTopic = /\b(travel|trip|guide|city|country|vacation|tour|destination|london|paris|tokyo|rome|barcelona|new york|bangkok|dubai)\b/i.test(topicOrTitle);
+  
+  if (isTravelTopic) {
+    return `Cinematic street photography, 8k resolution, shallow depth of field, blurred background. Iconic landmark of ${topicOrTitle} in focus. Golden hour lighting, vibrant colors, professional travel magazine cover aesthetic. NO TEXT ON IMAGE.`;
+  }
+
+  // Default - Macro photography for crafts/hobbies
   return `Macro photography, shallow depth of field, minimalist composition. Professional cookbook aesthetic. Subject: ${topicOrTitle}. Soft natural lighting, elegant styling, premium quality. NO TEXT ON IMAGE.`;
 };
 

@@ -133,16 +133,16 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       paragraphs.forEach((paragraph, index) => {
         const trimmed = paragraph.trim();
 
-        // Check for [PRO-TIP: ...] callout boxes - render with gold styling and bulb icon
+        // Check for [PRO-TIP: ...] callout boxes - light grey with charcoal left border
         const proTipMatch = trimmed.match(/\[PRO-TIP:\s*([^\]]+)\]/i);
         if (proTipMatch) {
           elements.push(
-            <div key={`protip-${index}`} className="my-8 p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div key={`protip-${index}`} className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
               <div className="flex items-start gap-4">
-                <span className="text-2xl flex-shrink-0">💡</span>
+                <span className="text-xl flex-shrink-0">💡</span>
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-amber-700 dark:text-amber-400 font-semibold mb-2">Pro-Tip</p>
-                  <p className="text-amber-900 dark:text-amber-100 italic font-serif leading-relaxed">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pro-Tip</p>
+                  <p className="text-foreground/80 dark:text-foreground/70 italic font-serif leading-relaxed text-[1.1rem]" style={{ lineHeight: '1.6' }}>
                     {proTipMatch[1].trim()}
                   </p>
                 </div>
@@ -252,12 +252,16 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           return;
         }
 
-        // Regular paragraph - first one gets drop cap
-        if (index === 0 || (hasDisclaimer && index === 1)) {
+        // Regular paragraph - standardized typography (1.1rem, 1.6 line-height)
+        // Only first paragraph of actual content gets drop cap (not after disclaimer)
+        const isFirstContentParagraph = index === 0 && !hasDisclaimer;
+        
+        if (isFirstContentParagraph) {
           elements.push(
             <p
               key={index}
-              className="text-lg md:text-xl first-letter:text-6xl first-letter:font-serif first-letter:font-bold first-letter:mr-3 first-letter:float-left first-letter:leading-none first-letter:text-foreground"
+              className="first-letter:text-5xl first-letter:font-serif first-letter:font-bold first-letter:mr-2 first-letter:float-left first-letter:leading-none first-letter:text-foreground"
+              style={{ fontSize: '1.1rem', lineHeight: '1.6' }}
             >
               {trimmed}
             </p>
@@ -266,7 +270,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         }
 
         elements.push(
-          <p key={index} className="text-base md:text-lg">
+          <p key={index} style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>
             {trimmed}
           </p>
         );
