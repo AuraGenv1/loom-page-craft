@@ -97,37 +97,37 @@ export type Database = {
       }
       chapters: {
         Row: {
-          book_id: string
-          chapter_number: number
+          book_id: string | null
+          chapter_number: number | null
           content: string | null
-          created_at: string
+          created_at: string | null
           id: string
           image_url: string | null
-          status: string
+          status: string | null
           title: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          book_id: string
-          chapter_number: number
+          book_id?: string | null
+          chapter_number?: number | null
           content?: string | null
-          created_at?: string
+          created_at?: string | null
           id?: string
           image_url?: string | null
-          status?: string
+          status?: string | null
           title?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          book_id?: string
-          chapter_number?: number
+          book_id?: string | null
+          chapter_number?: number | null
           content?: string | null
-          created_at?: string
+          created_at?: string | null
           id?: string
           image_url?: string | null
-          status?: string
+          status?: string | null
           title?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
