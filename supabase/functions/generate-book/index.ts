@@ -945,6 +945,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         console.log('Generating AI-powered universal image search query...');
         
         // UNIVERSAL INTENT SEARCH: Use AI to generate the BEST search query for any topic
+        // Extract geographic location from topic for travel queries
         let searchQuery = `${topic} high resolution professional photography`;
         
         try {
@@ -952,16 +953,21 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
 
 TOPIC: "${topic}"
 
-GUIDELINES:
-- For TRAVEL topics (cities, destinations, hotels): Include "landscape", "architecture", "scenic", "travel destination"
+CRITICAL GUIDELINES:
+- For TRAVEL topics (cities, destinations, hotels): 
+  * ALWAYS prepend the GEOGRAPHIC LOCATION (city, state/country) at the start
+  * Include "landscape", "architecture", "scenic", "travel destination"  
+  * APPEND these negative filters: -golf -wedding -event -stock
+  * Example: "Aspen Colorado mountain landscape scenic travel destination -golf -wedding"
 - For TECHNICAL topics (repair, mechanics, engineering): Include "mechanical detail", "close-up", "professional studio"
 - For AUTOMOTIVE topics (cars, vehicles): Include "automotive photography", "studio lighting", "showroom"
 - For FOOD/COOKING topics: Include "food photography", "culinary", "gourmet"
 - For WELLNESS topics: Include "lifestyle", "peaceful", "natural light"
 - For CRAFTS/DIY: Include "hands-on", "workspace", "materials"
-- Always use POSITIVE keywords that describe what we WANT, never negative filters
 
-Return ONLY the search query string, nothing else. Maximum 12 words.`;
+IMPORTANT: For any location-based topic, the GEOGRAPHIC LOCATION must be the FIRST words in the query.
+
+Return ONLY the search query string, nothing else. Maximum 15 words.`;
 
           const queryController = new AbortController();
           const queryTimeoutId = setTimeout(() => queryController.abort(), 10000);
@@ -994,13 +1000,14 @@ Return ONLY the search query string, nothing else. Maximum 12 words.`;
           }
         } catch (aiQueryError) {
           console.log('AI query generation failed, using fallback:', aiQueryError);
-          // Fallback to intent-based patterns
+          // Fallback to intent-based patterns with geographic markers
           if (topicType === 'TECHNICAL') {
             searchQuery = `${topic} professional studio photography mechanical detail`;
           } else if (topicType === 'LIFESTYLE') {
             const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain|hotel)\b/i;
             if (travelKeywords.test(topic)) {
-              searchQuery = `${topic} scenic landscape travel destination professional photography`;
+              // For travel topics, add negative filters to avoid golf courses and events
+              searchQuery = `${topic} scenic landscape travel destination professional photography -golf -wedding -event`;
             } else {
               searchQuery = `${topic} lifestyle magazine professional photography`;
             }
