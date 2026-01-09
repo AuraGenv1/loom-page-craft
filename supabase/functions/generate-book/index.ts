@@ -937,24 +937,33 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
     }
 
     // Generate cover image using Google Custom Search API
-    // Fetch up to 5 real images for fallback logic
+    // Fetch up to 5 real images from Google Custom Search (PRIMARY source)
     const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
     const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
     
     if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
       try {
-        console.log('Fetching cover images from Google Custom Search...');
+        console.log('Fetching cover images from Google Custom Search (PRIMARY)...');
         
-        // Extract location for more accurate search
-        const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
-        const searchLocation = locationMatch ? locationMatch[2] : topic;
+        // Extract location for travel-optimized search
+        const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,?\s*[A-Z]{2})?)/i);
+        const extractedLocation = locationMatch ? locationMatch[2].trim() : null;
         
-        // Build search query - prioritize location for travel topics
-        const searchQuery = isAutomotiveTopic
-          ? `${topic} high quality photo`
-          : `${searchLocation} travel destination scenic landscape`;
+        // Build optimized search query based on topic type
+        let searchQuery: string;
+        if (isAutomotiveTopic) {
+          searchQuery = `${topic} professional photo`;
+        } else if (extractedLocation) {
+          // Travel topic - use specific location + photography keywords
+          searchQuery = `${extractedLocation} travel photography landscape scenic`;
+        } else {
+          // General topic - use full topic with quality keywords
+          searchQuery = `${topic} beautiful photography`;
+        }
         
-        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
+        console.log(`Google CSE query: "${searchQuery}"`);
+        
+        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=xlarge&imgType=photo&safe=active`;
         
         const searchResponse = await fetch(searchUrl);
         
@@ -962,8 +971,12 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
           const searchData = await searchResponse.json();
           const items = searchData.items || [];
           
-          // Blocked domains that often fail to load
-          const blockedDomains = ['instagram.com', 'pinterest.com', 'tripadvisor.com', 'facebook.com', 'twitter.com', 'x.com'];
+          // Blocked domains that often fail to load or have CORS issues
+          const blockedDomains = [
+            'instagram.com', 'pinterest.com', 'tripadvisor.com', 
+            'facebook.com', 'twitter.com', 'x.com', 'tiktok.com',
+            'linkedin.com', 'flickr.com'
+          ];
           
           // Filter and collect up to 5 valid image URLs
           const validUrls: string[] = [];
@@ -977,7 +990,13 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
             // Check if URL is from a blocked domain
             const isBlocked = blockedDomains.some(domain => imageUrl.toLowerCase().includes(domain));
             if (isBlocked) {
-              console.log(`Skipping blocked domain: ${imageUrl}`);
+              console.log(`Skipping blocked domain: ${imageUrl.substring(0, 60)}...`);
+              continue;
+            }
+            
+            // Prefer HTTPS URLs
+            if (!imageUrl.startsWith('https://')) {
+              console.log(`Skipping non-HTTPS URL: ${imageUrl.substring(0, 60)}...`);
               continue;
             }
             
@@ -985,21 +1004,24 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
           }
           
           if (validUrls.length > 0) {
-            // Store as array for fallback logic in frontend
             bookData.coverImageUrl = validUrls;
             console.log(`Google CSE: Found ${validUrls.length} valid cover images`);
           } else {
             console.log('Google CSE: No valid images found after filtering');
+            bookData.coverImageUrl = null;
           }
         } else {
           const errorText = await searchResponse.text();
           console.error('Google CSE error:', searchResponse.status, errorText);
+          bookData.coverImageUrl = null;
         }
       } catch (cseError) {
         console.error('Google Custom Search failed:', cseError);
+        bookData.coverImageUrl = null;
       }
     } else {
       console.log('Google CSE API keys not configured, skipping cover image search');
+      bookData.coverImageUrl = null;
     }
 
     // Ensure coverImageUrl is always an array or null (never undefined)
