@@ -935,36 +935,81 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       bookData.hasDisclaimer = true;
     }
 
-    // Generate cover image using Google Custom Search API with DYNAMIC INTENT
-    // AI generates topic-specific search query for maximum relevance
+    // Generate cover image using Google Custom Search API with UNIVERSAL INTENT
+    // AI dynamically generates the most relevant search query for EACH topic
     const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
     const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
     
     if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
       try {
-        console.log('Generating dynamic search query for cover image...');
+        console.log('Generating AI-powered universal image search query...');
         
-        // DYNAMIC INTENT SEARCH: Generate topic-specific search query
+        // UNIVERSAL INTENT SEARCH: Use AI to generate the BEST search query for any topic
         let searchQuery = `${topic} high resolution professional photography`;
         
-        // Intent-based query optimization
-        if (topicType === 'TECHNICAL') {
-          // For technical topics: focus on mechanical details, tools, craftsmanship
-          searchQuery = `${topic} professional studio photography detail close-up`;
-        } else if (topicType === 'LIFESTYLE') {
-          // For lifestyle/travel: focus on landscapes, interiors, aspirational imagery
-          const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain)\b/i;
-          if (travelKeywords.test(topic)) {
-            searchQuery = `${topic} scenic landscape travel destination professional photography`;
-          } else {
-            searchQuery = `${topic} lifestyle magazine professional photography`;
+        try {
+          const queryPrompt = `Analyze this topic and generate the BEST Google image search query to find stunning, relevant imagery.
+
+TOPIC: "${topic}"
+
+GUIDELINES:
+- For TRAVEL topics (cities, destinations, hotels): Include "landscape", "architecture", "scenic", "travel destination"
+- For TECHNICAL topics (repair, mechanics, engineering): Include "mechanical detail", "close-up", "professional studio"
+- For AUTOMOTIVE topics (cars, vehicles): Include "automotive photography", "studio lighting", "showroom"
+- For FOOD/COOKING topics: Include "food photography", "culinary", "gourmet"
+- For WELLNESS topics: Include "lifestyle", "peaceful", "natural light"
+- For CRAFTS/DIY: Include "hands-on", "workspace", "materials"
+- Always use POSITIVE keywords that describe what we WANT, never negative filters
+
+Return ONLY the search query string, nothing else. Maximum 12 words.`;
+
+          const queryController = new AbortController();
+          const queryTimeoutId = setTimeout(() => queryController.abort(), 10000);
+          
+          const queryResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: queryPrompt }] }],
+                generationConfig: {
+                  temperature: 0.3,
+                  maxOutputTokens: 100,
+                },
+              }),
+              signal: queryController.signal,
+            }
+          );
+          
+          clearTimeout(queryTimeoutId);
+          
+          if (queryResponse.ok) {
+            const queryData = await queryResponse.json();
+            const aiQuery = queryData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (aiQuery && aiQuery.length > 10 && aiQuery.length < 200) {
+              searchQuery = aiQuery;
+              console.log('AI-generated search query:', searchQuery);
+            }
           }
-        } else {
-          // For academic: focus on relevant imagery
-          searchQuery = `${topic} professional editorial photography`;
+        } catch (aiQueryError) {
+          console.log('AI query generation failed, using fallback:', aiQueryError);
+          // Fallback to intent-based patterns
+          if (topicType === 'TECHNICAL') {
+            searchQuery = `${topic} professional studio photography mechanical detail`;
+          } else if (topicType === 'LIFESTYLE') {
+            const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain|hotel)\b/i;
+            if (travelKeywords.test(topic)) {
+              searchQuery = `${topic} scenic landscape travel destination professional photography`;
+            } else {
+              searchQuery = `${topic} lifestyle magazine professional photography`;
+            }
+          } else {
+            searchQuery = `${topic} professional editorial photography`;
+          }
         }
         
-        console.log('Dynamic search query:', searchQuery);
+        console.log('Final search query:', searchQuery);
         
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
         
@@ -974,8 +1019,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
           const searchData = await searchResponse.json();
           const items = searchData.items || [];
           
-          // Blocked domains that often fail to load
-          const blockedDomains = ['instagram.com', 'pinterest.com', 'tripadvisor.com', 'facebook.com', 'twitter.com', 'x.com'];
+          // Blocked domains that often fail to load or have CORS issues
+          const blockedDomains = ['instagram.com', 'pinterest.com', 'tripadvisor.com', 'facebook.com', 'twitter.com', 'x.com', 'flickr.com', 'tumblr.com'];
           
           // Filter and collect up to 5 valid image URLs
           const validUrls: string[] = [];
@@ -993,7 +1038,12 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
               continue;
             }
             
-            validUrls.push(imageUrl);
+            // Prefer URLs that look like direct image links
+            if (imageUrl.match(/\.(jpg|jpeg|png|webp)($|\?)/i)) {
+              validUrls.push(imageUrl);
+            } else if (validUrls.length < 5) {
+              validUrls.push(imageUrl); // Still include non-obvious URLs as fallback
+            }
           }
           
           if (validUrls.length > 0) {
