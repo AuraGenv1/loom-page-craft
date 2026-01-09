@@ -38,6 +38,8 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
   const fetchLocalResources = async (latitude: number, longitude: number) => {
     setIsLoading(true);
     setLocationError(null);
+    // Clear previous results before new search
+    setFetchedResources([]);
 
     try {
       const sessionId = getSessionId();
