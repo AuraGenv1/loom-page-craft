@@ -944,14 +944,9 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       try {
         console.log('Fetching cover images from Google Custom Search...');
         
-        // Extract location for more accurate search
-        const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
-        const searchLocation = locationMatch ? locationMatch[2] : topic;
-        
-        // Build search query - prioritize location for travel topics
-        const searchQuery = isAutomotiveTopic
-          ? `${topic} high quality photo`
-          : `${searchLocation} travel destination scenic landscape`;
+        // Build search query for high resolution travel photography
+        // Use the full topic for maximum relevance
+        const searchQuery = `${topic} high resolution travel photography`;
         
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
         
