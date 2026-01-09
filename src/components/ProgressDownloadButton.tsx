@@ -22,30 +22,56 @@ interface ProgressDownloadButtonProps {
 
 /**
  * Convert image URL to Base64 data URL for PDF embedding
+ * This ensures images are embedded directly in the PDF and avoids CORS issues
  */
 const convertImageToBase64 = async (url: string): Promise<string | null> => {
   if (!url) return null;
-  if (url.startsWith('data:')) return url;
+  if (url.startsWith('data:')) return url; // Already a data URL
 
   try {
+    console.log('[PDF] Converting image to Base64:', url.substring(0, 80) + '...');
+    
     const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
       body: { url },
     });
 
     if (error) {
-      console.warn('fetch-image-data-url failed:', error);
+      console.warn('[PDF] fetch-image-data-url failed:', error);
       return null;
     }
 
     if (data?.dataUrl && typeof data.dataUrl === 'string' && data.dataUrl.startsWith('data:')) {
+      console.log('[PDF] Successfully converted image to Base64');
       return data.dataUrl;
     }
 
+    console.warn('[PDF] Invalid response from fetch-image-data-url');
     return null;
   } catch (e) {
-    console.warn('convertImageToBase64 exception:', e);
+    console.warn('[PDF] convertImageToBase64 exception:', e);
     return null;
   }
+};
+
+/**
+ * Try multiple cover URLs until one successfully converts to Base64
+ */
+const getBase64CoverImage = async (coverImageUrls: string[]): Promise<string | null> => {
+  if (!coverImageUrls || coverImageUrls.length === 0) return null;
+
+  for (let i = 0; i < coverImageUrls.length; i++) {
+    const url = coverImageUrls[i];
+    console.log(`[PDF] Trying cover image ${i + 1}/${coverImageUrls.length}...`);
+    
+    const base64Url = await convertImageToBase64(url);
+    if (base64Url) {
+      console.log(`[PDF] Cover image ${i + 1} converted successfully`);
+      return base64Url;
+    }
+  }
+
+  console.warn('[PDF] All cover images failed to convert');
+  return null;
 };
 
 const ProgressDownloadButton = ({
@@ -75,10 +101,10 @@ const ProgressDownloadButton = ({
   // Button label based on state
   const getButtonLabel = () => {
     if (isConverting) {
-      return 'Preparing images for PDF...';
+      return 'Preparing High-Resolution PDF...';
     }
     if (isCompiling) {
-      return 'Compiling your high-quality PDF...';
+      return 'Compiling your guide...';
     }
     if (isPurchased && !isComplete) {
       return `Weaving... ${completedChapters}/${totalChapters} chapters`;
@@ -87,7 +113,8 @@ const ProgressDownloadButton = ({
   };
 
   /**
-   * Handle PDF download with Base64 image conversion
+   * Handle PDF download with robust Base64 image conversion
+   * Converts ALL cover images to Base64 before PDF generation to avoid CORS issues
    */
   const handleDownload = async () => {
     if (!bookData) {
@@ -97,29 +124,38 @@ const ProgressDownloadButton = ({
 
     try {
       setIsConverting(true);
-      toast.info('Preparing PDF...', { 
+      
+      // Show persistent loading toast
+      toast.loading('Preparing High-Resolution PDF...', { 
         id: 'pdf-progress',
-        description: 'Converting images for embedding...' 
+        description: 'Converting images for embedding (this may take a moment)...' 
       });
 
-      // Convert cover image to Base64 for PDF embedding
-      let base64CoverUrl: string | null = null;
+      console.log('[PDF] Starting PDF preparation...');
+      console.log('[PDF] Cover URLs available:', coverImageUrls.length);
+
+      // STEP 1: Convert cover image to Base64 for PDF embedding
+      // Try multiple URLs until one works (fallback logic)
+      const base64CoverUrl = await getBase64CoverImage(coverImageUrls);
       
-      if (coverImageUrls.length > 0) {
-        // Try each cover URL until one succeeds
-        for (const url of coverImageUrls) {
-          base64CoverUrl = await convertImageToBase64(url);
-          if (base64CoverUrl) break;
-        }
+      if (base64CoverUrl) {
+        console.log('[PDF] Cover image ready for embedding');
+      } else {
+        console.log('[PDF] No cover image available, proceeding without');
       }
 
-      // Allow 3 seconds for conversion to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // STEP 2: Wait for any async operations to settle
+      // This ensures the Base64 data is fully available before PDF generation
+      console.log('[PDF] Waiting for image processing to complete...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      toast.info('Generating PDF...', { 
+      // STEP 3: Update toast and generate PDF
+      toast.loading('Generating PDF...', { 
         id: 'pdf-progress',
         description: 'Creating your clean, content-only guide.' 
       });
+
+      console.log('[PDF] Calling generateCleanPDF...');
 
       // Generate PDF with Base64 cover image
       await generateCleanPDF({
@@ -133,10 +169,12 @@ const ProgressDownloadButton = ({
         description: 'Your guide has been saved.' 
       });
 
+      console.log('[PDF] PDF generation complete');
+
       // Call external onClick if provided
       onClick?.();
     } catch (error) {
-      console.error('PDF generation error:', error);
+      console.error('[PDF] PDF generation error:', error);
       toast.error('Failed to generate PDF. Please try again.', { id: 'pdf-progress' });
     } finally {
       setIsConverting(false);
@@ -191,7 +229,7 @@ const ProgressDownloadButton = ({
       
       {isCompiling && (
         <p className="text-sm text-muted-foreground font-serif italic text-center">
-          Preparing your premium PDF with all diagrams and formatting...
+          Preparing your premium PDF with all content and cover image...
         </p>
       )}
     </div>
