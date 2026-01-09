@@ -147,7 +147,7 @@ const ProgressDownloadButton = ({
       // STEP 2: Wait for any async operations to settle
       // This ensures the Base64 data is fully available before PDF generation
       console.log('[PDF] Waiting for image processing to complete...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 3500));
 
       // STEP 3: Update toast and generate PDF
       toast.loading('Generating PDF...', { 

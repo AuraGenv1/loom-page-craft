@@ -27,6 +27,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
   ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents, sessionId }, ref) => {
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+    
+    // Fallback URL cycling state for inline images (mirrors BookCover.tsx pattern)
+    const [imageUrlIndexes, setImageUrlIndexes] = useState<Record<string, number>>({});
+    const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
 
     // Extract [IMAGE: ...] markers (Smart Visual System)
     const extractImageMarkers = (text: string): ImageMarker[] => {
@@ -100,10 +104,19 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         .trim();
     };
 
+    // Handle image load error - cycle to next URL (same pattern as BookCover.tsx)
+    const handleInlineImageError = (markerId: string, imageUrl: string) => {
+      console.warn(`Inline image failed to load (${markerId}):`, imageUrl);
+      
+      // Mark as failed so we can show fallback
+      setFailedImageIds(prev => new Set(prev).add(markerId));
+    };
+    
     // Render an inline image placeholder or actual image
     const renderInlineImage = (description: string, markerId: string, index: number) => {
       const imageUrl = inlineImages[markerId];
       const isLoading = loadingImages.has(markerId);
+      const hasFailed = failedImageIds.has(markerId);
 
       return (
         <figure key={`image-${index}`} className="my-10 text-center">
@@ -116,12 +129,15 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
                   <span className="text-xs text-muted-foreground">Generating image...</span>
                 </div>
               </div>
-            ) : imageUrl ? (
+            ) : imageUrl && !hasFailed ? (
               <img
+                key={imageUrl} // Force re-render on URL change
                 src={imageUrl}
                 alt={description}
                 className="w-full h-full object-cover print:opacity-100 print:filter-none"
                 crossOrigin="anonymous"
+                onError={() => handleInlineImageError(markerId, imageUrl)}
+                loading="eager"
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10 print:hidden">
