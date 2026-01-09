@@ -11,6 +11,13 @@ const BLOCKED_HOST_SNIPPETS = [
   "instagram.",
   "pinterest.",
   "tripadvisor.",
+  "facebook.",
+  "twitter.",
+  "tiktok.",
+  "shutterstock.",
+  "gettyimages.",
+  "alamy.",
+  "dreamstime.",
 ];
 
 const isBlockedUrl = (urlStr: string): boolean => {
@@ -26,8 +33,8 @@ const isBlockedUrl = (urlStr: string): boolean => {
 // More permissive location extraction: supports apostrophes/hyphens and commas (e.g. "St. Moritz", "Badrutt's")
 const extractGeographicLocation = (topic: string): string | null => {
   const patterns = [
-    /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][\w'’\-\.]+(?:\s+[A-Z][\w'’\-\.]+)*(?:,\s*[A-Z][\w'’\-\.]+(?:\s+[A-Z][\w'’\-\.]+)*)?)/i,
-    /^([A-Z][\w'’\-\.]+(?:,?\s+[A-Z][\w'’\-\.]+)*)/,
+    /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*(?:,\s*[A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*)?)/i,
+    /^([A-Z][\w''\-\.]+(?:,?\s+[A-Z][\w''\-\.]+)*)/,
   ];
 
   for (const p of patterns) {
@@ -99,7 +106,12 @@ const looksLikeLoadableImage = async (url: string): Promise<boolean> => {
   }
 };
 
-async function fetchGoogleImage(query: string, apiKey: string, cx: string): Promise<string | null> {
+/**
+ * Fetches up to 5 image URLs from Google CSE, filters blocked domains,
+ * and validates each image is loadable.
+ * Returns array of validated image URLs for frontend fallback cycling.
+ */
+async function fetchGoogleImages(query: string, apiKey: string, cx: string): Promise<string[]> {
   try {
     console.log("Google CSE search query:", query);
 
@@ -108,7 +120,7 @@ async function fetchGoogleImage(query: string, apiKey: string, cx: string): Prom
       cx,
       q: query,
       searchType: "image",
-      num: "5",
+      num: "10", // Request 10 to have better chances of getting 5 valid ones
       imgSize: "xlarge",
       imgType: "photo",
       safe: "active",
@@ -119,7 +131,7 @@ async function fetchGoogleImage(query: string, apiKey: string, cx: string): Prom
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Google CSE API error:", response.status, errorText);
-      return null;
+      return [];
     }
 
     const data = await response.json();
@@ -127,29 +139,36 @@ async function fetchGoogleImage(query: string, apiKey: string, cx: string): Prom
 
     if (!items.length) {
       console.log("Google CSE returned no results");
-      return null;
+      return [];
     }
 
-    // Candidate selection: block known-hostile domains; validate link is an image.
+    // Filter out blocked domains
     const candidates = items
       .map((it) => it.link)
       .filter((u): u is string => typeof u === "string" && u.startsWith("http"))
       .filter((u) => !isBlockedUrl(u));
 
+    console.log(`Filtered ${items.length} results to ${candidates.length} candidates after blocking`);
+
+    // Validate each image and collect up to 5 valid URLs
+    const validUrls: string[] = [];
     for (const url of candidates) {
+      if (validUrls.length >= 5) break;
+      
       const ok = await looksLikeLoadableImage(url);
       if (ok) {
-        console.log("Google CSE selected image:", url);
-        return url;
+        console.log(`Validated image ${validUrls.length + 1}:`, url);
+        validUrls.push(url);
+      } else {
+        console.log("Rejected image candidate (not loadable):", url);
       }
-      console.log("Rejected image candidate (not loadable):", url);
     }
 
-    console.log("No suitable image found after filtering/validation");
-    return null;
+    console.log(`Returning ${validUrls.length} validated image URLs`);
+    return validUrls;
   } catch (error) {
     console.error("Google CSE fetch error:", error);
-    return null;
+    return [];
   }
 }
 
@@ -196,16 +215,20 @@ serve(async (req) => {
     const subjectForQuery = resolvedVariant === "cover" ? coverSubject : rawSubject;
 
     const searchQuery = buildSearchQuery(resolvedVariant, subjectForQuery, caption);
-    const imageUrl = await fetchGoogleImage(searchQuery, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX);
+    const imageUrls = await fetchGoogleImages(searchQuery, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX);
 
-    if (!imageUrl) {
-      return new Response(JSON.stringify({ error: "No suitable image found" }), {
+    if (imageUrls.length === 0) {
+      return new Response(JSON.stringify({ error: "No suitable images found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ imageUrl }), {
+    // Return both array (for fallback) and single URL (for backward compatibility)
+    return new Response(JSON.stringify({ 
+      imageUrl: imageUrls[0],  // Primary URL (backward compatible)
+      imageUrls: imageUrls,    // Full array for fallback cycling
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {

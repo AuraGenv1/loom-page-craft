@@ -33,5 +33,5 @@ export interface BookData {
   chapter12Content?: string;
   localResources: LocalResource[];
   hasDisclaimer?: boolean;
-  coverImageUrl?: string;
+  coverImageUrl?: string | string[];
 }

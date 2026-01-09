@@ -26,7 +26,7 @@ export type Database = {
           chapter7_content: string | null
           chapter8_content: string | null
           chapter9_content: string | null
-          cover_image_url: string | null
+          cover_image_url: string[] | null
           created_at: string
           edition_year: number | null
           has_disclaimer: boolean
@@ -52,7 +52,7 @@ export type Database = {
           chapter7_content?: string | null
           chapter8_content?: string | null
           chapter9_content?: string | null
-          cover_image_url?: string | null
+          cover_image_url?: string[] | null
           created_at?: string
           edition_year?: number | null
           has_disclaimer?: boolean
@@ -78,7 +78,7 @@ export type Database = {
           chapter7_content?: string | null
           chapter8_content?: string | null
           chapter9_content?: string | null
-          cover_image_url?: string | null
+          cover_image_url?: string[] | null
           created_at?: string
           edition_year?: number | null
           has_disclaimer?: boolean
@@ -308,7 +308,7 @@ export type Database = {
           chapter7_content: string | null
           chapter8_content: string | null
           chapter9_content: string | null
-          cover_image_url: string | null
+          cover_image_url: string[] | null
           created_at: string
           edition_year: number | null
           has_disclaimer: boolean

@@ -40,7 +40,7 @@ interface SavedBook {
     table_of_contents: any;
     local_resources: any;
     has_disclaimer: boolean;
-    cover_image_url: string | null;
+    cover_image_url: string[] | null;
     is_purchased: boolean;
     edition_year: number | null;
   } | null;
@@ -165,7 +165,7 @@ const Dashboard = () => {
         chapter10Content: book.chapter10_content || undefined,
         localResources: book.local_resources || [],
         hasDisclaimer: book.has_disclaimer,
-        coverImageUrl: book.cover_image_url || undefined,
+        coverImageUrl: book.cover_image_url?.[0] || undefined,
       };
 
       toast.loading('Generating PDF from your guide...', { id: 'pdf-gen' });
@@ -206,7 +206,7 @@ const Dashboard = () => {
         chapter10Content: book.chapter10_content || undefined,
         localResources: book.local_resources || [],
         hasDisclaimer: book.has_disclaimer,
-        coverImageUrl: book.cover_image_url || undefined,
+        coverImageUrl: book.cover_image_url?.[0] || undefined,
       };
 
       // Use Kindle-optimized HTML export
@@ -278,7 +278,7 @@ const Dashboard = () => {
             chapter10_content: data.chapter10Content || null,
             local_resources: JSON.parse(JSON.stringify(data.localResources || [])),
             has_disclaimer: data.hasDisclaimer || false,
-            cover_image_url: data.coverImageUrl || null,
+            cover_image_url: data.coverImageUrl ? (Array.isArray(data.coverImageUrl) ? data.coverImageUrl : [data.coverImageUrl]) : null,
             is_purchased: true, // Inherit purchased status
             edition_year: currentYear,
             session_id: crypto.randomUUID(),
@@ -511,9 +511,9 @@ const Dashboard = () => {
                     className="aspect-[4/3] bg-secondary flex items-center justify-center relative cursor-pointer overflow-hidden"
                     onClick={() => handleViewGuide(saved)}
                   >
-                    {saved.books?.cover_image_url ? (
+                    {saved.books?.cover_image_url?.length ? (
                       <img 
-                        src={saved.books.cover_image_url} 
+                        src={saved.books.cover_image_url[0]} 
                         alt={saved.books.title}
                         crossOrigin="anonymous"
                         className="w-full h-full object-cover"

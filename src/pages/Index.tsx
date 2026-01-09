@@ -79,7 +79,7 @@ const Index = () => {
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [bookId, setBookId] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImageUrls, setCoverImageUrls] = useState<string[]>([]);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
   const [isGeneratingDiagrams, setIsGeneratingDiagrams] = useState(false);
@@ -225,11 +225,11 @@ const Index = () => {
             chapter10Content: data.chapter10_content || undefined,
             localResources: data.local_resources as unknown as BookData['localResources'],
             hasDisclaimer: data.has_disclaimer ?? false,
-            coverImageUrl: data.cover_image_url || undefined,
+            coverImageUrl: Array.isArray(data.cover_image_url) ? data.cover_image_url[0] : data.cover_image_url || undefined,
           });
           setTopic(data.topic);
           setBookId(data.id);
-          setCoverImageUrl(data.cover_image_url || null);
+          setCoverImageUrls(Array.isArray(data.cover_image_url) ? data.cover_image_url : data.cover_image_url ? [data.cover_image_url] : []);
           setIsPurchased(data.is_purchased || false);
           setIsSavedToLibrary(true);
           setViewState('book');
@@ -243,7 +243,7 @@ const Index = () => {
         setViewState('landing');
         setBookData(null);
         setBookId(null);
-        setCoverImageUrl(null);
+        setCoverImageUrls([]);
         setIsPurchased(false);
         return;
       }
@@ -337,8 +337,9 @@ const Index = () => {
               
               // Update cover image if it changed
               if (updated.cover_image_url && !prev.coverImageUrl) {
-                updates.coverImageUrl = updated.cover_image_url as string;
-                setCoverImageUrl(updated.cover_image_url as string);
+                const urls = Array.isArray(updated.cover_image_url) ? updated.cover_image_url : [updated.cover_image_url as string];
+                updates.coverImageUrl = urls[0];
+                setCoverImageUrls(urls);
               }
               
               if (Object.keys(updates).length > 0) {
@@ -439,7 +440,7 @@ const Index = () => {
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');
-    setCoverImageUrl(null);
+    setCoverImageUrls([]);
     setDiagramImages({});
     setIsGeneratingDiagrams(false);
     setIsSavedToLibrary(false); // Reset for new book
@@ -509,7 +510,7 @@ const Index = () => {
               chapter10_content: generatedBook.chapter10Content || null,
               local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
               has_disclaimer: generatedBook.hasDisclaimer || false,
-              cover_image_url: generatedBook.coverImageUrl || null,
+              cover_image_url: generatedBook.coverImageUrl ? (Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl]) : null,
               is_purchased: false,
               session_id: sessionId,
               user_id: user.id,
@@ -545,7 +546,7 @@ const Index = () => {
             chapter10_content: generatedBook.chapter10Content || null,
             local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
             has_disclaimer: generatedBook.hasDisclaimer || false,
-            cover_image_url: generatedBook.coverImageUrl || null,
+            cover_image_url: generatedBook.coverImageUrl ? (Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl]) : null,
             is_purchased: false,
             session_id: sessionId,
             user_id: null,
@@ -596,16 +597,17 @@ const Index = () => {
       // Enter book view IMMEDIATELY - chapters will stream in via realtime
       setViewState('book');
 
-      // Use cover image from generate-book response (Fal.ai) if available
+      // Use cover image from generate-book response if available
       if (generatedBook.coverImageUrl) {
-        setCoverImageUrl(generatedBook.coverImageUrl);
+        const urls = Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl];
+        setCoverImageUrls(urls);
         setIsLoadingCoverImage(false);
         
         // Update cover_image_url in database if not already set
         if (savedBookId) {
           supabase
             .from('books')
-            .update({ cover_image_url: generatedBook.coverImageUrl })
+            .update({ cover_image_url: urls })
             .eq('id', savedBookId)
             .then(({ error }) => {
               if (error) console.error('Failed to save cover URL:', error);
@@ -621,13 +623,15 @@ const Index = () => {
           })
           .then(({ data: imageData, error: imageError }) => {
             setIsLoadingCoverImage(false);
-            if (!imageError && imageData?.imageUrl) {
-              setCoverImageUrl(imageData.imageUrl);
+            if (!imageError && (imageData?.imageUrls || imageData?.imageUrl)) {
+              // Prefer imageUrls array, fallback to single imageUrl
+              const urls = imageData.imageUrls || (imageData.imageUrl ? [imageData.imageUrl] : []);
+              setCoverImageUrls(urls);
               // Save to database
               if (savedBookId) {
                 supabase
                   .from('books')
-                  .update({ cover_image_url: imageData.imageUrl })
+                  .update({ cover_image_url: urls })
                   .eq('id', savedBookId)
                   .then(({ error }) => {
                     if (error) console.error('Failed to save cover URL:', error);
@@ -682,7 +686,7 @@ const Index = () => {
       await generateCleanPDF({
         topic,
         bookData,
-        coverImageUrl,
+        coverImageUrl: coverImageUrls[0] || null,
       });
       
       toast.success('PDF downloaded!', { 
@@ -700,7 +704,7 @@ const Index = () => {
     setTopic('');
     setBookData(null);
     setBookId(null);
-    setCoverImageUrl(null);
+    setCoverImageUrls([]);
     setIsLoadingCoverImage(false);
     setIsSavedToLibrary(false);
     setIsPurchased(false);
@@ -876,7 +880,7 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrl={coverImageUrl} isLoadingImage={isLoadingCoverImage} />
+              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState } from 'react';
+import { forwardRef, useEffect, useState, useCallback } from 'react';
 import { getTopicIcon } from '@/lib/iconMap';
 import WeavingLoader from '@/components/WeavingLoader';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,31 +7,59 @@ interface BookCoverProps {
   title: string;
   subtitle?: string;
   topic?: string;
+  /** Array of cover image URLs for fallback cycling */
+  coverImageUrls?: string[];
+  /** @deprecated Use coverImageUrls instead */
   coverImageUrl?: string | null;
   isLoadingImage?: boolean;
 }
 
 const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
-  ({ title, subtitle, topic = '', coverImageUrl, isLoadingImage }, ref) => {
+  ({ title, subtitle, topic = '', coverImageUrls = [], coverImageUrl, isLoadingImage }, ref) => {
     const TopicIcon = getTopicIcon(topic || title);
     const [imageLoaded, setImageLoaded] = useState(false);
-    const [imageFailed, setImageFailed] = useState(false);
+    const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
     
-    // Once we have a valid cover URL, lock it in to prevent flicker
-    const [lockedCoverUrl, setLockedCoverUrl] = useState<string | null>(null);
+    // Merge legacy coverImageUrl prop with coverImageUrls array
+    const allUrls = coverImageUrls.length > 0 
+      ? coverImageUrls 
+      : (coverImageUrl ? [coverImageUrl] : []);
+    
+    // Lock in the first valid URL to prevent flicker
+    const [lockedUrls, setLockedUrls] = useState<string[]>([]);
 
-    // FIX: On mount, if coverImageUrl exists from database, use it immediately
+    // Update locked URLs when we get new ones
     useEffect(() => {
-      if (coverImageUrl && !lockedCoverUrl) {
-        // Database cover URL takes priority - lock it immediately
-        setLockedCoverUrl(coverImageUrl);
+      if (allUrls.length > 0 && lockedUrls.length === 0) {
+        setLockedUrls(allUrls);
         setImageLoaded(false);
-        setImageFailed(false);
+        setCurrentUrlIndex(0);
+      } else if (allUrls.length > 0 && JSON.stringify(allUrls) !== JSON.stringify(lockedUrls)) {
+        // DB update with new URLs - use them
+        setLockedUrls(allUrls);
+        setCurrentUrlIndex(0);
+        setImageLoaded(false);
       }
-    }, [coverImageUrl]); // Remove lockedCoverUrl from deps to allow DB override
+    }, [allUrls, lockedUrls]);
     
-    // Use locked URL for display to prevent flicker, but always prefer fresh DB URL
-    const displayUrl = coverImageUrl || lockedCoverUrl;
+    // Current display URL with fallback cycling
+    const displayUrl = lockedUrls[currentUrlIndex] || null;
+    
+    // Handle image load error - cycle to next URL
+    const handleImageError = useCallback(() => {
+      console.warn(`Cover image failed to load (index ${currentUrlIndex}):`, displayUrl);
+      
+      if (currentUrlIndex < lockedUrls.length - 1) {
+        // Try next URL
+        console.log(`Cycling to next cover image (${currentUrlIndex + 1}/${lockedUrls.length})`);
+        setCurrentUrlIndex(prev => prev + 1);
+        setImageLoaded(false);
+      } else {
+        // All URLs exhausted, show fallback
+        console.warn('All cover URLs failed, showing fallback');
+        setImageLoaded(true); // Mark as loaded to stop skeleton
+      }
+    }, [currentUrlIndex, displayUrl, lockedUrls.length]);
     
     // Parse title for premium magazine styling (Category: Main Title)
     const parsedTitle = (() => {
@@ -46,16 +74,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     })();
     
     useEffect(() => {
-      // Timeout fallback: if image doesn't load in 15s, show fallback
+      // Timeout fallback: if image doesn't load in 15s, try next or show fallback
       if (displayUrl && !imageLoaded) {
         const timeout = setTimeout(() => {
-          console.warn('Cover image load timeout, showing fallback');
-          setImageFailed(true);
-          setImageLoaded(true);
+          console.warn('Cover image load timeout');
+          handleImageError();
         }, 15000);
         return () => clearTimeout(timeout);
       }
-    }, [displayUrl, imageLoaded]);
+    }, [displayUrl, imageLoaded, handleImageError]);
+
+    // Check if we have any valid URL after fallbacks
+    const hasValidUrl = displayUrl && currentUrlIndex < lockedUrls.length;
 
     return (
       <div
@@ -76,21 +106,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square mb-6">
             {isLoadingImage && !displayUrl ? (
               <Skeleton className="w-full h-full rounded-lg" />
-            ) : displayUrl && !imageFailed ? (
+            ) : hasValidUrl ? (
               <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10 print:opacity-100 print:filter-none">
                 {!imageLoaded && (
                   <Skeleton className="absolute inset-0 rounded-lg print:hidden" />
                 )}
                 <img
+                  key={displayUrl} // Force re-render on URL change
                   src={displayUrl}
                   alt={`Cover illustration for ${title}`}
                   className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'} print:opacity-100 print:filter-none`}
                   onLoad={() => setImageLoaded(true)}
-                  onError={() => {
-                    console.warn('Cover image failed to load, showing fallback');
-                    setImageFailed(true);
-                    setImageLoaded(true);
-                  }}
+                  onError={handleImageError}
                   loading="eager"
                   crossOrigin="anonymous"
                 />
@@ -159,4 +186,3 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 BookCover.displayName = 'BookCover';
 
 export default BookCover;
-
