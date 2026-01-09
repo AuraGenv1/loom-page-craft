@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useState } from 'react';
 const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Gathering threads...');
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
     const stages = [
@@ -11,6 +12,7 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
       { progress: 55, text: 'Weaving chapters...' },
       { progress: 75, text: 'Adding finishing touches...' },
       { progress: 90, text: 'Almost ready...' },
+      { progress: 95, text: 'Still working... complex topics take longer' },
     ];
 
     let currentStage = 0;
@@ -22,7 +24,15 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
       }
     }, 1800);
 
-    return () => clearInterval(interval);
+    // Track elapsed time for "still working" message
+    const timeTracker = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(timeTracker);
+    };
   }, []);
 
   return (
@@ -47,9 +57,16 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
       </h2>
 
       {/* Status text */}
-      <p className="text-sm text-muted-foreground mb-8 h-5 transition-opacity duration-300">
+      <p className="text-sm text-muted-foreground mb-2 h-5 transition-opacity duration-300">
         {statusText}
       </p>
+      
+      {/* Extended wait message */}
+      {elapsedTime >= 30 && (
+        <p className="text-xs text-muted-foreground/70 mb-6 animate-pulse">
+          Still weaving... this guide requires extra care ✨
+        </p>
+      )}
 
       {/* Progress bar */}
       <div className="w-64 md:w-80 h-1 bg-secondary rounded-full overflow-hidden">

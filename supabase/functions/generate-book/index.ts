@@ -865,7 +865,8 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
     }
 
     const data = await response.json();
-    console.log('Gemini response received');
+    console.log('Gemini response received, parsing content...');
+    console.log('Response candidates count:', data.candidates?.length || 0);
 
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!content) {
@@ -1001,7 +1002,21 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       console.log('Google CSE API keys not configured, skipping cover image search');
     }
 
-    console.log('Successfully generated book shell:', bookData.title);
+    // Ensure coverImageUrl is always an array or null (never undefined)
+    if (bookData.coverImageUrl === undefined) {
+      bookData.coverImageUrl = null;
+    }
+    
+    console.log('Successfully generated book shell:', {
+      title: bookData.title,
+      displayTitle: bookData.displayTitle,
+      subtitle: bookData.subtitle,
+      tocLength: bookData.tableOfContents?.length || 0,
+      chapter1Length: bookData.chapter1Content?.length || 0,
+      coverImageUrls: Array.isArray(bookData.coverImageUrl) ? bookData.coverImageUrl.length : 0,
+      localResourcesCount: bookData.localResources?.length || 0,
+      hasDisclaimer: bookData.hasDisclaimer || false,
+    });
 
     // COST OPTIMIZATION: Only generate remaining chapters if user is purchasing (fullBook=true)
     // For guests (unpaid), we only generate Cover + Chapter 1 to save API costs
@@ -1041,9 +1056,13 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
     );
 
   } catch (error) {
-    console.error('Error in generate-book function:', error);
+    console.error('FATAL ERROR in generate-book function:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'An unexpected error occurred' }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
