@@ -221,26 +221,8 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   container.innerHTML = coverPage + tocPage + chapterPages;
   document.body.appendChild(container);
 
-  // Wait for images to load before capturing (prevents blank PDFs)
-  const images = container.querySelectorAll('img');
-  if (images.length > 0) {
-    await Promise.all(
-      Array.from(images).map(
-        (img) =>
-          new Promise<void>((resolve) => {
-            if (img.complete) {
-              resolve();
-            } else {
-              img.onload = () => resolve();
-              img.onerror = () => resolve(); // Continue even if image fails
-            }
-          })
-      )
-    );
-  }
-
-  // Additional delay for fonts/layout to settle (2 seconds for reliable capture)
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Additional rendering wait (fonts/layout)
+  await new Promise((resolve) => setTimeout(resolve, 250));
 
   const opt = {
     margin: [10, 10, 10, 10] as [number, number, number, number],
@@ -249,10 +231,9 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
     html2canvas: {
       scale: 2,
       useCORS: true,
-      allowTaint: true, // Allow cross-origin images
+      allowTaint: false,
       backgroundColor: "#ffffff",
       logging: false,
-      imageTimeout: 15000, // Wait up to 15s for images
     },
     jsPDF: {
       unit: "mm" as const,
