@@ -935,18 +935,36 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       bookData.hasDisclaimer = true;
     }
 
-    // Generate cover image using Google Custom Search API
-    // Fetch up to 5 real images for fallback logic
+    // Generate cover image using Google Custom Search API with DYNAMIC INTENT
+    // AI generates topic-specific search query for maximum relevance
     const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
     const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
     
     if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
       try {
-        console.log('Fetching cover images from Google Custom Search...');
+        console.log('Generating dynamic search query for cover image...');
         
-        // Build search query for high resolution travel photography
-        // Use the full topic for maximum relevance
-        const searchQuery = `${topic} high resolution travel photography`;
+        // DYNAMIC INTENT SEARCH: Generate topic-specific search query
+        let searchQuery = `${topic} high resolution professional photography`;
+        
+        // Intent-based query optimization
+        if (topicType === 'TECHNICAL') {
+          // For technical topics: focus on mechanical details, tools, craftsmanship
+          searchQuery = `${topic} professional studio photography detail close-up`;
+        } else if (topicType === 'LIFESTYLE') {
+          // For lifestyle/travel: focus on landscapes, interiors, aspirational imagery
+          const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain)\b/i;
+          if (travelKeywords.test(topic)) {
+            searchQuery = `${topic} scenic landscape travel destination professional photography`;
+          } else {
+            searchQuery = `${topic} lifestyle magazine professional photography`;
+          }
+        } else {
+          // For academic: focus on relevant imagery
+          searchQuery = `${topic} professional editorial photography`;
+        }
+        
+        console.log('Dynamic search query:', searchQuery);
         
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
         
