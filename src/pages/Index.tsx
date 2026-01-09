@@ -907,8 +907,11 @@ const Index = () => {
                         <ProgressDownloadButton
                           completedChapters={completedChapters}
                           totalChapters={10}
-                          onClick={handleDownloadPDF}
                           disabled={!allChaptersComplete}
+                          isPurchased={isPurchased}
+                          bookData={bookData}
+                          topic={topic}
+                          coverImageUrls={coverImageUrls}
                         />
                       ) : (
                         <>
