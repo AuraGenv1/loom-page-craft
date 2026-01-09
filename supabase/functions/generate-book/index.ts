@@ -935,55 +935,70 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       bookData.hasDisclaimer = true;
     }
 
-    // Generate cover image using Fal.ai if FAL_KEY is configured
-    // DYNAMIC COVER: No more "books-on-books" or text overlays
-    if (FAL_KEY) {
+    // Generate cover image using Google Custom Search API
+    // Fetch up to 5 real images for fallback logic
+    const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
+    const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
+    
+    if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
       try {
-        console.log('Generating cover image with Fal.ai...');
+        console.log('Fetching cover images from Google Custom Search...');
         
-        const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, open books, diagrams, people, faces, hands";
-        
-        // TRAVEL JOURNALISM STYLE - No "cinematic" AI look
-        // Extract geographic location for grounding
+        // Extract location for more accurate search
         const locationMatch = topic.match(/\b(in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
-        const location = locationMatch ? locationMatch[2] : topic;
+        const searchLocation = locationMatch ? locationMatch[2] : topic;
         
-        const imagePrompt = isAutomotiveTopic
-          ? `Authentic editorial automotive photography of ${topic}. High-end car magazine style, shot on Hasselblad, natural lighting, 8k resolution. NO text, NO people.`
-          : `Authentic editorial travel journalism photography of ${location}. High-end travel magazine style, shot on Hasselblad, natural golden hour lighting, real location landmarks. NO text, NO people, NO illustrations.`;
+        // Build search query - prioritize location for travel topics
+        const searchQuery = isAutomotiveTopic
+          ? `${topic} high quality photo`
+          : `${searchLocation} travel destination scenic landscape`;
         
-        const falResponse = await fetch('https://fal.run/fal-ai/flux/schnell', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Key ${FAL_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            prompt: imagePrompt,
-            negative_prompt: NEGATIVE_PROMPT,
-            image_size: 'square_hd',
-            num_inference_steps: 4,
-            num_images: 1,
-            enable_safety_checker: true,
-          }),
-        });
-
-        if (falResponse.ok) {
-          const falData = await falResponse.json();
-          const imageUrl = falData.images?.[0]?.url;
-          if (imageUrl) {
-            bookData.coverImageUrl = imageUrl;
-            console.log('Fal.ai cover image generated successfully');
+        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
+        
+        const searchResponse = await fetch(searchUrl);
+        
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json();
+          const items = searchData.items || [];
+          
+          // Blocked domains that often fail to load
+          const blockedDomains = ['instagram.com', 'pinterest.com', 'tripadvisor.com', 'facebook.com', 'twitter.com', 'x.com'];
+          
+          // Filter and collect up to 5 valid image URLs
+          const validUrls: string[] = [];
+          
+          for (const item of items) {
+            if (validUrls.length >= 5) break;
+            
+            const imageUrl = item.link;
+            if (!imageUrl) continue;
+            
+            // Check if URL is from a blocked domain
+            const isBlocked = blockedDomains.some(domain => imageUrl.toLowerCase().includes(domain));
+            if (isBlocked) {
+              console.log(`Skipping blocked domain: ${imageUrl}`);
+              continue;
+            }
+            
+            validUrls.push(imageUrl);
+          }
+          
+          if (validUrls.length > 0) {
+            // Store as array for fallback logic in frontend
+            bookData.coverImageUrl = validUrls;
+            console.log(`Google CSE: Found ${validUrls.length} valid cover images`);
+          } else {
+            console.log('Google CSE: No valid images found after filtering');
           }
         } else {
-          const errorText = await falResponse.text();
-          console.error('Fal.ai error:', falResponse.status, errorText);
+          const errorText = await searchResponse.text();
+          console.error('Google CSE error:', searchResponse.status, errorText);
         }
-      } catch (falError) {
-        console.error('Fal.ai image generation failed:', falError);
+      } catch (cseError) {
+        console.error('Google Custom Search failed:', cseError);
       }
     } else {
-      console.log('FAL_KEY not configured, skipping cover image generation');
+      console.log('Google CSE API keys not configured, skipping cover image search');
     }
 
     console.log('Successfully generated book shell:', bookData.title);
