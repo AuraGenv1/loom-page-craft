@@ -7,16 +7,10 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram";
 
-const NEGATIVE_PROMPT = "text, letters, words, labels, gibberish, alphabet, watermark, blurry, signature, numbers, captions, titles, book, cover, book mockup, frame, bar graph, tropical, palm trees, generic resort, sports car, luxury car, hyper-realistic, 8k, CGI, digital art, illustration";
-
 // Geographic extraction helper - finds city/state/country from topic
-// Returns "City, State/Country" format for geographic grounding
 const extractGeographicLocation = (topic: string): string | null => {
-  // Match patterns like "Aspen Colorado", "Paris France", "Tokyo Japan"
   const patterns = [
-    // "travel to Paris, France" or "guide to Aspen, Colorado"
     /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)?)/i,
-    // "Paris Travel Guide" or "Aspen Colorado Guide"
     /^([A-Z][a-z]+(?:,?\s+[A-Z][a-z]+)*)/,
   ];
   
@@ -30,63 +24,76 @@ const extractGeographicLocation = (topic: string): string | null => {
   return null;
 };
 
-// Detect if topic is travel-related for geographic locking
+// Detect if topic is travel-related
 const isTravelTopic = (topic: string): boolean => {
   const travelPatterns = /\b(travel|trip|vacation|tour|visit|guide|destination|city|country|explore|journey|getaway|resort|hotel|tourism)\b/i;
   return travelPatterns.test(topic);
 };
 
-const buildPrompt = (variant: Variant, topicOrTitle: string, caption?: string) => {
+// Build search query for Google Custom Search
+const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string): string => {
   const location = extractGeographicLocation(topicOrTitle);
   const isTravel = isTravelTopic(topicOrTitle);
   
-  // GEOGRAPHIC LOCK: For travel, MUST include specific city/state
-  // Explicitly forbid generic tropical/resort elements
-  const locationClause = location 
-    ? `authentic ${location} landmarks and scenery, specific to ${location}, ` 
-    : '';
-  
-  const antiGenericClause = isTravel 
-    ? 'NOT tropical, NOT palm trees, NOT generic resort, authentic local architecture, ' 
-    : '';
-  
-  if (variant === "diagram") {
-    // Candid 35mm film photography for [IMAGE:] tags - with geographic grounding and known landmarks
-    return `Candid photography, shot on 35mm film, natural sunlight, unpolished, authentic everyday scene: ${caption || topicOrTitle}. ${locationClause}${antiGenericClause}Architectural landmark visible. Editorial magazine quality. Strictly NO text, NO diagrams, NO illustrations, NO people, NO sports cars.`;
+  if (variant === "diagram" && caption) {
+    // Use caption for inline images
+    const locationSuffix = location ? ` ${location}` : '';
+    return `${caption}${locationSuffix} photograph`;
   }
 
-  // COVER PROMPT: Full-bleed authentic location photograph
-  // Uses candid 35mm film style - NOT hyper-realistic or 8k (which look like AI)
-  return `A full-bleed, professional editorial photograph of ${topicOrTitle}. ${locationClause}${antiGenericClause}Candid photography, shot on 35mm film, natural sunlight, unpolished, authentic everyday scene, known local architectural landmark. Strictly NO text, NO book mockups, NO frames, NO bar graphs, NO diagrams, NO people, NO illustrations, NO sports cars.`;
+  // Cover image: search for the location/topic as editorial photograph
+  if (isTravel && location) {
+    return `${location} landmark architecture photograph editorial`;
+  }
+  
+  return `${topicOrTitle} professional photograph`;
 };
 
-async function fetchWithRetry(url: string, init: RequestInit, retries = 2) {
-  let lastError: Error | null = null;
+// Fetch image from Google Custom Search JSON API
+async function fetchGoogleImage(
+  query: string, 
+  apiKey: string, 
+  cx: string
+): Promise<string | null> {
+  try {
+    console.log("Google CSE search query:", query);
+    
+    const params = new URLSearchParams({
+      key: apiKey,
+      cx: cx,
+      q: query,
+      searchType: "image",
+      num: "5", // Get top 5 results for variety
+      imgSize: "xlarge",
+      imgType: "photo",
+      safe: "active",
+    });
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const res = await fetch(url, init);
-      if (res.ok) return res;
+    const response = await fetch(
+      `https://www.googleapis.com/customsearch/v1?${params.toString()}`
+    );
 
-      // Retry transient upstream errors
-      if ((res.status === 429 || res.status === 503) && attempt < retries) {
-        const waitMs = 500 * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-
-      return res;
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error("Unknown error");
-      if (attempt < retries) {
-        const waitMs = 500 * Math.pow(2, attempt);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Google CSE API error:", response.status, errorText);
+      return null;
     }
-  }
 
-  throw lastError ?? new Error("Unknown error");
+    const data = await response.json();
+    
+    if (data.items && data.items.length > 0) {
+      // Return the first high-quality image link
+      const imageUrl = data.items[0].link;
+      console.log("Google CSE found image:", imageUrl);
+      return imageUrl;
+    }
+
+    console.log("Google CSE returned no results");
+    return null;
+  } catch (error) {
+    console.error("Google CSE fetch error:", error);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -97,7 +104,7 @@ serve(async (req) => {
   try {
     const { title, topic, sessionId, variant, caption } = await req.json();
 
-    // Validate session_id to prevent bot abuse
+    // Validate session_id
     if (!sessionId || typeof sessionId !== "string" || sessionId.length < 10) {
       console.error("Invalid or missing session_id:", sessionId);
       return new Response(JSON.stringify({ error: "Valid session required" }), {
@@ -106,7 +113,7 @@ serve(async (req) => {
       });
     }
 
-    // SECURITY: Limit input length to prevent cost abuse
+    // SECURITY: Limit input length
     const MAX_INPUT_LENGTH = 200;
     const rawSubject = (topic || title || "").toString();
     if (rawSubject.length > MAX_INPUT_LENGTH) {
@@ -120,62 +127,41 @@ serve(async (req) => {
     const resolvedVariant: Variant = variant === "diagram" ? "diagram" : "cover";
     const subject = rawSubject;
 
-    console.log(`Generating ${resolvedVariant} image for: ${subject}`);
+    console.log(`Fetching ${resolvedVariant} image for: ${subject}`);
 
-    const prompt = buildPrompt(resolvedVariant, subject, caption);
+    // Get Google CSE credentials
+    const GOOGLE_CSE_API_KEY = Deno.env.get("GOOGLE_CSE_API_KEY");
+    const GOOGLE_CSE_CX = Deno.env.get("GOOGLE_CSE_CX");
     
-    // Use FAL.AI directly with FAL_KEY
-    const FAL_KEY = Deno.env.get("FAL_KEY");
-    if (!FAL_KEY) {
-      console.error("FAL_KEY not configured");
+    if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) {
+      console.error("Google CSE credentials not configured");
       return new Response(JSON.stringify({ error: "Image service not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("Calling FAL.AI flux/dev endpoint...");
-
-    const response = await fetchWithRetry(
-      "https://fal.run/fal-ai/flux/dev",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Key ${FAL_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          negative_prompt: NEGATIVE_PROMPT,
-          image_size: "square_hd",
-          num_inference_steps: 28,
-          num_images: 1,
-          enable_safety_checker: true,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("FAL.AI API error:", response.status, errorText);
-      throw new Error(`FAL.AI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const imageUrl = data.images?.[0]?.url;
+    // Build search query
+    const searchQuery = buildSearchQuery(resolvedVariant, subject, caption);
+    
+    // Fetch from Google Custom Search
+    const imageUrl = await fetchGoogleImage(searchQuery, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX);
 
     if (!imageUrl) {
-      console.error("No image URL in FAL.AI response:", data);
-      throw new Error("No image generated");
+      console.error("No image found for query:", searchQuery);
+      return new Response(JSON.stringify({ error: "No suitable image found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("FAL.AI image generated successfully");
+    console.log("Image fetched successfully:", imageUrl);
 
     return new Response(JSON.stringify({ imageUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    console.error("Error generating image:", error);
+    console.error("Error fetching image:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -183,4 +169,3 @@ serve(async (req) => {
     });
   }
 });
-

@@ -25,7 +25,7 @@ import { FunctionsHttpError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
-import { generateGuidePDF } from '@/lib/generatePDF';
+import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import PrintPreview from '@/components/PrintPreview';
 import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
 import ProgressDownloadButton from '@/components/ProgressDownloadButton';
@@ -675,14 +675,14 @@ const Index = () => {
     try {
       toast.info('Generating PDF...', { 
         id: 'pdf-download',
-        description: 'This may take a moment.' 
+        description: 'Creating your clean, content-only guide.' 
       });
       
-      // Use html2pdf.js for real PDF generation
-      await generateGuidePDF({
-        title: displayTitle,
+      // Use clean PDF generator that strips all UI elements
+      await generateCleanPDF({
         topic,
         bookData,
+        coverImageUrl,
       });
       
       toast.success('PDF downloaded!', { 
