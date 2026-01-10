@@ -20,12 +20,16 @@ interface ProgressDownloadButtonProps {
   coverImageUrls?: string[];
 }
 
+// Transparent 1x1 pixel PNG as fail-safe placeholder
+const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
 /**
  * Convert image URL to Base64 data URL for PDF embedding
  * This ensures images are embedded directly in the PDF and avoids CORS issues
+ * FAIL-SAFE: Returns transparent 1x1 pixel if conversion fails
  */
-const convertImageToBase64 = async (url: string): Promise<string | null> => {
-  if (!url) return null;
+const convertImageToBase64 = async (url: string): Promise<string> => {
+  if (!url) return TRANSPARENT_PIXEL;
   if (url.startsWith('data:')) return url; // Already a data URL
 
   try {
@@ -37,7 +41,7 @@ const convertImageToBase64 = async (url: string): Promise<string | null> => {
 
     if (error) {
       console.warn('[PDF] fetch-image-data-url failed:', error);
-      return null;
+      return TRANSPARENT_PIXEL;
     }
 
     if (data?.dataUrl && typeof data.dataUrl === 'string' && data.dataUrl.startsWith('data:')) {
@@ -46,32 +50,33 @@ const convertImageToBase64 = async (url: string): Promise<string | null> => {
     }
 
     console.warn('[PDF] Invalid response from fetch-image-data-url');
-    return null;
+    return TRANSPARENT_PIXEL;
   } catch (e) {
     console.warn('[PDF] convertImageToBase64 exception:', e);
-    return null;
+    return TRANSPARENT_PIXEL;
   }
 };
 
 /**
  * Try multiple cover URLs until one successfully converts to Base64
+ * FAIL-SAFE: Returns transparent pixel if all URLs fail
  */
-const getBase64CoverImage = async (coverImageUrls: string[]): Promise<string | null> => {
-  if (!coverImageUrls || coverImageUrls.length === 0) return null;
+const getBase64CoverImage = async (coverImageUrls: string[]): Promise<string> => {
+  if (!coverImageUrls || coverImageUrls.length === 0) return TRANSPARENT_PIXEL;
 
   for (let i = 0; i < coverImageUrls.length; i++) {
     const url = coverImageUrls[i];
     console.log(`[PDF] Trying cover image ${i + 1}/${coverImageUrls.length}...`);
     
     const base64Url = await convertImageToBase64(url);
-    if (base64Url) {
+    if (base64Url && base64Url !== TRANSPARENT_PIXEL) {
       console.log(`[PDF] Cover image ${i + 1} converted successfully`);
       return base64Url;
     }
   }
 
-  console.warn('[PDF] All cover images failed to convert');
-  return null;
+  console.warn('[PDF] All cover images failed to convert, using transparent pixel');
+  return TRANSPARENT_PIXEL;
 };
 
 /**
@@ -122,15 +127,16 @@ const extractAllImageUrls = (bookData: BookData): string[] => {
 /**
  * Process all images in bookData and convert them to Base64
  * Returns a deep copy of bookData with all URLs replaced
+ * FAIL-SAFE: Failed images are replaced with transparent 1x1 pixel
  */
 const processBookImages = async (
   bookData: BookData,
   coverImageUrls: string[],
   onProgress?: (message: string) => void
-): Promise<{ processedBookData: BookData; base64CoverUrl: string | null }> => {
-  onProgress?.('Converting cover image...');
+): Promise<{ processedBookData: BookData; base64CoverUrl: string }> => {
+  onProgress?.('Embedding cover image...');
   
-  // Step 1: Convert cover image
+  // Step 1: Convert cover image (with fail-safe)
   const base64CoverUrl = await getBase64CoverImage(coverImageUrls);
   
   // Step 2: Extract and convert all chapter images
@@ -141,28 +147,33 @@ const processBookImages = async (
     return { processedBookData: bookData, base64CoverUrl };
   }
   
-  onProgress?.(`Converting ${chapterImageUrls.length} chapter images...`);
+  onProgress?.(`Embedding ${chapterImageUrls.length} chapter images...`);
   
   // Convert all chapter images in parallel (up to 5 at a time to avoid overwhelming the server)
+  // FAIL-SAFE: Failed images get transparent pixel
   const urlToBase64Map: Record<string, string> = {};
   
   for (let i = 0; i < chapterImageUrls.length; i += 5) {
     const batch = chapterImageUrls.slice(i, i + 5);
     const results = await Promise.all(
       batch.map(async (url) => {
-        const base64 = await convertImageToBase64(url);
-        return { url, base64 };
+        try {
+          const base64 = await convertImageToBase64(url);
+          return { url, base64 };
+        } catch (e) {
+          console.warn(`[PDF] Failed to convert image, using transparent pixel:`, url);
+          return { url, base64: TRANSPARENT_PIXEL };
+        }
       })
     );
     
     results.forEach(({ url, base64 }) => {
-      if (base64) {
-        urlToBase64Map[url] = base64;
-      }
+      urlToBase64Map[url] = base64;
     });
   }
   
-  console.log(`[PDF] Successfully converted ${Object.keys(urlToBase64Map).length} chapter images`);
+  const successCount = Object.values(urlToBase64Map).filter(v => v !== TRANSPARENT_PIXEL).length;
+  console.log(`[PDF] Successfully converted ${successCount}/${chapterImageUrls.length} chapter images`);
   
   // Step 3: Create a deep copy of bookData with URLs replaced
   const processedBookData = { ...bookData };
@@ -238,6 +249,7 @@ const ProgressDownloadButton = ({
    * Handle PDF download with robust Base64 image conversion
    * Converts ALL images (cover + chapters) to Base64 before PDF generation
    * Uses a 4000ms delay to ensure all image processing completes
+   * FAIL-SAFE: Failed images become transparent pixels (no crashes)
    */
   const handleDownload = async () => {
     if (!bookData) {
@@ -259,6 +271,7 @@ const ProgressDownloadButton = ({
       console.log('[PDF] Cover URLs available:', coverImageUrls.length);
 
       // STEP 1: Process ALL images (cover + chapters) to Base64
+      // FAIL-SAFE: Any failed images become transparent 1x1 pixels
       const { processedBookData, base64CoverUrl } = await processBookImages(
         bookData,
         coverImageUrls,
@@ -271,10 +284,10 @@ const ProgressDownloadButton = ({
         }
       );
       
-      if (base64CoverUrl) {
+      if (base64CoverUrl && base64CoverUrl !== TRANSPARENT_PIXEL) {
         console.log('[PDF] Cover image ready for embedding');
       } else {
-        console.log('[PDF] No cover image available, proceeding without');
+        console.log('[PDF] No valid cover image, proceeding without');
       }
 
       // STEP 2: Wait 4000ms (4 seconds) for all async operations to settle
@@ -297,10 +310,11 @@ const ProgressDownloadButton = ({
       console.log('[PDF] Calling generateCleanPDF with processed book data...');
 
       // Generate PDF with Base64 cover image and processed book data
+      // CRITICAL: Pass null for cover if it's just a transparent pixel
       await generateCleanPDF({
         topic,
         bookData: processedBookData,
-        coverImageUrl: base64CoverUrl,
+        coverImageUrl: base64CoverUrl !== TRANSPARENT_PIXEL ? base64CoverUrl : null,
       });
 
       toast.success('PDF downloaded!', { 
