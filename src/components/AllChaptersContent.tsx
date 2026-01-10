@@ -23,6 +23,8 @@ interface AllChaptersContentProps {
     localResources?: LocalResource[];
     hasDisclaimer?: boolean;
     tableOfContents?: ChapterInfo[];
+    /** Cover image URLs for fallback cycling */
+    coverImageUrl?: string[];
   };
   loadingChapter?: number | null;
   isFullAccess?: boolean;
@@ -39,6 +41,12 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+    
+    // Fallback URL cycling state for inline images (mirrors BookCover.tsx pattern)
+    const [imageUrlIndexes, setImageUrlIndexes] = useState<Record<string, number>>({});
+    const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+    // Track images that have exhausted all fallbacks - these should be hidden
+    const [hiddenImageIds, setHiddenImageIds] = useState<Set<string>>(new Set());
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (chapterNumber: number) => {
@@ -150,10 +158,42 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       return tocEntry?.title || `Chapter ${chapterNumber}`;
     };
 
+    // Handle image load error - cycle to next URL (same pattern as BookCover.tsx)
+    const handleInlineImageError = (markerId: string, currentUrl: string) => {
+      console.warn(`[AllChaptersContent] Inline image failed to load (${markerId}):`, currentUrl);
+      
+      // Get current index for this marker
+      const currentIndex = imageUrlIndexes[markerId] || 0;
+      const nextIndex = currentIndex + 1;
+      
+      // Use cover image URLs as fallback pool
+      const fallbackUrls = bookData.coverImageUrl || [];
+      
+      // If we have more fallback URLs, try the next one
+      if (nextIndex < fallbackUrls.length) {
+        console.log(`[AllChaptersContent] Trying fallback image ${nextIndex + 1}/${fallbackUrls.length} for ${markerId}`);
+        setImageUrlIndexes(prev => ({ ...prev, [markerId]: nextIndex }));
+        // Update the image URL to the fallback
+        setInlineImages(prev => ({ ...prev, [markerId]: fallbackUrls[nextIndex] }));
+      } else {
+        // All fallbacks exhausted - hide the image entirely
+        console.warn(`[AllChaptersContent] All fallback images exhausted for ${markerId}, hiding image`);
+        setHiddenImageIds(prev => new Set(prev).add(markerId));
+        setFailedImageIds(prev => new Set(prev).add(markerId));
+      }
+    };
+
     // Render an inline image placeholder or actual image
     const renderInlineImage = (description: string, markerId: string) => {
       const imageUrl = inlineImages[markerId];
       const isLoading = loadingImages.has(markerId);
+      const hasFailed = failedImageIds.has(markerId);
+      const isHidden = hiddenImageIds.has(markerId);
+
+      // CRITICAL: If all fallbacks exhausted, hide the image entirely (no gray box)
+      if (isHidden) {
+        return null;
+      }
 
       return (
         <figure key={markerId} className="my-10 text-center">
@@ -166,22 +206,31 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                   <span className="text-xs text-muted-foreground">Generating image...</span>
                 </div>
               </div>
-            ) : imageUrl ? (
+            ) : imageUrl && !hasFailed ? (
               <img
+                key={`${markerId}-${imageUrlIndexes[markerId] || 0}`} // Force re-render on URL change
                 src={imageUrl}
                 alt={description}
                 className="w-full h-full object-cover"
                 crossOrigin="anonymous"
+                onError={(e) => handleInlineImageError(markerId, e.currentTarget.src)}
+                loading="eager"
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10">
-                <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
-              </div>
+              // Only show placeholder if still loading or has URL - otherwise hidden
+              !hasFailed && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
+                </div>
+              )
             )}
           </div>
-          <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
-            {description}
-          </figcaption>
+          {/* Only show caption if image is visible */}
+          {!hasFailed && (
+            <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+              {description}
+            </figcaption>
+          )}
         </figure>
       );
     };

@@ -21,16 +21,20 @@ interface ChapterContentProps {
   diagramImages?: Record<string, string | undefined>;
   tableOfContents?: Array<{ chapter: number; title: string; imageDescription?: string }>;
   sessionId?: string;
+  /** Array of image URLs for fallback cycling */
+  chapterImageUrls?: string[];
 }
 
 const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
-  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents, sessionId }, ref) => {
+  ({ topic, content, localResources, hasDisclaimer, materials, isGenerating = false, diagramImages, tableOfContents, sessionId, chapterImageUrls = [] }, ref) => {
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
     
     // Fallback URL cycling state for inline images (mirrors BookCover.tsx pattern)
     const [imageUrlIndexes, setImageUrlIndexes] = useState<Record<string, number>>({});
     const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+    // Track images that have exhausted all fallbacks - these should be hidden
+    const [hiddenImageIds, setHiddenImageIds] = useState<Set<string>>(new Set());
 
     // Extract [IMAGE: ...] markers (Smart Visual System)
     const extractImageMarkers = (text: string): ImageMarker[] => {
@@ -105,11 +109,25 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
     };
 
     // Handle image load error - cycle to next URL (same pattern as BookCover.tsx)
-    const handleInlineImageError = (markerId: string, imageUrl: string) => {
-      console.warn(`Inline image failed to load (${markerId}):`, imageUrl);
+    const handleInlineImageError = (markerId: string, currentUrl: string) => {
+      console.warn(`[ChapterContent] Inline image failed to load (${markerId}):`, currentUrl);
       
-      // Mark as failed so we can show fallback
-      setFailedImageIds(prev => new Set(prev).add(markerId));
+      // Get current index for this marker
+      const currentIndex = imageUrlIndexes[markerId] || 0;
+      const nextIndex = currentIndex + 1;
+      
+      // If we have more fallback URLs, try the next one
+      if (chapterImageUrls && nextIndex < chapterImageUrls.length) {
+        console.log(`[ChapterContent] Trying fallback image ${nextIndex + 1}/${chapterImageUrls.length} for ${markerId}`);
+        setImageUrlIndexes(prev => ({ ...prev, [markerId]: nextIndex }));
+        // Update the image URL to the fallback
+        setInlineImages(prev => ({ ...prev, [markerId]: chapterImageUrls[nextIndex] }));
+      } else {
+        // All fallbacks exhausted - hide the image entirely
+        console.warn(`[ChapterContent] All fallback images exhausted for ${markerId}, hiding image`);
+        setHiddenImageIds(prev => new Set(prev).add(markerId));
+        setFailedImageIds(prev => new Set(prev).add(markerId));
+      }
     };
     
     // Render an inline image placeholder or actual image
@@ -117,6 +135,12 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       const imageUrl = inlineImages[markerId];
       const isLoading = loadingImages.has(markerId);
       const hasFailed = failedImageIds.has(markerId);
+      const isHidden = hiddenImageIds.has(markerId);
+
+      // CRITICAL: If all fallbacks exhausted, hide the image entirely (no gray box)
+      if (isHidden) {
+        return null;
+      }
 
       return (
         <figure key={`image-${index}`} className="my-10 text-center">
@@ -131,23 +155,29 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               </div>
             ) : imageUrl && !hasFailed ? (
               <img
-                key={imageUrl} // Force re-render on URL change
+                key={`${markerId}-${imageUrlIndexes[markerId] || 0}`} // Force re-render on URL change
                 src={imageUrl}
                 alt={description}
                 className="w-full h-full object-cover print:opacity-100 print:filter-none"
                 crossOrigin="anonymous"
-                onError={() => handleInlineImageError(markerId, imageUrl)}
+                onError={(e) => handleInlineImageError(markerId, e.currentTarget.src)}
                 loading="eager"
               />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10 print:hidden">
-                <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
-              </div>
+              // Only show placeholder if still loading or has URL - otherwise hidden
+              !hasFailed && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-secondary/30 to-secondary/10 print:hidden">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30" />
+                </div>
+              )
             )}
           </div>
-          <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
-            {description}
-          </figcaption>
+          {/* Only show caption if image is visible */}
+          {!hasFailed && (
+            <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+              {description}
+            </figcaption>
+          )}
         </figure>
       );
     };
