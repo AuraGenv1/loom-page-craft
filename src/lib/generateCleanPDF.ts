@@ -80,27 +80,34 @@ const markdownToHTML = (content: string): string => {
   return html;
 };
 
+/**
+ * Resolve cover image to a safe format for html2pdf
+ * If the URL is already a data URL, return it as-is
+ * Otherwise, attempt to convert via edge function
+ */
 const resolveCoverImageForPDF = async (url: string): Promise<string | null> => {
   // If it's already a data URL, it's safe for html2canvas
   if (url.startsWith("data:")) return url;
 
   try {
+    console.log("[CleanPDF] Converting external URL to Base64...");
     const { data, error } = await supabase.functions.invoke("fetch-image-data-url", {
       body: { url },
     });
 
     if (error) {
-      console.warn("fetch-image-data-url failed:", error);
+      console.warn("[CleanPDF] fetch-image-data-url failed:", error);
       return null;
     }
 
     if (data?.dataUrl && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:")) {
+      console.log("[CleanPDF] Successfully converted to Base64");
       return data.dataUrl;
     }
 
     return null;
   } catch (e) {
-    console.warn("resolveCoverImageForPDF exception:", e);
+    console.warn("[CleanPDF] resolveCoverImageForPDF exception:", e);
     return null;
   }
 };
@@ -135,8 +142,11 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   });
 
   // Make cover image safe for html2pdf/html2canvas (prevents blank PDFs)
+  // The coverImageUrl should already be Base64 from ProgressDownloadButton
+  // But we double-check and convert if needed
   let safeCoverSrc: string | null = coverImageUrl ?? null;
-  if (safeCoverSrc) {
+  if (safeCoverSrc && !safeCoverSrc.startsWith("data:")) {
+    console.log("[CleanPDF] Cover URL is not Base64, attempting conversion...");
     safeCoverSrc = await resolveCoverImageForPDF(safeCoverSrc);
   }
 
@@ -154,7 +164,7 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
     <div style="page-break-after: always; min-height: 277mm; position: relative; background: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px;">
       ${safeCoverSrc ? `
         <div style="width: 100%; max-height: 180mm; overflow: hidden; margin-bottom: 30px; border-radius: 4px;">
-          <img src="${safeCoverSrc}" style="width: 100%; height: auto; object-fit: cover;" referrerpolicy="no-referrer" />
+          <img src="${safeCoverSrc}" style="width: 100%; height: auto; object-fit: cover;" crossorigin="anonymous" />
         </div>
       ` : ""}
       <h1 style="font-family: Georgia, serif; font-size: 32pt; font-weight: 700; color: #1a1a1a; margin: 0 0 16px 0; line-height: 1.2;">
@@ -221,8 +231,9 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   container.innerHTML = coverPage + tocPage + chapterPages;
   document.body.appendChild(container);
 
-  // Additional rendering wait (fonts/layout)
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  // Wait for rendering to complete (fonts, images, layout)
+  console.log("[CleanPDF] Waiting for rendering...");
+  await new Promise((resolve) => setTimeout(resolve, 500));
 
   const opt = {
     margin: [10, 10, 10, 10] as [number, number, number, number],
@@ -243,7 +254,9 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   };
 
   try {
+    console.log("[CleanPDF] Generating PDF with html2pdf...");
     await html2pdf().set(opt).from(container).save();
+    console.log("[CleanPDF] PDF saved successfully");
   } finally {
     document.body.removeChild(container);
   }
