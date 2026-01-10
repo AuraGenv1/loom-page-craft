@@ -657,18 +657,16 @@ IMPORTANT:
     console.log('[ImageSearch] AI query generation failed, using fallback:', error);
   }
   
-  // Intelligent fallback based on topic type
+// Intelligent fallback based on topic type - NO hardcoded travelKeywords regex
+  // Always use specific, context-aware queries
   if (topicType === 'TECHNICAL') {
     return `${topic} professional studio photography mechanical detail`;
   } else if (topicType === 'LIFESTYLE') {
-    const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain|hotel)\b/i;
-    if (travelKeywords.test(topic)) {
-      return `${topic} scenic landscape travel destination photography -golf -wedding -event`;
-    }
-    return `${topic} lifestyle magazine professional photography`;
+    // Always append exclusions for lifestyle topics to avoid golf courses, weddings, etc.
+    return `${topic} guide visual reference -golf -wedding -event -stock -clipart`;
   }
   
-  return defaultQuery;
+  return `${topic} guide visual reference -golf -wedding`;
 }
 
 serve(async (req) => {
@@ -758,7 +756,8 @@ serve(async (req) => {
     console.log('Topic classified as:', topicType, '- Using subtitle:', classifiedSubtitle);
 
     // SHELL-FIRST: Generate only TOC and Chapter 1, then return immediately
-    const minWordsPerChapter = 1800;
+// Reduced for initial preview to ensure valid JSON - full version uses 2000 words
+    const minWordsForPreview = 900;
 
     // SMART IMAGE BUDGETING in system prompt
     const imageGuidance = topicType === 'TECHNICAL'
@@ -855,14 +854,14 @@ You must respond with a JSON object in this exact format:
     { "chapter": 2, "title": "Chapter title", "imageDescription": "...", "imageSearchQuery": "..." },
     ...through chapter 10
   ],
-  "chapter1Content": "Full markdown content of chapter 1 - MINIMUM ${minWordsPerChapter} WORDS with SPECIFIC data...",
+  "chapter1Content": "Full markdown content of chapter 1 - concise but complete for preview (800-1000 words) with SPECIFIC data...",
   "localResources": [
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" }
   ],
   "coverImageSearchQuery": "The BEST Google Image Search query for the cover image - be extremely specific with location/subject"
 }
 
-CHAPTER WORD COUNT: MINIMUM ${minWordsPerChapter} words per chapter (strictly enforced).
+CHAPTER 1 WORD COUNT FOR PREVIEW: Approximately 800-1000 words. Prioritize VALID JSON SYNTAX over length. The full version will have 2000+ words.
 
 CHAPTER STRUCTURE (ALL REQUIRED):
 - Compelling opening paragraph establishing importance
@@ -873,7 +872,7 @@ CHAPTER STRUCTURE (ALL REQUIRED):
 - MANDATORY: Exactly ONE [PRO-TIP: Expert advice here] callout (UI renders this as styled box)
 ${topicType === 'LIFESTYLE' ? '- Include ONE [IMAGE: extremely specific prompt with location for stunning photograph]' : '- NO images for technical content'}`;
 
-    const userPrompt = `Compose Chapter One (MINIMUM ${minWordsPerChapter} WORDS - this is STRICTLY REQUIRED) and the complete Table of Contents for an instructional volume on: "${topic}".
+    const userPrompt = `Compose Chapter One (approximately ${minWordsForPreview} words - concise but complete for preview) and the complete Table of Contents for an instructional volume on: "${topic}".
 
 For Chapter One, you MUST include:
 1. ${topicType === 'LIFESTYLE' ? 'ONE [IMAGE: prompt with geographic location] at the TOP of the chapter, before text' : 'NO images for technical content'}
@@ -896,7 +895,7 @@ For the "coverImageSearchQuery" field AND each chapter's "imageSearchQuery" fiel
 
 FORMATTING: Do NOT write "Pro Tips" or "Key Takeaways" as section headers. Use [PRO-TIP:] tags instead - the UI will render them beautifully.
 
-Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This is non-negotiable.`;
+CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure the JSON response is valid. Prioritize SYNTACTICALLY CORRECT JSON over word count.`;
 
     console.log('Calling Google Gemini API for shell (TOC + Chapter 1)...');
 
