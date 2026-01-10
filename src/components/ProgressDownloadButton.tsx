@@ -101,7 +101,7 @@ const ProgressDownloadButton = ({
   // Button label based on state
   const getButtonLabel = () => {
     if (isConverting) {
-      return 'Preparing High-Resolution PDF...';
+      return 'Preparing High-Res PDF...';
     }
     if (isCompiling) {
       return 'Compiling your guide...';
@@ -114,7 +114,8 @@ const ProgressDownloadButton = ({
 
   /**
    * Handle PDF download with robust Base64 image conversion
-   * Converts ALL cover images to Base64 before PDF generation to avoid CORS issues
+   * Converts the cover image to Base64 before PDF generation to avoid CORS issues
+   * Uses a 4-second delay to ensure all image processing completes
    */
   const handleDownload = async () => {
     if (!bookData) {
@@ -125,10 +126,10 @@ const ProgressDownloadButton = ({
     try {
       setIsConverting(true);
       
-      // Show persistent loading toast
-      toast.loading('Preparing High-Resolution PDF...', { 
+      // Show persistent loading toast with clear messaging
+      toast.loading('Preparing High-Res PDF...', { 
         id: 'pdf-progress',
-        description: 'Converting images for embedding (this may take a moment)...' 
+        description: 'Converting images for embedding (please wait ~5 seconds)...' 
       });
 
       console.log('[PDF] Starting PDF preparation...');
@@ -144,10 +145,14 @@ const ProgressDownloadButton = ({
         console.log('[PDF] No cover image available, proceeding without');
       }
 
-      // STEP 2: Wait for any async operations to settle
+      // STEP 2: Wait 4 seconds for all async operations to settle
       // This ensures the Base64 data is fully available before PDF generation
-      console.log('[PDF] Waiting for image processing to complete...');
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      console.log('[PDF] Waiting 4 seconds for image processing to complete...');
+      toast.loading('Processing images...', { 
+        id: 'pdf-progress',
+        description: 'Ensuring all images are embedded properly...' 
+      });
+      await new Promise(resolve => setTimeout(resolve, 4000));
 
       // STEP 3: Update toast and generate PDF
       toast.loading('Generating PDF...', { 

@@ -320,6 +320,7 @@ function partialParseBookData(src: string, topic: string): { bookData: any; warn
       chapter: i + 1,
       title: `Chapter ${i + 1}`,
       imageDescription: `A minimalist diagram illustrating core concepts of ${topic}.`,
+      imageSearchQuery: `${topic} professional photography`,
     })),
     chapter1Content: extractJsonStringValue(src, 'chapter1Content') ?? '',
     localResources: extractJsonArrayValue(src, 'localResources') ?? [],
@@ -572,6 +573,104 @@ async function generateAndSaveChapterAtomically(
   }
 }
 
+// UNIVERSAL IMAGE SEARCH: AI generates the optimal search query for ANY topic
+async function generateImageSearchQuery(
+  topic: string,
+  chapterTitle: string,
+  topicType: 'TECHNICAL' | 'LIFESTYLE' | 'ACADEMIC',
+  geminiApiKey: string
+): Promise<string> {
+  const defaultQuery = `${topic} professional photography high resolution`;
+  
+  try {
+    const queryPrompt = `You are an expert image curator. Generate the PERFECT Google Image Search query to find stunning, relevant imagery for this content.
+
+TOPIC: "${topic}"
+CHAPTER/SECTION: "${chapterTitle}"
+CONTENT TYPE: ${topicType}
+
+CRITICAL RULES FOR EACH TYPE:
+
+IF TRAVEL (cities, destinations, hotels, tours):
+- ALWAYS start with the EXACT GEOGRAPHIC LOCATION (city, state/country)
+- Include: "landscape", "architecture", "scenic view", "travel destination"
+- ALWAYS append: -golf -wedding -event -stock -clipart
+- Example: "Aspen Colorado mountain landscape scenic winter resort -golf -wedding -event"
+
+IF TECHNICAL (repair, mechanics, engineering, automotive):
+- Include: "mechanical detail", "close-up", "professional studio", "diagram"
+- Focus on the specific object/process being discussed
+- Example: "V8 engine piston close-up mechanical detail studio lighting"
+
+IF AUTOMOTIVE (cars, vehicles, luxury):
+- Include: "automotive photography", "studio lighting", "showroom", "editorial"
+- Example: "Ferrari 488 automotive photography studio lighting showroom"
+
+IF FOOD/COOKING (recipes, cuisine):
+- Include: "food photography", "culinary", "gourmet", "plated dish"
+- Example: "sourdough bread artisan bakery food photography rustic"
+
+IF WELLNESS (health, fitness, yoga):
+- Include: "lifestyle photography", "natural light", "peaceful", "wellness"
+- Example: "yoga practice sunset beach lifestyle photography peaceful"
+
+IF CRAFTS/DIY/HOBBIES:
+- Include: "hands-on", "workspace", "materials", "artisan"
+- Example: "pottery wheel hands crafting artisan workspace studio"
+
+IMPORTANT:
+- Maximum 12 words
+- Be EXTREMELY specific to avoid irrelevant results
+- For location-based topics, GEOGRAPHY must be FIRST
+- Return ONLY the search query string, nothing else`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: queryPrompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 80,
+          },
+        }),
+        signal: controller.signal,
+      }
+    );
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json();
+      const aiQuery = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (aiQuery && aiQuery.length > 10 && aiQuery.length < 150) {
+        console.log(`[ImageSearch] AI query: "${aiQuery}"`);
+        return aiQuery;
+      }
+    }
+  } catch (error) {
+    console.log('[ImageSearch] AI query generation failed, using fallback:', error);
+  }
+  
+  // Intelligent fallback based on topic type
+  if (topicType === 'TECHNICAL') {
+    return `${topic} professional studio photography mechanical detail`;
+  } else if (topicType === 'LIFESTYLE') {
+    const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain|hotel)\b/i;
+    if (travelKeywords.test(topic)) {
+      return `${topic} scenic landscape travel destination photography -golf -wedding -event`;
+    }
+    return `${topic} lifestyle magazine professional photography`;
+  }
+  
+  return defaultQuery;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -737,20 +836,30 @@ ${topicType === 'LIFESTYLE' ? `IMAGE REQUIREMENT:
 - The prompt must include GEOGRAPHIC LOCATION and be highly specific
 - Example: [IMAGE: Authentic editorial photography of the Eiffel Tower at golden hour, Paris, France]` : ''}
 
+IMPORTANT - IMAGE SEARCH QUERY REQUIREMENT:
+For EACH chapter in the tableOfContents, you MUST include an "imageSearchQuery" field with a highly specific Google Image Search query.
+This query will be used to fetch real images. Make it extremely specific to avoid irrelevant results.
+
 You must respond with a JSON object in this exact format:
 {
   "title": "The Full Combined Title: ${classifiedSubtitle}",
   "displayTitle": "Short Cover Title",
   "subtitle": "${classifiedSubtitle}",
   "tableOfContents": [
-    { "chapter": 1, "title": "Chapter title", "imageDescription": "EXTREMELY specific prompt for high-end travel photography..." },
-    { "chapter": 2, "title": "Chapter title", "imageDescription": "..." },
+    { 
+      "chapter": 1, 
+      "title": "Chapter title", 
+      "imageDescription": "EXTREMELY specific prompt for high-end travel photography...",
+      "imageSearchQuery": "Specific Google search query for this chapter's imagery (e.g., 'Aspen Colorado ski resort mountain landscape -golf -wedding')"
+    },
+    { "chapter": 2, "title": "Chapter title", "imageDescription": "...", "imageSearchQuery": "..." },
     ...through chapter 10
   ],
   "chapter1Content": "Full markdown content of chapter 1 - MINIMUM ${minWordsPerChapter} WORDS with SPECIFIC data...",
   "localResources": [
     { "name": "Business Name", "type": "Service Type", "description": "Brief description" }
-  ]
+  ],
+  "coverImageSearchQuery": "The BEST Google Image Search query for the cover image - be extremely specific with location/subject"
 }
 
 CHAPTER WORD COUNT: MINIMUM ${minWordsPerChapter} words per chapter (strictly enforced).
@@ -777,6 +886,13 @@ For Chapter One, you MUST include:
 8. MANDATORY: Exactly ONE [PRO-TIP: ...] callout (the UI renders this as a styled box)
 9. "Putting It Into Practice" section with exercises
 10. Transition paragraph to Chapter 2
+
+CRITICAL - IMAGE SEARCH QUERIES:
+For the "coverImageSearchQuery" field AND each chapter's "imageSearchQuery" field, generate a HIGHLY SPECIFIC Google Image Search query that will return relevant, high-quality images.
+- For TRAVEL topics: Include the GEOGRAPHIC LOCATION first, then descriptive terms, then append "-golf -wedding -event -stock"
+- For TECHNICAL topics: Include the object/subject with "close-up", "detail", "professional studio"
+- For FOOD topics: Include "food photography", "gourmet", "plated"
+- For WELLNESS topics: Include "lifestyle photography", "natural light"
 
 FORMATTING: Do NOT write "Pro Tips" or "Key Takeaways" as section headers. Use [PRO-TIP:] tags instead - the UI will render them beautifully.
 
@@ -909,6 +1025,7 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
         chapter: i + 1,
         title: `Chapter ${i + 1}`,
         imageDescription: `A minimalist diagram illustrating core concepts of ${topic}.`,
+        imageSearchQuery: `${topic} professional photography`,
       }));
     }
 
@@ -935,88 +1052,24 @@ Count your words. The chapter MUST be at least ${minWordsPerChapter} words. This
       bookData.hasDisclaimer = true;
     }
 
-    // Generate cover image using Google Custom Search API with UNIVERSAL INTENT
-    // AI dynamically generates the most relevant search query for EACH topic
+    // UNIVERSAL CONTEXT-AWARE IMAGE SEARCH
+    // Use the AI-generated coverImageSearchQuery or generate one dynamically
     const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
     const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
     
     if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
       try {
-        console.log('Generating AI-powered universal image search query...');
+        console.log('Starting Universal Context-Aware Image Search...');
         
-        // UNIVERSAL INTENT SEARCH: Use AI to generate the BEST search query for any topic
-        // Extract geographic location from topic for travel queries
-        let searchQuery = `${topic} high resolution professional photography`;
+        // Use AI-generated query from the book data, or generate one
+        let searchQuery = bookData.coverImageSearchQuery;
         
-        try {
-          const queryPrompt = `Analyze this topic and generate the BEST Google image search query to find stunning, relevant imagery.
-
-TOPIC: "${topic}"
-
-CRITICAL GUIDELINES:
-- For TRAVEL topics (cities, destinations, hotels): 
-  * ALWAYS prepend the GEOGRAPHIC LOCATION (city, state/country) at the start
-  * Include "landscape", "architecture", "scenic", "travel destination"  
-  * APPEND these negative filters: -golf -wedding -event -stock
-  * Example: "Aspen Colorado mountain landscape scenic travel destination -golf -wedding"
-- For TECHNICAL topics (repair, mechanics, engineering): Include "mechanical detail", "close-up", "professional studio"
-- For AUTOMOTIVE topics (cars, vehicles): Include "automotive photography", "studio lighting", "showroom"
-- For FOOD/COOKING topics: Include "food photography", "culinary", "gourmet"
-- For WELLNESS topics: Include "lifestyle", "peaceful", "natural light"
-- For CRAFTS/DIY: Include "hands-on", "workspace", "materials"
-
-IMPORTANT: For any location-based topic, the GEOGRAPHIC LOCATION must be the FIRST words in the query.
-
-Return ONLY the search query string, nothing else. Maximum 15 words.`;
-
-          const queryController = new AbortController();
-          const queryTimeoutId = setTimeout(() => queryController.abort(), 10000);
-          
-          const queryResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: queryPrompt }] }],
-                generationConfig: {
-                  temperature: 0.3,
-                  maxOutputTokens: 100,
-                },
-              }),
-              signal: queryController.signal,
-            }
-          );
-          
-          clearTimeout(queryTimeoutId);
-          
-          if (queryResponse.ok) {
-            const queryData = await queryResponse.json();
-            const aiQuery = queryData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (aiQuery && aiQuery.length > 10 && aiQuery.length < 200) {
-              searchQuery = aiQuery;
-              console.log('AI-generated search query:', searchQuery);
-            }
-          }
-        } catch (aiQueryError) {
-          console.log('AI query generation failed, using fallback:', aiQueryError);
-          // Fallback to intent-based patterns with geographic markers
-          if (topicType === 'TECHNICAL') {
-            searchQuery = `${topic} professional studio photography mechanical detail`;
-          } else if (topicType === 'LIFESTYLE') {
-            const travelKeywords = /\b(travel|trip|vacation|tour|visit|city|country|island|beach|mountain|hotel)\b/i;
-            if (travelKeywords.test(topic)) {
-              // For travel topics, add negative filters to avoid golf courses and events
-              searchQuery = `${topic} scenic landscape travel destination professional photography -golf -wedding -event`;
-            } else {
-              searchQuery = `${topic} lifestyle magazine professional photography`;
-            }
-          } else {
-            searchQuery = `${topic} professional editorial photography`;
-          }
+        if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.length < 10) {
+          console.log('No coverImageSearchQuery in response, generating dynamically...');
+          searchQuery = await generateImageSearchQuery(topic, 'Cover Image', topicType, GEMINI_API_KEY);
         }
         
-        console.log('Final search query:', searchQuery);
+        console.log('Final cover image search query:', searchQuery);
         
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
         
@@ -1041,7 +1094,7 @@ Return ONLY the search query string, nothing else. Maximum 15 words.`;
             // Check if URL is from a blocked domain
             const isBlocked = blockedDomains.some(domain => imageUrl.toLowerCase().includes(domain));
             if (isBlocked) {
-              console.log(`Skipping blocked domain: ${imageUrl}`);
+              console.log(`Skipping blocked domain: ${imageUrl.substring(0, 50)}...`);
               continue;
             }
             
