@@ -96,6 +96,7 @@ Respond with ONLY a JSON object:
 }
 
 // Fetch local resources using Google Places API (New) with fallback to Legacy
+// FIXED: Now includes full address and rating in description
 async function fetchLocalResources(topic: string, apiKey: string): Promise<Array<{ name: string; type: string; description: string }>> {
   const searchQuery = `${topic} supplies store`;
   
@@ -130,7 +131,9 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
         }) => ({
           name: place.displayName?.text || 'Local Business',
           type: place.primaryType?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
-          description: place.formattedAddress || 'Local provider for your project needs.',
+          // FIXED: Force address + rating into description
+          description: (place.formattedAddress || 'Local provider for your project needs.') + 
+            (place.rating ? ` • ⭐ ${place.rating}` : ''),
         }));
       }
       console.log('Places API (New) returned no results, falling back to legacy...');
@@ -157,10 +160,13 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
           name?: string;
           types?: string[];
           formatted_address?: string;
+          rating?: number;
         }) => ({
           name: place.name || 'Local Business',
           type: place.types?.[0]?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Retail Store',
-          description: place.formatted_address || 'Local provider for your project needs.',
+          // FIXED: Force address + rating into description
+          description: (place.formatted_address || 'Local provider for your project needs.') + 
+            (place.rating ? ` • ⭐ ${place.rating}` : ''),
         }));
       }
       console.log('Legacy Places API returned no results');
@@ -175,6 +181,79 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
   // Return empty array if both APIs fail - AI-generated fallback will be used
   console.log('Both Places APIs returned no results, using AI-generated resources');
   return [];
+}
+
+// BAKE IN IMAGES: Replace [IMAGE: prompt] markers with actual Pexels URLs
+async function bakeInPexelsImages(
+  content: string, 
+  pexelsApiKey: string,
+  maxImages: number = 3
+): Promise<string> {
+  // Find all [IMAGE: prompt] markers
+  const imageMarkerRegex = /\[IMAGE:\s*([^\]]+)\]/gi;
+  const matches = [...content.matchAll(imageMarkerRegex)];
+  
+  if (matches.length === 0) {
+    console.log('[BakeImages] No [IMAGE:] markers found in content');
+    return content;
+  }
+  
+  console.log(`[BakeImages] Found ${matches.length} image markers, processing up to ${maxImages}`);
+  
+  let processedContent = content;
+  let imagesProcessed = 0;
+  
+  for (const match of matches) {
+    if (imagesProcessed >= maxImages) {
+      // Remove remaining markers beyond budget
+      processedContent = processedContent.replace(match[0], '');
+      continue;
+    }
+    
+    const fullMatch = match[0];
+    const imagePrompt = match[1].trim();
+    
+    try {
+      // Clean the prompt for Pexels (remove exclusion terms)
+      const cleanedQuery = imagePrompt.replace(/-\w+/g, '').trim().slice(0, 100);
+      console.log(`[BakeImages] Fetching Pexels image for: "${cleanedQuery}"`);
+      
+      const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(cleanedQuery)}&per_page=3&orientation=landscape`;
+      
+      const pexelsResponse = await fetch(pexelsUrl, {
+        headers: { 'Authorization': pexelsApiKey },
+      });
+      
+      if (pexelsResponse.ok) {
+        const pexelsData = await pexelsResponse.json();
+        const photo = pexelsData.photos?.[0];
+        
+        if (photo) {
+          const imageUrl = photo.src?.landscape || photo.src?.large || photo.src?.original;
+          const altText = imagePrompt.slice(0, 80).replace(/[^\w\s]/g, '');
+          
+          // Replace the marker with standard Markdown image syntax
+          const markdownImage = `![${altText}](${imageUrl})`;
+          processedContent = processedContent.replace(fullMatch, markdownImage);
+          imagesProcessed++;
+          console.log(`[BakeImages] ✓ Replaced marker with Pexels URL`);
+        } else {
+          // No image found - remove the marker
+          console.log(`[BakeImages] No Pexels results for "${cleanedQuery}", removing marker`);
+          processedContent = processedContent.replace(fullMatch, '');
+        }
+      } else {
+        console.log(`[BakeImages] Pexels API error, removing marker`);
+        processedContent = processedContent.replace(fullMatch, '');
+      }
+    } catch (error) {
+      console.error('[BakeImages] Error fetching image:', error);
+      processedContent = processedContent.replace(fullMatch, '');
+    }
+  }
+  
+  console.log(`[BakeImages] Processed ${imagesProcessed} images, content length: ${processedContent.length}`);
+  return processedContent;
 }
 
 // ---- Robust JSON extraction/parsing helpers (Deno-safe) ----
@@ -499,10 +578,14 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
       if (response.ok) {
         const data = await response.json();
         const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (content) {
-          console.log(`[Chapter ${chapterNumber}] Generated successfully`);
-          return content.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
-        }
+    if (content) {
+      console.log(`[Chapter ${chapterNumber}] Generated successfully`);
+      // Clean stray code block markers
+      return content
+        .replace(/^```(?:markdown|json)?\n?/gi, '')
+        .replace(/\n?```$/gi, '')
+        .trim();
+    }
       }
 
       if (response.status === 429 && retry < maxRetries) {
@@ -534,6 +617,7 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
 
 // ATOMIC GENERATION: Each chapter saves IMMEDIATELY to database upon completion
 // This ensures real-time progress and prevents "Chapter 3" timeout bugs
+// UPDATED: Now bakes in Pexels images for LIFESTYLE chapters
 async function generateAndSaveChapterAtomically(
   chapterNum: number,
   chapterTitle: string,
@@ -542,16 +626,23 @@ async function generateAndSaveChapterAtomically(
   bookId: string,
   geminiApiKey: string,
   supabaseUrl: string,
-  supabaseServiceKey: string
+  supabaseServiceKey: string,
+  pexelsApiKey?: string // Optional: for baking in images
 ): Promise<void> {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
   console.log(`[ATOMIC ${chapterNum}] Starting generation for: ${chapterTitle}`);
   
   try {
-    const content = await generateSingleChapter(chapterNum, chapterTitle, topic, topicType, geminiApiKey);
+    let content = await generateSingleChapter(chapterNum, chapterTitle, topic, topicType, geminiApiKey);
     
     if (content) {
+      // BAKE IN IMAGES: Replace [IMAGE: prompt] markers with Pexels URLs (LIFESTYLE only)
+      if (pexelsApiKey && topicType === 'LIFESTYLE') {
+        console.log(`[ATOMIC ${chapterNum}] Baking in Pexels images...`);
+        content = await bakeInPexelsImages(content, pexelsApiKey, 1); // 1 image per chapter
+      }
+      
       // ATOMIC SAVE: Immediately upsert to database
       const columnName = `chapter${chapterNum}_content`;
       const { error } = await supabase
@@ -1063,6 +1154,21 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
     if (!bookData.chapter1Content || typeof bookData.chapter1Content !== 'string') {
       bookData.chapter1Content = `## Draft Output\n\n${sanitizeJsonText(content).slice(0, 12000)}`;
     }
+    
+    // Clean stray code block markers from Chapter 1
+    bookData.chapter1Content = bookData.chapter1Content
+      .replace(/^```(?:markdown|json)?\s*$/gim, '')
+      .replace(/```$/gim, '')
+      .trim();
+
+    // BAKE IN PEXELS IMAGES for Chapter 1 (LIFESTYLE topics only, Guest mode gets 1 image)
+    const PEXELS_API_KEY_EARLY = Deno.env.get('PEXELS_API_KEY');
+    if (PEXELS_API_KEY_EARLY && topicType === 'LIFESTYLE' && bookData.chapter1Content) {
+      console.log('Baking Pexels images into Chapter 1...');
+      // Guest mode: only 1 image to save bandwidth; Full book: allow more
+      const maxImagesForCh1 = fullBook ? 2 : 1;
+      bookData.chapter1Content = await bakeInPexelsImages(bookData.chapter1Content, PEXELS_API_KEY_EARLY, maxImagesForCh1);
+    }
 
     // Fetch real local resources from Google Places API if key is configured
     if (GOOGLE_PLACES_API_KEY) {
@@ -1168,6 +1274,7 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
         const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
         
         // Each chapter runs independently and saves IMMEDIATELY on completion
+        // Pass PEXELS_API_KEY to bake in images for LIFESTYLE chapters
         (globalThis as any).EdgeRuntime?.waitUntil?.(
           generateAndSaveChapterAtomically(
             chapterNum,
@@ -1177,7 +1284,8 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
             existingBookId,
             GEMINI_API_KEY,
             SUPABASE_URL,
-            SUPABASE_SERVICE_ROLE_KEY
+            SUPABASE_SERVICE_ROLE_KEY,
+            PEXELS_API_KEY // NEW: Pass Pexels key for image baking
           )
         );
       }

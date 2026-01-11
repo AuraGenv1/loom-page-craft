@@ -28,9 +28,13 @@ interface CleanPDFOptions {
 /**
  * Clean markdown of special formatting markers
  * Preserves essential content while removing UI-specific elements
+ * FIXED: Now strips stray code block markers that Gemini may leave
  */
 const cleanMarkdown = (text: string): string => {
   return text
+    // SANITIZATION: Strip stray code block markers (```markdown, ```json, ```)
+    .replace(/^```(?:markdown|json)?\s*$/gim, "")
+    .replace(/```$/gim, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold -> plain (preserve content)
     .replace(/\*([^*]+)\*/g, "$1") // Italic -> plain (preserve content)
     .replace(/---+/g, "") // Horizontal rules
