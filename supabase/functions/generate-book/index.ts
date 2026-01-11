@@ -95,14 +95,86 @@ Respond with ONLY a JSON object:
   return { safe: true };
 }
 
+// Extract location/city from topic for geocoding-based search
+// FIXED: Now extracts geographic location dynamically from the topic
+function extractLocationFromTopic(topic: string): { city: string | null; country: string | null; searchTerms: string[] } {
+  const lowerTopic = topic.toLowerCase();
+  
+  // Common city/country patterns
+  const locationPatterns = [
+    // "Trip to Paris", "Visit Rome", "Guide to Tokyo"
+    /(?:trip to|visit|guide to|exploring|discover|travel to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    // "Paris Travel Guide", "Rome Vacation", "Tokyo Adventure"
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:travel|vacation|adventure|guide|trip|tour|exploration)/i,
+    // "The London Bible", "New York Secrets"
+    /^(?:the\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:bible|secrets|insider|experience)/i,
+    // Just a city name as the topic
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/,
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = topic.match(pattern);
+    if (match && match[1]) {
+      const location = match[1].trim();
+      // Filter out common non-location words
+      const nonLocations = ['the', 'guide', 'bible', 'book', 'secrets', 'complete', 'ultimate', 'best'];
+      if (!nonLocations.includes(location.toLowerCase())) {
+        console.log(`[LocationExtract] Found location in topic: "${location}"`);
+        return {
+          city: location,
+          country: null,
+          searchTerms: topic.replace(location, '').trim().split(/\s+/).filter(w => w.length > 3)
+        };
+      }
+    }
+  }
+  
+  // If no explicit location found, extract any capitalized proper nouns
+  const properNouns = topic.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g);
+  if (properNouns && properNouns.length > 0) {
+    const potentialLocation = properNouns[0];
+    const nonLocations = ['The', 'Guide', 'Bible', 'Book', 'Secrets', 'Complete', 'Ultimate', 'Best', 'Pro', 'Master'];
+    if (!nonLocations.includes(potentialLocation)) {
+      console.log(`[LocationExtract] Inferred location from proper noun: "${potentialLocation}"`);
+      return {
+        city: potentialLocation,
+        country: null,
+        searchTerms: topic.replace(potentialLocation, '').trim().split(/\s+/).filter(w => w.length > 3)
+      };
+    }
+  }
+  
+  console.log(`[LocationExtract] No location found in topic, using generic search`);
+  return { city: null, country: null, searchTerms: topic.split(/\s+/).filter(w => w.length > 3) };
+}
+
 // Fetch local resources using Google Places API (New) with fallback to Legacy
 // FIXED: Now includes full address and rating in description
+// FIXED: Now geocodes based on topic location, not user's physical location
 async function fetchLocalResources(topic: string, apiKey: string): Promise<Array<{ name: string; type: string; description: string }>> {
-  const searchQuery = `${topic} supplies store`;
+  // Extract location from topic for geocoding
+  const locationInfo = extractLocationFromTopic(topic);
+  const locationContext = locationInfo.city ? ` near ${locationInfo.city}` : '';
+  const searchQuery = `${topic} supplies store${locationContext}`;
+  
+  console.log(`[LocalResources] Search query: "${searchQuery}"`);
   
   // Try Places API (New) first - more cost effective
   try {
     console.log('Attempting Places API (New) text search...');
+    
+    // Build request with location bias if we have a location
+    const requestBody: Record<string, unknown> = {
+      textQuery: searchQuery,
+      maxResultCount: 5,
+    };
+    
+    // If we extracted a location, add it to the search for better relevance
+    if (locationInfo.city) {
+      // The Places API will geocode the text query automatically when location is mentioned
+      requestBody.textQuery = `${topic} specialty shop in ${locationInfo.city}`;
+    }
+    
     const newApiResponse = await fetch(
       'https://places.googleapis.com/v1/places:searchText',
       {
@@ -112,10 +184,7 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
           'X-Goog-Api-Key': apiKey,
           'X-Goog-FieldMask': 'places.displayName,places.primaryType,places.formattedAddress,places.rating',
         },
-        body: JSON.stringify({
-          textQuery: searchQuery,
-          maxResultCount: 3,
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -148,8 +217,12 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
   // Fallback to Legacy Places API
   try {
     console.log('Attempting Legacy Places API text search...');
+    const legacyQuery = locationInfo.city 
+      ? `${topic} in ${locationInfo.city}` 
+      : searchQuery;
+    
     const legacyResponse = await fetch(
-      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`
+      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(legacyQuery)}&key=${apiKey}`
     );
 
     if (legacyResponse.ok) {
@@ -184,6 +257,7 @@ async function fetchLocalResources(topic: string, apiKey: string): Promise<Array
 }
 
 // BAKE IN IMAGES: Replace [IMAGE: prompt] markers with actual Pexels URLs
+// ROBUST: Wrapped in try/catch to prevent crashes on Pexels errors
 async function bakeInPexelsImages(
   content: string, 
   pexelsApiKey: string,
@@ -202,6 +276,9 @@ async function bakeInPexelsImages(
   
   let processedContent = content;
   let imagesProcessed = 0;
+  
+  // Generic fallback image for when Pexels fails
+  const FALLBACK_IMAGE = 'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=800&h=400';
   
   for (const match of matches) {
     if (imagesProcessed >= maxImages) {
@@ -238,17 +315,25 @@ async function bakeInPexelsImages(
           imagesProcessed++;
           console.log(`[BakeImages] ✓ Replaced marker with Pexels URL`);
         } else {
-          // No image found - remove the marker
-          console.log(`[BakeImages] No Pexels results for "${cleanedQuery}", removing marker`);
-          processedContent = processedContent.replace(fullMatch, '');
+          // No image found - use fallback
+          console.log(`[BakeImages] No Pexels results for "${cleanedQuery}", using fallback`);
+          const altText = imagePrompt.slice(0, 40).replace(/[^\w\s]/g, '');
+          processedContent = processedContent.replace(fullMatch, `![${altText}](${FALLBACK_IMAGE})`);
+          imagesProcessed++;
         }
       } else {
-        console.log(`[BakeImages] Pexels API error, removing marker`);
-        processedContent = processedContent.replace(fullMatch, '');
+        // Pexels API error (500, 429, etc.) - use fallback instead of removing
+        console.log(`[BakeImages] Pexels API error ${pexelsResponse.status}, using fallback`);
+        const altText = imagePrompt.slice(0, 40).replace(/[^\w\s]/g, '');
+        processedContent = processedContent.replace(fullMatch, `![${altText}](${FALLBACK_IMAGE})`);
+        imagesProcessed++;
       }
     } catch (error) {
-      console.error('[BakeImages] Error fetching image:', error);
-      processedContent = processedContent.replace(fullMatch, '');
+      // ROBUST: Catch any errors and use fallback image
+      console.error('[BakeImages] Error fetching image, using fallback:', error);
+      const altText = imagePrompt.slice(0, 40).replace(/[^\w\s]/g, '');
+      processedContent = processedContent.replace(fullMatch, `![${altText}](${FALLBACK_IMAGE})`);
+      imagesProcessed++;
     }
   }
   

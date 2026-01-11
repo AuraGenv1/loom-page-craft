@@ -234,7 +234,38 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           return;
         }
 
-        // Check for [IMAGE: ...] markers
+        // FIX: Check for Markdown image syntax ![alt](url) - render as actual <img> tag
+        const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+        if (markdownImageMatch) {
+          const alt = markdownImageMatch[1] || 'Image';
+          const url = markdownImageMatch[2];
+          elements.push(
+            <figure key={`md-image-${index}`} className="my-10 text-center">
+              <div className="relative w-full max-w-2xl mx-auto aspect-video bg-secondary/20 rounded-lg overflow-hidden border border-border/30">
+                <img
+                  src={url}
+                  alt={alt}
+                  className="w-full h-full object-cover"
+                  crossOrigin="anonymous"
+                  loading="eager"
+                  onError={(e) => {
+                    // Hide image on error
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                  }}
+                />
+              </div>
+              {alt && alt !== 'Image' && (
+                <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+                  {alt}
+                </figcaption>
+              )}
+            </figure>
+          );
+          return;
+        }
+
+        // Check for [IMAGE: ...] markers (legacy - these should now be replaced with ![](url))
         const imageMatch = trimmed.match(/\[IMAGE:\s*([^\]]+)\]/i);
         if (imageMatch) {
           const imageDescription = imageMatch[1].trim();
@@ -316,6 +347,23 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
                 </div>
               </div>
             </div>
+          );
+          return;
+        }
+
+        // Check for inline markdown images within text (e.g., paragraph with images)
+        if (/!\[[^\]]*\]\([^)]+\)/.test(trimmed)) {
+          // Process inline images in the paragraph
+          const processedParagraph = trimmed.replace(
+            /!\[([^\]]*)\]\(([^)]+)\)/g,
+            (_, alt, url) => `<img src="${url}" alt="${alt || 'Image'}" class="inline-block max-h-64 mx-2 rounded" crossorigin="anonymous" />`
+          );
+          elements.push(
+            <p 
+              key={index} 
+              style={{ fontSize: '1.1rem', lineHeight: '1.6' }}
+              dangerouslySetInnerHTML={{ __html: processedParagraph }}
+            />
           );
           return;
         }
