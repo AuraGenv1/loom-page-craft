@@ -391,52 +391,95 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       return words[num - 1] || `${num}`;
     };
 
+    // GUEST PREVIEW LOGIC: Only show Chapter 1 for non-paid users
+    // Chapters 2-10 show a "Locked" blur overlay
+    const isChapterLocked = (chapterNum: number): boolean => {
+      return !isFullAccess && chapterNum > 1;
+    };
+
     return (
       <div className="space-y-16">
-        {chapters.map((chapter, idx) => (
-          <article
-            key={chapter.number}
-            ref={(el) => { chapterRefs.current[idx] = el; }}
-            id={`chapter-${chapter.number}`}
-            className="w-full max-w-3xl mx-auto py-16 md:py-20 px-6 md:px-12 animate-fade-up bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative scroll-mt-24"
-          >
-            {/* Deckle edge effect */}
-            <div className="absolute inset-0 pointer-events-none rounded-sm overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent" />
-              <div className="absolute top-0 bottom-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-foreground/[0.03] to-transparent" />
-              <div className="absolute top-0 bottom-0 right-0 w-[3px] bg-gradient-to-b from-transparent via-foreground/[0.03] to-transparent" />
-            </div>
-
-            {/* Chapter header */}
-            <header className="mb-14 text-center">
-              <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">
-                Chapter {formatChapterNumber(chapter.number)}
-              </p>
-              <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">
-                {getChapterTitle(chapter.number)}
-              </h1>
-              <div className="flex items-center justify-center gap-3 mt-8">
-                <div className="w-12 h-[1px] bg-foreground/15" />
-                <div className="w-2 h-2 rounded-full border border-foreground/20" />
-                <div className="w-12 h-[1px] bg-foreground/15" />
+        {chapters.map((chapter, idx) => {
+          const locked = isChapterLocked(chapter.number);
+          
+          return (
+            <article
+              key={chapter.number}
+              ref={(el) => { chapterRefs.current[idx] = el; }}
+              id={`chapter-${chapter.number}`}
+              className="w-full max-w-3xl mx-auto py-16 md:py-20 px-6 md:px-12 animate-fade-up bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative scroll-mt-24"
+            >
+              {/* Deckle edge effect */}
+              <div className="absolute inset-0 pointer-events-none rounded-sm overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent" />
+                <div className="absolute top-0 bottom-0 left-0 w-[3px] bg-gradient-to-b from-transparent via-foreground/[0.03] to-transparent" />
+                <div className="absolute top-0 bottom-0 right-0 w-[3px] bg-gradient-to-b from-transparent via-foreground/[0.03] to-transparent" />
               </div>
-            </header>
 
-            {/* Chapter content */}
-            <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
-              {renderContent(chapter.content, chapter.number, idx === 0 && bookData.hasDisclaimer)}
-            </div>
-            
-            {/* Local Resources at the end of the last chapter */}
-            {chapter.number === 10 && chapter.content && (
-              <LocalResources 
-                topic={topic} 
-                resources={bookData.localResources}
-              />
-            )}
-          </article>
-        ))}
+              {/* Chapter header */}
+              <header className="mb-14 text-center">
+                <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">
+                  Chapter {formatChapterNumber(chapter.number)}
+                </p>
+                <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">
+                  {getChapterTitle(chapter.number)}
+                </h1>
+                <div className="flex items-center justify-center gap-3 mt-8">
+                  <div className="w-12 h-[1px] bg-foreground/15" />
+                  <div className="w-2 h-2 rounded-full border border-foreground/20" />
+                  <div className="w-12 h-[1px] bg-foreground/15" />
+                </div>
+              </header>
+
+              {/* Chapter content - OR locked overlay for guests */}
+              {locked ? (
+                <div className="relative min-h-[300px]">
+                  {/* Blurred placeholder content */}
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div className="blur-md opacity-40 select-none pointer-events-none">
+                      <p className="text-base mb-4">This chapter contains expert insights and detailed guidance on {getChapterTitle(chapter.number).toLowerCase()}. Our comprehensive coverage includes step-by-step instructions, pro tips from industry experts, and real-world examples you can apply immediately.</p>
+                      <p className="text-base mb-4">You'll discover the most effective strategies, common mistakes to avoid, and insider knowledge that separates beginners from professionals. Each section builds on the previous, creating a complete learning experience.</p>
+                      <p className="text-base">Unlock the full guide to access all 10 chapters of premium content, including exclusive resources and downloadable materials...</p>
+                    </div>
+                  </div>
+                  
+                  {/* Lock overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-background/60 via-background/80 to-background/90 backdrop-blur-sm rounded-lg border border-border/30">
+                    <div className="text-center px-8 py-10">
+                      <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-foreground/5 border border-foreground/10 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </div>
+                      <h3 className="font-serif text-xl md:text-2xl font-semibold text-foreground mb-3">
+                        Chapter Locked
+                      </h3>
+                      <p className="text-muted-foreground text-sm md:text-base max-w-sm mx-auto mb-6">
+                        Upgrade to unlock all 10 chapters of expert content, pro tips, and exclusive resources.
+                      </p>
+                      <span className="inline-block px-6 py-2.5 bg-foreground text-background font-serif text-sm rounded-sm hover:bg-foreground/90 transition-colors cursor-pointer">
+                        Unlock Full Guide
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
+                  {renderContent(chapter.content, chapter.number, idx === 0 && bookData.hasDisclaimer)}
+                </div>
+              )}
+              
+              {/* Local Resources at the end of the last chapter (only for paid users) */}
+              {chapter.number === 10 && chapter.content && isFullAccess && (
+                <LocalResources 
+                  topic={topic} 
+                  resources={bookData.localResources}
+                />
+              )}
+            </article>
+          );
+        })}
       </div>
     );
   }

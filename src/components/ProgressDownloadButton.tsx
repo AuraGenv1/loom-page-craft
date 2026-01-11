@@ -128,23 +128,46 @@ const extractAllImageUrls = (bookData: BookData): string[] => {
  * Process all images in bookData and convert them to Base64
  * Returns a deep copy of bookData with all URLs replaced
  * FAIL-SAFE: Failed images are replaced with transparent 1x1 pixel
+ * 
+ * GUEST PREVIEW: If isPurchased=false, only process Chapter 1
  */
 const processBookImages = async (
   bookData: BookData,
   coverImageUrls: string[],
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  isPurchased: boolean = false
 ): Promise<{ processedBookData: BookData; base64CoverUrl: string }> => {
   onProgress?.('Embedding cover image...');
   
   // Step 1: Convert cover image (with fail-safe)
   const base64CoverUrl = await getBase64CoverImage(coverImageUrls);
   
+  // GUEST PREVIEW: For non-purchased users, only include Chapter 1 in PDF
+  // Create a cleaned copy with only Chapter 1 content
+  let bookDataToProcess = { ...bookData };
+  
+  if (!isPurchased) {
+    console.log('[PDF] GUEST MODE: Only processing Chapter 1 for PDF');
+    bookDataToProcess = {
+      ...bookData,
+      chapter2Content: undefined,
+      chapter3Content: undefined,
+      chapter4Content: undefined,
+      chapter5Content: undefined,
+      chapter6Content: undefined,
+      chapter7Content: undefined,
+      chapter8Content: undefined,
+      chapter9Content: undefined,
+      chapter10Content: undefined,
+    };
+  }
+  
   // Step 2: Extract and convert all chapter images
-  const chapterImageUrls = extractAllImageUrls(bookData);
+  const chapterImageUrls = extractAllImageUrls(bookDataToProcess);
   console.log(`[PDF] Found ${chapterImageUrls.length} chapter images to convert`);
   
   if (chapterImageUrls.length === 0) {
-    return { processedBookData: bookData, base64CoverUrl };
+    return { processedBookData: bookDataToProcess, base64CoverUrl };
   }
   
   onProgress?.(`Embedding ${chapterImageUrls.length} chapter images...`);
@@ -176,17 +199,17 @@ const processBookImages = async (
   console.log(`[PDF] Successfully converted ${successCount}/${chapterImageUrls.length} chapter images`);
   
   // Step 3: Create a deep copy of bookData with URLs replaced
-  const processedBookData = { ...bookData };
+  const processedBookData = { ...bookDataToProcess };
   
-  // Replace URLs in all chapter content
-  const chapterKeys = [
-    'chapter1Content', 'chapter2Content', 'chapter3Content', 'chapter4Content',
-    'chapter5Content', 'chapter6Content', 'chapter7Content', 'chapter8Content',
-    'chapter9Content', 'chapter10Content'
-  ] as const;
+  // Replace URLs in all chapter content (only Chapter 1 for guests)
+  const chapterKeys = isPurchased 
+    ? ['chapter1Content', 'chapter2Content', 'chapter3Content', 'chapter4Content',
+       'chapter5Content', 'chapter6Content', 'chapter7Content', 'chapter8Content',
+       'chapter9Content', 'chapter10Content'] as const
+    : ['chapter1Content'] as const;
   
   chapterKeys.forEach((key) => {
-    let content = processedBookData[key];
+    let content = (processedBookData as any)[key];
     if (!content) return;
     
     Object.entries(urlToBase64Map).forEach(([url, base64]) => {
@@ -287,6 +310,7 @@ const ProgressDownloadButton = ({
 
       // STEP 1: Process ALL images (cover + chapters) to Base64
       // FAIL-SAFE: Any failed images become transparent 1x1 pixels
+      // GUEST PREVIEW: If not purchased, only process Chapter 1
       const { processedBookData, base64CoverUrl } = await processBookImages(
         bookData,
         coverImageUrls,
@@ -296,7 +320,8 @@ const ProgressDownloadButton = ({
             id: 'pdf-progress',
             description: message 
           });
-        }
+        },
+        isPurchased // Pass isPurchased flag to limit content for guests
       );
       
       // DEBUG: Log processed book data
