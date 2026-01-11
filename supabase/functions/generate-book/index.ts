@@ -485,10 +485,10 @@ MINIMUM ${minWordsPerChapter} WORDS. Write the full chapter content in markdown 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-            generationConfig: {
-              temperature: 0.8,
-              maxOutputTokens: 4000,
-            },
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4000,
+          },
           }),
           signal: controller.signal,
         }
@@ -952,7 +952,7 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
             body: JSON.stringify({
               contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
               generationConfig: {
-                temperature: 0.8,
+                temperature: 0.7,
                 responseMimeType: 'application/json',
                 maxOutputTokens: 16384,
               },
@@ -1083,14 +1083,13 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
       bookData.hasDisclaimer = true;
     }
 
-    // UNIVERSAL CONTEXT-AWARE IMAGE SEARCH
-    // Use the AI-generated coverImageSearchQuery or generate one dynamically
-    const GOOGLE_CSE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
-    const GOOGLE_CSE_CX = Deno.env.get('GOOGLE_CSE_CX');
+// PEXELS API: Commercial-ready CORS-friendly image search
+    // Replaces Google CSE for legal, commercially-licensed images
+    const PEXELS_API_KEY = Deno.env.get('PEXELS_API_KEY');
     
-    if (GOOGLE_CSE_API_KEY && GOOGLE_CSE_CX) {
+    if (PEXELS_API_KEY) {
       try {
-        console.log('Starting Universal Context-Aware Image Search...');
+        console.log('Starting Pexels Commercial Image Search...');
         
         // Use AI-generated query from the book data, or generate one
         let searchQuery = bookData.coverImageSearchQuery;
@@ -1100,59 +1099,58 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
           searchQuery = await generateImageSearchQuery(topic, 'Cover Image', topicType, GEMINI_API_KEY);
         }
         
-        console.log('Final cover image search query:', searchQuery);
+        // Clean the query for Pexels (remove exclusion terms like -text -signage)
+        const cleanedQuery = searchQuery.replace(/-\w+/g, '').trim();
+        console.log('Final Pexels search query:', cleanedQuery);
         
-        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_API_KEY}&cx=${GOOGLE_CSE_CX}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=10&imgSize=large&imgType=photo&safe=active`;
+        const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(cleanedQuery)}&per_page=10&orientation=landscape`;
         
-        const searchResponse = await fetch(searchUrl);
+        const pexelsResponse = await fetch(pexelsUrl, {
+          headers: {
+            'Authorization': PEXELS_API_KEY,
+          },
+        });
         
-        if (searchResponse.ok) {
-          const searchData = await searchResponse.json();
-          const items = searchData.items || [];
+        if (pexelsResponse.ok) {
+          const pexelsData = await pexelsResponse.json();
+          const photos = pexelsData.photos || [];
           
-          // Blocked domains that often fail to load or have CORS issues
-          const blockedDomains = ['instagram.com', 'pinterest.com', 'tripadvisor.com', 'facebook.com', 'twitter.com', 'x.com', 'flickr.com', 'tumblr.com'];
-          
-          // Filter and collect up to 5 valid image URLs
+          // Collect up to 5 valid image URLs (Pexels provides CORS-friendly URLs)
           const validUrls: string[] = [];
           
-          for (const item of items) {
+          for (const photo of photos) {
             if (validUrls.length >= 5) break;
             
-            const imageUrl = item.link;
-            if (!imageUrl) continue;
-            
-            // Check if URL is from a blocked domain
-            const isBlocked = blockedDomains.some(domain => imageUrl.toLowerCase().includes(domain));
-            if (isBlocked) {
-              console.log(`Skipping blocked domain: ${imageUrl.substring(0, 50)}...`);
-              continue;
-            }
-            
-            // Prefer URLs that look like direct image links
-            if (imageUrl.match(/\.(jpg|jpeg|png|webp)($|\?)/i)) {
+            // Prefer landscape or large versions for cover images
+            const imageUrl = photo.src?.landscape || photo.src?.large || photo.src?.original;
+            if (imageUrl) {
               validUrls.push(imageUrl);
-            } else if (validUrls.length < 5) {
-              validUrls.push(imageUrl); // Still include non-obvious URLs as fallback
             }
           }
           
           if (validUrls.length > 0) {
             // Store as array for fallback logic in frontend
             bookData.coverImageUrl = validUrls;
-            console.log(`Google CSE: Found ${validUrls.length} valid cover images`);
+            console.log(`Pexels: Found ${validUrls.length} valid cover images`);
           } else {
-            console.log('Google CSE: No valid images found after filtering');
+            console.log('Pexels: No valid images found, using topic placeholder');
+            // FALLBACK: Use a generic placeholder based on topic type
+            bookData.coverImageUrl = [`https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2`];
           }
         } else {
-          const errorText = await searchResponse.text();
-          console.error('Google CSE error:', searchResponse.status, errorText);
+          const errorText = await pexelsResponse.text();
+          console.error('Pexels API error:', pexelsResponse.status, errorText);
+          // FALLBACK: Use a generic placeholder
+          bookData.coverImageUrl = [`https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2`];
         }
-      } catch (cseError) {
-        console.error('Google Custom Search failed:', cseError);
+      } catch (pexelsError) {
+        console.error('Pexels API failed:', pexelsError);
+        // FALLBACK: Use a generic placeholder
+        bookData.coverImageUrl = [`https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2`];
       }
     } else {
-      console.log('Google CSE API keys not configured, skipping cover image search');
+      console.log('PEXELS_API_KEY not configured, using placeholder');
+      bookData.coverImageUrl = [`https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2`];
     }
 
     console.log('Successfully generated book shell:', bookData.title);
