@@ -4,6 +4,13 @@
  * - Page 1: Cover (image + title)
  * - Page 2: Table of Contents
  * - Page 3+: Chapters (each starts on a new page)
+ * 
+ * ROBUST MARKDOWN PARSER:
+ * - Handles headers (h1, h2, h3, h4)
+ * - Handles lists (ul/li, numbered)
+ * - Handles images (![alt](url) and [IMAGE: prompt])
+ * - Handles paragraphs (fallback for unrecognized lines)
+ * - Page breaks between chapters
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -18,65 +25,162 @@ interface CleanPDFOptions {
   coverImageUrl?: string | null;
 }
 
+/**
+ * Clean markdown of special formatting markers
+ * Preserves essential content while removing UI-specific elements
+ */
 const cleanMarkdown = (text: string): string => {
   return text
-    .replace(/\*\*/g, "")
-    .replace(/\*/g, "")
-    .replace(/---+/g, "")
-    .replace(/\[IMAGE:[^\]]+\]/gi, "")
-    .replace(/\[PRO-TIP:[^\]]+\]/gi, "")
-    .replace(/^Pro[- ]?Tip:\s*/gim, "")
-    .replace(/^Key Takeaway[s]?:\s*/gim, "")
-    .replace(/^Expert Tip:\s*/gim, "")
-    .replace(/^Insider Tip:\s*/gim, "")
-    .replace(/^\s*[-*]\s*$/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold -> plain (preserve content)
+    .replace(/\*([^*]+)\*/g, "$1") // Italic -> plain (preserve content)
+    .replace(/---+/g, "") // Horizontal rules
+    .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, "\n**Pro Tip:** $1\n") // Convert PRO-TIP to styled text
+    .replace(/^\s*[-*]\s*$/gm, "") // Empty list items
     .trim();
 };
 
+/**
+ * ROBUST Markdown to HTML converter
+ * - Handles headers (h1-h4)
+ * - Handles lists (ul/li, ol/li)
+ * - Handles images: ![alt](url) AND [IMAGE: url] patterns
+ * - Falls back to <p> for unrecognized lines (never drops content)
+ */
 const markdownToHTML = (content: string): string => {
   const lines = cleanMarkdown(content).split("\n");
   let html = "";
   let inList = false;
+  let listType: "ul" | "ol" | null = null;
 
   for (const line of lines) {
     const trimmed = line.trim();
 
+    // Skip empty lines but close any open list
     if (!trimmed) {
       if (inList) {
-        html += "</ul>";
+        html += listType === "ol" ? "</ol>" : "</ul>";
         inList = false;
+        listType = null;
       }
       continue;
     }
 
-    if (trimmed.startsWith("### ")) {
+    // Check for Markdown image syntax: ![alt](url)
+    const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (markdownImageMatch) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      const alt = markdownImageMatch[1] || "Image";
+      const url = markdownImageMatch[2];
+      html += `<div style="margin: 16px 0; text-align: center;">
+        <img src="${url}" alt="${alt}" style="width: 100%; max-width: 500px; height: auto; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" />
+      </div>`;
+      continue;
+    }
+
+    // Check for [IMAGE: url] pattern (custom image marker)
+    const imageMarkerMatch = trimmed.match(/^\[IMAGE:\s*([^\]]+)\]$/i);
+    if (imageMarkerMatch) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      // This is a prompt, not a URL - skip it for PDF (or show placeholder text)
+      // Images should be pre-converted to data URLs before reaching here
+      continue;
+    }
+
+    // Check for inline images in the middle of text
+    const inlineImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    if (inlineImagePattern.test(trimmed) && !trimmed.match(/^!\[/)) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      const processedLine = trimmed.replace(
+        inlineImagePattern,
+        (_, alt, url) => `<img src="${url}" alt="${alt || 'Image'}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 8px 0;" crossorigin="anonymous" />`
+      );
+      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${processedLine}</p>`;
+      continue;
+    }
+
+    // Headers
+    if (trimmed.startsWith("#### ")) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      html += `<h5 style="font-family: Georgia, serif; font-size: 12pt; font-weight: 600; margin: 16px 0 8px 0; color: #1a1a1a;">${trimmed.slice(5)}</h5>`;
+    } else if (trimmed.startsWith("### ")) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
       html += `<h4 style="font-family: Georgia, serif; font-size: 14pt; font-weight: 600; margin: 20px 0 10px 0; color: #1a1a1a;">${trimmed.slice(4)}</h4>`;
     } else if (trimmed.startsWith("## ")) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
       html += `<h3 style="font-family: Georgia, serif; font-size: 16pt; font-weight: 600; margin: 24px 0 12px 0; color: #1a1a1a;">${trimmed.slice(3)}</h3>`;
     } else if (trimmed.startsWith("# ")) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
       html += `<h2 style="font-family: Georgia, serif; font-size: 18pt; font-weight: 600; margin: 28px 0 14px 0; color: #1a1a1a;">${trimmed.slice(2)}</h2>`;
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      if (!inList) {
-        html += '<ul style="margin: 12px 0; padding-left: 24px;">';
+    }
+    // Unordered list items
+    else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      if (!inList || listType !== "ul") {
+        if (inList) html += listType === "ol" ? "</ol>" : "</ul>";
+        html += '<ul style="margin: 12px 0; padding-left: 24px; list-style-type: disc;">';
         inList = true;
+        listType = "ul";
       }
       html += `<li style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin-bottom: 6px; color: #333;">${trimmed.slice(2)}</li>`;
-    } else if (/^\d+\.\s/.test(trimmed)) {
-      if (inList) {
-        html += "</ul>";
-        inList = false;
+    }
+    // Ordered list items (1. 2. 3. etc.)
+    else if (/^\d+\.\s/.test(trimmed)) {
+      if (!inList || listType !== "ol") {
+        if (inList) html += listType === "ol" ? "</ol>" : "</ul>";
+        html += '<ol style="margin: 12px 0; padding-left: 24px; list-style-type: decimal;">';
+        inList = true;
+        listType = "ol";
       }
-      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin: 8px 0 8px 24px; color: #333;">${trimmed}</p>`;
-    } else {
+      const content = trimmed.replace(/^\d+\.\s/, "");
+      html += `<li style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin-bottom: 6px; color: #333;">${content}</li>`;
+    }
+    // Default: treat as paragraph (NEVER drop content)
+    else {
       if (inList) {
-        html += "</ul>";
+        html += listType === "ol" ? "</ol>" : "</ul>";
         inList = false;
+        listType = null;
       }
-      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${trimmed}</p>`;
+      // Handle bold text within paragraphs
+      const processedText = trimmed
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${processedText}</p>`;
     }
   }
 
-  if (inList) html += "</ul>";
+  // Close any remaining open list
+  if (inList) {
+    html += listType === "ol" ? "</ol>" : "</ul>";
+  }
+
   return html;
 };
 
@@ -116,6 +220,11 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   const displayTitle = bookData.displayTitle || bookData.title || `${topic} Guide`;
   const subtitle = bookData.subtitle || "A Comprehensive Guide";
 
+  console.log("[CleanPDF] Starting PDF generation...");
+  console.log("[CleanPDF] Title:", displayTitle);
+  console.log("[CleanPDF] Subtitle:", subtitle);
+  console.log("[CleanPDF] Cover image provided:", !!coverImageUrl);
+
   // Build chapter content array
   const chapters: { number: number; title: string; content: string }[] = [];
   const chapterContents = [
@@ -139,6 +248,13 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
       title: tocEntry?.title || `Chapter ${idx + 1}`,
       content,
     });
+  });
+
+  console.log("[CleanPDF] Total chapters with content:", chapters.length);
+
+  // DEBUG: Log content lengths
+  chapters.forEach((ch, idx) => {
+    console.log(`[CleanPDF] Chapter ${ch.number} content length: ${ch.content.length} chars`);
   });
 
   // Make cover image safe for html2pdf/html2canvas (prevents blank PDFs)
@@ -196,7 +312,7 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
     .join("");
 
   const tocPage = `
-    <div style="min-height: 277mm; padding: 50px 40px; background: #ffffff;">
+    <div style="page-break-after: always; min-height: 277mm; padding: 50px 40px; background: #ffffff;">
       <h2 style="font-family: Georgia, serif; font-size: 24pt; font-weight: 600; color: #1a1a1a; margin: 0 0 40px 0; text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 20px;">
         Table of Contents
       </h2>
@@ -206,30 +322,39 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
     </div>
   `;
 
-  // PAGES 3+: Chapters (each starts on a new page)
+  // PAGES 3+: Chapters (each starts on a new page with html2pdf page breaks)
   const chapterPages = chapters
     .map(
-      (ch) => `
-      <div style="page-break-before: always; min-height: 277mm; padding: 50px 40px; background: #ffffff;">
-        <div style="text-align: center; margin-bottom: 40px;">
-          <p style="font-family: Arial, sans-serif; font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; color: #999; margin: 0 0 12px 0;">
-            Chapter ${ch.number}
-          </p>
-          <h2 style="font-family: Georgia, serif; font-size: 22pt; font-weight: 600; color: #1a1a1a; margin: 0 0 16px 0;">
-            ${ch.title}
-          </h2>
-          <div style="width: 60px; height: 2px; background: #1a1a1a; margin: 0 auto;"></div>
-        </div>
-        <div style="columns: 1; column-gap: 30px;">
-          ${markdownToHTML(ch.content)}
-        </div>
-      </div>
-    `
+      (ch) => {
+        const htmlContent = markdownToHTML(ch.content);
+        console.log(`[CleanPDF] Chapter ${ch.number} HTML length: ${htmlContent.length} chars`);
+        
+        return `
+          <div class="html2pdf__page-break"></div>
+          <div style="min-height: 277mm; padding: 50px 40px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 40px;">
+              <p style="font-family: Arial, sans-serif; font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; color: #999; margin: 0 0 12px 0;">
+                Chapter ${ch.number}
+              </p>
+              <h2 style="font-family: Georgia, serif; font-size: 22pt; font-weight: 600; color: #1a1a1a; margin: 0 0 16px 0;">
+                ${ch.title}
+              </h2>
+              <div style="width: 60px; height: 2px; background: #1a1a1a; margin: 0 auto;"></div>
+            </div>
+            <div style="columns: 1; column-gap: 30px;">
+              ${htmlContent}
+            </div>
+          </div>
+        `;
+      }
     )
     .join("");
 
   container.innerHTML = coverPage + tocPage + chapterPages;
   document.body.appendChild(container);
+
+  // DEBUG: Log final HTML length
+  console.log("[CleanPDF] Total HTML content length:", container.innerHTML.length, "chars");
 
   // Wait for rendering to complete (fonts, images, layout)
   console.log("[CleanPDF] Waiting for rendering...");
@@ -244,13 +369,14 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
       useCORS: true,
       allowTaint: false,
       backgroundColor: "#ffffff",
-      logging: false,
+      logging: true, // Enable logging for debugging
     },
     jsPDF: {
       unit: "mm" as const,
       format: "a4" as const,
       orientation: "portrait" as const,
     },
+    pagebreak: { mode: ['css', 'legacy'] },
   };
 
   try {

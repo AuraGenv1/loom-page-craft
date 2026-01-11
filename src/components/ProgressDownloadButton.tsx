@@ -254,8 +254,26 @@ const ProgressDownloadButton = ({
   const handleDownload = async () => {
     if (!bookData) {
       toast.error('Book data not available');
+      console.error('[PDF] No bookData provided');
       return;
     }
+
+    // DEBUG: Log incoming book data
+    console.log('[PDF] === PDF DOWNLOAD STARTED ===');
+    console.log('[PDF] Topic:', topic);
+    console.log('[PDF] Cover URLs available:', coverImageUrls.length);
+    console.log('[PDF] Book title:', bookData.title);
+    console.log('[PDF] Chapter 1 content length:', bookData.chapter1Content?.length || 0);
+    
+    // Count all chapters
+    const chapterKeys = ['chapter1Content', 'chapter2Content', 'chapter3Content', 'chapter4Content', 
+                         'chapter5Content', 'chapter6Content', 'chapter7Content', 'chapter8Content',
+                         'chapter9Content', 'chapter10Content'] as const;
+    const chaptersWithContent = chapterKeys.filter(key => bookData[key] && bookData[key]!.length > 0);
+    console.log('[PDF] Total chapters with content:', chaptersWithContent.length);
+    chaptersWithContent.forEach(key => {
+      console.log(`[PDF] ${key} length: ${bookData[key]?.length || 0} chars`);
+    });
 
     try {
       setIsConverting(true);
@@ -266,9 +284,6 @@ const ProgressDownloadButton = ({
         id: 'pdf-progress',
         description: 'Converting all images for embedding (please wait ~5 seconds)...' 
       });
-
-      console.log('[PDF] Starting PDF preparation...');
-      console.log('[PDF] Cover URLs available:', coverImageUrls.length);
 
       // STEP 1: Process ALL images (cover + chapters) to Base64
       // FAIL-SAFE: Any failed images become transparent 1x1 pixels
@@ -284,8 +299,11 @@ const ProgressDownloadButton = ({
         }
       );
       
+      // DEBUG: Log processed book data
+      console.log('[PDF] After processing - Chapter 1 length:', processedBookData.chapter1Content?.length || 0);
+      
       if (base64CoverUrl && base64CoverUrl !== TRANSPARENT_PIXEL) {
-        console.log('[PDF] Cover image ready for embedding');
+        console.log('[PDF] Cover image ready for embedding (Base64 length:', base64CoverUrl.length, ')');
       } else {
         console.log('[PDF] No valid cover image, proceeding without');
       }
@@ -307,7 +325,11 @@ const ProgressDownloadButton = ({
         description: 'Creating your clean, content-only guide.' 
       });
 
-      console.log('[PDF] Calling generateCleanPDF with processed book data...');
+      console.log('[PDF] Calling generateCleanPDF with:');
+      console.log('[PDF]   - topic:', topic);
+      console.log('[PDF]   - processedBookData.title:', processedBookData.title);
+      console.log('[PDF]   - processedBookData.chapter1Content length:', processedBookData.chapter1Content?.length || 0);
+      console.log('[PDF]   - coverImageUrl is Base64:', base64CoverUrl?.startsWith('data:') || false);
 
       // Generate PDF with Base64 cover image and processed book data
       // CRITICAL: Pass null for cover if it's just a transparent pixel
@@ -322,7 +344,7 @@ const ProgressDownloadButton = ({
         description: 'Your guide has been saved.' 
       });
 
-      console.log('[PDF] PDF generation complete');
+      console.log('[PDF] === PDF DOWNLOAD COMPLETE ===');
 
       // Call external onClick if provided
       onClick?.();

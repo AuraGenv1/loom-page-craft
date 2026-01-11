@@ -574,20 +574,27 @@ async function generateAndSaveChapterAtomically(
 }
 
 // UNIVERSAL IMAGE SEARCH: AI generates the optimal search query for ANY topic
+// CAPTION-DRIVEN: The query is derived directly from the visual description/caption
 async function generateImageSearchQuery(
   topic: string,
   chapterTitle: string,
   topicType: 'TECHNICAL' | 'LIFESTYLE' | 'ACADEMIC',
-  geminiApiKey: string
+  geminiApiKey: string,
+  visualCaption?: string // NEW: Optional caption for caption-driven search
 ): Promise<string> {
   const defaultQuery = `${topic} professional photography high resolution`;
   
   try {
+    // CAPTION-DRIVEN SEARCH: If a visual caption is provided, use it as the primary search source
+    const captionContext = visualCaption 
+      ? `\nVISUAL CAPTION PROVIDED: "${visualCaption}"\nDERIVE your search query DIRECTLY from this caption.` 
+      : '';
+    
     const queryPrompt = `You are an expert image curator. Generate the PERFECT Google Image Search query to find stunning, relevant imagery for this content.
 
 TOPIC: "${topic}"
 CHAPTER/SECTION: "${chapterTitle}"
-CONTENT TYPE: ${topicType}
+CONTENT TYPE: ${topicType}${captionContext}
 
 CRITICAL RULES FOR EACH TYPE:
 
@@ -614,9 +621,18 @@ IF WELLNESS (health, fitness, yoga):
 - Include: "lifestyle photography", "natural light", "peaceful", "wellness"
 - Example: "yoga practice sunset beach lifestyle photography peaceful"
 
+IF FINANCE/BUSINESS:
+- Include: "business professional", "corporate photography", "meeting", "office"
+- Example: "business professionals networking corporate photography editorial"
+
 IF CRAFTS/DIY/HOBBIES:
 - Include: "hands-on", "workspace", "materials", "artisan"
 - Example: "pottery wheel hands crafting artisan workspace studio"
+
+CAPTION-DRIVEN LOGIC:
+- If a VISUAL CAPTION was provided, your query MUST directly reflect the described scene
+- Example Caption: "Sunset over mountains" → Query: "Aspen Colorado mountains sunset landscape golden hour -golf -wedding"
+- Example Caption: "Business professionals shaking hands" → Query: "business professionals handshake professional photography corporate"
 
 IMPORTANT:
 - Maximum 12 words
@@ -657,8 +673,13 @@ IMPORTANT:
     console.log('[ImageSearch] AI query generation failed, using fallback:', error);
   }
   
-// Intelligent fallback based on topic type - NO hardcoded travelKeywords regex
-  // Always use specific, context-aware queries
+  // Intelligent fallback based on topic type - uses caption if provided
+  if (visualCaption && visualCaption.length > 10) {
+    // Extract key words from caption for fallback
+    const captionWords = visualCaption.replace(/[^\w\s]/g, '').split(' ').slice(0, 5).join(' ');
+    return `${captionWords} ${topic} professional photography -golf -wedding -event -stock`;
+  }
+  
   if (topicType === 'TECHNICAL') {
     return `${topic} professional studio photography mechanical detail`;
   } else if (topicType === 'LIFESTYLE') {
