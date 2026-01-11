@@ -156,6 +156,40 @@ const TOPIC_CONFIGS: Record<string, { keywords: string[]; types: string[]; relev
   }
 };
 
+// Extract location/city from topic for dynamic geocoding
+function extractLocationFromTopic(topic: string): string | null {
+  // Common city/country patterns
+  const patterns = [
+    /(?:trip to|visit|guide to|exploring|discover|travel to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:travel|vacation|adventure|guide|trip|tour)/i,
+    /^(?:the\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:bible|secrets|insider|experience)/i,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = topic.match(pattern);
+    if (match && match[1]) {
+      const location = match[1].trim();
+      const nonLocations = ['the', 'guide', 'bible', 'book', 'secrets', 'complete', 'ultimate', 'best'];
+      if (!nonLocations.includes(location.toLowerCase())) {
+        return location;
+      }
+    }
+  }
+  
+  // Extract any capitalized proper nouns
+  const properNouns = topic.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g);
+  if (properNouns && properNouns.length > 0) {
+    const potentialLocation = properNouns[0];
+    const nonLocations = ['The', 'Guide', 'Bible', 'Book', 'Secrets', 'Complete', 'Ultimate', 'Best', 'Pro', 'Master'];
+    if (!nonLocations.includes(potentialLocation)) {
+      return potentialLocation;
+    }
+  }
+  
+  return null;
+}
+
 function getTopicConfig(topic: string): { keywords: string[]; types: string[]; relevantTerms: string[] } {
   const lowerTopic = topic.toLowerCase();
   
@@ -326,20 +360,33 @@ serve(async (req) => {
     const topicConfig = getTopicConfig(topic || '');
     console.log('Topic config:', topicConfig);
 
+    // Extract location from topic for dynamic geocoding
+    const extractedLocation = extractLocationFromTopic(topic || '');
+    console.log('Extracted location from topic:', extractedLocation);
+
     // Combine topic keywords with any extracted materials
     const materialsList = Array.isArray(materials) ? materials.slice(0, 3) : [];
     const allRelevantTerms = [...topicConfig.relevantTerms, ...materialsList.map(m => m.toLowerCase())];
     
     let allResults: PlaceResult[] = [];
     
+    // DYNAMIC GEOCODING: If we extracted a location from the topic, search there
+    // instead of using the user's physical location
+    const useExtractedLocation = extractedLocation && (!latitude || !longitude);
+    
     // Search with each specialty keyword
     for (const keyword of topicConfig.keywords.slice(0, 2)) {
+      // Append extracted location to keyword if available
+      const searchKeyword = extractedLocation 
+        ? `${keyword} in ${extractedLocation}` 
+        : keyword;
+      
       // First try 16km (~10 miles)
       const nearResults = await searchPlaces(
         GOOGLE_PLACES_API_KEY,
-        keyword,
-        latitude,
-        longitude,
+        searchKeyword,
+        useExtractedLocation ? null : latitude,
+        useExtractedLocation ? null : longitude,
         16000,
         allRelevantTerms
       );
@@ -350,15 +397,19 @@ serve(async (req) => {
     }
     
     // If we don't have enough results, expand to 80km (~50 miles)
-    if (allResults.length < 3 && latitude && longitude) {
+    if (allResults.length < 3) {
       console.log('Expanding search radius to 50 miles...');
       
       for (const keyword of topicConfig.keywords) {
+        const searchKeyword = extractedLocation 
+          ? `${keyword} in ${extractedLocation}` 
+          : keyword;
+        
         const wideResults = await searchPlaces(
           GOOGLE_PLACES_API_KEY,
-          keyword,
-          latitude,
-          longitude,
+          searchKeyword,
+          useExtractedLocation ? null : latitude,
+          useExtractedLocation ? null : longitude,
           80000,
           allRelevantTerms
         );
