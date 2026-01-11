@@ -590,54 +590,58 @@ async function generateImageSearchQuery(
       ? `\nVISUAL CAPTION PROVIDED: "${visualCaption}"\nDERIVE your search query DIRECTLY from this caption.` 
       : '';
     
-    const queryPrompt = `You are an expert image curator. Generate the PERFECT Google Image Search query to find stunning, relevant imagery for this content.
+    const queryPrompt = `You are an expert image curator. Generate the PERFECT Google Image Search query to find stunning, clean photography (NO TEXT/SIGNAGE) for this content.
 
 TOPIC: "${topic}"
 CHAPTER/SECTION: "${chapterTitle}"
 CONTENT TYPE: ${topicType}${captionContext}
 
+MANDATORY EXCLUSIONS (APPEND TO ALL QUERIES):
+-text -signage -infographic -poster -stock -clipart -golf -wedding -event
+
 CRITICAL RULES FOR EACH TYPE:
 
 IF TRAVEL (cities, destinations, hotels, tours):
-- ALWAYS start with the EXACT GEOGRAPHIC LOCATION (city, state/country)
-- Include: "landscape", "architecture", "scenic view", "travel destination"
-- ALWAYS append: -golf -wedding -event -stock -clipart
-- Example: "Aspen Colorado mountain landscape scenic winter resort -golf -wedding -event"
+- ALWAYS start with the EXACT GEOGRAPHIC LOCATION: "City, State/Country"
+- Use "skyline", "landmark", "landscape", "aerial view" - NOT just the city name
+- Example: "New York City skyline Manhattan aerial view sunset -text -signage -infographic -poster"
+- Example: "Aspen Colorado ski resort mountain landscape scenic -text -signage -golf -wedding"
 
 IF TECHNICAL (repair, mechanics, engineering, automotive):
-- Include: "mechanical detail", "close-up", "professional studio", "diagram"
+- Include: "mechanical detail", "close-up", "professional studio"
 - Focus on the specific object/process being discussed
-- Example: "V8 engine piston close-up mechanical detail studio lighting"
+- Example: "V8 engine piston close-up mechanical detail studio lighting -text -infographic"
 
 IF AUTOMOTIVE (cars, vehicles, luxury):
 - Include: "automotive photography", "studio lighting", "showroom", "editorial"
-- Example: "Ferrari 488 automotive photography studio lighting showroom"
+- Example: "Ferrari 488 automotive photography studio lighting showroom -text -poster"
 
 IF FOOD/COOKING (recipes, cuisine):
 - Include: "food photography", "culinary", "gourmet", "plated dish"
-- Example: "sourdough bread artisan bakery food photography rustic"
+- Example: "sourdough bread artisan bakery food photography rustic -text -signage"
 
 IF WELLNESS (health, fitness, yoga):
 - Include: "lifestyle photography", "natural light", "peaceful", "wellness"
-- Example: "yoga practice sunset beach lifestyle photography peaceful"
+- Example: "yoga practice sunset beach lifestyle photography peaceful -text -poster"
 
 IF FINANCE/BUSINESS:
 - Include: "business professional", "corporate photography", "meeting", "office"
-- Example: "business professionals networking corporate photography editorial"
+- Example: "business professionals networking corporate photography editorial -text -signage"
 
 IF CRAFTS/DIY/HOBBIES:
 - Include: "hands-on", "workspace", "materials", "artisan"
-- Example: "pottery wheel hands crafting artisan workspace studio"
+- Example: "pottery wheel hands crafting artisan workspace studio -text -infographic"
 
 CAPTION-DRIVEN LOGIC:
 - If a VISUAL CAPTION was provided, your query MUST directly reflect the described scene
-- Example Caption: "Sunset over mountains" → Query: "Aspen Colorado mountains sunset landscape golden hour -golf -wedding"
-- Example Caption: "Business professionals shaking hands" → Query: "business professionals handshake professional photography corporate"
+- Example Caption: "Sunset over mountains" → Query: "Aspen Colorado mountains sunset landscape golden hour -text -signage -golf"
+- Example Caption: "Business professionals shaking hands" → Query: "business professionals handshake professional photography corporate -text -poster"
 
 IMPORTANT:
-- Maximum 12 words
+- Maximum 15 words (including exclusions)
 - Be EXTREMELY specific to avoid irrelevant results
-- For location-based topics, GEOGRAPHY must be FIRST
+- For location-based topics, GEOGRAPHY + LANDMARK TYPE must be FIRST
+- ALWAYS include at least: -text -signage -infographic
 - Return ONLY the search query string, nothing else`;
 
     const controller = new AbortController();
@@ -674,20 +678,27 @@ IMPORTANT:
   }
   
   // Intelligent fallback based on topic type - uses caption if provided
+  // ALWAYS include -text -signage -infographic -poster for clean images
+  const cleanExclusions = '-text -signage -infographic -poster -golf -wedding -event -stock -clipart';
+  
   if (visualCaption && visualCaption.length > 10) {
     // Extract key words from caption for fallback
     const captionWords = visualCaption.replace(/[^\w\s]/g, '').split(' ').slice(0, 5).join(' ');
-    return `${captionWords} ${topic} professional photography -golf -wedding -event -stock`;
+    return `${captionWords} ${topic} professional photography ${cleanExclusions}`;
   }
   
   if (topicType === 'TECHNICAL') {
-    return `${topic} professional studio photography mechanical detail`;
+    return `${topic} professional studio photography mechanical detail ${cleanExclusions}`;
   } else if (topicType === 'LIFESTYLE') {
-    // Always append exclusions for lifestyle topics to avoid golf courses, weddings, etc.
-    return `${topic} guide visual reference -golf -wedding -event -stock -clipart`;
+    // For travel/cities: Use skyline/landmark approach
+    const isCityTopic = /\b(city|cities|travel|trip|visit|tour|destination|guide to)\b/i.test(topic);
+    if (isCityTopic) {
+      return `${topic} skyline landmark landscape scenic ${cleanExclusions}`;
+    }
+    return `${topic} professional photography editorial ${cleanExclusions}`;
   }
   
-  return `${topic} guide visual reference -golf -wedding`;
+  return `${topic} professional photography ${cleanExclusions}`;
 }
 
 serve(async (req) => {

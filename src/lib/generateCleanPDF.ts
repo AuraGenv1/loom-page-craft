@@ -65,7 +65,7 @@ const markdownToHTML = (content: string): string => {
       continue;
     }
 
-    // Check for Markdown image syntax: ![alt](url)
+    // Check for Markdown image syntax: ![alt](url) - SUPPORTS Base64 DATA URLs
     const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (markdownImageMatch) {
       if (inList) {
@@ -75,8 +75,11 @@ const markdownToHTML = (content: string): string => {
       }
       const alt = markdownImageMatch[1] || "Image";
       const url = markdownImageMatch[2];
-      html += `<div style="margin: 16px 0; text-align: center;">
-        <img src="${url}" alt="${alt}" style="width: 100%; max-width: 500px; height: auto; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" />
+      // CRITICAL: Handle both regular URLs and Base64 data URLs
+      const isBase64 = url.startsWith('data:');
+      console.log(`[CleanPDF] Rendering image (${isBase64 ? 'Base64' : 'URL'}): ${url.substring(0, 50)}...`);
+      html += `<div style="margin: 20px 0; text-align: center;">
+        <img src="${url}" alt="${alt}" style="width: 100%; max-width: 500px; height: auto; object-fit: contain; border-radius: 4px;" ${!isBase64 ? 'crossorigin="anonymous"' : ''} />
       </div>`;
       continue;
     }
@@ -94,7 +97,7 @@ const markdownToHTML = (content: string): string => {
       continue;
     }
 
-    // Check for inline images in the middle of text
+    // Check for inline images in the middle of text - SUPPORTS Base64 DATA URLs
     const inlineImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
     if (inlineImagePattern.test(trimmed) && !trimmed.match(/^!\[/)) {
       if (inList) {
@@ -104,7 +107,10 @@ const markdownToHTML = (content: string): string => {
       }
       const processedLine = trimmed.replace(
         inlineImagePattern,
-        (_, alt, url) => `<img src="${url}" alt="${alt || 'Image'}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 8px 0;" crossorigin="anonymous" />`
+        (_, alt, url) => {
+          const isBase64 = url.startsWith('data:');
+          return `<img src="${url}" alt="${alt || 'Image'}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 8px 0;" ${!isBase64 ? 'crossorigin="anonymous"' : ''} />`;
+        }
       );
       html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${processedLine}</p>`;
       continue;
