@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// SIMPLIFY QUERY for Pexels (Fixes "Bad Image" issue)
+// Simplified Query Logic
 const getVisualQuery = (topic: string): string => {
   return topic.replace(/guide|manual|book|how to|learn/gi, "").trim();
 };
@@ -20,8 +20,6 @@ const getLocalizedSubtitle = (lang: string): string => {
       return "Le Guide Essentiel";
     case "es":
       return "La Guía Esencial";
-    case "it":
-      return "La Guida Essenziale";
     default:
       return "A Curated Guide";
   }
@@ -57,7 +55,7 @@ serve(async (req) => {
       }
     `;
 
-    // 2. CALL GEMINI (Switched to STABLE gemini-pro)
+    // *** LINE 58: CRITICAL FIX - MUST BE 'gemini-pro' ***
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
       {
