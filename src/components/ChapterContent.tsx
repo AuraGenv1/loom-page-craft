@@ -17,7 +17,7 @@ interface ChapterContentProps {
     content: string;
     imageUrl?: string;
     locationTitle?: string;
-  };
+  } | null; // Allow null for safety
   language?: string;
   localResources?: LocalResource[];
   loadingLocation?: boolean;
@@ -29,11 +29,18 @@ export const ChapterContent = ({
   localResources = [],
   loadingLocation,
 }: ChapterContentProps) => {
+  // --- SAFETY GUARD ---
+  // If chapter is undefined (loading error), return null instead of crashing
+  if (!chapter) {
+    return null;
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* 1. Main Text Section */}
       <div className="prose prose-slate max-w-none">
         <div className="flex items-baseline justify-between mb-6 border-b pb-4">
+          {/* This line was crashing before. Now it's safe. */}
           <h3 className="text-3xl font-serif text-slate-900">{chapter.title}</h3>
         </div>
 
@@ -109,5 +116,4 @@ export const ChapterContent = ({
   );
 };
 
-// THIS IS THE LINE THAT FIXES THE CRASH:
 export default ChapterContent;
