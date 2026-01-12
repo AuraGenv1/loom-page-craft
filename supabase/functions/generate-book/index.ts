@@ -525,15 +525,16 @@ function parseBookDataFromModelText(text: string, topic: string): { bookData: an
 }
 
 // Subtitle translations for each language
+// FIXED: French "Un Guide Soigné" was incorrect - changed to "Le Guide Essentiel"
 const subtitleTranslations: Record<string, { technical: string; academic: string; lifestyle: string }> = {
   en: { technical: 'A Technical Manual', academic: 'An Educational Series', lifestyle: 'A Curated Guide' },
-  es: { technical: 'Un Manual Técnico', academic: 'Una Serie Educativa', lifestyle: 'Una Guía Curada' },
-  fr: { technical: 'Un Manuel Technique', academic: 'Une Série Éducative', lifestyle: 'Un Guide Soigné' },
-  de: { technical: 'Ein Technisches Handbuch', academic: 'Eine Bildungsreihe', lifestyle: 'Ein Kuratierter Leitfaden' },
-  it: { technical: 'Un Manuale Tecnico', academic: 'Una Serie Educativa', lifestyle: 'Una Guida Curata' },
-  pt: { technical: 'Um Manual Técnico', academic: 'Uma Série Educacional', lifestyle: 'Um Guia Curado' },
+  es: { technical: 'Un Manual Técnico', academic: 'Una Serie Educativa', lifestyle: 'La Guía Esencial' },
+  fr: { technical: 'Un Manuel Technique', academic: 'Une Série Éducative', lifestyle: 'Le Guide Essentiel' },
+  de: { technical: 'Ein Technisches Handbuch', academic: 'Eine Bildungsreihe', lifestyle: 'Der Wesentliche Leitfaden' },
+  it: { technical: 'Un Manuale Tecnico', academic: 'Una Serie Educativa', lifestyle: 'La Guida Essenziale' },
+  pt: { technical: 'Um Manual Técnico', academic: 'Uma Série Educacional', lifestyle: 'O Guia Essencial' },
   zh: { technical: '技术手册', academic: '教育系列', lifestyle: '精选指南' },
-  ja: { technical: '技術マニュアル', academic: '教育シリーズ', lifestyle: 'キュレーションガイド' },
+  ja: { technical: '技術マニュアル', academic: '教育シリーズ', lifestyle: 'エッセンシャルガイド' },
 };
 
 // INTENT ROUTER: Classify the topic type dynamically
@@ -1067,14 +1068,27 @@ FORMATTING RULES (STRICTLY ENFORCED):
 - Write in plain text only - no emphasis markers
 - Ensure ALL titles are complete - never truncate mid-word
 
-${topicType === 'LIFESTYLE' ? `IMAGE REQUIREMENT:
+${topicType === 'LIFESTYLE' ? `IMAGE REQUIREMENT (CRITICAL - AVOID GENERIC IMAGES):
 - Include exactly ONE [IMAGE: prompt] marker at the TOP of Chapter 1 content (before the first paragraph)
-- The prompt must include GEOGRAPHIC LOCATION and SPECIFIC CONTEXT based on topic type
-- For TRAVEL topics: Use "cinematic, landmark, architecture, wide angle, editorial travel photography"
-- For SKILL/ACTIVITY topics: Use "close up, detail, hands working, studio lighting, artisan craftsmanship"
-- ALWAYS include the specific ${topic} subject in the prompt
-- Example Travel: [IMAGE: Cinematic wide angle photography of the Eiffel Tower at golden hour, Paris France, landmark architecture editorial]
-- Example Skill: [IMAGE: Close up photography of hands kneading sourdough bread dough, artisan bakery, studio lighting, rustic wooden surface]` : ''}
+- The prompt MUST be HIGHLY SPECIFIC to the exact topic: "${topic}"
+- NEVER use generic prompts that could return unrelated images (like "bathtub" for travel)
+
+TOPIC-SPECIFIC IMAGE RULES:
+- For TRAVEL/PLACES (cities, destinations, countries):
+  - ALWAYS start with the EXACT location name: "${topic}"
+  - Use keywords: "cinematic skyline, landmark architecture, wide angle aerial view, editorial travel photography, golden hour"
+  - Example: [IMAGE: Cinematic aerial photography of Paris France Eiffel Tower skyline at sunset, landmark architecture, wide angle editorial travel]
+
+- For SKILLS/ACTIVITIES (cooking, crafts, hobbies):
+  - Focus on the SPECIFIC activity: "${topic}"
+  - Use keywords: "close up detail, hands working, studio lighting, artisan craftsmanship, professional photography"
+  - Example: [IMAGE: Close up photography of hands kneading ${topic}, artisan detail, warm studio lighting, rustic wooden surface]
+
+- For TECHNICAL topics:
+  - Show the SPECIFIC object or process: "${topic}"
+  - Use keywords: "professional product photography, mechanical detail, studio lighting, high resolution"
+  
+MANDATORY: The image prompt MUST contain the exact subject "${topic}" - never use unrelated terms!` : ''}
 
 IMPORTANT - IMAGE SEARCH QUERY REQUIREMENT:
 For EACH chapter in the tableOfContents, you MUST include an "imageSearchQuery" field with a highly specific Google Image Search query.
