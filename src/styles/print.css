@@ -1,4 +1,4 @@
-/* Print CSS for Professional PDF Export via window.print() */
+/* Print CSS for Professional PDF Export - 6x9 Trade Paperback Format */
 /* Ensures 100% visual parity between screen and PDF output */
 
 @media print {
@@ -38,15 +38,24 @@
     padding: 0;
   }
 
-  /* Page setup with 1-inch margins */
+  /* ===== 6x9 TRADE PAPERBACK FORMAT ===== */
   @page {
-    size: A4 portrait;
-    margin: 1in;
+    size: 6in 9in;
+    margin: 0.75in 0.5in 0.75in 0.75in; /* top, right, bottom, left (gutter) */
   }
 
-  /* First page (cover) - no margin adjustments needed */
+  /* Alternate margins for left/right pages (if supported) */
+  @page :left {
+    margin: 0.75in 0.75in 0.75in 0.5in;
+  }
+
+  @page :right {
+    margin: 0.75in 0.5in 0.75in 0.75in;
+  }
+
+  /* First page (cover) */
   @page :first {
-    margin: 1in;
+    margin: 0.5in;
   }
 
   /* Container reset */
@@ -81,9 +90,9 @@
   /* Cover image styling */
   [class*="BookCover"] img,
   .book-cover img {
-    max-width: 300px !important;
-    max-height: 300px !important;
-    margin: 2rem auto !important;
+    max-width: 280px !important;
+    max-height: 280px !important;
+    margin: 1.5rem auto !important;
     border-radius: 4px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   }
@@ -91,7 +100,7 @@
   /* Cover title */
   [class*="BookCover"] h1,
   .book-cover h1 {
-    font-size: 32pt !important;
+    font-size: 28pt !important;
     font-weight: 600 !important;
     margin-bottom: 0.5rem !important;
     color: #1a1a1a !important;
@@ -100,7 +109,7 @@
   /* Cover subtitle */
   [class*="BookCover"] p,
   .book-cover p {
-    font-size: 12pt !important;
+    font-size: 11pt !important;
     font-style: italic !important;
     color: #666 !important;
   }
@@ -114,9 +123,9 @@
 
   [class*="TableOfContents"] h2,
   .table-of-contents h2 {
-    font-size: 20pt !important;
+    font-size: 18pt !important;
     text-align: center !important;
-    margin-bottom: 2rem !important;
+    margin-bottom: 1.5rem !important;
     color: #1a1a1a !important;
   }
 
@@ -125,16 +134,17 @@
   .table-of-contents li {
     display: flex !important;
     justify-content: space-between !important;
-    padding: 0.5rem 0 !important;
+    padding: 0.4rem 0 !important;
     border-bottom: 1px dotted #ddd !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
 
-  /* ===== CHAPTER STYLING ===== */
+  /* ===== CHAPTER STYLING - FORCE PAGE BREAKS ===== */
   /* Force page break before each chapter */
   article,
   [id^="chapter-"],
-  .print-chapter-break {
+  .print-chapter-break,
+  h1.chapter-title {
     page-break-before: always !important;
     break-before: page !important;
   }
@@ -150,46 +160,46 @@
   article header,
   [id^="chapter-"] header {
     text-align: center !important;
-    margin-bottom: 2rem !important;
+    margin-bottom: 1.5rem !important;
   }
 
   /* Chapter number */
   article header p:first-child,
   [class*="tracking-"] {
-    font-size: 9pt !important;
+    font-size: 8pt !important;
     text-transform: uppercase !important;
     letter-spacing: 0.25em !important;
     color: #888 !important;
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.4rem !important;
   }
 
   /* Chapter title */
   article h1,
   [id^="chapter-"] h1 {
-    font-size: 22pt !important;
+    font-size: 20pt !important;
     font-weight: 600 !important;
     color: #1a1a1a !important;
-    margin-bottom: 1.5rem !important;
+    margin-bottom: 1rem !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
 
   /* Section headers */
   h2 {
-    font-size: 14pt !important;
+    font-size: 13pt !important;
     font-weight: 600 !important;
-    margin-top: 1.5rem !important;
-    margin-bottom: 0.75rem !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 0.6rem !important;
     color: #333 !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
 
   h3 {
-    font-size: 12pt !important;
+    font-size: 11pt !important;
     font-weight: 600 !important;
-    margin-top: 1rem !important;
-    margin-bottom: 0.5rem !important;
+    margin-top: 0.8rem !important;
+    margin-bottom: 0.4rem !important;
     color: #444 !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
@@ -198,41 +208,41 @@
   /* ===== CONTENT STYLING ===== */
   /* Paragraphs */
   p {
-    font-size: 11pt !important;
-    line-height: 1.6 !important;
-    margin-bottom: 0.75rem !important;
+    font-size: 10pt !important;
+    line-height: 1.55 !important;
+    margin-bottom: 0.6rem !important;
     text-align: justify !important;
     orphans: 3 !important;
     widows: 3 !important;
   }
 
-  /* First paragraph of chapter - drop cap removed for cleaner print */
+  /* First paragraph of chapter - no indent */
   article p:first-of-type {
     text-indent: 0 !important;
   }
 
   /* Subsequent paragraphs */
   article p + p {
-    text-indent: 1.5em !important;
+    text-indent: 1.25em !important;
   }
 
   /* Lists */
   ul, ol {
-    margin: 1rem 0 !important;
-    padding-left: 1.5rem !important;
+    margin: 0.8rem 0 !important;
+    padding-left: 1.25rem !important;
   }
 
   li {
-    font-size: 11pt !important;
-    margin-bottom: 0.4rem !important;
-    line-height: 1.5 !important;
+    font-size: 10pt !important;
+    margin-bottom: 0.3rem !important;
+    line-height: 1.45 !important;
   }
 
   /* Blockquotes */
   blockquote {
-    margin: 1.5rem 2rem !important;
-    padding: 0.5rem 1rem !important;
-    border-left: 3px solid #ddd !important;
+    margin: 1rem 1.5rem !important;
+    padding: 0.4rem 0.8rem !important;
+    border-left: 2px solid #ddd !important;
     font-style: italic !important;
     color: #555 !important;
     page-break-inside: avoid !important;
@@ -243,12 +253,12 @@
   [class*="pro-tip"],
   div[class*="bg-"][class*="border-l"] {
     background: #f8f9fa !important;
-    border-left: 4px solid #333 !important;
-    padding: 1rem !important;
-    margin: 1.5rem 0 !important;
+    border-left: 3px solid #333 !important;
+    padding: 0.8rem !important;
+    margin: 1rem 0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    border-radius: 0 4px 4px 0 !important;
+    border-radius: 0 3px 3px 0 !important;
   }
 
   [class*="pro-tip"] p,
@@ -265,7 +275,7 @@
   figure {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    margin: 1.5rem auto !important;
+    margin: 1rem auto !important;
     text-align: center !important;
   }
 
@@ -274,31 +284,30 @@
   figure img {
     max-width: 100% !important;
     height: auto !important;
-    max-height: 400px !important;
+    max-height: 350px !important;
     border: 1px solid #eee !important;
   }
 
   /* Diagram captions */
   [class*="TechnicalDiagram"] [class*="caption"],
   figcaption {
-    font-size: 9pt !important;
+    font-size: 8pt !important;
     font-style: italic !important;
     color: #666 !important;
-    margin-top: 0.5rem !important;
-    padding: 0.5rem !important;
+    margin-top: 0.4rem !important;
+    padding: 0.4rem !important;
     background: #f9f9f9 !important;
   }
 
   /* ===== LOOM & PAGE FOOTER BRANDING ===== */
-  /* Add Loom & Page footer to every printed page */
   body::after {
     content: 'LOOM & PAGE';
     position: fixed;
-    bottom: 0.4in;
+    bottom: 0.35in;
     left: 50%;
     transform: translateX(-50%);
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 8pt;
+    font-size: 7pt;
     letter-spacing: 0.2em;
     color: #999;
     text-align: center;
@@ -315,7 +324,7 @@
     animation: none !important;
   }
 
-  /* Remove all borders and shadows from articles for cleaner look */
+  /* Remove all borders and shadows from articles */
   article {
     border: none !important;
     box-shadow: none !important;
@@ -324,7 +333,7 @@
     margin: 0 !important;
   }
 
-  /* Ensure images don't overflow AND are 100% visible */
+  /* Ensure images don't overflow */
   img {
     max-width: 100% !important;
     height: auto !important;
@@ -332,13 +341,13 @@
     filter: none !important;
   }
 
-  /* Links - show URL or just use text color */
+  /* Links */
   a {
     color: #1a1a1a !important;
     text-decoration: none !important;
   }
 
-  /* Hide loading states, spinners */
+  /* Hide loading states */
   [class*="loading"],
   [class*="spinner"],
   [class*="skeleton"],
@@ -346,7 +355,7 @@
     display: none !important;
   }
 
-  /* Ensure prose max-width is removed for print */
+  /* Prose max-width removed */
   .prose {
     max-width: 100% !important;
   }
@@ -359,11 +368,34 @@
   }
 }
 
-/* Screen styles for print preview (if used) */
+/* ===== SCREEN PREVIEW STYLES (6x9 Book Simulation) ===== */
 .print-preview-container {
   background: white;
   color: #1a1a1a;
   font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+}
+
+/* Book page dimensions - 6x9 aspect ratio */
+.book-page-6x9 {
+  width: 6in;
+  min-height: 9in;
+  padding: 0.75in;
+  background: white;
+  box-shadow: 
+    0 0 0 1px rgba(0,0,0,0.05),
+    0 25px 50px -12px rgba(0, 0, 0, 0.15),
+    0 12px 24px -8px rgba(0, 0, 0, 0.08);
+}
+
+/* Gutter/inside margin simulation */
+.book-page-6x9.page-left {
+  padding-left: 0.75in;
+  padding-right: 0.5in;
+}
+
+.book-page-6x9.page-right {
+  padding-left: 0.5in;
+  padding-right: 0.75in;
 }
 
 .print-page-marker {
