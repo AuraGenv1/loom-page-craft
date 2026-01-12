@@ -3,6 +3,7 @@ import { MapPin, Star, ExternalLink, Loader2, MapPinOff } from 'lucide-react';
 import { LocalResource } from '@/lib/bookTypes';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface LocalResourcesProps {
   topic: string;
@@ -24,6 +25,7 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
   const [isLoading, setIsLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+  const { language } = useLanguage();
 
   // Generate or retrieve session ID
   const getSessionId = (): string => {
@@ -49,7 +51,8 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
           longitude, 
           materials: materials || [],
           topic,
-          sessionId
+          sessionId,
+          language
         }
       });
 

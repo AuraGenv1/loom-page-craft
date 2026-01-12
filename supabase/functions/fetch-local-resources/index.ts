@@ -249,7 +249,8 @@ async function searchPlaces(
   latitude: number | null,
   longitude: number | null,
   radiusMeters: number,
-  relevantTerms: string[]
+  relevantTerms: string[],
+  languageCode: string = 'en'
 ): Promise<PlaceResult[]> {
   const results: PlaceResult[] = [];
   
@@ -259,7 +260,8 @@ async function searchPlaces(
     
     const requestBody: Record<string, unknown> = {
       textQuery: query,
-      maxResultCount: 10, // Get more results to filter
+      maxResultCount: 10,
+      languageCode: languageCode, // Pass language to Places API
     };
 
     if (latitude && longitude) {
@@ -324,7 +326,7 @@ serve(async (req) => {
   }
 
   try {
-    const { latitude, longitude, materials, topic, sessionId } = await req.json();
+    const { latitude, longitude, materials, topic, sessionId, language = 'en' } = await req.json();
     
     // Validate session_id to prevent bot abuse
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
@@ -388,7 +390,8 @@ serve(async (req) => {
         useExtractedLocation ? null : latitude,
         useExtractedLocation ? null : longitude,
         16000,
-        allRelevantTerms
+        allRelevantTerms,
+        language
       );
       
       if (nearResults.length > 0) {
@@ -411,7 +414,8 @@ serve(async (req) => {
           useExtractedLocation ? null : latitude,
           useExtractedLocation ? null : longitude,
           80000,
-          allRelevantTerms
+          allRelevantTerms,
+          language
         );
         
         if (wideResults.length > 0) {

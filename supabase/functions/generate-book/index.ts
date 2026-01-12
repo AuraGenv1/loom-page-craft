@@ -883,7 +883,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, sessionId, fullBook = false, bookId: existingBookId } = await req.json();
+    const { topic, sessionId, fullBook = false, bookId: existingBookId, language = 'en' } = await req.json();
     
     // Validate session_id to prevent bot abuse
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length < 10) {
@@ -981,7 +981,23 @@ serve(async (req) => {
         - NEVER use diagrams, bar graphs, or the word "plate"`
       : `IMAGE BUDGET: 0-1 images total for the entire book. Only include if essential.`;
 
+    // Language mapping for the AI prompt
+    const languageNames: Record<string, string> = {
+      en: 'English',
+      es: 'Spanish',
+      fr: 'French',
+      de: 'German',
+      it: 'Italian',
+      pt: 'Portuguese',
+      zh: 'Chinese',
+      ja: 'Japanese',
+    };
+    const targetLanguage = languageNames[language] || 'English';
+
     const systemPrompt = `You are a world-class expert—a renowned travel journalist, subject matter specialist, and prolific author. You do NOT engage in conversation—you only produce refined, comprehensive guide content.
+
+CRITICAL LANGUAGE REQUIREMENT:
+You MUST write the ENTIRE guide in ${targetLanguage}. Even if the user's prompt is in English, you MUST generate ALL content, titles, descriptions, and recommendations entirely in ${targetLanguage}. The only exception is proper nouns (brand names, hotel names, place names) which should remain in their original form.
 
 TOPIC CLASSIFICATION: ${topicType}
 DYNAMIC SUBTITLE: "${classifiedSubtitle}"
