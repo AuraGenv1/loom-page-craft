@@ -7,8 +7,15 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram";
 
-// Fallback placeholder image (subtle gradient)
+// Fallback placeholder image - always works, never crashes
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
+
+// Successful response helper - always returns valid image(s)
+const successResponse = (imageUrl: string, imageUrls: string[] = [imageUrl]) => {
+  return new Response(JSON.stringify({ imageUrl, imageUrls }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+};
 
 // More permissive location extraction
 const extractGeographicLocation = (topic: string): string | null => {
@@ -47,21 +54,25 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
 };
 
 /**
- * Fetch images from Pexels API
- * Returns array of validated image URLs for frontend fallback cycling.
+ * Fetch images from Pexels API with full error handling
+ * NEVER throws - always returns array (empty on failure)
  */
 async function fetchPexelsImages(query: string, apiKey: string): Promise<string[]> {
   try {
     console.log("Pexels search query:", query);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     const response = await fetch(
       `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape`,
       {
-        headers: {
-          Authorization: apiKey,
-        },
+        headers: { Authorization: apiKey },
+        signal: controller.signal,
       }
     );
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -73,13 +84,13 @@ async function fetchPexelsImages(query: string, apiKey: string): Promise<string[
     const photos = data.photos ?? [];
 
     if (!photos.length) {
-      console.log("Pexels returned no results");
+      console.log("Pexels returned no results for query:", query);
       return [];
     }
 
     // Extract large2x or large image URLs
     const imageUrls = photos
-      .slice(0, 5) // Limit to 5 images
+      .slice(0, 5)
       .map((photo: { src?: { large2x?: string; large?: string; original?: string } }) => {
         return photo.src?.large2x || photo.src?.large || photo.src?.original;
       })
@@ -88,12 +99,14 @@ async function fetchPexelsImages(query: string, apiKey: string): Promise<string[
     console.log(`Returning ${imageUrls.length} Pexels image URLs`);
     return imageUrls;
   } catch (error) {
-    console.error("Pexels fetch error:", error);
+    // Catch ALL errors - timeout, network, parsing, etc.
+    console.error("Pexels fetch error (handled gracefully):", error);
     return [];
   }
 }
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -101,81 +114,59 @@ serve(async (req) => {
   try {
     const { title, topic, sessionId, variant, caption } = await req.json();
 
+    // Session validation
     if (!sessionId || typeof sessionId !== "string" || sessionId.length < 10) {
       console.error("Invalid or missing sessionId:", sessionId);
-      return new Response(JSON.stringify({ error: "Valid session required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Return fallback instead of error to prevent crashes
+      console.log("Returning fallback due to invalid session");
+      return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
     const MAX_INPUT_LENGTH = 200;
     const rawSubject = (topic || title || "").toString();
     if (!rawSubject || rawSubject.length > MAX_INPUT_LENGTH) {
-      return new Response(JSON.stringify({ error: `Input must be ${MAX_INPUT_LENGTH} characters or less` }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.log("Input too long or empty, using fallback");
+      return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
     const resolvedVariant: Variant = variant === "diagram" ? "diagram" : "cover";
 
-    // Use PEXELS_API_KEY from Supabase secrets
+    // ============ PEXELS API KEY - CRITICAL ============
     const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY");
 
     if (!PEXELS_API_KEY) {
-      console.error("PEXELS_API_KEY not configured in Supabase secrets");
-      // Return fallback image instead of error to prevent app crashes
+      // Log clearly but DO NOT crash - return fallback
+      console.error("⚠️ PEXELS_API_KEY not configured in Supabase secrets");
       console.log("Returning fallback image due to missing API key");
-      return new Response(JSON.stringify({ 
-        imageUrl: FALLBACK_IMAGE,
-        imageUrls: [FALLBACK_IMAGE],
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    // For cover: use topic first (more accurate), then title as fallback
+    // Build search query
     const coverSubject = (topic || title || "").toString();
     const subjectForQuery = resolvedVariant === "cover" ? coverSubject : rawSubject;
-
     const searchQuery = buildSearchQuery(resolvedVariant, subjectForQuery, caption);
-    
+
+    // Attempt to fetch images - wrapped in try/catch
     let imageUrls: string[] = [];
-    
     try {
       imageUrls = await fetchPexelsImages(searchQuery, PEXELS_API_KEY);
     } catch (fetchError) {
-      console.error("Error fetching from Pexels:", fetchError);
-      // Continue with empty array, will use fallback below
+      console.error("Outer catch for Pexels fetch:", fetchError);
+      // Continue with empty array
     }
 
-    // If no images found, return fallback
+    // If no images found, return fallback (not error)
     if (imageUrls.length === 0) {
-      console.log("No images found, using fallback");
-      return new Response(JSON.stringify({ 
-        imageUrl: FALLBACK_IMAGE,
-        imageUrls: [FALLBACK_IMAGE],
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.log("No images found, returning fallback");
+      return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    // Return both array (for fallback) and single URL (for backward compatibility)
-    return new Response(JSON.stringify({ 
-      imageUrl: imageUrls[0],  // Primary URL (backward compatible)
-      imageUrls: imageUrls,    // Full array for fallback cycling
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Success - return images
+    return successResponse(imageUrls[0], imageUrls);
+
   } catch (error: unknown) {
-    console.error("Error in generate-cover-image:", error);
-    // Even on error, return fallback image to prevent app crashes
-    return new Response(JSON.stringify({ 
-      imageUrl: FALLBACK_IMAGE,
-      imageUrls: [FALLBACK_IMAGE],
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // GLOBAL catch - NEVER return 500, always return fallback
+    console.error("Error in generate-cover-image (handled):", error);
+    return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
   }
 });
