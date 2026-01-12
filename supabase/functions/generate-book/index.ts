@@ -1,7 +1,6 @@
-import "[https://deno.land/x/xhr@0.1.0/mod.ts](https://deno.land/x/xhr@0.1.0/mod.ts)";
-import { serve } from "[https://deno.land/std@0.168.0/http/server.ts](https://deno.land/std@0.168.0/http/server.ts)";
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Allow generic Google keys or specific Gemini keys
 const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
 const pexelsApiKey = Deno.env.get("PEXELS_API_KEY");
 
@@ -10,14 +9,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// --- Helper: Clean Pexels Query ---
-// Fixes "Bad Images" by keeping the search simple
 const getVisualQuery = (topic: string): string => {
-  // Remove "guide", "manual", "book" to get just the subject (e.g. "Tokyo Sushi")
   return topic.replace(/guide|manual|book|how to|learn/gi, "").trim();
 };
 
-// --- Helper: Correct Title Translations ---
 const getLocalizedSubtitle = (lang: string): string => {
   switch (lang.toLowerCase()) {
     case "fr":
@@ -28,12 +23,6 @@ const getLocalizedSubtitle = (lang: string): string => {
       return "La Guida Essenziale";
     case "de":
       return "Der Wesentliche Leitfaden";
-    case "pt":
-      return "O Guia Essencial";
-    case "ja":
-      return "必須ガイド";
-    case "zh":
-      return "基本指南";
     default:
       return "A Curated Guide";
   }
@@ -46,7 +35,6 @@ serve(async (req) => {
     const { topic, language = "en" } = await req.json();
 
     // 1. GEMINI PROMPT
-    // We explicitly ask for NO markdown to prevent parsing errors
     const promptText = `
       You are a travel and skills expert writing a book in ${language}.
       Topic: ${topic}
@@ -70,9 +58,9 @@ serve(async (req) => {
       }
     `;
 
-    // 2. CALL GEMINI
+    // 2. CALL GEMINI (Switched to gemini-pro for stability)
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,17 +72,15 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    // Safety Check: Did Gemini fail?
     if (data.error) {
       console.error("Gemini Error:", data.error);
       throw new Error(data.error.message || "Gemini API Error");
     }
 
-    // 3. PARSE RESPONSE (ROBUST MODE)
+    // 3. PARSE RESPONSE
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error("Gemini returned empty text");
 
-    // Remove any accidental markdown (This fixes the 'No Chapter 1' crash)
     rawText = rawText
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -104,12 +90,11 @@ serve(async (req) => {
     try {
       structure = JSON.parse(rawText);
     } catch (e) {
-      console.error("JSON Parse Error. Raw Text:", rawText);
+      console.error("JSON Parse Error:", rawText);
       throw new Error("Failed to parse AI response");
     }
 
-    // 4. GET IMAGE (PEXELS)
-    // Use the simplified query for better results
+    // 4. GET IMAGE
     const visualQuery = getVisualQuery(topic);
     let coverImageUrl = null;
 
@@ -122,7 +107,7 @@ serve(async (req) => {
           },
         );
         const pexelsData = await pexelsRes.json();
-        if (pexelsData.photos && pexelsData.photos.length > 0) {
+        if (pexelsData.photos?.length > 0) {
           coverImageUrl = pexelsData.photos[0].src.large2x;
         }
       } catch (e) {
@@ -130,7 +115,6 @@ serve(async (req) => {
       }
     }
 
-    // 5. RETURN
     return new Response(
       JSON.stringify({
         title: structure.title,
