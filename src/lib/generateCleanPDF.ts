@@ -201,7 +201,7 @@ const FALLBACK_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDov
  * Load an image with CORS and timeout handling
  * Returns Base64 data URL or fallback on failure
  */
-const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<string> => {
+const loadImageAsBase64 = (url: string, timeoutMs: number = 3000): Promise<string> => {
   return new Promise((resolve) => {
     // If already a data URL, return immediately
     if (url.startsWith("data:")) {
@@ -212,6 +212,10 @@ const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<strin
     const img = new Image();
     let resolved = false;
 
+    // CRITICAL: Set crossOrigin IMMEDIATELY after creating the Image object
+    // This MUST be done BEFORE setting the src attribute to avoid CORS issues
+    img.crossOrigin = 'anonymous';
+
     // Set timeout - if image doesn't load in time, use fallback
     const timeoutId = setTimeout(() => {
       if (!resolved) {
@@ -220,9 +224,6 @@ const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<strin
         resolve(FALLBACK_PLACEHOLDER);
       }
     }, timeoutMs);
-
-    // CRITICAL: Set crossOrigin BEFORE setting src to avoid CORS issues
-    img.crossOrigin = 'anonymous';
 
     img.onload = () => {
       if (resolved) return;
@@ -240,6 +241,7 @@ const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<strin
           console.log(`[CleanPDF] Image converted to Base64: ${dataUrl.substring(0, 50)}...`);
           resolve(dataUrl);
         } else {
+          console.warn('[CleanPDF] Canvas context unavailable, using fallback');
           resolve(FALLBACK_PLACEHOLDER);
         }
       } catch (e) {
@@ -256,6 +258,7 @@ const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<strin
       resolve(FALLBACK_PLACEHOLDER);
     };
 
+    // Set the src AFTER setting crossOrigin and event handlers
     img.src = url;
   });
 };

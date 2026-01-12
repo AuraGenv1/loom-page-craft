@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, ArrowRight } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface SearchInputProps {
   onSearch: (query: string) => void;
@@ -8,6 +9,7 @@ interface SearchInputProps {
 
 const SearchInput = ({ onSearch, isLoading }: SearchInputProps) => {
   const [query, setQuery] = useState('');
+  const { t } = useLanguage();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +28,7 @@ const SearchInput = ({ onSearch, isLoading }: SearchInputProps) => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="What do you want to learn today?"
+          placeholder={t('searchPlaceholder')}
           disabled={isLoading}
           className="w-full h-14 md:h-16 pl-14 pr-14 bg-card border border-border rounded-full text-base md:text-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground/20 transition-all shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
         />

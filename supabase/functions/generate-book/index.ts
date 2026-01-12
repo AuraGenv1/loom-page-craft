@@ -1010,7 +1010,7 @@ serve(async (req) => {
     const systemPrompt = `You are a world-class expert—a renowned travel journalist, subject matter specialist, and prolific author. You do NOT engage in conversation—you only produce refined, comprehensive guide content.
 
 CRITICAL LANGUAGE REQUIREMENT:
-You MUST write the ENTIRE guide in ${targetLanguage}. Even if the user's prompt is in English, you MUST generate ALL content, titles, descriptions, and recommendations entirely in ${targetLanguage}. The only exception is proper nouns (brand names, hotel names, place names) which should remain in their original form.
+You MUST write the ENTIRE guide in ${targetLanguage}. Even if the user's prompt is in English, you MUST generate ALL content, titles, descriptions, section headers (including "Common Mistakes", "Pro Tips", "Key Takeaways", "Local Resources"), and recommendations entirely in ${targetLanguage}. The only exception is proper nouns (brand names, hotel names, place names) which should remain in their original form.
 
 TOPIC CLASSIFICATION: ${topicType}
 DYNAMIC SUBTITLE: "${classifiedSubtitle}"
@@ -1069,8 +1069,12 @@ FORMATTING RULES (STRICTLY ENFORCED):
 
 ${topicType === 'LIFESTYLE' ? `IMAGE REQUIREMENT:
 - Include exactly ONE [IMAGE: prompt] marker at the TOP of Chapter 1 content (before the first paragraph)
-- The prompt must include GEOGRAPHIC LOCATION and be highly specific
-- Example: [IMAGE: Authentic editorial photography of the Eiffel Tower at golden hour, Paris, France]` : ''}
+- The prompt must include GEOGRAPHIC LOCATION and SPECIFIC CONTEXT based on topic type
+- For TRAVEL topics: Use "cinematic, landmark, architecture, wide angle, editorial travel photography"
+- For SKILL/ACTIVITY topics: Use "close up, detail, hands working, studio lighting, artisan craftsmanship"
+- ALWAYS include the specific ${topic} subject in the prompt
+- Example Travel: [IMAGE: Cinematic wide angle photography of the Eiffel Tower at golden hour, Paris France, landmark architecture editorial]
+- Example Skill: [IMAGE: Close up photography of hands kneading sourdough bread dough, artisan bakery, studio lighting, rustic wooden surface]` : ''}
 
 IMPORTANT - IMAGE SEARCH QUERY REQUIREMENT:
 For EACH chapter in the tableOfContents, you MUST include an "imageSearchQuery" field with a highly specific Google Image Search query.
