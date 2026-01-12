@@ -447,8 +447,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             </>
           )}
 
-          {/* Local Resources Section - inside prose div */}
-          <LocalResources topic={topic} resources={localResources} materials={materials} />
+          {/* Local Resources Section - inside prose div, hidden if empty */}
+          {localResources && localResources.length > 0 && (
+            <LocalResources topic={topic} resources={localResources} materials={materials} />
+          )}
         </div>
       </article>
     );
