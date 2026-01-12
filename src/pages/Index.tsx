@@ -843,19 +843,19 @@ const Index = () => {
         {/* Landing View */}
         {viewState === 'landing' && (
           <div className="min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center px-4">
-            <div className="text-center mb-10 animate-fade-up">
+          <div className="text-center mb-10 animate-fade-up">
               <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-semibold text-foreground mb-4 tracking-tight">
-                Learn anything.
+                {t('learnAnything')}
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground max-w-md mx-auto">
-                Beautiful, custom how-to guides crafted just for you.
+                {t('beautifulGuides')}
               </p>
             </div>
             <div className="w-full animate-fade-up animation-delay-200">
               <SearchInput onSearch={handleSearch} />
             </div>
             <p className="text-sm text-muted-foreground mt-8 animate-fade-up animation-delay-300">
-              Try: "Sourdough bread baking" or "Watercolor painting basics"
+              {t('searchExamples')}
             </p>
           </div>
         )}
@@ -944,12 +944,12 @@ const Index = () => {
                 })()}
                 {!isPaid && (
                   <p className="text-xs text-muted-foreground text-center max-w-md">
-                    The free sample includes the Cover, Table of Contents, and Chapter 1. The full $4.99 guide unlocks all 10 chapters, including detailed diagrams and the complete instructional series.
+                    {t('freeSampleDesc')}
                   </p>
                 )}
                 {isPaid && (
                   <p className="text-xs text-accent text-center max-w-md font-medium">
-                    ✓ Full access unlocked — {[
+                    ✓ {t('fullAccessUnlocked')} — {[
                       bookData?.chapter1Content,
                       bookData?.chapter2Content,
                       bookData?.chapter3Content,
@@ -1026,7 +1026,7 @@ const Index = () => {
               <div className="flex items-center justify-center gap-4">
                 <div className="flex-1 h-[1px] bg-border" />
                 <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Begin Reading
+                  {t('beginReading')}
                 </span>
                 <div className="flex-1 h-[1px] bg-border" />
               </div>
