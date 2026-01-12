@@ -424,7 +424,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         </header>
 
         {/* Chapter content */}
-        <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed">
+        <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed h-auto">
           {renderContent()}
 
           {!content && (
@@ -446,10 +446,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               </blockquote>
             </>
           )}
-        </div>
 
-        {/* Local Resources Section */}
-        <LocalResources topic={topic} resources={localResources} materials={materials} />
+          {/* Local Resources Section - inside prose div */}
+          <LocalResources topic={topic} resources={localResources} materials={materials} />
+        </div>
       </article>
     );
   }
