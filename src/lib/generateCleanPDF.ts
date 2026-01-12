@@ -194,12 +194,16 @@ const markdownToHTML = (content: string): string => {
   return html;
 };
 
+// Simple fallback placeholder - a solid color encoded as Base64
+const FALLBACK_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCBmaWxsPSIjZjBmMGYwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLCBzZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIFVuYXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==";
+
 /**
  * Resolve cover image to a safe format for html2pdf
  * If the URL is already a data URL, return it as-is
  * Otherwise, attempt to convert via edge function
+ * RESILIENT: Returns fallback placeholder on any failure
  */
-const resolveCoverImageForPDF = async (url: string): Promise<string | null> => {
+const resolveCoverImageForPDF = async (url: string): Promise<string> => {
   // If it's already a data URL, it's safe for html2canvas
   if (url.startsWith("data:")) return url;
 
@@ -211,7 +215,7 @@ const resolveCoverImageForPDF = async (url: string): Promise<string | null> => {
 
     if (error) {
       console.warn("[CleanPDF] fetch-image-data-url failed:", error);
-      return null;
+      return FALLBACK_PLACEHOLDER;
     }
 
     if (data?.dataUrl && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:")) {
@@ -219,10 +223,10 @@ const resolveCoverImageForPDF = async (url: string): Promise<string | null> => {
       return data.dataUrl;
     }
 
-    return null;
+    return FALLBACK_PLACEHOLDER;
   } catch (e) {
     console.warn("[CleanPDF] resolveCoverImageForPDF exception:", e);
-    return null;
+    return FALLBACK_PLACEHOLDER;
   }
 };
 
@@ -270,10 +274,21 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   // Make cover image safe for html2pdf/html2canvas (prevents blank PDFs)
   // The coverImageUrl should already be Base64 from ProgressDownloadButton
   // But we double-check and convert if needed
-  let safeCoverSrc: string | null = coverImageUrl ?? null;
-  if (safeCoverSrc && !safeCoverSrc.startsWith("data:")) {
-    console.log("[CleanPDF] Cover URL is not Base64, attempting conversion...");
-    safeCoverSrc = await resolveCoverImageForPDF(safeCoverSrc);
+  // RESILIENT: Always use fallback if conversion fails
+  let safeCoverSrc: string = FALLBACK_PLACEHOLDER;
+  
+  try {
+    if (coverImageUrl) {
+      if (coverImageUrl.startsWith("data:")) {
+        safeCoverSrc = coverImageUrl;
+      } else {
+        console.log("[CleanPDF] Cover URL is not Base64, attempting conversion...");
+        safeCoverSrc = await resolveCoverImageForPDF(coverImageUrl);
+      }
+    }
+  } catch (coverError) {
+    console.warn("[CleanPDF] Cover image processing failed, using fallback:", coverError);
+    safeCoverSrc = FALLBACK_PLACEHOLDER;
   }
 
   // Create hidden container for PDF content (must be "visible" to renderer)
@@ -285,14 +300,11 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
   container.style.width = "210mm"; // A4 width
   container.style.backgroundColor = "#ffffff";
 
-  // PAGE 1: Cover
+  // PAGE 1: Cover - Always render with safeCoverSrc (fallback guaranteed)
   const coverPage = `
     <div style="page-break-after: always; min-height: 277mm; position: relative; background: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px;">
-      ${safeCoverSrc ? `
-        <div style="width: 100%; max-height: 180mm; overflow: hidden; margin-bottom: 30px; border-radius: 4px;">
-          <img src="${safeCoverSrc}" style="width: 100%; height: auto; object-fit: cover;" crossorigin="anonymous" />
-        </div>
-      ` : ""}
+      <div style="width: 100%; max-height: 180mm; overflow: hidden; margin-bottom: 30px; border-radius: 4px;">
+        <img src="${safeCoverSrc}" style="width: 100%; height: auto; object-fit: cover;" onerror="this.style.display='none'" />
       <h1 style="font-family: Georgia, serif; font-size: 32pt; font-weight: 700; color: #1a1a1a; margin: 0 0 16px 0; line-height: 1.2;">
         ${displayTitle}
       </h1>
