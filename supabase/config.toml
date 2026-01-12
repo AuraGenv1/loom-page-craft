@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-ebook-file]
 verify_jwt = false
+
+[functions.fetch-image-data-url]
+verify_jwt = false
