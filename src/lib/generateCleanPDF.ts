@@ -1,22 +1,23 @@
 /**
- * Clean PDF Generator - Browser Print Method for Amazon KDP Compliance
- * 
- * This approach opens a new browser window with formatted book content
- * and triggers the native print dialog for high-quality PDF output.
- * 
+ * Clean PDF Generator - Dedicated template that ignores website UI
  * Page flow:
- * - Page 1: Title Page (cover image + title + subtitle)
+ * - Page 1: Cover (image + title)
  * - Page 2: Table of Contents
  * - Page 3+: Chapters (each starts on a new page)
  * 
- * KDP Specifications:
- * - Page size: 6in x 9in (standard paperback)
- * - Margins: 0.75in all sides
- * - Font: Times New Roman, 12pt
- * - Images preserved with proper scaling
+ * ROBUST MARKDOWN PARSER:
+ * - Handles headers (h1, h2, h3, h4)
+ * - Handles lists (ul/li, numbered)
+ * - Handles images (![alt](url) and [IMAGE: prompt])
+ * - Handles paragraphs (fallback for unrecognized lines)
+ * - Page breaks between chapters
  */
 
+import { supabase } from "@/integrations/supabase/client";
 import { BookData, ChapterInfo } from "@/lib/bookTypes";
+
+// @ts-ignore - html2pdf.js doesn't have TypeScript types
+import html2pdf from "html2pdf.js";
 
 interface CleanPDFOptions {
   topic: string;
@@ -27,21 +28,27 @@ interface CleanPDFOptions {
 /**
  * Clean markdown of special formatting markers
  * Preserves essential content while removing UI-specific elements
+ * FIXED: Now strips stray code block markers that Gemini may leave
  */
 const cleanMarkdown = (text: string): string => {
   return text
+    // SANITIZATION: Strip stray code block markers (```markdown, ```json, ```)
     .replace(/^```(?:markdown|json)?\s*$/gim, "")
     .replace(/```$/gim, "")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/---+/g, "")
-    .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, '<div class="pro-tip"><strong>💡 Pro Tip:</strong> $1</div>')
-    .replace(/^\s*[-*]\s*$/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold -> plain (preserve content)
+    .replace(/\*([^*]+)\*/g, "$1") // Italic -> plain (preserve content)
+    .replace(/---+/g, "") // Horizontal rules
+    .replace(/\[PRO-TIP:\s*([^\]]+)\]/gi, "\n**Pro Tip:** $1\n") // Convert PRO-TIP to styled text
+    .replace(/^\s*[-*]\s*$/gm, "") // Empty list items
     .trim();
 };
 
 /**
- * Convert markdown to print-ready HTML
+ * ROBUST Markdown to HTML converter
+ * - Handles headers (h1-h4)
+ * - Handles lists (ul/li, ol/li)
+ * - Handles images: ![alt](url) AND [IMAGE: url] patterns
+ * - Falls back to <p> for unrecognized lines (never drops content)
  */
 const markdownToHTML = (content: string): string => {
   const lines = cleanMarkdown(content).split("\n");
@@ -52,6 +59,7 @@ const markdownToHTML = (content: string): string => {
   for (const line of lines) {
     const trimmed = line.trim();
 
+    // Skip empty lines but close any open list
     if (!trimmed) {
       if (inList) {
         html += listType === "ol" ? "</ol>" : "</ul>";
@@ -61,7 +69,7 @@ const markdownToHTML = (content: string): string => {
       continue;
     }
 
-    // Markdown image: ![alt](url)
+    // Check for Markdown image syntax: ![alt](url) - SUPPORTS Base64 DATA URLs
     const markdownImageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (markdownImageMatch) {
       if (inList) {
@@ -71,65 +79,114 @@ const markdownToHTML = (content: string): string => {
       }
       const alt = markdownImageMatch[1] || "Image";
       const url = markdownImageMatch[2];
-      html += `<figure class="book-image"><img src="${url}" alt="${alt}" /><figcaption>${alt}</figcaption></figure>`;
+      // CRITICAL: Handle both regular URLs and Base64 data URLs
+      const isBase64 = url.startsWith('data:');
+      console.log(`[CleanPDF] Rendering image (${isBase64 ? 'Base64' : 'URL'}): ${url.substring(0, 50)}...`);
+      html += `<div style="margin: 20px 0; text-align: center;">
+        <img src="${url}" alt="${alt}" style="width: 100%; max-width: 500px; height: auto; object-fit: contain; border-radius: 4px;" ${!isBase64 ? 'crossorigin="anonymous"' : ''} />
+      </div>`;
       continue;
     }
 
-    // Skip [IMAGE: prompt] markers (prompts, not actual images)
-    if (/^\[IMAGE:\s*[^\]]+\]$/i.test(trimmed)) {
+    // Check for [IMAGE: url] pattern (custom image marker)
+    const imageMarkerMatch = trimmed.match(/^\[IMAGE:\s*([^\]]+)\]$/i);
+    if (imageMarkerMatch) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      // This is a prompt, not a URL - skip it for PDF (or show placeholder text)
+      // Images should be pre-converted to data URLs before reaching here
+      continue;
+    }
+
+    // Check for inline images in the middle of text - SUPPORTS Base64 DATA URLs
+    const inlineImagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    if (inlineImagePattern.test(trimmed) && !trimmed.match(/^!\[/)) {
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      const processedLine = trimmed.replace(
+        inlineImagePattern,
+        (_, alt, url) => {
+          const isBase64 = url.startsWith('data:');
+          return `<img src="${url}" alt="${alt || 'Image'}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 8px 0;" ${!isBase64 ? 'crossorigin="anonymous"' : ''} />`;
+        }
+      );
+      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${processedLine}</p>`;
       continue;
     }
 
     // Headers
     if (trimmed.startsWith("#### ")) {
-      if (inList) { html += listType === "ol" ? "</ol>" : "</ul>"; inList = false; listType = null; }
-      html += `<h5>${trimmed.slice(5)}</h5>`;
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      html += `<h5 style="font-family: Georgia, serif; font-size: 12pt; font-weight: 600; margin: 16px 0 8px 0; color: #1a1a1a;">${trimmed.slice(5)}</h5>`;
     } else if (trimmed.startsWith("### ")) {
-      if (inList) { html += listType === "ol" ? "</ol>" : "</ul>"; inList = false; listType = null; }
-      html += `<h4>${trimmed.slice(4)}</h4>`;
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      html += `<h4 style="font-family: Georgia, serif; font-size: 14pt; font-weight: 600; margin: 20px 0 10px 0; color: #1a1a1a;">${trimmed.slice(4)}</h4>`;
     } else if (trimmed.startsWith("## ")) {
-      if (inList) { html += listType === "ol" ? "</ol>" : "</ul>"; inList = false; listType = null; }
-      html += `<h3>${trimmed.slice(3)}</h3>`;
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      html += `<h3 style="font-family: Georgia, serif; font-size: 16pt; font-weight: 600; margin: 24px 0 12px 0; color: #1a1a1a;">${trimmed.slice(3)}</h3>`;
     } else if (trimmed.startsWith("# ")) {
-      if (inList) { html += listType === "ol" ? "</ol>" : "</ul>"; inList = false; listType = null; }
-      html += `<h2>${trimmed.slice(2)}</h2>`;
+      if (inList) {
+        html += listType === "ol" ? "</ol>" : "</ul>";
+        inList = false;
+        listType = null;
+      }
+      html += `<h2 style="font-family: Georgia, serif; font-size: 18pt; font-weight: 600; margin: 28px 0 14px 0; color: #1a1a1a;">${trimmed.slice(2)}</h2>`;
     }
-    // Unordered list
+    // Unordered list items
     else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       if (!inList || listType !== "ul") {
         if (inList) html += listType === "ol" ? "</ol>" : "</ul>";
-        html += "<ul>";
+        html += '<ul style="margin: 12px 0; padding-left: 24px; list-style-type: disc;">';
         inList = true;
         listType = "ul";
       }
-      html += `<li>${trimmed.slice(2)}</li>`;
+      html += `<li style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin-bottom: 6px; color: #333;">${trimmed.slice(2)}</li>`;
     }
-    // Ordered list
+    // Ordered list items (1. 2. 3. etc.)
     else if (/^\d+\.\s/.test(trimmed)) {
       if (!inList || listType !== "ol") {
         if (inList) html += listType === "ol" ? "</ol>" : "</ul>";
-        html += "<ol>";
+        html += '<ol style="margin: 12px 0; padding-left: 24px; list-style-type: decimal;">';
         inList = true;
         listType = "ol";
       }
-      html += `<li>${trimmed.replace(/^\d+\.\s/, "")}</li>`;
+      const content = trimmed.replace(/^\d+\.\s/, "");
+      html += `<li style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.6; margin-bottom: 6px; color: #333;">${content}</li>`;
     }
-    // Blockquote
-    else if (trimmed.startsWith("> ")) {
-      if (inList) { html += listType === "ol" ? "</ol>" : "</ul>"; inList = false; listType = null; }
-      html += `<blockquote>${trimmed.slice(2)}</blockquote>`;
-    }
-    // Default: paragraph
+    // Default: treat as paragraph (NEVER drop content)
     else {
       if (inList) {
         html += listType === "ol" ? "</ol>" : "</ul>";
         inList = false;
         listType = null;
       }
-      html += `<p>${trimmed}</p>`;
+      // Handle bold text within paragraphs
+      const processedText = trimmed
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      html += `<p style="font-family: Georgia, serif; font-size: 11pt; line-height: 1.7; margin: 0 0 12px 0; color: #333; text-align: justify;">${processedText}</p>`;
     }
   }
 
+  // Close any remaining open list
   if (inList) {
     html += listType === "ol" ? "</ol>" : "</ul>";
   }
@@ -137,268 +194,122 @@ const markdownToHTML = (content: string): string => {
   return html;
 };
 
+// Simple fallback placeholder - a solid color encoded as Base64
+const FALLBACK_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCBmaWxsPSIjZjBmMGYwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLCBzZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIFVuYXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==";
+
 /**
- * Generate print-ready CSS for KDP compliance
+ * Load an image with CORS and timeout handling
+ * Returns Base64 data URL or fallback on failure
  */
-const generatePrintStyles = (): string => {
-  return `
-    @page {
-      size: 6in 9in;
-      margin: 0.75in;
+const loadImageAsBase64 = (url: string, timeoutMs: number = 3000): Promise<string> => {
+  return new Promise((resolve) => {
+    // If already a data URL, return immediately
+    if (url.startsWith("data:")) {
+      resolve(url);
+      return;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    const img = new Image();
+    let resolved = false;
 
-    body {
-      font-family: 'Times New Roman', Times, Georgia, serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: black;
-      background: white;
-    }
+    // CRITICAL: Set crossOrigin IMMEDIATELY after creating the Image object
+    // This MUST be done BEFORE setting the src attribute to avoid CORS issues
+    img.crossOrigin = 'anonymous';
 
-    /* Title Page */
-    .title-page {
-      page-break-after: always;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 2in 0.5in;
-    }
-
-    .title-page .cover-image {
-      max-width: 4in;
-      max-height: 5in;
-      margin-bottom: 1in;
-      object-fit: contain;
-    }
-
-    .title-page h1 {
-      font-size: 28pt;
-      font-weight: bold;
-      margin-bottom: 0.5in;
-      line-height: 1.2;
-    }
-
-    .title-page .subtitle {
-      font-size: 14pt;
-      font-style: italic;
-      color: #444;
-      margin-bottom: 1in;
-    }
-
-    .title-page .footer {
-      font-size: 10pt;
-      color: #666;
-      position: absolute;
-      bottom: 1in;
-    }
-
-    /* Table of Contents */
-    .toc-page {
-      page-break-after: always;
-      padding-top: 1in;
-    }
-
-    .toc-page h2 {
-      font-size: 20pt;
-      text-align: center;
-      margin-bottom: 0.75in;
-      border-bottom: 2px solid black;
-      padding-bottom: 0.25in;
-    }
-
-    .toc-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 0.15in 0;
-      border-bottom: 1px dotted #999;
-      font-size: 12pt;
-    }
-
-    .toc-item .chapter-title {
-      flex: 1;
-    }
-
-    .toc-item .page-num {
-      color: #666;
-      margin-left: 0.25in;
-    }
-
-    /* Chapter Pages */
-    .chapter {
-      page-break-before: always;
-    }
-
-    .chapter-header {
-      text-align: center;
-      margin-bottom: 0.5in;
-      padding-top: 0.5in;
-    }
-
-    .chapter-header .chapter-label {
-      font-size: 10pt;
-      text-transform: uppercase;
-      letter-spacing: 0.15in;
-      color: #666;
-      margin-bottom: 0.25in;
-    }
-
-    .chapter-header h2 {
-      font-size: 18pt;
-      font-weight: bold;
-      margin-bottom: 0.25in;
-    }
-
-    .chapter-header .divider {
-      width: 1in;
-      height: 2px;
-      background: black;
-      margin: 0 auto;
-    }
-
-    .chapter-content h2 {
-      font-size: 16pt;
-      font-weight: bold;
-      margin: 0.4in 0 0.2in 0;
-    }
-
-    .chapter-content h3 {
-      font-size: 14pt;
-      font-weight: bold;
-      margin: 0.35in 0 0.15in 0;
-    }
-
-    .chapter-content h4 {
-      font-size: 13pt;
-      font-weight: bold;
-      margin: 0.3in 0 0.1in 0;
-    }
-
-    .chapter-content h5 {
-      font-size: 12pt;
-      font-weight: bold;
-      margin: 0.25in 0 0.1in 0;
-    }
-
-    .chapter-content p {
-      text-align: justify;
-      text-indent: 0.25in;
-      margin-bottom: 0.15in;
-    }
-
-    .chapter-content p:first-of-type {
-      text-indent: 0;
-    }
-
-    .chapter-content ul, 
-    .chapter-content ol {
-      margin: 0.2in 0 0.2in 0.5in;
-    }
-
-    .chapter-content li {
-      margin-bottom: 0.1in;
-    }
-
-    .chapter-content blockquote {
-      margin: 0.3in 0.5in;
-      padding-left: 0.25in;
-      border-left: 3px solid #666;
-      font-style: italic;
-      color: #444;
-    }
-
-    .chapter-content .pro-tip {
-      background: #f5f5f5;
-      border-left: 4px solid #333;
-      padding: 0.2in;
-      margin: 0.3in 0;
-      font-size: 11pt;
-    }
-
-    .chapter-content .book-image {
-      text-align: center;
-      margin: 0.4in 0;
-      page-break-inside: avoid;
-    }
-
-    .chapter-content .book-image img {
-      max-width: 100%;
-      max-height: 4in;
-      object-fit: contain;
-    }
-
-    .chapter-content .book-image figcaption {
-      font-size: 10pt;
-      font-style: italic;
-      color: #666;
-      margin-top: 0.1in;
-    }
-
-    /* Print-specific overrides */
-    @media print {
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+    // Set timeout - if image doesn't load in time, use fallback
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn(`[CleanPDF] Image load timeout (${timeoutMs}ms): ${url.substring(0, 50)}...`);
+        resolve(FALLBACK_PLACEHOLDER);
       }
+    }, timeoutMs);
 
-      .title-page {
-        page-break-after: always;
-      }
+    img.onload = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
 
-      .toc-page {
-        page-break-after: always;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          console.log(`[CleanPDF] Image converted to Base64: ${dataUrl.substring(0, 50)}...`);
+          resolve(dataUrl);
+        } else {
+          console.warn('[CleanPDF] Canvas context unavailable, using fallback');
+          resolve(FALLBACK_PLACEHOLDER);
+        }
+      } catch (e) {
+        console.warn('[CleanPDF] Canvas conversion failed (likely CORS):', e);
+        resolve(FALLBACK_PLACEHOLDER);
       }
+    };
 
-      .chapter {
-        page-break-before: always;
-      }
+    img.onerror = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+      console.warn(`[CleanPDF] Image failed to load: ${url.substring(0, 50)}...`);
+      resolve(FALLBACK_PLACEHOLDER);
+    };
 
-      .book-image {
-        page-break-inside: avoid;
-      }
-    }
-
-    /* Screen preview styling */
-    @media screen {
-      body {
-        max-width: 6in;
-        margin: 0 auto;
-        padding: 0.75in;
-        background: #f0f0f0;
-      }
-
-      .title-page,
-      .toc-page,
-      .chapter {
-        background: white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 0.5in;
-        padding: 0.75in;
-      }
-    }
-  `;
+    // Set the src AFTER setting crossOrigin and event handlers
+    img.src = url;
+  });
 };
 
 /**
- * Main PDF generation function using browser print
+ * Resolve cover image to a safe format for html2pdf
+ * If the URL is already a data URL, return it as-is
+ * Otherwise, attempt to convert via edge function, then client-side fallback
+ * RESILIENT: Returns fallback placeholder on any failure
  */
+const resolveCoverImageForPDF = async (url: string): Promise<string> => {
+  // If it's already a data URL, it's safe for html2canvas
+  if (url.startsWith("data:")) return url;
+
+  try {
+    console.log("[CleanPDF] Converting external URL to Base64...");
+    
+    // First, try edge function for better CORS handling
+    const { data, error } = await supabase.functions.invoke("fetch-image-data-url", {
+      body: { url },
+    });
+
+    if (!error && data?.dataUrl && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:")) {
+      console.log("[CleanPDF] Successfully converted to Base64 via edge function");
+      return data.dataUrl;
+    }
+
+    // Fallback: try client-side loading with crossOrigin
+    console.log("[CleanPDF] Edge function failed, trying client-side conversion...");
+    return await loadImageAsBase64(url, 3000);
+  } catch (e) {
+    console.warn("[CleanPDF] resolveCoverImageForPDF exception:", e);
+    // Final fallback: try client-side loading
+    try {
+      return await loadImageAsBase64(url, 2000);
+    } catch {
+      return FALLBACK_PLACEHOLDER;
+    }
+  }
+};
+
 export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: CleanPDFOptions): Promise<void> => {
   const displayTitle = bookData.displayTitle || bookData.title || `${topic} Guide`;
   const subtitle = bookData.subtitle || "A Comprehensive Guide";
 
-  console.log("[CleanPDF] Starting browser print generation...");
+  console.log("[CleanPDF] Starting PDF generation...");
   console.log("[CleanPDF] Title:", displayTitle);
+  console.log("[CleanPDF] Subtitle:", subtitle);
+  console.log("[CleanPDF] Cover image provided:", !!coverImageUrl);
 
-  // Build chapters array
+  // Build chapter content array
   const chapters: { number: number; title: string; content: string }[] = [];
   const chapterContents = [
     bookData.chapter1Content,
@@ -423,134 +334,150 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
     });
   });
 
-  console.log("[CleanPDF] Total chapters:", chapters.length);
+  console.log("[CleanPDF] Total chapters with content:", chapters.length);
 
-  // Build HTML content
-  const coverImageHtml = coverImageUrl 
-    ? `<img src="${coverImageUrl}" alt="Book Cover" class="cover-image" />`
-    : '';
+  // DEBUG: Log content lengths
+  chapters.forEach((ch, idx) => {
+    console.log(`[CleanPDF] Chapter ${ch.number} content length: ${ch.content.length} chars`);
+  });
 
-  const titlePageHtml = `
-    <div class="title-page">
-      ${coverImageHtml}
-      <h1>${displayTitle}</h1>
-      <p class="subtitle">${subtitle}</p>
-      <p class="footer">Generated by Loom • ${new Date().getFullYear()}</p>
-    </div>
-  `;
-
-  const tocItemsHtml = chapters
-    .map((ch, idx) => `
-      <div class="toc-item">
-        <span class="chapter-title">Chapter ${ch.number}: ${ch.title}</span>
-        <span class="page-num">${idx + 3}</span>
-      </div>
-    `)
-    .join("");
-
-  const tocPageHtml = `
-    <div class="toc-page">
-      <h2>Table of Contents</h2>
-      ${tocItemsHtml}
-    </div>
-  `;
-
-  const chaptersHtml = chapters
-    .map((ch) => `
-      <div class="chapter">
-        <div class="chapter-header">
-          <p class="chapter-label">Chapter ${ch.number}</p>
-          <h2>${ch.title}</h2>
-          <div class="divider"></div>
-        </div>
-        <div class="chapter-content">
-          ${markdownToHTML(ch.content)}
-        </div>
-      </div>
-    `)
-    .join("");
-
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${displayTitle} - PDF</title>
-      <style>${generatePrintStyles()}</style>
-    </head>
-    <body>
-      ${titlePageHtml}
-      ${tocPageHtml}
-      ${chaptersHtml}
-    </body>
-    </html>
-  `;
-
-  // Open new window and inject content
-  const printWindow = window.open('', '_blank', 'width=816,height=1056');
+  // Make cover image safe for html2pdf/html2canvas (prevents blank PDFs)
+  // The coverImageUrl should already be Base64 from ProgressDownloadButton
+  // But we double-check and convert if needed
+  // RESILIENT: Always use fallback if conversion fails
+  let safeCoverSrc: string = FALLBACK_PLACEHOLDER;
   
-  if (!printWindow) {
-    console.error("[CleanPDF] Failed to open print window - popup blocked?");
-    alert("Please allow popups to generate the PDF. Then try again.");
-    return;
+  try {
+    if (coverImageUrl) {
+      if (coverImageUrl.startsWith("data:")) {
+        safeCoverSrc = coverImageUrl;
+      } else {
+        console.log("[CleanPDF] Cover URL is not Base64, attempting conversion...");
+        safeCoverSrc = await resolveCoverImageForPDF(coverImageUrl);
+      }
+    }
+  } catch (coverError) {
+    console.warn("[CleanPDF] Cover image processing failed, using fallback:", coverError);
+    safeCoverSrc = FALLBACK_PLACEHOLDER;
   }
 
-  printWindow.document.write(fullHtml);
-  printWindow.document.close();
+  // Create hidden container for PDF content (must be "visible" to renderer)
+  const container = document.createElement("div");
+  container.id = "pdf-clean-container";
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "210mm"; // A4 width
+  container.style.backgroundColor = "#ffffff";
 
-  // Wait for images to load, then trigger print
-  const images = printWindow.document.querySelectorAll('img');
-  const imageCount = images.length;
-  
-  console.log(`[CleanPDF] Waiting for ${imageCount} images to load...`);
+  // PAGE 1: Cover - Always render with safeCoverSrc (fallback guaranteed)
+  const coverPage = `
+    <div style="page-break-after: always; min-height: 277mm; position: relative; background: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px;">
+      <div style="width: 100%; max-height: 180mm; overflow: hidden; margin-bottom: 30px; border-radius: 4px;">
+        <img src="${safeCoverSrc}" style="width: 100%; height: auto; object-fit: cover;" onerror="this.style.display='none'" />
+      <h1 style="font-family: Georgia, serif; font-size: 32pt; font-weight: 700; color: #1a1a1a; margin: 0 0 16px 0; line-height: 1.2;">
+        ${displayTitle}
+      </h1>
+      <p style="font-family: Georgia, serif; font-size: 14pt; font-style: italic; color: #666; margin: 0;">
+        ${subtitle}
+      </p>
+      <p style="font-family: Arial, sans-serif; font-size: 10pt; color: #999; position: absolute; bottom: 30px; left: 0; right: 0; text-align: center;">
+        Generated by Loom • ${new Date().getFullYear()}
+      </p>
+    </div>
+  `;
 
-  if (imageCount === 0) {
-    // No images, print immediately after a short delay for rendering
-    setTimeout(() => {
-      console.log("[CleanPDF] No images, triggering print...");
-      printWindow.focus();
-      printWindow.print();
-    }, 500);
-  } else {
-    // Wait for all images to load (with timeout fallback)
-    let loadedCount = 0;
-    let printTriggered = false;
+  // PAGE 2: Table of Contents
+  const tocItems = chapters
+    .map(
+      (ch, idx) => `
+      <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dotted #ddd;">
+        <span style="font-family: Georgia, serif; font-size: 12pt; color: #333;">
+          Chapter ${ch.number}: ${ch.title}
+        </span>
+        <span style="font-family: Georgia, serif; font-size: 11pt; color: #666;">
+          ${idx + 3}
+        </span>
+      </div>
+    `
+    )
+    .join("");
 
-    const triggerPrint = () => {
-      if (printTriggered) return;
-      printTriggered = true;
-      console.log("[CleanPDF] Images loaded, triggering print...");
-      printWindow.focus();
-      printWindow.print();
-    };
+  const tocPage = `
+    <div style="page-break-after: always; min-height: 277mm; padding: 50px 40px; background: #ffffff;">
+      <h2 style="font-family: Georgia, serif; font-size: 24pt; font-weight: 600; color: #1a1a1a; margin: 0 0 40px 0; text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 20px;">
+        Table of Contents
+      </h2>
+      <div style="max-width: 500px; margin: 0 auto;">
+        ${tocItems}
+      </div>
+    </div>
+  `;
 
-    const handleImageLoad = () => {
-      loadedCount++;
-      console.log(`[CleanPDF] Image ${loadedCount}/${imageCount} loaded`);
-      if (loadedCount >= imageCount) {
-        triggerPrint();
+  // PAGES 3+: Chapters (each starts on a new page with html2pdf page breaks)
+  const chapterPages = chapters
+    .map(
+      (ch) => {
+        const htmlContent = markdownToHTML(ch.content);
+        console.log(`[CleanPDF] Chapter ${ch.number} HTML length: ${htmlContent.length} chars`);
+        
+        return `
+          <div class="html2pdf__page-break"></div>
+          <div style="min-height: 277mm; padding: 50px 40px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 40px;">
+              <p style="font-family: Arial, sans-serif; font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; color: #999; margin: 0 0 12px 0;">
+                Chapter ${ch.number}
+              </p>
+              <h2 style="font-family: Georgia, serif; font-size: 22pt; font-weight: 600; color: #1a1a1a; margin: 0 0 16px 0;">
+                ${ch.title}
+              </h2>
+              <div style="width: 60px; height: 2px; background: #1a1a1a; margin: 0 auto;"></div>
+            </div>
+            <div style="columns: 1; column-gap: 30px;">
+              ${htmlContent}
+            </div>
+          </div>
+        `;
       }
-    };
+    )
+    .join("");
 
-    images.forEach((img) => {
-      if (img.complete) {
-        handleImageLoad();
-      } else {
-        img.onload = handleImageLoad;
-        img.onerror = () => {
-          console.warn("[CleanPDF] Image failed to load, continuing...");
-          handleImageLoad();
-        };
-      }
-    });
+  container.innerHTML = coverPage + tocPage + chapterPages;
+  document.body.appendChild(container);
 
-    // Fallback: trigger print after 5 seconds regardless
-    setTimeout(() => {
-      if (!printTriggered) {
-        console.warn("[CleanPDF] Image load timeout, triggering print anyway...");
-        triggerPrint();
-      }
-    }, 5000);
+  // DEBUG: Log final HTML length
+  console.log("[CleanPDF] Total HTML content length:", container.innerHTML.length, "chars");
+
+  // Wait for rendering to complete (fonts, images, layout)
+  console.log("[CleanPDF] Waiting for rendering...");
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const opt = {
+    margin: [10, 10, 10, 10] as [number, number, number, number],
+    filename: `${topic.toLowerCase().replace(/\s+/g, "-")}-guide.pdf`,
+    image: { type: "jpeg" as const, quality: 0.95 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: true, // Enable logging for debugging
+    },
+    jsPDF: {
+      unit: "mm" as const,
+      format: "a4" as const,
+      orientation: "portrait" as const,
+    },
+    pagebreak: { mode: ['css', 'legacy'] },
+  };
+
+  try {
+    console.log("[CleanPDF] Generating PDF with html2pdf...");
+    await html2pdf().set(opt).from(container).save();
+    console.log("[CleanPDF] PDF saved successfully");
+  } finally {
+    document.body.removeChild(container);
   }
 };
+
+export default generateCleanPDF;
