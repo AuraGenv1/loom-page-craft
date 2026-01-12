@@ -291,8 +291,14 @@ async function bakeInPexelsImages(
     const imagePrompt = match[1].trim();
     
     try {
-      // Clean the prompt for Pexels (remove exclusion terms)
-      const cleanedQuery = imagePrompt.replace(/-\w+/g, '').trim().slice(0, 100);
+      // FIXED: Use simple, direct query - always prepend topic to avoid generic results
+      // Extract the main topic from the prompt or use a fallback
+      const cleanedQuery = imagePrompt
+        .replace(/-\w+/g, '') // Remove exclusion terms
+        .replace(/cinematic|aerial|photography|editorial|wide angle|golden hour|landmark|architecture/gi, '') // Remove style keywords
+        .trim()
+        .slice(0, 80);
+      
       console.log(`[BakeImages] Fetching Pexels image for: "${cleanedQuery}"`);
       
       const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(cleanedQuery)}&per_page=3&orientation=landscape`;
@@ -1329,19 +1335,26 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
       try {
         console.log('Starting Pexels Commercial Image Search...');
         
-        // Use AI-generated query from the book data, or generate one
-        let searchQuery = bookData.coverImageSearchQuery;
+        // FIXED: Use simple, direct query format: "${topic} city" for MAXIMUM relevance
+        // This ensures Tokyo searches return Tokyo, not Dubai or generic bathtubs
+        const firstChapterTitle = bookData.tableOfContents?.[0]?.title || 'Introduction';
         
-        if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.length < 10) {
-          console.log('No coverImageSearchQuery in response, generating dynamically...');
-          searchQuery = await generateImageSearchQuery(topic, 'Cover Image', topicType, GEMINI_API_KEY);
+        // Determine if this is a place/travel topic
+        const isTravelTopic = /\b(city|cities|travel|trip|visit|tour|destination|guide|vacation|hotel|resort|tokyo|paris|london|rome|new york|dubai|barcelona|amsterdam)\b/i.test(topic);
+        
+        // SIMPLE, DIRECT QUERY: Always include the topic FIRST
+        let searchQuery: string;
+        if (isTravelTopic) {
+          // For travel: "${topic} skyline city landmark"
+          searchQuery = `${topic} skyline city landmark`;
+        } else {
+          // For skills/hobbies: "${topic} professional photography"
+          searchQuery = `${topic} professional photography`;
         }
         
-        // Clean the query for Pexels (remove exclusion terms like -text -signage)
-        const cleanedQuery = searchQuery.replace(/-\w+/g, '').trim();
-        console.log('Final Pexels search query:', cleanedQuery);
+        console.log('Final Pexels search query (topic-first):', searchQuery);
         
-        const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(cleanedQuery)}&per_page=10&orientation=landscape`;
+        const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=10&orientation=landscape`;
         
         const pexelsResponse = await fetch(pexelsUrl, {
           headers: {

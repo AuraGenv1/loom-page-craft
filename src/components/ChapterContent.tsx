@@ -174,9 +174,9 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           </div>
           {/* Only show caption if image is visible */}
           {!hasFailed && (
-            <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
-              {description}
-            </figcaption>
+              <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto break-words whitespace-normal">
+                {description}
+              </figcaption>
           )}
         </figure>
       );
@@ -256,7 +256,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
                 />
               </div>
               {alt && alt !== 'Image' && (
-                <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto">
+                <figcaption className="mt-3 text-sm text-muted-foreground italic font-serif max-w-xl mx-auto break-words whitespace-normal">
                   {alt}
                 </figcaption>
               )}
