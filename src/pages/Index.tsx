@@ -11,6 +11,7 @@ import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import SaveToCloudBanner from '@/components/SaveToCloudBanner';
 import AuthModal from '@/components/AuthModal';
+import LanguageSelector from '@/components/LanguageSelector';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -25,6 +26,7 @@ import { FunctionsHttpError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import PrintPreview from '@/components/PrintPreview';
 import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
@@ -84,6 +86,7 @@ const Index = () => {
   const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
   const [isGeneratingDiagrams, setIsGeneratingDiagrams] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
@@ -406,6 +409,7 @@ const Index = () => {
               chapterNumber: chapterNum,
               chapterTitle: tocEntry.title,
               topic,
+              language,
             },
           });
 
@@ -451,7 +455,7 @@ const Index = () => {
     try {
       const currentSessionId = getSessionId();
       const { data, error } = await supabase.functions.invoke('generate-book', {
-        body: { topic: query, sessionId: currentSessionId }
+        body: { topic: query, sessionId: currentSessionId, language }
       });
 
       if (error) {
@@ -781,9 +785,10 @@ const Index = () => {
                 onClick={handleStartOver}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                New Guide
+                {t('newGuide')}
               </button>
             )}
+            <LanguageSelector />
             {!authLoading && (
               user ? (
                 <div className="flex items-center gap-3">
@@ -793,7 +798,7 @@ const Index = () => {
                     onClick={() => navigate('/dashboard')}
                     className="hidden sm:flex"
                   >
-                    Dashboard
+                    {t('dashboard')}
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -808,11 +813,11 @@ const Index = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                        Dashboard
+                        {t('dashboard')}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleSignOut} className="text-muted-foreground">
-                        Sign Out
+                        {t('signOut')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -825,7 +830,7 @@ const Index = () => {
                   disabled={isAuthenticating}
                   className="gap-2"
                 >
-                  {isAuthenticating ? 'Signing in...' : 'Join'}
+                  {isAuthenticating ? t('loading') : t('join')}
                 </Button>
               )
             )}

@@ -104,7 +104,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId, chapterNumber, chapterTitle, topic } = await req.json();
+    const { bookId, chapterNumber, chapterTitle, topic, language = 'en' } = await req.json();
 
     if (!bookId || !chapterNumber || !chapterTitle || !topic) {
       return new Response(JSON.stringify({ error: "Missing required parameters" }), {
@@ -118,7 +118,23 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("AI service is not configured");
 
+    // Language mapping
+    const languageNames: Record<string, string> = {
+      en: 'English',
+      es: 'Spanish',
+      fr: 'French',
+      de: 'German',
+      it: 'Italian',
+      pt: 'Portuguese',
+      zh: 'Chinese',
+      ja: 'Japanese',
+    };
+    const targetLanguage = languageNames[language] || 'English';
+
     const systemPrompt = `You are a world-class expert—a travel journalist, subject matter specialist, and prolific author. You do NOT give homework—you ARE the expert. Provide SPECIFIC data, prices (2026), names, and recommendations.
+
+CRITICAL LANGUAGE REQUIREMENT:
+You MUST write the ENTIRE chapter in ${targetLanguage}. Even if the user's prompt is in English, you MUST generate ALL content, titles, descriptions, and recommendations entirely in ${targetLanguage}. The only exception is proper nouns (brand names, hotel names, place names) which should remain in their original form.
 
 CRITICAL EXPERT PERSONA:
 - NEVER say "research online", "check local listings", or "consult a professional"
