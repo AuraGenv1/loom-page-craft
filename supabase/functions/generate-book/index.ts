@@ -52,8 +52,8 @@ serve(async (req) => {
       }
     `;
 
-    console.log("Calling Gemini 1.0 Pro...");
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${geminiApiKey}`, {
+    console.log("Calling Gemini 2.0 Flash...");
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
