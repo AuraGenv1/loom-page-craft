@@ -1100,6 +1100,16 @@ IMPORTANT - IMAGE SEARCH QUERY REQUIREMENT:
 For EACH chapter in the tableOfContents, you MUST include an "imageSearchQuery" field with a highly specific Google Image Search query.
 This query will be used to fetch real images. Make it extremely specific to avoid irrelevant results.
 
+LOCAL RESOURCES - CRITICAL INSTRUCTION:
+- "localResources" should contain REAL businesses/stores related to the topic
+- ONLY include localResources if the topic is tied to a SPECIFIC GEOGRAPHIC LOCATION (city, country, region)
+- If the topic is a GENERAL SKILL (Cooking, Gardening, Knitting, Self-Help, Fitness, Programming, etc.) that is NOT tied to a specific city, return an EMPTY ARRAY: "localResources": []
+- Examples:
+  - "Tokyo Travel Guide" → Include Tokyo-specific shops/restaurants with ratings
+  - "How to Knit" → Return "localResources": [] (no location)
+  - "Paris Wine Tasting" → Include Paris wine bars with ratings
+  - "Meditation for Beginners" → Return "localResources": [] (no location)
+
 You must respond with a JSON object in this exact format:
 {
   "title": "The Full Combined Title: ${classifiedSubtitle}",
@@ -1117,10 +1127,12 @@ You must respond with a JSON object in this exact format:
   ],
   "chapter1Content": "Full markdown content of chapter 1 - concise but complete for preview (800-1000 words) with SPECIFIC data...",
   "localResources": [
-    { "name": "Business Name", "type": "Service Type", "description": "Brief description" }
+    { "name": "Business Name", "type": "Service Type", "rating": 4.5 }
   ],
   "coverImageSearchQuery": "The BEST Google Image Search query for the cover image - be extremely specific with location/subject"
 }
+
+IMPORTANT: For skill-based topics without a location, "localResources" MUST be an empty array [].
 
 CHAPTER 1 WORD COUNT FOR PREVIEW: Approximately 800-1000 words. Prioritize VALID JSON SYNTAX over length. The full version will have 2000+ words.
 
