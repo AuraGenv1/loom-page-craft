@@ -14,14 +14,11 @@ serve(async (req) => {
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_API_KEY');
     const pexelsApiKey = Deno.env.get('PEXELS_API_KEY');
 
-    // 1. Clean the Topic to avoid generic results
-    // "Tokyo Luxury Travel Guide" -> "Tokyo Luxury Travel"
+    // 1. Clean the Topic
     const cleanTopic = topic.replace(/guide|manual|book|how to|learn/gi, '').trim();
-    
-    // Check if it is a skill (like "Cooking") vs a place
     const isSkill = /how to|learn|planting|cooking|gardening|self-help/i.test(topic);
 
-    // 2. Gemini Prompt (Tier 1 Compatible)
+    // 2. Gemini Prompt
     const promptText = `
       You are a professional author. Write a book outline in ${language}.
       Topic: ${topic}
@@ -46,15 +43,20 @@ serve(async (req) => {
       }
     `;
 
-    // 3. Call Gemini Pro
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
+    // 3. Call Gemini 1.0 Pro (Explicit Version on Stable v1 API)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
     });
 
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message || "Gemini API Error");
+    
+    // Detailed Error Logging for Debugging
+    if (data.error) {
+      console.error("Gemini API Error Detail:", JSON.stringify(data.error));
+      throw new Error(data.error.message || "Gemini API Error");
+    }
     
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error("Gemini returned empty text");
@@ -62,11 +64,10 @@ serve(async (req) => {
     const jsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
     const structure = JSON.parse(jsonStr);
 
-    // 4. Fetch Cover Image (Smart Search)
+    // 4. Fetch Cover Image
     let coverImageUrl = null;
     if (pexelsApiKey) {
       try {
-        // Search: "Tokyo Luxury Travel city landmark"
         const query = `${cleanTopic} ${isSkill ? '' : 'city landmark'}`.trim();
         const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1`, {
           headers: { Authorization: pexelsApiKey }
