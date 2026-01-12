@@ -9,6 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// SIMPLIFY QUERY for Pexels (Fixes "Bad Image" issue)
 const getVisualQuery = (topic: string): string => {
   return topic.replace(/guide|manual|book|how to|learn/gi, "").trim();
 };
@@ -21,8 +22,6 @@ const getLocalizedSubtitle = (lang: string): string => {
       return "La Guía Esencial";
     case "it":
       return "La Guida Essenziale";
-    case "de":
-      return "Der Wesentliche Leitfaden";
     default:
       return "A Curated Guide";
   }
@@ -58,7 +57,7 @@ serve(async (req) => {
       }
     `;
 
-    // 2. CALL GEMINI (Switched to gemini-pro for stability)
+    // 2. CALL GEMINI (Switched to STABLE gemini-pro)
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
       {
@@ -72,6 +71,7 @@ serve(async (req) => {
 
     const data = await response.json();
 
+    // API Error Check
     if (data.error) {
       console.error("Gemini Error:", data.error);
       throw new Error(data.error.message || "Gemini API Error");
@@ -81,6 +81,7 @@ serve(async (req) => {
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error("Gemini returned empty text");
 
+    // Clean Markdown
     rawText = rawText
       .replace(/```json/g, "")
       .replace(/```/g, "")
