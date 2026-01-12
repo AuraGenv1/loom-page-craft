@@ -927,7 +927,7 @@ const Index = () => {
                             className="gap-2 font-serif"
                           >
                             <Download className="w-4 h-4" />
-                            Download Free Sample (PDF)
+                            {t('downloadFreeSample')}
                           </Button>
                           <Button
                             size="lg"
@@ -935,7 +935,7 @@ const Index = () => {
                             onClick={handlePurchase}
                           >
                             <Sparkles className="w-4 h-4" />
-                            Unlock Full Artisan Guide — $4.99
+                            {t('unlockFullGuide')} — $4.99
                           </Button>
                         </>
                       )}
@@ -973,11 +973,11 @@ const Index = () => {
                     className="gap-2 text-muted-foreground hover:text-foreground"
                   >
                     <BookmarkPlus className="w-4 h-4" />
-                    {isSaving ? 'Saving...' : 'Save to Library'}
+                    {isSaving ? t('saving') : t('saveToLibrary')}
                   </Button>
                 )}
                 {isSavedToLibrary && (
-                  <p className="text-xs text-accent font-medium">✓ Saved to your library</p>
+                  <p className="text-xs text-accent font-medium">✓ {t('saved')}</p>
                 )}
               </div>
             </section>

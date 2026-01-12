@@ -524,9 +524,22 @@ function parseBookDataFromModelText(text: string, topic: string): { bookData: an
   }
 }
 
+// Subtitle translations for each language
+const subtitleTranslations: Record<string, { technical: string; academic: string; lifestyle: string }> = {
+  en: { technical: 'A Technical Manual', academic: 'An Educational Series', lifestyle: 'A Curated Guide' },
+  es: { technical: 'Un Manual Técnico', academic: 'Una Serie Educativa', lifestyle: 'Una Guía Curada' },
+  fr: { technical: 'Un Manuel Technique', academic: 'Une Série Éducative', lifestyle: 'Un Guide Soigné' },
+  de: { technical: 'Ein Technisches Handbuch', academic: 'Eine Bildungsreihe', lifestyle: 'Ein Kuratierter Leitfaden' },
+  it: { technical: 'Un Manuale Tecnico', academic: 'Una Serie Educativa', lifestyle: 'Una Guida Curata' },
+  pt: { technical: 'Um Manual Técnico', academic: 'Uma Série Educacional', lifestyle: 'Um Guia Curado' },
+  zh: { technical: '技术手册', academic: '教育系列', lifestyle: '精选指南' },
+  ja: { technical: '技術マニュアル', academic: '教育シリーズ', lifestyle: 'キュレーションガイド' },
+};
+
 // INTENT ROUTER: Classify the topic type dynamically
-function classifyTopicType(topicText: string): { type: 'TECHNICAL' | 'LIFESTYLE' | 'ACADEMIC'; subtitle: string } {
+function classifyTopicType(topicText: string, language: string = 'en'): { type: 'TECHNICAL' | 'LIFESTYLE' | 'ACADEMIC'; subtitle: string } {
   const lower = topicText.toLowerCase();
+  const translations = subtitleTranslations[language] || subtitleTranslations.en;
   
   // TECHNICAL: repair, building, engineering, mechanics, craftsmanship
   const technicalPatterns = /\b(repair|fix|restore|build|construct|assemble|mechanic|engine|plumbing|electrical|wiring|carpentry|woodwork|metalwork|welding|solder|circuit|watch|clock|automotive|transmission|calibrat|tool|machine)\b/i;
@@ -538,17 +551,17 @@ function classifyTopicType(topicText: string): { type: 'TECHNICAL' | 'LIFESTYLE'
   const lifestylePatterns = /\b(travel|trip|vacation|tour|visit|cuisine|cook|bak|recipe|food|restaurant|hotel|flight|wellness|fitness|yoga|meditation|garden|photography|art|paint|craft|hobby|fashion|style|decor|home)\b/i;
   
   if (technicalPatterns.test(lower)) {
-    return { type: 'TECHNICAL', subtitle: 'A Technical Manual' };
+    return { type: 'TECHNICAL', subtitle: translations.technical };
   }
   if (academicPatterns.test(lower)) {
-    return { type: 'ACADEMIC', subtitle: 'An Educational Series' };
+    return { type: 'ACADEMIC', subtitle: translations.academic };
   }
   if (lifestylePatterns.test(lower)) {
-    return { type: 'LIFESTYLE', subtitle: 'A Curated Guide' };
+    return { type: 'LIFESTYLE', subtitle: translations.lifestyle };
   }
   
   // Default to LIFESTYLE for general topics
-  return { type: 'LIFESTYLE', subtitle: 'A Curated Guide' };
+  return { type: 'LIFESTYLE', subtitle: translations.lifestyle };
 }
 
 // Generate a single chapter with retry logic - INDEPENDENT WORKER
@@ -956,12 +969,12 @@ serve(async (req) => {
     const isHighRisk = HIGH_RISK_KEYWORDS.some(keyword => lowerTopic.includes(keyword));
     console.log('High-risk topic detected:', isHighRisk);
 
-    // INTENT ROUTER: Classify topic type for dynamic subtitle
-    const topicClassification = classifyTopicType(topic);
+    // INTENT ROUTER: Classify topic type for dynamic subtitle (now language-aware)
+    const topicClassification = classifyTopicType(topic, language);
     const classifiedSubtitle = topicClassification.subtitle;
     const topicType = topicClassification.type;
     
-    console.log('Topic classified as:', topicType, '- Using subtitle:', classifiedSubtitle);
+    console.log('Topic classified as:', topicType, '- Using subtitle:', classifiedSubtitle, '- Language:', language);
 
     // SHELL-FIRST: Generate only TOC and Chapter 1, then return immediately
 // Reduced for initial preview to ensure valid JSON - full version uses 2000 words
