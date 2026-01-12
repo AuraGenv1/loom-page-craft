@@ -21,6 +21,11 @@ interface FetchedResource {
 }
 
 const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) => {
+  // SMART HIDE: If no resources provided (skill-based topics), don't render anything
+  if (!resources || resources.length === 0) {
+    return null;
+  }
+
   const [fetchedResources, setFetchedResources] = useState<FetchedResource[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
