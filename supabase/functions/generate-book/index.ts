@@ -1,7 +1,7 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "[https://deno.land/x/xhr@0.1.0/mod.ts](https://deno.land/x/xhr@0.1.0/mod.ts)";
+import { serve } from "[https://deno.land/std@0.168.0/http/server.ts](https://deno.land/std@0.168.0/http/server.ts)";
 
-// 1. USE GEMINI API KEY
+// Allow generic Google keys or specific Gemini keys
 const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
 const pexelsApiKey = Deno.env.get("PEXELS_API_KEY");
 
@@ -10,23 +10,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// --- Helper: Get Smart Image Keywords ---
-const getVisualContext = (topic: string, chapterTitle: string): string => {
-  const t = topic.toLowerCase();
-
-  if (
-    t.includes("travel") ||
-    t.includes("guide") ||
-    t.includes("stay") ||
-    t.includes("visit") ||
-    t.includes("vacation")
-  ) {
-    return `cinematic shot of ${topic}, landmark, architecture, 4k, wide angle, travel photography`;
-  }
-  if (t.includes("food") || t.includes("cook") || t.includes("recipe") || t.includes("eat")) {
-    return `delicious ${topic}, food photography, michelin style, close up, 4k, studio lighting`;
-  }
-  return `high quality photo of ${topic}, detail shot, hands working, professional, 4k, aesthetic`;
+// --- Helper: Clean Pexels Query ---
+// Fixes "Bad Images" by keeping the search simple
+const getVisualQuery = (topic: string): string => {
+  // Remove "guide", "manual", "book" to get just the subject (e.g. "Tokyo Sushi")
+  return topic.replace(/guide|manual|book|how to|learn/gi, "").trim();
 };
 
 // --- Helper: Correct Title Translations ---
@@ -56,32 +44,33 @@ serve(async (req) => {
 
   try {
     const { topic, language = "en" } = await req.json();
-    if (!topic) throw new Error("Topic is required");
 
-    console.log(`Generating book for: ${topic} in ${language} using GEMINI`);
-
-    // 2. GEMINI PROMPT
+    // 1. GEMINI PROMPT
+    // We explicitly ask for NO markdown to prevent parsing errors
     const promptText = `
-      You are an expert author writing a premium guide book in ${language}.
+      You are a travel and skills expert writing a book in ${language}.
       Topic: ${topic}
       
-      Requirements:
-      1. Title: Create a catchy, premium main title in ${language}.
-      2. Chapters: Generate exactly 10 chapter titles.
-      3. Tone: Professional, authoritative, yet accessible.
-      4. Language: OUTPUT EVERYTHING STRICTLY IN ${language.toUpperCase()}.
-      
-      Output strictly valid JSON (no markdown formatting):
+      Output valid JSON only. No markdown formatting. No \`\`\` code blocks.
+      Structure:
       {
-        "title": "Main Title",
+        "title": "A creative title in ${language}",
         "chapters": [
-           { "title": "Chapter 1 Title", "description": "Brief summary" },
-           ...
+           { "title": "Chapter 1 Title", "description": "Short summary" },
+           { "title": "Chapter 2 Title", "description": "Short summary" },
+           { "title": "Chapter 3 Title", "description": "Short summary" },
+           { "title": "Chapter 4 Title", "description": "Short summary" },
+           { "title": "Chapter 5 Title", "description": "Short summary" },
+           { "title": "Chapter 6 Title", "description": "Short summary" },
+           { "title": "Chapter 7 Title", "description": "Short summary" },
+           { "title": "Chapter 8 Title", "description": "Short summary" },
+           { "title": "Chapter 9 Title", "description": "Short summary" },
+           { "title": "Chapter 10 Title", "description": "Short summary" }
         ]
       }
     `;
 
-    // 3. CALL GOOGLE GEMINI API
+    // 2. CALL GEMINI
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
       {
@@ -95,33 +84,39 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    // Check for API Errors
+    // Safety Check: Did Gemini fail?
     if (data.error) {
-      console.error("Gemini API Error:", data.error);
-      throw new Error(`Gemini API Error: ${data.error.message}`);
+      console.error("Gemini Error:", data.error);
+      throw new Error(data.error.message || "Gemini API Error");
     }
 
-    // 4. PARSE GEMINI RESPONSE
+    // 3. PARSE RESPONSE (ROBUST MODE)
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) throw new Error("Gemini returned empty text");
 
-    if (!rawText) throw new Error("Gemini returned empty content");
-
-    // Clean Markdown (Fixes the crash if Gemini adds ```json)
+    // Remove any accidental markdown (This fixes the 'No Chapter 1' crash)
     rawText = rawText
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    const structure = JSON.parse(rawText);
+    let structure;
+    try {
+      structure = JSON.parse(rawText);
+    } catch (e) {
+      console.error("JSON Parse Error. Raw Text:", rawText);
+      throw new Error("Failed to parse AI response");
+    }
 
-    // 5. Generate Cover Image (Pexels)
-    const coverPrompt = getVisualContext(topic, "Cover");
+    // 4. GET IMAGE (PEXELS)
+    // Use the simplified query for better results
+    const visualQuery = getVisualQuery(topic);
     let coverImageUrl = null;
 
     if (pexelsApiKey) {
       try {
         const pexelsRes = await fetch(
-          `https://api.pexels.com/v1/search?query=${encodeURIComponent(coverPrompt)}&per_page=1&orientation=portrait`,
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(visualQuery)}&per_page=1&orientation=portrait`,
           {
             headers: { Authorization: pexelsApiKey },
           },
@@ -135,6 +130,7 @@ serve(async (req) => {
       }
     }
 
+    // 5. RETURN
     return new Response(
       JSON.stringify({
         title: structure.title,
@@ -149,7 +145,7 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
