@@ -1,3 +1,4 @@
+// Force deploy
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -71,10 +72,13 @@ serve(async (req) => {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      return new Response(JSON.stringify({ error: `Failed to fetch image (${res.status})`, details: text.slice(0, 200) }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: `Failed to fetch image (${res.status})`, details: text.slice(0, 200) }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const contentType = res.headers.get("content-type") || "image/jpeg";
