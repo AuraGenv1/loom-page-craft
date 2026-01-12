@@ -53,7 +53,6 @@ export const ChapterContent = ({
       </div>
 
       {/* 2. Location / Resources Section */}
-      {/* Only show this block if there are resources OR we are loading */}
       {(loadingLocation || localResources.length > 0) && (
         <Card className="border-slate-200 shadow-sm bg-white mt-8 break-inside-avoid">
           <CardHeader className="pb-2 border-b border-slate-50">
@@ -67,7 +66,6 @@ export const ChapterContent = ({
             {loadingLocation ? (
               <div className="text-center py-4 text-slate-400 italic">Finding the best spots...</div>
             ) : localResources.length > 0 ? (
-              // SUCCESS: Render list HERE inside the card
               <div className="grid grid-cols-1 gap-4">
                 {localResources.map((resource, idx) => (
                   <div
@@ -99,7 +97,6 @@ export const ChapterContent = ({
                 ))}
               </div>
             ) : (
-              // EMPTY STATE (Fallback)
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>No specific local suppliers found for this section.</AlertDescription>
@@ -111,3 +108,6 @@ export const ChapterContent = ({
     </div>
   );
 };
+
+// THIS IS THE LINE THAT FIXES THE CRASH:
+export default ChapterContent;
