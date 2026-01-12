@@ -50,6 +50,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Try Again',
     powered_by: 'Powered by',
     introductionTo: 'Introduction to',
+    // NEW KEYS
+    weaving: 'Weaving your guide...',
+    downloadFreeSample: 'Download Free Sample (PDF)',
+    unlockFullGuide: 'Unlock Full Artisan Guide',
+    puttingItIntoPractice: 'Putting It Into Practice',
+    saving: 'Saving...',
+    saved: 'Saved to your library',
   },
   es: {
     join: 'Unirse',
@@ -80,6 +87,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Intentar de Nuevo',
     powered_by: 'Impulsado por',
     introductionTo: 'Introducción a',
+    // NEW KEYS
+    weaving: 'Weaving tu guía...',
+    downloadFreeSample: 'Descargar Muestra Gratis (PDF)',
+    unlockFullGuide: 'Desbloquear Guía Artesanal Completa',
+    puttingItIntoPractice: 'Poniéndolo en Práctica',
+    saving: 'Guardando...',
+    saved: 'Guardado en tu biblioteca',
   },
   fr: {
     join: 'Rejoindre',
@@ -110,6 +124,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Réessayer',
     powered_by: 'Propulsé par',
     introductionTo: 'Introduction à',
+    // NEW KEYS
+    weaving: 'Weaving votre guide...',
+    downloadFreeSample: 'Télécharger Échantillon Gratuit (PDF)',
+    unlockFullGuide: 'Débloquer le Guide Artisan Complet',
+    puttingItIntoPractice: 'Mise en Pratique',
+    saving: 'Enregistrement...',
+    saved: 'Enregistré dans votre bibliothèque',
   },
   de: {
     join: 'Beitreten',
@@ -140,6 +161,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Erneut Versuchen',
     powered_by: 'Unterstützt von',
     introductionTo: 'Einführung in',
+    // NEW KEYS
+    weaving: 'Weaving Ihren Leitfaden...',
+    downloadFreeSample: 'Kostenlose Probe Herunterladen (PDF)',
+    unlockFullGuide: 'Vollständigen Handwerker-Leitfaden Freischalten',
+    puttingItIntoPractice: 'In die Praxis Umsetzen',
+    saving: 'Speichern...',
+    saved: 'In Ihrer Bibliothek gespeichert',
   },
   it: {
     join: 'Unisciti',
@@ -170,6 +198,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Riprova',
     powered_by: 'Alimentato da',
     introductionTo: 'Introduzione a',
+    // NEW KEYS
+    weaving: 'Weaving la tua guida...',
+    downloadFreeSample: 'Scarica Campione Gratuito (PDF)',
+    unlockFullGuide: 'Sblocca la Guida Artigianale Completa',
+    puttingItIntoPractice: 'Metterlo in Pratica',
+    saving: 'Salvataggio...',
+    saved: 'Salvato nella tua libreria',
   },
   pt: {
     join: 'Junte-se',
@@ -200,6 +235,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: 'Tentar Novamente',
     powered_by: 'Desenvolvido por',
     introductionTo: 'Introdução a',
+    // NEW KEYS
+    weaving: 'Weaving seu guia...',
+    downloadFreeSample: 'Baixar Amostra Grátis (PDF)',
+    unlockFullGuide: 'Desbloquear Guia Artesanal Completo',
+    puttingItIntoPractice: 'Colocando em Prática',
+    saving: 'Salvando...',
+    saved: 'Salvo na sua biblioteca',
   },
   zh: {
     join: '加入',
@@ -230,6 +272,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: '重试',
     powered_by: '技术支持',
     introductionTo: '简介',
+    // NEW KEYS
+    weaving: 'Weaving 您的指南...',
+    downloadFreeSample: '下载免费样本 (PDF)',
+    unlockFullGuide: '解锁完整工匠指南',
+    puttingItIntoPractice: '付诸实践',
+    saving: '保存中...',
+    saved: '已保存到您的书库',
   },
   ja: {
     join: '参加',
@@ -260,6 +309,13 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tryAgain: '再試行',
     powered_by: '提供',
     introductionTo: '入門',
+    // NEW KEYS
+    weaving: 'Weaving ガイドを作成中...',
+    downloadFreeSample: '無料サンプルをダウンロード (PDF)',
+    unlockFullGuide: '完全な職人ガイドをアンロック',
+    puttingItIntoPractice: '実践する',
+    saving: '保存中...',
+    saved: 'ライブラリに保存されました',
   },
 };
 

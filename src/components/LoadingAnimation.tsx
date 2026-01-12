@@ -1,8 +1,10 @@
 import { forwardRef, useEffect, useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Gathering threads...');
+  const { t } = useLanguage();
 
   useEffect(() => {
     const stages = [
@@ -41,9 +43,9 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
         ))}
       </div>
 
-      {/* Title */}
+      {/* Title - uses translated 'weaving' key */}
       <h2 className="font-serif text-2xl md:text-3xl text-foreground tracking-tight mb-3">
-        Weaving your masterpiece...
+        {t('weaving')}
       </h2>
 
       {/* Status text */}

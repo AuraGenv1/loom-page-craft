@@ -198,9 +198,72 @@ const markdownToHTML = (content: string): string => {
 const FALLBACK_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCBmaWxsPSIjZjBmMGYwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLCBzZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIFVuYXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==";
 
 /**
+ * Load an image with CORS and timeout handling
+ * Returns Base64 data URL or fallback on failure
+ */
+const loadImageAsBase64 = (url: string, timeoutMs: number = 2000): Promise<string> => {
+  return new Promise((resolve) => {
+    // If already a data URL, return immediately
+    if (url.startsWith("data:")) {
+      resolve(url);
+      return;
+    }
+
+    const img = new Image();
+    let resolved = false;
+
+    // Set timeout - if image doesn't load in time, use fallback
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn(`[CleanPDF] Image load timeout (${timeoutMs}ms): ${url.substring(0, 50)}...`);
+        resolve(FALLBACK_PLACEHOLDER);
+      }
+    }, timeoutMs);
+
+    // CRITICAL: Set crossOrigin BEFORE setting src to avoid CORS issues
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          console.log(`[CleanPDF] Image converted to Base64: ${dataUrl.substring(0, 50)}...`);
+          resolve(dataUrl);
+        } else {
+          resolve(FALLBACK_PLACEHOLDER);
+        }
+      } catch (e) {
+        console.warn('[CleanPDF] Canvas conversion failed (likely CORS):', e);
+        resolve(FALLBACK_PLACEHOLDER);
+      }
+    };
+
+    img.onerror = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+      console.warn(`[CleanPDF] Image failed to load: ${url.substring(0, 50)}...`);
+      resolve(FALLBACK_PLACEHOLDER);
+    };
+
+    img.src = url;
+  });
+};
+
+/**
  * Resolve cover image to a safe format for html2pdf
  * If the URL is already a data URL, return it as-is
- * Otherwise, attempt to convert via edge function
+ * Otherwise, attempt to convert via edge function, then client-side fallback
  * RESILIENT: Returns fallback placeholder on any failure
  */
 const resolveCoverImageForPDF = async (url: string): Promise<string> => {
@@ -209,24 +272,28 @@ const resolveCoverImageForPDF = async (url: string): Promise<string> => {
 
   try {
     console.log("[CleanPDF] Converting external URL to Base64...");
+    
+    // First, try edge function for better CORS handling
     const { data, error } = await supabase.functions.invoke("fetch-image-data-url", {
       body: { url },
     });
 
-    if (error) {
-      console.warn("[CleanPDF] fetch-image-data-url failed:", error);
-      return FALLBACK_PLACEHOLDER;
-    }
-
-    if (data?.dataUrl && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:")) {
-      console.log("[CleanPDF] Successfully converted to Base64");
+    if (!error && data?.dataUrl && typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:")) {
+      console.log("[CleanPDF] Successfully converted to Base64 via edge function");
       return data.dataUrl;
     }
 
-    return FALLBACK_PLACEHOLDER;
+    // Fallback: try client-side loading with crossOrigin
+    console.log("[CleanPDF] Edge function failed, trying client-side conversion...");
+    return await loadImageAsBase64(url, 3000);
   } catch (e) {
     console.warn("[CleanPDF] resolveCoverImageForPDF exception:", e);
-    return FALLBACK_PLACEHOLDER;
+    // Final fallback: try client-side loading
+    try {
+      return await loadImageAsBase64(url, 2000);
+    } catch {
+      return FALLBACK_PLACEHOLDER;
+    }
   }
 };
 
