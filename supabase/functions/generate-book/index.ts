@@ -1,63 +1,67 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const pexelsApiKey = Deno.env.get('PEXELS_API_KEY');
+// 1. USE GEMINI API KEY
+const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
+const pexelsApiKey = Deno.env.get("PEXELS_API_KEY");
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 // --- Helper: Get Smart Image Keywords ---
-// This fixes the "Bathtub" issue by checking what KIND of guide this is.
 const getVisualContext = (topic: string, chapterTitle: string): string => {
   const t = topic.toLowerCase();
-  const c = chapterTitle.toLowerCase();
-  
-  // 1. Travel / Place Logic
-  if (t.includes('travel') || t.includes('guide') || t.includes('stay') || t.includes('visit') || t.includes('vacation')) {
+
+  if (
+    t.includes("travel") ||
+    t.includes("guide") ||
+    t.includes("stay") ||
+    t.includes("visit") ||
+    t.includes("vacation")
+  ) {
     return `cinematic shot of ${topic}, landmark, architecture, 4k, wide angle, travel photography`;
   }
-  
-  // 2. Food / Cooking Logic
-  if (t.includes('food') || t.includes('cook') || t.includes('recipe') || t.includes('eat')) {
+  if (t.includes("food") || t.includes("cook") || t.includes("recipe") || t.includes("eat")) {
     return `delicious ${topic}, food photography, michelin style, close up, 4k, studio lighting`;
   }
-
-  // 3. Skill / Craft Logic (Default)
   return `high quality photo of ${topic}, detail shot, hands working, professional, 4k, aesthetic`;
 };
 
 // --- Helper: Correct Title Translations ---
-// This fixes the "Healer" (Soigné) issue.
 const getLocalizedSubtitle = (lang: string): string => {
   switch (lang.toLowerCase()) {
-    case 'fr': return "Le Guide Essentiel";      // French
-    case 'es': return "La Guía Esencial";        // Spanish
-    case 'it': return "La Guida Essenziale";     // Italian
-    case 'de': return "Der Wesentliche Leitfaden"; // German
-    case 'pt': return "O Guia Essencial";        // Portuguese
-    case 'ja': return "必須ガイド";               // Japanese
-    case 'zh': return "基本指南";                 // Chinese
-    default: return "A Curated Guide";           // English
+    case "fr":
+      return "Le Guide Essentiel";
+    case "es":
+      return "La Guía Esencial";
+    case "it":
+      return "La Guida Essenziale";
+    case "de":
+      return "Der Wesentliche Leitfaden";
+    case "pt":
+      return "O Guia Essencial";
+    case "ja":
+      return "必須ガイド";
+    case "zh":
+      return "基本指南";
+    default:
+      return "A Curated Guide";
   }
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, language = 'en' } = await req.json();
+    const { topic, language = "en" } = await req.json();
+    if (!topic) throw new Error("Topic is required");
 
-    if (!topic) throw new Error('Topic is required');
+    console.log(`Generating book for: ${topic} in ${language} using GEMINI`);
 
-    console.log(`Generatng book for: ${topic} in ${language}`);
-
-    // 1. Generate Structure (Table of Contents)
-    const systemPrompt = `
+    // 2. GEMINI PROMPT
+    const promptText = `
       You are an expert author writing a premium guide book in ${language}.
       Topic: ${topic}
       
@@ -67,7 +71,7 @@ serve(async (req) => {
       3. Tone: Professional, authoritative, yet accessible.
       4. Language: OUTPUT EVERYTHING STRICTLY IN ${language.toUpperCase()}.
       
-      Format (JSON):
+      Output strictly valid JSON (no markdown formatting):
       {
         "title": "Main Title",
         "chapters": [
@@ -77,20 +81,77 @@ serve(async (req) => {
       }
     `;
 
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
+    // 3. CALL GOOGLE GEMINI API
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }],
+        }),
       },
-      body: JSON.stringify({
-        model: 'gpt-4o', // Use GPT-4o for better language skills
-        messages: [{ role: 'system', content: systemPrompt }],
-        temperature: 0.7,
+    );
+
+    const data = await response.json();
+
+    // Check for API Errors
+    if (data.error) {
+      console.error("Gemini API Error:", data.error);
+      throw new Error(`Gemini API Error: ${data.error.message}`);
+    }
+
+    // 4. PARSE GEMINI RESPONSE
+    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!rawText) throw new Error("Gemini returned empty content");
+
+    // Clean Markdown (Fixes the crash if Gemini adds ```json)
+    rawText = rawText
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const structure = JSON.parse(rawText);
+
+    // 5. Generate Cover Image (Pexels)
+    const coverPrompt = getVisualContext(topic, "Cover");
+    let coverImageUrl = null;
+
+    if (pexelsApiKey) {
+      try {
+        const pexelsRes = await fetch(
+          `https://api.pexels.com/v1/search?query=${encodeURIComponent(coverPrompt)}&per_page=1&orientation=portrait`,
+          {
+            headers: { Authorization: pexelsApiKey },
+          },
+        );
+        const pexelsData = await pexelsRes.json();
+        if (pexelsData.photos && pexelsData.photos.length > 0) {
+          coverImageUrl = pexelsData.photos[0].src.large2x;
+        }
+      } catch (e) {
+        console.error("Pexels error:", e);
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        title: structure.title,
+        subtitle: getLocalizedSubtitle(language),
+        coverImage: coverImageUrl,
+        chapters: structure.chapters,
+        language: language,
       }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  } catch (error) {
+    console.error("Error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
     });
-
-    const aiData = await completion.json();
-    const structure = JSON.parse(aiData.choices[0].message.content);
-
-    // 2. Generate Cover Image (Using Smart Context
+  }
+});
