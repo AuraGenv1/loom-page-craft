@@ -135,108 +135,107 @@ const LocalResources = ({ topic, resources, materials }: LocalResourcesProps) =>
         Local Resources for {topic}
       </h2>
       
-      {!hasAttemptedFetch && !displayResources && (
-        <div className="bg-secondary/30 border border-border rounded-lg p-6 text-center mb-8">
-          <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground mb-4">
-            Find material suppliers and workshops near you
-          </p>
-          <Button 
-            onClick={requestLocation} 
-            disabled={isLoading}
-            className="gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Finding nearby places...
-              </>
-            ) : (
-              <>
-                <MapPin className="w-4 h-4" />
-                Enable Location
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-
-      {/* Only show error if search is 100% finished (not loading) AND results are empty */}
-      {locationError && !displayResources && hasAttemptedFetch && !isLoading && (
-        <div className="bg-secondary/30 border border-border rounded-lg p-6 text-center mb-8">
-          <MapPinOff className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground mb-4">{locationError}</p>
-          <Button 
-            onClick={requestLocation} 
-            variant="outline"
-            disabled={isLoading}
-            className="gap-2"
-          >
-            Try Again
-          </Button>
-        </div>
-      )}
-
-      {isLoading && hasAttemptedFetch && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Searching nearby...</span>
-        </div>
-      )}
-
-      {displayResources && displayResources.length > 0 && (
-        <>
-          <p className="text-muted-foreground mb-8">
-            Connect with these trusted local providers to enhance your learning journey.
-          </p>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {displayResources.map((business, index) => (
-              <div
-                key={index}
-                className="bg-card border border-border rounded-lg p-5 hover:shadow-card transition-shadow"
-              >
-                <div className="mb-3">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {business.type}
-                  </span>
-                </div>
-                <h3 className="font-semibold text-foreground mb-2 leading-tight">
-                  {business.name}
-                </h3>
-                {(business.rating !== null && business.rating > 0) && (
-                  <div className="flex items-center gap-1 mb-3">
-                    <Star className="w-3.5 h-3.5 fill-accent text-accent" />
-                    <span className="text-sm font-medium">{business.rating.toFixed(1)}</span>
-                    {business.reviewCount !== null && business.reviewCount > 0 && (
-                      <span className="text-sm text-muted-foreground">
-                        ({business.reviewCount.toLocaleString()} reviews)
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div className="space-y-1.5 text-sm text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                    <span>{business.address}</span>
-                  </div>
-                </div>
-                {business.placeId && (
-                  <a
-                    href={`https://www.google.com/maps/place/?q=place_id:${business.placeId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-3"
-                  >
-                    View on Maps
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            ))}
+      {/* Main card container - shows appropriate content based on state */}
+      <div className="bg-secondary/30 border border-border rounded-lg p-6 mb-8">
+        {/* State: Not yet attempted fetch AND no results - show Enable Location */}
+        {!hasAttemptedFetch && !displayResources && !isLoading && (
+          <div className="text-center">
+            <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground mb-4">
+              Find material suppliers and workshops near you
+            </p>
+            <Button 
+              onClick={requestLocation} 
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <MapPin className="w-4 h-4" />
+              Enable Location
+            </Button>
           </div>
-        </>
-      )}
+        )}
+
+        {/* State: Currently loading */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Searching nearby...</span>
+          </div>
+        )}
+
+        {/* State: Error occurred AND no results found */}
+        {locationError && !displayResources && hasAttemptedFetch && !isLoading && (
+          <div className="text-center">
+            <MapPinOff className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground mb-4">{locationError}</p>
+            <Button 
+              onClick={requestLocation} 
+              variant="outline"
+              disabled={isLoading}
+              className="gap-2"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
+
+        {/* State: Results found - display INSIDE this card */}
+        {displayResources && displayResources.length > 0 && !isLoading && (
+          <>
+            <p className="text-muted-foreground mb-6">
+              Connect with these trusted local providers to enhance your learning journey.
+            </p>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              {displayResources.map((business, index) => (
+                <div
+                  key={index}
+                  className="bg-card border border-border rounded-lg p-5 hover:shadow-card transition-shadow"
+                >
+                  <div className="mb-3">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {business.type}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-2 leading-tight">
+                    {business.name}
+                  </h3>
+                  {(business.rating !== null && business.rating > 0) && (
+                    <div className="flex items-center gap-1 mb-3">
+                      <Star className="w-3.5 h-3.5 fill-accent text-accent" />
+                      <span className="text-sm font-medium">{business.rating.toFixed(1)}</span>
+                      {business.reviewCount !== null && business.reviewCount > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          ({business.reviewCount.toLocaleString()} reviews)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-1.5 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                      <span>{business.address}</span>
+                    </div>
+                  </div>
+                  {business.placeId && (
+                    <a
+                      href={`https://www.google.com/maps/place/?q=place_id:${business.placeId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-3"
+                    >
+                      View on Maps
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Fallback AI-generated resources shown when location not enabled */}
 
       {/* Show AI-generated fallback if location not enabled and we have resources */}
       {!displayResources && fallbackResources && fallbackResources.length > 0 && hasAttemptedFetch && !isLoading && (

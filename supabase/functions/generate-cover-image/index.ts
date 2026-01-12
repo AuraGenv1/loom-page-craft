@@ -7,30 +7,10 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram";
 
-const BLOCKED_HOST_SNIPPETS = [
-  "instagram.",
-  "pinterest.",
-  "tripadvisor.",
-  "facebook.",
-  "twitter.",
-  "tiktok.",
-  "shutterstock.",
-  "gettyimages.",
-  "alamy.",
-  "dreamstime.",
-];
+// Fallback placeholder image (subtle gradient)
+const FALLBACK_IMAGE = "https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
 
-const isBlockedUrl = (urlStr: string): boolean => {
-  try {
-    const u = new URL(urlStr);
-    const host = u.hostname.toLowerCase();
-    return BLOCKED_HOST_SNIPPETS.some((d) => host.includes(d));
-  } catch {
-    return true;
-  }
-};
-
-// More permissive location extraction: supports apostrophes/hyphens and commas (e.g. "St. Moritz", "Badrutt's")
+// More permissive location extraction
 const extractGeographicLocation = (topic: string): string | null => {
   const patterns = [
     /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*(?:,\s*[A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*)?)/i,
@@ -54,120 +34,61 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
   const isTravel = isTravelTopic(topicOrTitle);
 
   if (variant === "diagram" && caption) {
-    // Inline images: we want real photos when possible (not diagrams)
     const locationSuffix = location ? ` ${location}` : "";
-    return `${caption}${locationSuffix} photograph`;
+    return `${caption}${locationSuffix}`;
   }
 
   // Cover image: prioritize location grounding for travel topics
   if (isTravel && location) {
-    return `${location} landmark architecture photograph editorial`;
+    return `${location} landmark architecture`;
   }
 
-  return `${topicOrTitle} professional photograph`;
-};
-
-const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-};
-
-const looksLikeLoadableImage = async (url: string): Promise<boolean> => {
-  // We only need to reject obvious non-images or dead links.
-  // (Browser hotlink/CORS can still fail, but this eliminates the worst offenders.)
-  try {
-    // Prefer HEAD (fast) but some servers disallow.
-    let res = await fetchWithTimeout(url, { method: "HEAD" }, 6000);
-    if (res.status === 405 || res.status === 403) {
-      // Some CDNs block HEAD; try minimal GET.
-      res = await fetchWithTimeout(
-        url,
-        {
-          method: "GET",
-          headers: {
-            Range: "bytes=0-0",
-            "User-Agent": "Mozilla/5.0 (compatible; LovableImageFetcher/1.0)",
-          },
-        },
-        8000
-      );
-    }
-
-    if (!res.ok) return false;
-    const ct = res.headers.get("content-type")?.toLowerCase() ?? "";
-    return ct.startsWith("image/");
-  } catch {
-    return false;
-  }
+  return topicOrTitle;
 };
 
 /**
- * Fetches up to 5 image URLs from Google CSE, filters blocked domains,
- * and validates each image is loadable.
+ * Fetch images from Pexels API
  * Returns array of validated image URLs for frontend fallback cycling.
  */
-async function fetchGoogleImages(query: string, apiKey: string, cx: string): Promise<string[]> {
+async function fetchPexelsImages(query: string, apiKey: string): Promise<string[]> {
   try {
-    console.log("Google CSE search query:", query);
+    console.log("Pexels search query:", query);
 
-    const params = new URLSearchParams({
-      key: apiKey,
-      cx,
-      q: query,
-      searchType: "image",
-      num: "10", // Request 10 to have better chances of getting 5 valid ones
-      imgSize: "xlarge",
-      imgType: "photo",
-      safe: "active",
-    });
-
-    const response = await fetch(`https://www.googleapis.com/customsearch/v1?${params.toString()}`);
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape`,
+      {
+        headers: {
+          Authorization: apiKey,
+        },
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Google CSE API error:", response.status, errorText);
+      console.error("Pexels API error:", response.status, errorText);
       return [];
     }
 
     const data = await response.json();
-    const items: Array<{ link?: string; displayLink?: string; mime?: string }> = data.items ?? [];
+    const photos = data.photos ?? [];
 
-    if (!items.length) {
-      console.log("Google CSE returned no results");
+    if (!photos.length) {
+      console.log("Pexels returned no results");
       return [];
     }
 
-    // Filter out blocked domains
-    const candidates = items
-      .map((it) => it.link)
-      .filter((u): u is string => typeof u === "string" && u.startsWith("http"))
-      .filter((u) => !isBlockedUrl(u));
+    // Extract large2x or large image URLs
+    const imageUrls = photos
+      .slice(0, 5) // Limit to 5 images
+      .map((photo: { src?: { large2x?: string; large?: string; original?: string } }) => {
+        return photo.src?.large2x || photo.src?.large || photo.src?.original;
+      })
+      .filter((url: string | undefined): url is string => typeof url === "string" && url.length > 0);
 
-    console.log(`Filtered ${items.length} results to ${candidates.length} candidates after blocking`);
-
-    // Validate each image and collect up to 5 valid URLs
-    const validUrls: string[] = [];
-    for (const url of candidates) {
-      if (validUrls.length >= 5) break;
-      
-      const ok = await looksLikeLoadableImage(url);
-      if (ok) {
-        console.log(`Validated image ${validUrls.length + 1}:`, url);
-        validUrls.push(url);
-      } else {
-        console.log("Rejected image candidate (not loadable):", url);
-      }
-    }
-
-    console.log(`Returning ${validUrls.length} validated image URLs`);
-    return validUrls;
+    console.log(`Returning ${imageUrls.length} Pexels image URLs`);
+    return imageUrls;
   } catch (error) {
-    console.error("Google CSE fetch error:", error);
+    console.error("Pexels fetch error:", error);
     return [];
   }
 }
@@ -199,13 +120,17 @@ serve(async (req) => {
 
     const resolvedVariant: Variant = variant === "diagram" ? "diagram" : "cover";
 
-    const GOOGLE_CSE_API_KEY = Deno.env.get("GOOGLE_CSE_API_KEY");
-    const GOOGLE_CSE_CX = Deno.env.get("GOOGLE_CSE_CX");
+    // Use PEXELS_API_KEY from Supabase secrets
+    const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY");
 
-    if (!GOOGLE_CSE_API_KEY || !GOOGLE_CSE_CX) {
-      console.error("Google CSE credentials not configured");
-      return new Response(JSON.stringify({ error: "Image service not configured" }), {
-        status: 500,
+    if (!PEXELS_API_KEY) {
+      console.error("PEXELS_API_KEY not configured in Supabase secrets");
+      // Return fallback image instead of error to prevent app crashes
+      console.log("Returning fallback image due to missing API key");
+      return new Response(JSON.stringify({ 
+        imageUrl: FALLBACK_IMAGE,
+        imageUrls: [FALLBACK_IMAGE],
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -215,11 +140,23 @@ serve(async (req) => {
     const subjectForQuery = resolvedVariant === "cover" ? coverSubject : rawSubject;
 
     const searchQuery = buildSearchQuery(resolvedVariant, subjectForQuery, caption);
-    const imageUrls = await fetchGoogleImages(searchQuery, GOOGLE_CSE_API_KEY, GOOGLE_CSE_CX);
+    
+    let imageUrls: string[] = [];
+    
+    try {
+      imageUrls = await fetchPexelsImages(searchQuery, PEXELS_API_KEY);
+    } catch (fetchError) {
+      console.error("Error fetching from Pexels:", fetchError);
+      // Continue with empty array, will use fallback below
+    }
 
+    // If no images found, return fallback
     if (imageUrls.length === 0) {
-      return new Response(JSON.stringify({ error: "No suitable images found" }), {
-        status: 404,
+      console.log("No images found, using fallback");
+      return new Response(JSON.stringify({ 
+        imageUrl: FALLBACK_IMAGE,
+        imageUrls: [FALLBACK_IMAGE],
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -232,11 +169,13 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    console.error("Error fetching image:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    console.error("Error in generate-cover-image:", error);
+    // Even on error, return fallback image to prevent app crashes
+    return new Response(JSON.stringify({ 
+      imageUrl: FALLBACK_IMAGE,
+      imageUrls: [FALLBACK_IMAGE],
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
     });
   }
 });
