@@ -3,6 +3,7 @@ import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
 import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Skeleton } from '@/components/ui/skeleton';
 import ReactMarkdown from 'react-markdown';
 
 interface ChapterContentProps {
@@ -19,7 +20,7 @@ interface ChapterContentProps {
 }
 
 const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
-  ({ topic, content, localResources, hasDisclaimer, sessionId, chapterImageUrls = [] }, ref) => {
+  ({ topic, content, localResources, hasDisclaimer, sessionId }, ref) => {
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
     
@@ -42,11 +43,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         }
     };
 
-    // --- MARKDOWN COMPONENTS (Visual Engine) ---
+    // --- MARKDOWN COMPONENTS ---
     const MarkdownComponents = {
         // 1. IMAGE HANDLER (Fixes Missing Images)
         img: ({ src, alt }: any) => {
-            // Create a unique ID for the image
             const imageId = `img-${(alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
             
             // Trigger generation if not exists
@@ -63,7 +63,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
                         {isLoading ? (
                             <div className="flex flex-col items-center">
                                 <ImageIcon className="w-10 h-10 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground mt-2">Generating image...</span>
+                                <Skeleton className="h-4 w-32 mt-2" />
                             </div>
                         ) : (
                             <img src={displayUrl} alt={alt || 'Generated image'} className="object-cover w-full h-full" />
@@ -74,14 +74,14 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             );
         },
 
-        // 2. PRO-TIP HANDLER (Keeps Blue Box Working)
+        // 2. PRO-TIP HANDLER (Blue Box)
         blockquote: ({ children }: any) => {
             const textContent = Array.isArray(children) 
                 ? children.map((c: any) => c?.props?.children || "").join("") 
                 : children?.toString() || "";
             
             if (textContent.toLowerCase().includes("pro-tip")) {
-                const cleanText = textContent.replace(/pro-tip:?\*\*?/gi, "").replace(/\*\*/g, "").trim();
+                const cleanText = textContent.replace(/pro-tip:?/i, "").trim();
                 return (
                     <div className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
                         <div className="flex items-start gap-4">
