@@ -1,5 +1,5 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,60 +12,78 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId, chapterNumber, topic, type, tone, instructions } = await req.json();
-    
-    // HARDCODED MODEL FIX
+    const { bookId, chapterNumber, chapterTitle, topic, language = 'en' } = await req.json();
+
+    if (!topic || !chapterTitle) {
+      throw new Error('Missing required fields');
+    }
+
+    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}" for topic "${topic}"`);
+
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
 
-    const prompt = `Write Chapter ${chapterNumber} for a book about "${topic}".
-    Style: ${tone || 'engaging'}. 
-    Instructions: ${instructions || 'Write a comprehensive chapter.'}.
-    Return ONLY the raw text content. No markdown formatting like ** or ##.`;
+    const languageNames: Record<string, string> = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+      it: 'Italian', pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese',
+    };
+    const targetLanguage = languageNames[language] || 'English';
 
-    console.log(`Generating Chapter ${chapterNumber} with gemini-pro...`);
+    // Prompt engineered for MAXIMUM LENGTH (Aiming for substantial content like before)
+    const prompt = `You are an expert author writing a comprehensive, deep-dive textbook on "${topic}".
+Write the full content for **Chapter ${chapterNumber}: ${chapterTitle}**.
 
+**Requirements:**
+1. **Language:** Write in ${targetLanguage}.
+2. **Length:** Write as much as possible. Aim for 2,000+ words. Do not summarize; expand on every point.
+3. **Structure:**
+   - **Introduction:** Detailed history and context.
+   - **The Science/Theory:** Explain the underlying principles deeply.
+   - **Step-by-Step Guide:** Detailed instructions with potential variations.
+   - **Case Studies:** Real-world examples or scenarios.
+   - **Common Pitfalls:** Deep analysis of mistakes and how to fix them.
+   - **Pro-Tip:** Include a distinct blockquote starting with "> **Pro-Tip:**".
+4. **Tone:** Professional, authoritative, and educational.
+
+Write ONLY the markdown content for the chapter. Do not wrap it in JSON.`;
+
+    // UPDATE: Swapped broken 'gemini-pro' for working 'gemini-2.0-flash'
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8192, // Max allowed for single request
+        },
+      }),
     });
 
-    const data = await response.json();
-    
     if (!response.ok) {
-      console.error('Gemini API Error:', data);
-      throw new Error(data.error?.message || 'Failed to generate content');
+      const errorText = await response.text();
+      throw new Error(`AI service error: ${response.status} - ${errorText}`);
     }
 
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!generatedText) throw new Error('No text returned from Gemini');
+    const data = await response.json();
+    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) throw new Error('No content returned from Gemini');
 
-    // Save to Database
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    // Clean up any potential markdown code blocks if the AI added them
+    const cleanedText = rawText.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+
+    return new Response(
+      JSON.stringify({ content: cleanedText }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-    const { error: updateError } = await supabase
-      .from('chapters')
-      .update({ content: generatedText, status: 'completed' })
-      .eq('book_id', bookId)
-      .eq('chapter_number', chapterNumber);
-
-    if (updateError) throw updateError;
-
-    return new Response(JSON.stringify({ success: true, content: generatedText }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.error('Error generating chapter:', error);
+    return new Response(
+      JSON.stringify({ error: (error as Error).message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
