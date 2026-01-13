@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Check, Lock, Loader2 } from 'lucide-react';
+import { Check, Lock, Loader2, Clock } from 'lucide-react';
 import { ChapterInfo } from '@/lib/bookTypes';
 import WeavingLoader from './WeavingLoader';
 
@@ -9,26 +9,46 @@ interface TableOfContentsProps {
   allUnlocked?: boolean; // When true (admin/purchased), all chapters show as unlocked
   onChapterClick?: (chapterNumber: number) => void;
   activeChapter?: number;
-  chapterStatuses?: Record<number, 'drafting' | 'complete'>; // Track drafting state
+  chapterStatuses?: Record<number, 'drafting' | 'complete' | 'pending'>; // UI state per chapter
   loadingChapter?: number | null; // Currently generating chapter
   chapterContent?: Record<number, string | undefined>; // Actual chapter content for realtime sync
 }
 
 const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
-  ({ topic, chapters, allUnlocked = false, onChapterClick, activeChapter, chapterStatuses = {}, loadingChapter, chapterContent = {} }, ref) => {
+  (
+    {
+      topic,
+      chapters,
+      allUnlocked = false,
+      onChapterClick,
+      activeChapter,
+      chapterStatuses = {},
+      loadingChapter,
+      chapterContent = {},
+    },
+    ref
+  ) => {
     // Use AI-generated chapters or fallback to defaults
     // If allUnlocked is true (admin or purchased), mark all as unlocked
     // REALTIME SYNC: Use chapterContent to determine if chapter has content (ready)
     const displayChapters = chapters?.length
       ? chapters.map((ch, idx) => {
+          const isUnlocked = allUnlocked || idx === 0;
           const hasContent = idx === 0 || !!chapterContent[ch.chapter];
+          const isLoading = loadingChapter === ch.chapter;
+
+          const status: 'complete' | 'drafting' | 'pending' | undefined = hasContent
+            ? 'complete'
+            : isUnlocked
+              ? (isLoading ? 'drafting' : (chapterStatuses[ch.chapter] ?? 'pending'))
+              : undefined;
+
           return {
             number: ch.chapter,
             title: ch.title,
-            isUnlocked: allUnlocked || idx === 0,
-            // Status is 'complete' if content exists, otherwise use passed status
-            status: hasContent ? 'complete' as const : (chapterStatuses[ch.chapter] || undefined),
-            isLoading: loadingChapter === ch.chapter,
+            isUnlocked,
+            status,
+            isLoading,
           };
         })
       : [
@@ -68,22 +88,31 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
         <div className="space-y-1 border-t border-b border-border/30 py-6">
           {displayChapters.map((chapter) => {
             const isActive = activeChapter === chapter.number;
-            const isDrafting = chapter.isLoading || (chapter.isUnlocked && chapter.status !== 'complete' && chapter.number > 1);
+            const isDrafting = chapter.isLoading || chapter.status === 'drafting';
+            const isPending = chapter.status === 'pending';
             const isComplete = chapter.status === 'complete';
             const canClick = chapter.isUnlocked && isComplete;
-            
+
             return (
               <div
                 key={chapter.number}
                 onClick={() => handleChapterClick(chapter)}
                 className={`group flex items-center justify-between py-4 px-5 rounded-lg transition-all duration-200 ${
-                  canClick ? 'hover:bg-secondary/60 cursor-pointer' : isDrafting ? 'opacity-80' : 'opacity-60'
+                  canClick
+                    ? 'hover:bg-secondary/60 cursor-pointer'
+                    : isDrafting
+                      ? 'opacity-90'
+                      : isPending
+                        ? 'opacity-75'
+                        : 'opacity-60'
                 } ${isActive ? 'bg-secondary/80 ring-1 ring-accent/20' : ''}`}
               >
                 <div className="flex items-center gap-5">
-                  <span className={`font-serif text-xl md:text-2xl w-10 tabular-nums ${
-                    isActive ? 'text-accent' : isDrafting ? 'text-amber-500/70' : 'text-muted-foreground/60'
-                  }`}>
+                  <span
+                    className={`font-serif text-xl md:text-2xl w-10 tabular-nums ${
+                      isActive ? 'text-accent' : isDrafting ? 'text-foreground/80' : 'text-muted-foreground/60'
+                    }`}
+                  >
                     {chapter.number.toString().padStart(2, '0')}
                   </span>
                   <div className="flex flex-col">
@@ -94,11 +123,22 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                     >
                       {chapter.title}
                     </span>
+
                     {/* Status badges */}
                     {isDrafting && (
                       <div className="flex items-center gap-2 mt-1">
-                        <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
-                        <span className="text-[10px] uppercase tracking-widest text-amber-500 font-medium">Drafting...</span>
+                        <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+                          Drafting...
+                        </span>
+                      </div>
+                    )}
+                    {isPending && chapter.isUnlocked && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+                          Pending
+                        </span>
                       </div>
                     )}
                     {isComplete && chapter.isUnlocked && !isActive && (
@@ -112,6 +152,7 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                     )}
                   </div>
                 </div>
+
                 <div className="flex items-center gap-3">
                   {/* Decorative dots leading to icon */}
                   <div className="hidden md:flex items-center gap-1 opacity-30">
@@ -119,15 +160,18 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                       <div key={i} className="w-0.5 h-0.5 rounded-full bg-foreground/40" />
                     ))}
                   </div>
+
                   {isDrafting ? (
-                    <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center">
-                      <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
+                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                      <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
                     </div>
                   ) : isComplete && chapter.isUnlocked ? (
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isActive ? 'bg-accent/20' : 'bg-accent/10'
-                    }`}>
-                      <Check className={`w-3.5 h-3.5 ${isActive ? 'text-accent' : 'text-accent'}`} />
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isActive ? 'bg-accent/20' : 'bg-accent/10'}`}>
+                      <Check className="w-3.5 h-3.5 text-accent" />
+                    </div>
+                  ) : isPending && chapter.isUnlocked ? (
+                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
                     </div>
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">

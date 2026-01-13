@@ -94,7 +94,6 @@ const Index = () => {
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
-  const [isGeneratingChapters, setIsGeneratingChapters] = useState(false);
   const allChaptersRef = useRef<AllChaptersContentHandle>(null);
   const chapter1Ref = useRef<HTMLElement>(null);
 
@@ -364,82 +363,75 @@ const Index = () => {
     };
   }, [bookId, viewState]);
 
-  // Generate missing chapters progressively for full access users
+  // Daisy-chain missing chapters (2-10): one request at a time; next starts only after state updates
+  const nextMissingChapter = useMemo(() => {
+    if (!bookData?.tableOfContents?.length) return null;
+
+    for (let i = 2; i <= 10; i++) {
+      const key = `chapter${i}Content` as keyof BookData;
+      if (!bookData[key]) return i;
+    }
+    return null;
+  }, [
+    bookData?.tableOfContents,
+    bookData?.chapter2Content,
+    bookData?.chapter3Content,
+    bookData?.chapter4Content,
+    bookData?.chapter5Content,
+    bookData?.chapter6Content,
+    bookData?.chapter7Content,
+    bookData?.chapter8Content,
+    bookData?.chapter9Content,
+    bookData?.chapter10Content,
+  ]);
+
   useEffect(() => {
-    if (!isPaid || !bookId || !bookData || viewState !== 'book' || isGeneratingChapters) return;
+    if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
+    if (!nextMissingChapter) return;
+    if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
 
-    const missingChapters: number[] = [];
-    const chapterContents = [
-      bookData.chapter2Content,
-      bookData.chapter3Content,
-      bookData.chapter4Content,
-      bookData.chapter5Content,
-      bookData.chapter6Content,
-      bookData.chapter7Content,
-      bookData.chapter8Content,
-      bookData.chapter9Content,
-      bookData.chapter10Content,
-    ];
-
-    chapterContents.forEach((content, idx) => {
-      if (!content) {
-        missingChapters.push(idx + 2); // Chapters 2-10
-      }
-    });
-
-    if (missingChapters.length === 0) return;
+    const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
+    if (!tocEntry) return;
 
     let cancelled = false;
 
-    const generateMissingChapters = async () => {
-      setIsGeneratingChapters(true);
+    const run = async () => {
+      setLoadingChapter(nextMissingChapter);
 
-      for (const chapterNum of missingChapters) {
-        if (cancelled) break;
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-chapter', {
+          body: {
+            bookId,
+            chapterNumber: nextMissingChapter,
+            chapterTitle: tocEntry.title,
+            topic,
+            language,
+          },
+        });
 
-        const tocEntry = bookData.tableOfContents?.find(ch => ch.chapter === chapterNum);
-        if (!tocEntry) continue;
+        if (cancelled) return;
 
-        setLoadingChapter(chapterNum);
-
-        try {
-          const { data, error } = await supabase.functions.invoke('generate-chapter', {
-            body: {
-              bookId,
-              chapterNumber: chapterNum,
-              chapterTitle: tocEntry.title,
-              topic,
-              language,
-            },
+        if (!error && data?.content) {
+          // Mark as complete immediately by saving content into local state
+          setBookData((prev) => {
+            if (!prev) return prev;
+            const key = `chapter${nextMissingChapter}Content` as keyof BookData;
+            return { ...prev, [key]: data.content };
           });
-
-          if (cancelled) break;
-
-          if (!error && data?.content) {
-            // Update local state with the new chapter content
-            setBookData(prev => {
-              if (!prev) return prev;
-              const key = `chapter${chapterNum}Content` as keyof BookData;
-              return { ...prev, [key]: data.content };
-            });
-          }
-        } catch (err) {
-          console.error(`Failed to generate chapter ${chapterNum}:`, err);
         }
-      }
-
-      if (!cancelled) {
-        setLoadingChapter(null);
-        setIsGeneratingChapters(false);
+      } catch (err) {
+        console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
+      } finally {
+        if (!cancelled) setLoadingChapter(null);
       }
     };
 
-    generateMissingChapters();
+    run();
 
     return () => {
       cancelled = true;
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, viewState, isGeneratingChapters]);
+  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
@@ -449,7 +441,6 @@ const Index = () => {
     setIsGeneratingDiagrams(false);
     setIsSavedToLibrary(false); // Reset for new book
     setLoadingChapter(null);
-    setIsGeneratingChapters(false);
 
 
     try {
