@@ -13,13 +13,41 @@ serve(async (req) => {
     const { topic, sessionId, language = 'en' } = await req.json();
     if (!topic) return new Response(JSON.stringify({ error: 'Missing topic' }), { status: 400, headers: corsHeaders });
 
-    const cleanTopic = topic.replace(/\b(travel )?guide\b/gi, '').trim(); 
-    const subtitle = `A comprehensive guide to ${cleanTopic}`;
+    const cleanTopic = topic.replace(/\b(travel )?guide\b/gi, '').trim();
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const prompt = `You are an expert book author. Write a book outline and Chapter 1 for: "${cleanTopic}".
-    Return ONLY JSON: { "title": "Unique Title", "chapters": [{"chapter_number":1, "title":"Title"}], "chapter_1_content": "Markdown" }
-    Requirements: 1,500 words. Include exactly: > **Pro-Tip:** [Tip]`;
+    const prompt = `You are an expert book author. Create a complete book outline and write Chapter 1 for: "${cleanTopic}".
+
+TITLE FORMAT (STRICT - 3 LINES):
+- Line 1: The location/topic name only (e.g., "Barcelona" or "Japanese Cooking")
+- Line 2: A unique, specific subtitle (NOT generic like "Your Complete Guide")
+- Line 3: "A Comprehensive Guide to ${cleanTopic}"
+
+Return ONLY valid JSON in this exact format:
+{
+  "title": "The unique title for line 2",
+  "topic_name": "${cleanTopic}",
+  "chapters": [
+    {"chapter_number": 1, "title": "Introduction"},
+    {"chapter_number": 2, "title": "Chapter 2 Title"},
+    {"chapter_number": 3, "title": "Chapter 3 Title"},
+    {"chapter_number": 4, "title": "Chapter 4 Title"},
+    {"chapter_number": 5, "title": "Chapter 5 Title"},
+    {"chapter_number": 6, "title": "Chapter 6 Title"},
+    {"chapter_number": 7, "title": "Chapter 7 Title"},
+    {"chapter_number": 8, "title": "Chapter 8 Title"},
+    {"chapter_number": 9, "title": "Chapter 9 Title"},
+    {"chapter_number": 10, "title": "Conclusion"}
+  ],
+  "chapter_1_content": "Full markdown content here"
+}
+
+CHAPTER 1 REQUIREMENTS:
+- Write approximately 1,500 words of high-quality, engaging content
+- MUST include at least one Pro-Tip using this EXACT format: > **Pro-Tip:** Your tip text here
+- MUST include at least one image using this EXACT format: ![descriptive alt text](placeholder)
+- Use proper markdown headings (## and ###)
+- Include bullet points and lists where appropriate`;
 
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY, {
       method: 'POST',
@@ -38,8 +66,9 @@ serve(async (req) => {
       title: aiData.title,
       tableOfContents: aiData.chapters.map((ch: any) => ({ chapter: ch.chapter_number, title: ch.title })),
       chapter1Content: aiData.chapter_1_content,
-      displayTitle: aiData.title,
-      subtitle: subtitle,
+      displayTitle: aiData.topic_name || cleanTopic,
+      subtitle: aiData.title,
+      description: `A Comprehensive Guide to ${cleanTopic}`,
       localResources: [],
       hasDisclaimer: false
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
