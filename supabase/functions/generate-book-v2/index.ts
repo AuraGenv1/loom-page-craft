@@ -21,7 +21,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`V2 GENERATOR (HIGH QUALITY): Generating book for: "${topic}"`);
+    console.log(`V2 GENERATOR: Generating book for: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -32,7 +32,13 @@ serve(async (req) => {
     };
     const targetLanguage = languageNames[language] || 'English';
 
-    // Updated Prompt: Forces Pro-Tip format and Length
+    // --- CLEAN SUBTITLE LOGIC ---
+    // If user types "Madrid Travel Guide", we want the subtitle to be 
+    // "A comprehensive guide to Madrid", NOT "...guide to Madrid Travel Guide"
+    const cleanTopic = topic.replace(/\b(travel )?guide\b/gi, '').trim(); 
+    const subtitle = `A comprehensive guide to ${cleanTopic}`;
+    // ---------------------------
+
     const prompt = `You are an expert book author. Create a comprehensive book outline and write the first chapter for the topic: "${topic}".
 IMPORTANT: Write all content in ${targetLanguage}.
 
@@ -61,7 +67,6 @@ Return ONLY raw JSON. The JSON structure must be exactly:
 3. **Formatting:** Use nice headers (##), lists, and bold text.
 `;
 
-    // Using gemini-2.0-flash
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
     
     const response = await fetch(url, {
@@ -86,23 +91,29 @@ Return ONLY raw JSON. The JSON structure must be exactly:
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error('No content returned from Gemini');
 
-    // Clean Markdown
-    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    // --- SMART JSON EXTRACTOR (Prevents 500 crashes) ---
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      rawText = rawText.substring(firstBrace, lastBrace + 1);
+    } else {
+      console.error("RAW TEXT DUMP:", rawText);
+      throw new Error('AI response did not contain valid JSON brackets');
+    }
+    // ---------------------------------------------------
 
     let aiData;
     try {
       aiData = JSON.parse(rawText);
     } catch (parseError) {
       console.error("JSON Parse Error:", rawText);
-      throw new Error('AI returned invalid JSON');
+      throw new Error('AI returned invalid JSON structure');
     }
 
-    // Fallbacks
     const safeTitle = aiData.title || topic;
     const safeChapters = Array.isArray(aiData.chapters) ? aiData.chapters : [];
     const safeCh1 = aiData.chapter_1_content || "Chapter 1 generation failed. Please refresh.";
 
-    // FORMAT DATA EXACTLY FOR FRONTEND
     const frontendPayload = {
       title: safeTitle,
       tableOfContents: safeChapters.map((ch: any) => ({
@@ -113,10 +124,9 @@ Return ONLY raw JSON. The JSON structure must be exactly:
       localResources: [],
       hasDisclaimer: false,
       displayTitle: safeTitle,
-      subtitle: `A comprehensive guide to ${topic}`
+      subtitle: subtitle // Uses the clean subtitle
     };
 
-    // Return JSON only
     return new Response(
       JSON.stringify(frontendPayload),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
