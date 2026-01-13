@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react';
 import { LocalResource, ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -342,22 +342,55 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                   <span className="leading-relaxed">{children}</span>
                 </li>
               ),
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
-                  {children}
-                </blockquote>
-              ),
+              blockquote: ({ children }) => {
+                // Check if the content inside the quote is a Pro-Tip
+                const textContent = typeof children === 'string' 
+                  ? children 
+                  : Array.isArray(children) 
+                    ? children.map((c: any) => (typeof c === 'string' ? c : c?.props?.children || '')).join('')
+                    : '';
+                
+                const isProTip = textContent.toLowerCase().includes('pro-tip');
+
+                if (isProTip) {
+                  const cleanText = textContent.replace(/pro-tip:?\**/gi, '').replace(/\*\*/g, '').trim();
+                  return (
+                    <div className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                          <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pro-Tip</p>
+                          <p className="text-foreground/80 dark:text-foreground/70 italic font-serif leading-relaxed text-[1.1rem]" style={{ lineHeight: '1.6' }}>
+                            {cleanText}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Standard Quote
+                return (
+                  <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
+                    {children}
+                  </blockquote>
+                );
+              },
               br: () => <br className="my-2" />,
             }}
           >
             {processedContent}
           </ReactMarkdown>
           
-          {/* Render Pro-Tips with light grey styling and charcoal border */}
+          {/* Render Pro-Tips extracted from legacy [PRO-TIP:] markers */}
           {proTips.map((tip) => (
             <div key={tip.id} className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
               <div className="flex items-start gap-4">
-                <span className="text-xl flex-shrink-0">💡</span>
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pro-Tip</p>
                   <p className="text-foreground/80 dark:text-foreground/70 italic font-serif leading-relaxed text-[1.1rem]" style={{ lineHeight: '1.6' }}>
