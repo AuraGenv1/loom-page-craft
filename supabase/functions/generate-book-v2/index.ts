@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,14 +14,14 @@ serve(async (req) => {
   try {
     const { topic, sessionId, language = 'en' } = await req.json();
 
-    if (!topic || !sessionId) {
+    if (!topic) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: topic and sessionId' }),
+        JSON.stringify({ error: 'Missing topic' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`V2 GENERATOR (10 CHAPTERS): Generating book for topic: "${topic}"`);
+    console.log(`V2 GENERATOR (FRONTEND-COMPAT): Generating book for: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -33,11 +32,13 @@ serve(async (req) => {
     };
     const targetLanguage = languageNames[language] || 'English';
 
-    const prompt = `You are a book outline generator. Create a book outline for the topic: "${topic}".
+    // Updated Prompt: Asks for Outline AND Chapter 1 content
+    const prompt = `You are an expert book author. Create a comprehensive book outline and write the first chapter for the topic: "${topic}".
 IMPORTANT: Write all content in ${targetLanguage}.
+
 Return ONLY raw JSON. The JSON structure must be exactly:
 {
-  "title": "The Book Title",
+  "title": "A Catchy Title for the Book",
   "chapters": [
     { "chapter_number": 1, "title": "Chapter 1 Title" },
     { "chapter_number": 2, "title": "Chapter 2 Title" },
@@ -49,11 +50,12 @@ Return ONLY raw JSON. The JSON structure must be exactly:
     { "chapter_number": 8, "title": "Chapter 8 Title" },
     { "chapter_number": 9, "title": "Chapter 9 Title" },
     { "chapter_number": 10, "title": "Chapter 10 Title" }
-  ]
+  ],
+  "chapter_1_content": "Full markdown content for chapter 1. Make it engaging, educational, and at least 500 words. Use headers (##) and bullet points."
 }
-Generate exactly 10 chapters.`;
+`;
 
-    // Using gemini-2.0-flash (Confirmed Available)
+    // Using gemini-2.0-flash (Fast & available)
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
     
     const response = await fetch(url, {
@@ -63,7 +65,7 @@ Generate exactly 10 chapters.`;
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 8192, // Increased for Ch1 content
           response_mime_type: "application/json"
         },
       }),
@@ -71,88 +73,48 @@ Generate exactly 10 chapters.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`AI service error (gemini-2.0-flash): ${response.status} - ${errorText}`);
+      throw new Error(`AI service error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error('No content returned from Gemini');
 
-    // Clean Markdown (Just in case)
+    // Clean Markdown
     rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
-    let bookData;
+    let aiData;
     try {
-      bookData = JSON.parse(rawText);
+      aiData = JSON.parse(rawText);
     } catch (parseError) {
-      console.error("JSON PARSE ERROR:", parseError);
-      console.error("RAW TEXT:", rawText);
+      console.error("JSON Parse Error:", rawText);
       throw new Error('AI returned invalid JSON');
     }
 
-    // --- SAFETY CHECKS ---
-    
-    // 1. Fallback for Title
-    if (!bookData.title) {
-      console.warn("AI did not return a title. Using topic as fallback.");
-      bookData.title = topic;
-    }
+    // Fallbacks
+    const safeTitle = aiData.title || topic;
+    const safeChapters = Array.isArray(aiData.chapters) ? aiData.chapters : [];
+    const safeCh1 = aiData.chapter_1_content || "Chapter 1 generation failed. Please refresh to try regenerating.";
 
-    // 2. Fallback for Chapters
-    if (!bookData.chapters || !Array.isArray(bookData.chapters)) {
-      bookData.chapters = [];
-    }
+    // FORMAT DATA EXACTLY FOR FRONTEND (BookData type)
+    // The frontend expects: tableOfContents (with 'chapter' key), chapter1Content, etc.
+    const frontendPayload = {
+      title: safeTitle,
+      // Map 'chapter_number' to 'chapter' for frontend compatibility
+      tableOfContents: safeChapters.map((ch: any) => ({
+        chapter: ch.chapter_number,
+        title: ch.title || `Chapter ${ch.chapter_number}`
+      })),
+      chapter1Content: safeCh1,
+      localResources: [],
+      hasDisclaimer: false,
+      displayTitle: safeTitle,
+      subtitle: `A comprehensive guide to ${topic}`
+    };
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const tableOfContents = bookData.chapters.map((ch: any) => ({
-      number: ch.chapter_number,
-      title: ch.title || `Chapter ${ch.chapter_number}`,
-    }));
-
-    // Insert Book
-    const { data: bookRow, error: bookError } = await supabase
-      .from('books')
-      .insert({
-        session_id: sessionId,
-        topic: topic,
-        title: bookData.title,
-        table_of_contents: tableOfContents,
-        chapter1_content: 'Generating...',
-        has_disclaimer: false,
-        local_resources: [],
-      })
-      .select('id')
-      .single();
-
-    if (bookError) {
-      console.error("DB Insert Error:", bookError);
-      throw new Error(`Database rejected book creation: ${bookError.message}`);
-    }
-
-    // Insert Chapters
-    const chapterInserts = bookData.chapters.map((ch: any) => ({
-      book_id: bookRow.id,
-      chapter_number: ch.chapter_number,
-      title: ch.title || `Chapter ${ch.chapter_number}`,
-      status: 'pending',
-    }));
-
-    if (chapterInserts.length > 0) {
-      const { error: chaptersError } = await supabase.from('chapters').insert(chapterInserts);
-      if (chaptersError) console.error("Chapter Insert Error:", chaptersError);
-    }
-
+    // Return JSON only. DO NOT insert into DB (Frontend does it).
     return new Response(
-      JSON.stringify({
-        success: true,
-        bookId: bookRow.id,
-        title: bookData.title,
-        chapters: bookData.chapters,
-      }),
+      JSON.stringify(frontendPayload),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
