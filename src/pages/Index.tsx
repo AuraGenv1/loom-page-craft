@@ -445,7 +445,7 @@ const Index = () => {
 
     try {
       const currentSessionId = getSessionId();
-      const { data, error } = await supabase.functions.invoke('generate-book', {
+      const { data, error } = await supabase.functions.invoke('generate-book-v2', {
         body: { topic: query, sessionId: currentSessionId, language }
       });
 
