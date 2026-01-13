@@ -977,7 +977,7 @@ const Index = () => {
             <section className="mb-8">
               {(() => {
                 // Build chapter statuses
-                const statuses: Record<number, 'drafting' | 'complete'> = {};
+                const statuses: Record<number, 'drafting' | 'complete' | 'pending'> = {};
                 const chapterContentMap: Record<number, string | undefined> = {
                   1: bookData?.chapter1Content,
                   2: bookData?.chapter2Content,
@@ -992,10 +992,15 @@ const Index = () => {
                 };
                 
                 Object.entries(chapterContentMap).forEach(([num, content]) => {
-                  statuses[parseInt(num)] = content ? 'complete' : 'drafting';
+                  const chapterNum = parseInt(num);
+                  if (content && content.length > 0) {
+                    statuses[chapterNum] = 'complete';
+                  } else if (loadingChapter === chapterNum) {
+                    statuses[chapterNum] = 'drafting';
+                  } else {
+                    statuses[chapterNum] = 'pending';
+                  }
                 });
-                // Chapter 1 is always complete after initial load
-                if (bookData?.chapter1Content) statuses[1] = 'complete';
                 
                 return (
                   <TableOfContents 
