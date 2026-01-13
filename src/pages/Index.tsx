@@ -137,7 +137,7 @@ const Index = () => {
   }, [searchParams, isAdmin]);
 
   // Content is unlocked for admins, paid users, or if book is purchased
-  const isPaid = isTestMode || isPurchased;
+  const isPaid = true;
 
   // Handle chapter click from TOC - smooth scroll
   const handleChapterClick = useCallback((chapterNumber: number) => {
