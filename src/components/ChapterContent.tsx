@@ -1,7 +1,7 @@
 import { forwardRef, useState, useEffect } from 'react';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -215,17 +215,25 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       paragraphs.forEach((paragraph, index) => {
         const trimmed = paragraph.trim();
 
-        // Check for [PRO-TIP: ...] callout boxes - light grey with charcoal left border
-        const proTipMatch = trimmed.match(/\[PRO-TIP:\s*([^\]]+)\]/i);
-        if (proTipMatch) {
+        // Check for Pro-Tips - supports both [PRO-TIP: ...] and > **Pro-Tip:** formats
+        const isLegacyProTip = trimmed.match(/\[PRO-TIP:\s*([^\]]+)\]/i);
+        const isNewProTip = trimmed.match(/^>.*Pro-Tip:\**\s*(.*)/i);
+
+        if (isLegacyProTip || isNewProTip) {
+          const tipText = isLegacyProTip 
+            ? isLegacyProTip[1] 
+            : isNewProTip?.[1]?.replace(/^\*\*/, '').replace(/\*\*$/, '').trim();
+          
           elements.push(
             <div key={`protip-${index}`} className="my-8 p-6 bg-[#f8f9fa] dark:bg-muted/30 border-l-4 border-foreground/70 rounded-r-lg">
               <div className="flex items-start gap-4">
-                <span className="text-xl flex-shrink-0">💡</span>
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
                 <div>
                   <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-2">Pro-Tip</p>
                   <p className="text-foreground/80 dark:text-foreground/70 italic font-serif leading-relaxed text-[1.1rem]" style={{ lineHeight: '1.6' }}>
-                    {proTipMatch[1].trim()}
+                    {tipText?.trim()}
                   </p>
                 </div>
               </div>
