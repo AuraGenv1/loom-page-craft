@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("!!! FORCING NEW DEPLOYMENT - VERSION 2 !!!");
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
