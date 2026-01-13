@@ -1438,55 +1438,10 @@ CRITICAL: This is a PREVIEW. Keep Chapter 1 concise (~800-1000 words) to ensure 
 
     console.log('Successfully generated book shell:', bookData.title);
 
-    // COST OPTIMIZATION: Only generate remaining chapters if user is purchasing (fullBook=true)
-    // For guests (unpaid), we only generate Cover + Chapter 1 to save API costs
-    if (fullBook && existingBookId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && GEMINI_API_KEY) {
-      console.log('FULL BOOK REQUESTED: Generating chapters 2-10 SEQUENTIALLY to avoid rate limits for book:', existingBookId);
-      
-      const toc = bookData.tableOfContents || [];
-      
-      // SEQUENTIAL GENERATION: Generate chapters one-by-one to avoid API rate limits
-      // Each chapter must complete and save to DB before the next one starts
-      (globalThis as any).EdgeRuntime?.waitUntil?.(
-        (async () => {
-          for (let chapterNum = 2; chapterNum <= 10; chapterNum++) {
-            const tocEntry = toc.find((ch: { chapter: number }) => ch.chapter === chapterNum);
-            const chapterTitle = tocEntry?.title || `Chapter ${chapterNum}`;
-            
-            console.log(`[Sequential] Starting Chapter ${chapterNum}: "${chapterTitle}"`);
-            
-            try {
-              // AWAIT each chapter - must complete before next starts
-              await generateAndSaveChapterAtomically(
-                chapterNum,
-                chapterTitle,
-                topic,
-                topicType,
-                existingBookId,
-                GEMINI_API_KEY,
-                SUPABASE_URL,
-                SUPABASE_SERVICE_ROLE_KEY,
-                PEXELS_API_KEY
-              );
-              console.log(`[Sequential] ✓ Chapter ${chapterNum} completed and saved`);
-            } catch (error) {
-              console.error(`[Sequential] ✗ Chapter ${chapterNum} failed:`, error);
-              // Continue to next chapter even if one fails
-            }
-            
-            // Small delay between chapters to further avoid rate limits (1 second)
-            if (chapterNum < 10) {
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          }
-          console.log('[Sequential] All 9 chapters generated sequentially');
-        })()
-      );
-      
-      console.log('Sequential chapter generation started in background');
-    } else if (!fullBook) {
-      console.log('GUEST MODE: Only generating Cover + Chapter 1 to save costs. Remaining chapters require payment.');
-    }
+    // DAISY CHAIN ARCHITECTURE: Backend only generates Cover + Chapter 1
+    // Frontend handles sequential chapter generation (2-10) via generate-chapter edge function
+    // This prevents edge function timeout issues since each chapter is a separate HTTP request
+    console.log('Book shell generated (Cover + Chapter 1). Frontend will daisy-chain chapters 2-10 via generate-chapter function.');
 
     return new Response(
       JSON.stringify(bookData),
