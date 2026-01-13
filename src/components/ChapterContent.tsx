@@ -30,6 +30,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         setLoadingImages(prev => new Set(prev).add(id));
         
         try {
+            console.log("Generating image for:", description);
             const { data, error } = await supabase.functions.invoke('generate-cover-image', {
                 body: { topic, caption: description, variant: 'diagram', sessionId },
             });
@@ -51,7 +52,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             
             // Trigger generation if not exists
             if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId)) {
-                setTimeout(() => generateImage(imageId, alt || topic), 0);
+                // Short timeout to ensure render cycle is complete
+                setTimeout(() => generateImage(imageId, alt || topic), 100);
             }
 
             const displayUrl = inlineImages[imageId] || src;
@@ -74,7 +76,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             );
         },
 
-        // 2. PRO-TIP HANDLER (Blue Box)
+        // 2. PRO-TIP HANDLER (FORCED BLUE STYLE)
         blockquote: ({ children }: any) => {
             const textContent = Array.isArray(children) 
                 ? children.map((c: any) => c?.props?.children || "").join("") 
@@ -117,35 +119,30 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
     const cleanContent = (content || "").replace(/^⚠️.*$/m, "").trim();
 
     return (
-      <article ref={ref} className="relative z-10 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 px-6 md:px-16 lg:px-20 py-12 md:py-16 rounded-sm">
-        <div className="deckle-edge absolute top-0 left-0 right-0 h-4 bg-repeat-x" style={{ backgroundImage: "url('/deckle-edge.png')" }} />
-
-        <header className="mb-12 pb-8 border-b border-border/30">
-          <p className="text-sm uppercase tracking-wider text-muted-foreground mb-2">Chapter One</p>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground leading-tight mb-4">Introduction to {topic}</h1>
-          <div className="flex gap-1 items-center mt-3 text-muted-foreground/70">
-            <div className="w-8 h-0.5 bg-primary rounded-full" />
-            <div className="w-2 h-0.5 bg-primary/70 rounded-full" />
-            <div className="w-1 h-0.5 bg-primary/40 rounded-full" />
+      <article ref={ref} className="w-full max-w-3xl mx-auto py-16 md:py-20 px-6 md:px-12 animate-fade-up animation-delay-300 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative">
+        <header className="mb-14 text-center">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">Chapter One</p>
+          <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">Introduction to {topic}</h1>
+          <div className="flex items-center justify-center gap-3 mt-8">
+            <div className="w-12 h-[1px] bg-foreground/15" />
+            <div className="w-2 h-2 rounded-full border border-foreground/20" />
+            <div className="w-12 h-[1px] bg-foreground/15" />
           </div>
         </header>
-
-        <div className="prose prose-lg max-w-none">
+        <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed h-auto">
           {hasDisclaimer && content?.includes('⚠️') && (
-            <div className="flex items-start gap-4 p-6 my-8 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r-lg">
-              <div className="flex-shrink-0">
-                <AlertTriangle className="w-6 h-6 text-amber-600" />
-              </div>
-              <p className="text-amber-900 dark:text-amber-200 font-medium">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8">
+              <div className="flex items-start gap-4">
+                <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-amber-800 dark:text-amber-200 text-sm leading-relaxed">
                   {content.split('⚠️')[1]?.split('\n')[0]?.trim()}
-              </p>
+                </div>
+              </div>
             </div>
           )}
-
-          <ReactMarkdown components={MarkdownComponents}>{cleanContent}</ReactMarkdown>
-
+          <ReactMarkdown components={MarkdownComponents as any}>{cleanContent}</ReactMarkdown>
           {localResources && localResources.length > 0 && (
-            <LocalResources resources={localResources} topic={topic} />
+            <LocalResources topic={topic} resources={localResources} />
           )}
         </div>
       </article>
