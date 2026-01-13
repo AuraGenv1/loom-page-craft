@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// FORCE UPDATE: Adding Context-Awareness to prevent repetition
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -12,13 +13,14 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId, chapterNumber, chapterTitle, topic, language = 'en' } = await req.json();
+    // NOW ACCEPTING tableOfContents from the frontend to check for context
+    const { bookId, chapterNumber, chapterTitle, topic, tableOfContents, language = 'en' } = await req.json();
 
     if (!topic || !chapterTitle) {
       throw new Error('Missing required fields');
     }
 
-    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}" for topic "${topic}"`);
+    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -29,27 +31,38 @@ serve(async (req) => {
     };
     const targetLanguage = languageNames[language] || 'English';
 
-    // Prompt engineered for MAXIMUM LENGTH (Aiming for substantial content like before)
-    const prompt = `You are an expert author writing a comprehensive, deep-dive textbook on "${topic}".
+    // Create a string of the full outline so the AI sees the big picture
+    let outlineContext = "";
+    if (tableOfContents && Array.isArray(tableOfContents)) {
+      outlineContext = tableOfContents
+        .map((ch: any) => `Ch ${ch.chapter}: ${ch.title}`)
+        .join("\n");
+    }
+
+    const prompt = `You are an expert author writing a comprehensive textbook on "${topic}".
+
+**CONTEXT - THE BOOK OUTLINE:**
+${outlineContext}
+
+**CURRENT TASK:**
 Write the full content for **Chapter ${chapterNumber}: ${chapterTitle}**.
 
-**Requirements:**
+**CRITICAL INSTRUCTIONS TO AVOID REPETITION:**
+1. You are writing ONLY Chapter ${chapterNumber}.
+2. Do NOT write a general introduction to "${topic}" (that was covered in Chapter 1).
+3. Do NOT cover topics from other chapters in the outline above.
+4. Jump straight into the specific subject matter of "${chapterTitle}".
+
+**Content Requirements:**
 1. **Language:** Write in ${targetLanguage}.
-2. **Length:** Write as much as possible. Aim for 2,000+ words. Do not summarize; expand on every point.
-3. **Structure:**
-   - **Introduction:** Detailed history and context.
-   - **The Science/Theory:** Explain the underlying principles deeply.
-   - **Step-by-Step Guide:** Detailed instructions with potential variations.
-   - **Case Studies:** Real-world examples or scenarios.
-   - **Common Pitfalls:** Deep analysis of mistakes and how to fix them.
-   - **Pro-Tip:** Include a distinct blockquote starting with "> **Pro-Tip:**".
+2. **Length:** Detailed and deep (Aim for 1,500+ words).
+3. **Pro-Tip:** Include a Pro-Tip block: > **Pro-Tip:** [Tip]
 4. **Tone:** Professional, authoritative, and educational.
 
-Write ONLY the markdown content for the chapter. Do not wrap it in JSON.`;
+Write ONLY the markdown content.`;
 
-    // UPDATE: Swapped broken 'gemini-pro' for working 'gemini-2.0-flash'
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,7 +70,7 @@ Write ONLY the markdown content for the chapter. Do not wrap it in JSON.`;
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 8192, // Max allowed for single request
+          maxOutputTokens: 8192,
         },
       }),
     });
@@ -71,8 +84,10 @@ Write ONLY the markdown content for the chapter. Do not wrap it in JSON.`;
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error('No content returned from Gemini');
 
-    // Clean up any potential markdown code blocks if the AI added them
-    const cleanedText = rawText.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+    const cleanedText = rawText
+      .replace(/^```markdown\n/, '')
+      .replace(/^```\n/, '')
+      .replace(/\n```$/, '');
 
     return new Response(
       JSON.stringify({ content: cleanedText }),
