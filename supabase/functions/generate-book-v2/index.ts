@@ -21,7 +21,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`V2 GENERATOR (FRONTEND-COMPAT): Generating book for: "${topic}"`);
+    console.log(`V2 GENERATOR (HIGH QUALITY): Generating book for: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -32,7 +32,7 @@ serve(async (req) => {
     };
     const targetLanguage = languageNames[language] || 'English';
 
-    // Updated Prompt: Asks for Outline AND Chapter 1 content
+    // Updated Prompt: Forces Pro-Tip format and Length
     const prompt = `You are an expert book author. Create a comprehensive book outline and write the first chapter for the topic: "${topic}".
 IMPORTANT: Write all content in ${targetLanguage}.
 
@@ -51,11 +51,17 @@ Return ONLY raw JSON. The JSON structure must be exactly:
     { "chapter_number": 9, "title": "Chapter 9 Title" },
     { "chapter_number": 10, "title": "Chapter 10 Title" }
   ],
-  "chapter_1_content": "Full markdown content for chapter 1. Make it engaging, educational, and at least 500 words. Use headers (##) and bullet points."
+  "chapter_1_content": "MARKDOWN CONTENT HERE"
 }
+
+**Requirements for Chapter 1 Content:**
+1. **Length:** Minimum 1,500 words. Detailed and deep.
+2. **Pro-Tip:** You MUST include a Pro-Tip block using exactly this syntax:
+   > **Pro-Tip:** [Your tip here]
+3. **Formatting:** Use nice headers (##), lists, and bold text.
 `;
 
-    // Using gemini-2.0-flash (Fast & available)
+    // Using gemini-2.0-flash
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
     
     const response = await fetch(url, {
@@ -65,7 +71,7 @@ Return ONLY raw JSON. The JSON structure must be exactly:
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 8192, // Increased for Ch1 content
+          maxOutputTokens: 8192,
           response_mime_type: "application/json"
         },
       }),
@@ -94,13 +100,11 @@ Return ONLY raw JSON. The JSON structure must be exactly:
     // Fallbacks
     const safeTitle = aiData.title || topic;
     const safeChapters = Array.isArray(aiData.chapters) ? aiData.chapters : [];
-    const safeCh1 = aiData.chapter_1_content || "Chapter 1 generation failed. Please refresh to try regenerating.";
+    const safeCh1 = aiData.chapter_1_content || "Chapter 1 generation failed. Please refresh.";
 
-    // FORMAT DATA EXACTLY FOR FRONTEND (BookData type)
-    // The frontend expects: tableOfContents (with 'chapter' key), chapter1Content, etc.
+    // FORMAT DATA EXACTLY FOR FRONTEND
     const frontendPayload = {
       title: safeTitle,
-      // Map 'chapter_number' to 'chapter' for frontend compatibility
       tableOfContents: safeChapters.map((ch: any) => ({
         chapter: ch.chapter_number,
         title: ch.title || `Chapter ${ch.chapter_number}`
@@ -112,7 +116,7 @@ Return ONLY raw JSON. The JSON structure must be exactly:
       subtitle: `A comprehensive guide to ${topic}`
     };
 
-    // Return JSON only. DO NOT insert into DB (Frontend does it).
+    // Return JSON only
     return new Response(
       JSON.stringify(frontendPayload),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
