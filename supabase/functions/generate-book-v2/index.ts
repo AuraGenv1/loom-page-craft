@@ -22,7 +22,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`V2 GENERATOR: Generating book for topic: "${topic}"`);
+    console.log(`V2 GENERATOR (001): Generating book for topic: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -53,8 +53,8 @@ Return ONLY raw JSON. The JSON structure must be exactly:
 }
 Generate exactly 10 chapters.`;
 
-    // USE GEMINI 1.5 FLASH (V2)
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    // FIX: Use the specific stable version 'gemini-1.5-flash-001'
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=" + GEMINI_API_KEY;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -71,7 +71,7 @@ Generate exactly 10 chapters.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`AI service error (V2): ${response.status} - ${errorText}`);
+      throw new Error(`AI service error (V2-001): ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
