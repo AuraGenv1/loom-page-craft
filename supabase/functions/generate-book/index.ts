@@ -1,48 +1,53 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { topic, sessionId, language = 'en' } = await req.json();
+    const { topic, sessionId, language = "en" } = await req.json();
 
     if (!topic || !sessionId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: topic and sessionId' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Missing required fields: topic and sessionId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log(`Generating book for topic: "${topic}", session: ${sessionId}`);
 
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY is not configured');
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     // Language mapping
     const languageNames: Record<string, string> = {
-      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
-      it: 'Italian', pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese',
+      en: "English",
+      es: "Spanish",
+      fr: "French",
+      de: "German",
+      it: "Italian",
+      pt: "Portuguese",
+      zh: "Chinese",
+      ja: "Japanese",
     };
-    const targetLanguage = languageNames[language] || 'English';
+    const targetLanguage = languageNames[language] || "English";
 
     // Prompt for structured book outline
     const prompt = `You are a book outline generator. Create a book outline for the topic: "${topic}".
 
 IMPORTANT: Write all content in ${targetLanguage}.
 
-Return ONLY raw JSON with no markdown formatting, no code blocks, no backticks. Just pure JSON.
-
-The JSON structure must be exactly:
+Return ONLY raw JSON. The JSON structure must be exactly:
 {
   "title": "The Book Title",
   "chapters": [
@@ -59,114 +64,103 @@ The JSON structure must be exactly:
   ]
 }
 
-Generate exactly 10 chapters with descriptive, engaging titles relevant to the topic.
-Return ONLY the JSON object, nothing else.`;
+Generate exactly 10 chapters with descriptive, engaging titles relevant to the topic.`;
 
-    // Call Gemini API with gemini-pro model
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY;
-    
-    console.log('Calling Gemini API with gemini-pro model...');
-    
+    // UPDATED: Using gemini-1.5-flash which is more reliable and supports JSON mode
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_API_KEY;
+
+    console.log("Calling Gemini API with gemini-1.5-flash model...");
+
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 2048,
+          response_mime_type: "application/json", // Native JSON mode support
         },
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API Error:', response.status, errorText);
-      throw new Error(`AI service error: ${response.status}`);
+      console.error("Gemini API Error:", response.status, errorText);
+      throw new Error(`AI service error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
+
     if (!rawText) {
-      throw new Error('No content returned from Gemini');
+      throw new Error("No content returned from Gemini");
     }
 
-    console.log('Raw Gemini response received, length:', rawText.length);
+    console.log("Raw Gemini response received, length:", rawText.length);
 
-    // Clean markdown code blocks if present
-    rawText = rawText
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-
-    // Parse the JSON
+    // Parse the JSON (No need for regex cleanup with response_mime_type="application/json")
     let bookData: { title: string; chapters: Array<{ chapter_number: number; title: string }> };
     try {
       bookData = JSON.parse(rawText);
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Raw text was:', rawText.substring(0, 500));
-      throw new Error('Failed to parse book outline from AI response');
+      console.error("JSON parse error:", parseError);
+      console.error("Raw text was:", rawText.substring(0, 500));
+      throw new Error("Failed to parse book outline from AI response");
     }
 
     if (!bookData.title || !Array.isArray(bookData.chapters)) {
-      throw new Error('Invalid book data structure from AI');
+      throw new Error("Invalid book data structure from AI");
     }
 
     console.log(`Parsed book: "${bookData.title}" with ${bookData.chapters.length} chapters`);
 
     // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
 
     // Build table_of_contents array for the books table
-    const tableOfContents = bookData.chapters.map(ch => ({
+    const tableOfContents = bookData.chapters.map((ch) => ({
       number: ch.chapter_number,
       title: ch.title,
     }));
 
     // Insert into books table first
     const { data: bookRow, error: bookError } = await supabase
-      .from('books')
+      .from("books")
       .insert({
         session_id: sessionId,
         topic: topic,
         title: bookData.title,
         table_of_contents: tableOfContents,
-        chapter1_content: 'Generating...',
+        chapter1_content: "Generating...",
         has_disclaimer: false,
         local_resources: [],
       })
-      .select('id')
+      .select("id")
       .single();
 
     if (bookError) {
-      console.error('Book insert error:', bookError);
-      throw new Error('Failed to save book to database');
+      console.error("Book insert error:", bookError);
+      throw new Error("Failed to save book to database");
     }
 
     const bookId = bookRow.id;
     console.log(`Book inserted with ID: ${bookId}`);
 
     // Insert chapters into chapters table
-    const chapterInserts = bookData.chapters.map(ch => ({
+    const chapterInserts = bookData.chapters.map((ch) => ({
       book_id: bookId,
       chapter_number: ch.chapter_number,
       title: ch.title,
       content: null,
-      status: 'pending',
+      status: "pending",
     }));
 
-    const { error: chaptersError } = await supabase
-      .from('chapters')
-      .insert(chapterInserts);
+    const { error: chaptersError } = await supabase.from("chapters").insert(chapterInserts);
 
     if (chaptersError) {
-      console.error('Chapters insert error:', chaptersError);
+      console.error("Chapters insert error:", chaptersError);
       // Don't fail the whole request, chapters can be created later
     } else {
       console.log(`${chapterInserts.length} chapters inserted`);
@@ -180,16 +174,15 @@ Return ONLY the JSON object, nothing else.`;
         title: bookData.title,
         chapters: bookData.chapters,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
-    console.error('Error in generate-book:', error);
+    console.error("Error in generate-book:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "An unexpected error occurred",
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
