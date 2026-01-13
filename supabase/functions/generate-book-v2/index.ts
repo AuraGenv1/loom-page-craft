@@ -22,7 +22,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`V2 GENERATOR (ROBUST): Generating book for topic: "${topic}"`);
+    console.log(`V2 GENERATOR (10 CHAPTERS): Generating book for topic: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -78,6 +78,9 @@ Generate exactly 10 chapters.`;
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) throw new Error('No content returned from Gemini');
 
+    // Clean Markdown (Just in case)
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
     let bookData;
     try {
       bookData = JSON.parse(rawText);
@@ -87,18 +90,17 @@ Generate exactly 10 chapters.`;
       throw new Error('AI returned invalid JSON');
     }
 
-    // --- ROBUST SAFETY CHECKS ---
+    // --- SAFETY CHECKS ---
     
-    // 1. Fallback for Title (Fixes the "Null Value" Error)
+    // 1. Fallback for Title
     if (!bookData.title) {
       console.warn("AI did not return a title. Using topic as fallback.");
       bookData.title = topic;
     }
 
-    // 2. Validate Chapters
-    if (!bookData.chapters || !Array.isArray(bookData.chapters) || bookData.chapters.length === 0) {
-      console.error("Invalid chapters data:", bookData.chapters);
-      throw new Error('AI generated an empty chapter list.');
+    // 2. Fallback for Chapters
+    if (!bookData.chapters || !Array.isArray(bookData.chapters)) {
+      bookData.chapters = [];
     }
 
     const supabase = createClient(
@@ -108,7 +110,7 @@ Generate exactly 10 chapters.`;
 
     const tableOfContents = bookData.chapters.map((ch: any) => ({
       number: ch.chapter_number,
-      title: ch.title || `Chapter ${ch.chapter_number}`, // Fallback for chapter title too
+      title: ch.title || `Chapter ${ch.chapter_number}`,
     }));
 
     // Insert Book
@@ -139,11 +141,9 @@ Generate exactly 10 chapters.`;
       status: 'pending',
     }));
 
-    const { error: chaptersError } = await supabase.from('chapters').insert(chapterInserts);
-
-    if (chaptersError) {
-      console.error("Chapter Insert Error:", chaptersError);
-      // Non-fatal, we return the bookId anyway so user can retry chapters later if needed
+    if (chapterInserts.length > 0) {
+      const { error: chaptersError } = await supabase.from('chapters').insert(chapterInserts);
+      if (chaptersError) console.error("Chapter Insert Error:", chaptersError);
     }
 
     return new Response(
