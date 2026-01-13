@@ -21,7 +21,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`V2 GENERATOR: Generating book for: "${topic}"`);
+    console.log(`V2 GENERATOR (ROBUST): Generating book for: "${topic}"`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
