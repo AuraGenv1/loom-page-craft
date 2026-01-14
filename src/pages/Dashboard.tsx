@@ -81,7 +81,7 @@ const Dashboard = () => {
     const fetchSavedBooks = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('saved_projects')
         .select(`
           id,
@@ -108,9 +108,14 @@ const Dashboard = () => {
             is_purchased,
             edition_year
           )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        `);
+      
+      // Admins see ALL books; regular users see only their own
+      if (!isAdmin) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (!error && data) {
         setSavedBooks(data as SavedBook[]);
@@ -121,7 +126,7 @@ const Dashboard = () => {
     if (user) {
       fetchSavedBooks();
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   const handleSignOut = async () => {
     await signOut();
