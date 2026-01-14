@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,35 @@ serve(async (req) => {
       throw new Error('Missing or invalid chapterNumber');
     }
 
-    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}" for book ${bookId || 'unknown'}`);
+    if (!bookId) {
+      throw new Error('Missing required field: bookId is required');
+    }
+
+    console.log(`Generating Chapter ${chapterNumber} for Book ${bookId}`);
+    console.log(`Chapter title: "${chapterTitle}"`);
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Mark chapter as generating (upsert to handle race conditions)
+    const { error: upsertError } = await supabase
+      .from('chapters')
+      .upsert({
+        book_id: bookId,
+        chapter_number: chapterNumber,
+        title: chapterTitle,
+        status: 'generating',
+      }, {
+        onConflict: 'book_id,chapter_number',
+        ignoreDuplicates: false,
+      });
+
+    if (upsertError) {
+      console.log(`Note: Could not upsert generating status: ${upsertError.message}`);
+      // Continue anyway - the chapter might already exist
+    }
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -106,12 +135,41 @@ Write ONLY the markdown content.`;
         .replace(/^```\n/, '')
         .replace(/\n```$/, '');
 
+      // Save the chapter to the chapters table with status 'completed'
+      const { error: saveError } = await supabase
+        .from('chapters')
+        .upsert({
+          book_id: bookId,
+          chapter_number: chapterNumber,
+          title: chapterTitle,
+          content: cleanedText,
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'book_id,chapter_number',
+          ignoreDuplicates: false,
+        });
+
+      if (saveError) {
+        console.error(`Failed to save chapter to database: ${saveError.message}`);
+        // Still return the content even if save fails - frontend can handle it
+      } else {
+        console.log(`Chapter ${chapterNumber} saved to chapters table for book ${bookId}`);
+      }
+
       return new Response(
         JSON.stringify({ content: cleanedText }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (fetchError: unknown) {
       clearTimeout(timeoutId);
+      
+      // Update chapter status to 'failed' on error
+      await supabase
+        .from('chapters')
+        .update({ status: 'failed', updated_at: new Date().toISOString() })
+        .eq('book_id', bookId)
+        .eq('chapter_number', chapterNumber);
       
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         throw new Error(`AI request timed out after 60 seconds for Chapter ${chapterNumber}`);
