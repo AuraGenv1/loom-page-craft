@@ -103,8 +103,6 @@ const Index = () => {
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
-  const [isGeneratingChapter, setIsGeneratingChapter] = useState(false);
-  const isGeneratingRef = useRef(false); // STRICT LOCK: prevents flip-flop loop
   const allChaptersRef = useRef<AllChaptersContentHandle>(null);
   const chapter1Ref = useRef<HTMLElement>(null);
 
@@ -397,130 +395,51 @@ const Index = () => {
   ]);
 
   useEffect(() => {
-    // STRICT LOCK CHECK - Must be FIRST before any other logic
-    if (isGeneratingRef.current) return;
-    
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
     if (!nextMissingChapter) return;
-    if (loadingChapter !== null) return;
-    if (isGeneratingChapter) return;
+    if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
+
+    // Ensure Chapter 1 is saved before starting Chapter 2
+    if (nextMissingChapter === 2 && !bookData.chapter1Content) return;
 
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
 
     let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const run = async () => {
-      // Double-check ref lock inside async function
-      if (isGeneratingRef.current) return;
+      // Add 3-second delay to ensure database record is fully saved
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // First, check if the chapter already exists in the chapters table
-      try {
-        const { data: existingChapter } = await supabase
-          .from('chapters')
-          .select('content, status')
-          .eq('book_id', bookId)
-          .eq('chapter_number', nextMissingChapter)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        // If chapter exists with content, update local state and skip generation
-        if (existingChapter?.content && existingChapter.status === 'completed') {
-          console.log(`Chapter ${nextMissingChapter} already exists in chapters table, updating local state`);
-          setBookData((prev) => {
-            if (!prev) return prev;
-            const key = `chapter${nextMissingChapter}Content` as keyof BookData;
-            return { ...prev, [key]: existingChapter.content };
-          });
-          return;
-        }
-
-        // If chapter is being generated (status = 'generating'), wait and don't start another
-        if (existingChapter?.status === 'generating') {
-          console.log(`Chapter ${nextMissingChapter} is already being generated, waiting...`);
-          return;
-        }
-      } catch (err) {
-        console.error(`Error checking chapters table for chapter ${nextMissingChapter}:`, err);
-      }
-
       if (cancelled) return;
-
-      // STRICT LOCK: Set ref lock IMMEDIATELY before any API call
-      isGeneratingRef.current = true;
-      setIsGeneratingChapter(true);
+      
       setLoadingChapter(nextMissingChapter);
 
-      // 30-second timeout safety net - releases lock if something gets stuck
-      timeoutId = setTimeout(() => {
-        console.warn(`Chapter ${nextMissingChapter} generation timeout - releasing lock`);
-        isGeneratingRef.current = false;
-        setLoadingChapter(null);
-        setIsGeneratingChapter(false);
-      }, 30000);
-
-      // Small delay to allow database sync
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      if (cancelled) {
-        if (timeoutId) clearTimeout(timeoutId);
-        isGeneratingRef.current = false;
-        setLoadingChapter(null);
-        setIsGeneratingChapter(false);
-        return;
-      }
-
       try {
-        console.log(`Calling generate-chapter for Chapter ${nextMissingChapter}: "${tocEntry.title}"`);
-        
         const { data, error } = await supabase.functions.invoke('generate-chapter', {
           body: {
             bookId,
             chapterNumber: nextMissingChapter,
             chapterTitle: tocEntry.title,
             topic,
-            tableOfContents: bookData.tableOfContents,
             language,
           },
         });
 
         if (cancelled) return;
 
-        if (error) {
-          console.error(`Error generating chapter ${nextMissingChapter}:`, error);
-          toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
-          return;
-        }
-
-        if (data?.content) {
+        if (!error && data?.content) {
           // Mark as complete immediately by saving content into local state
           setBookData((prev) => {
             if (!prev) return prev;
             const key = `chapter${nextMissingChapter}Content` as keyof BookData;
             return { ...prev, [key]: data.content };
           });
-          
-          // IMPORTANT: Only release lock AFTER database has confirmed the save
-          // Wait for database to fully sync before releasing the lock
-          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
-        toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
       } finally {
-        // Clear the timeout since we're done
-        if (timeoutId) clearTimeout(timeoutId);
-        
-        // Release lock only after everything is complete
-        if (!cancelled) {
-          // Additional safety delay to ensure database sync
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          isGeneratingRef.current = false;
-          setLoadingChapter(null);
-          setIsGeneratingChapter(false);
-        }
+        if (!cancelled) setLoadingChapter(null);
       }
     };
 
@@ -528,10 +447,8 @@ const Index = () => {
 
     return () => {
       cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-      // NEVER reset isGeneratingRef.current in cleanup - API call may still be in progress
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, isGeneratingChapter, topic, language]);
+  }, [isPaid, bookId, bookData?.tableOfContents, bookData?.chapter1Content, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
@@ -858,9 +775,10 @@ const Index = () => {
     }
   };
 
-  // TITLE HIERARCHY: Main heading = Topic (e.g., "Rome Luxury"), Subtitle = AI creative title
-  const mainTitle = toTitleCase(topic || 'Your Guide');
-  const creativeSubtitle = bookData?.displayTitle || bookData?.subtitle || bookData?.title;
+  // Use AI-generated display title or fallback - always Title Case
+  const rawDisplayTitle = bookData?.displayTitle || bookData?.title || `Master ${topic}`;
+  const displayTitle = toTitleCase(rawDisplayTitle);
+  const subtitle = bookData?.subtitle;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -976,7 +894,7 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={mainTitle} subtitle={creativeSubtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
+              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
