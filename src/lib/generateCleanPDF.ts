@@ -288,12 +288,12 @@ const resolveCoverImageForPDF = async (url: string): Promise<string> => {
 
     // Fallback: try client-side loading with crossOrigin
     console.log("[CleanPDF] Edge function failed, trying client-side conversion...");
-    return await loadImageAsBase64(url, 3000);
+    return await loadImageAsBase64(url, 4000);
   } catch (e) {
     console.warn("[CleanPDF] resolveCoverImageForPDF exception:", e);
     // Final fallback: try client-side loading
     try {
-      return await loadImageAsBase64(url, 2000);
+      return await loadImageAsBase64(url, 4000);
     } catch {
       return FALLBACK_PLACEHOLDER;
     }
@@ -450,7 +450,7 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl }: Clean
 
   // Wait for rendering to complete (fonts, images, layout)
   console.log("[CleanPDF] Waiting for rendering...");
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const opt = {
     margin: [10, 10, 10, 10] as [number, number, number, number],
