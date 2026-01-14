@@ -489,8 +489,10 @@ const Index = () => {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
         toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
       } finally {
-        // ALWAYS release the lock and clear loading state
+        // SAFETY DELAY: Wait 3 seconds before releasing lock to prevent flip-flop
+        // This ensures the database has fully confirmed the save before we allow another generation
         if (!cancelled) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
           setLoadingChapter(null);
           setIsGeneratingChapter(false);
         }
@@ -501,7 +503,7 @@ const Index = () => {
 
     return () => {
       cancelled = true;
-      // Note: We don't reset isGeneratingChapter here because the async operation may still be in progress
+      // STRICT LOCK: Never reset isGeneratingChapter in cleanup - operation may still be in progress
     };
   }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, isGeneratingChapter, topic, language]);
 
@@ -830,10 +832,9 @@ const Index = () => {
     }
   };
 
-  // Use AI-generated display title or fallback - always Title Case
-  const rawDisplayTitle = bookData?.displayTitle || bookData?.title || `Master ${topic}`;
-  const displayTitle = toTitleCase(rawDisplayTitle);
-  const subtitle = bookData?.subtitle;
+  // TITLE HIERARCHY: Main heading = Topic (e.g., "Rome Luxury"), Subtitle = AI creative title
+  const mainTitle = toTitleCase(topic || 'Your Guide');
+  const creativeSubtitle = bookData?.displayTitle || bookData?.subtitle || bookData?.title;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -949,7 +950,7 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
+              <BookCover title={mainTitle} subtitle={creativeSubtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
