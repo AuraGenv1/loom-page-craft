@@ -72,7 +72,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       // IMAGE HANDLER - Skip, images handled separately
       img: () => null,
 
-      // PRO-TIP HANDLER - Blue Box Style with Lightbulb (EXACT match)
+      // PRO-TIP HANDLER - Premium Editorial Style with Lightbulb (EXACT match)
       blockquote: ({ children }: any) => {
         // Extract text content recursively from React children
         const extractText = (node: any): string => {
@@ -96,25 +96,30 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           return (
             <div
               className="my-8 p-6 rounded-xl"
-              style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6' }}
+              style={{ backgroundColor: '#f8fafc', borderLeft: '4px solid #000000' }}
             >
               <div className="flex items-start gap-4">
                 <div
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: '#dbeafe' }}
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-md"
+                  style={{ backgroundColor: '#ffffff' }}
                 >
-                  <Lightbulb className="w-5 h-5" style={{ color: '#3b82f6' }} />
+                  <Lightbulb 
+                    className="w-5 h-5" 
+                    fill="yellow" 
+                    color="orange" 
+                    strokeWidth={1.5} 
+                  />
                 </div>
                 <div>
                   <p
                     className="text-sm uppercase tracking-widest font-bold mb-2"
-                    style={{ color: '#1d4ed8' }}
+                    style={{ color: '#000000' }}
                   >
                     Pro-Tip
                   </p>
                   <p
                     className="font-serif leading-relaxed text-lg"
-                    style={{ color: '#1e40af', lineHeight: '1.7' }}
+                    style={{ color: '#374151', lineHeight: '1.7' }}
                   >
                     {cleanText}
                   </p>

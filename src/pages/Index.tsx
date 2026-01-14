@@ -411,12 +411,15 @@ const Index = () => {
       if (cancelled) return;
 
       try {
+        console.log(`Calling generate-chapter for Chapter ${nextMissingChapter}: "${tocEntry.title}"`);
+        
         const { data, error } = await supabase.functions.invoke('generate-chapter', {
           body: {
             bookId,
             chapterNumber: nextMissingChapter,
             chapterTitle: tocEntry.title,
             topic,
+            tableOfContents: bookData.tableOfContents,
             language,
           },
         });

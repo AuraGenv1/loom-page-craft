@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// FORCE UPDATE: Adding Context-Awareness to prevent repetition
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -13,14 +12,18 @@ serve(async (req) => {
   }
 
   try {
-    // NOW ACCEPTING tableOfContents from the frontend to check for context
     const { bookId, chapterNumber, chapterTitle, topic, tableOfContents, language = 'en' } = await req.json();
 
+    // Validate required fields
     if (!topic || !chapterTitle) {
-      throw new Error('Missing required fields');
+      throw new Error('Missing required fields: topic and chapterTitle are required');
     }
 
-    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}"`);
+    if (!chapterNumber || typeof chapterNumber !== 'number') {
+      throw new Error('Missing or invalid chapterNumber');
+    }
+
+    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}" for book ${bookId || 'unknown'}`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
@@ -63,36 +66,58 @@ Write ONLY the markdown content.`;
 
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-        },
-      }),
-    });
+    // Create an AbortController with 60 second timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI service error: ${response.status} - ${errorText}`);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`AI service error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      // Explicit check for empty or missing content
+      if (!rawText || rawText.trim().length === 0) {
+        throw new Error(`AI returned empty content for Chapter ${chapterNumber}`);
+      }
+
+      console.log(`Successfully generated Chapter ${chapterNumber}, length: ${rawText.length} chars`);
+
+      const cleanedText = rawText
+        .replace(/^```markdown\n/, '')
+        .replace(/^```\n/, '')
+        .replace(/\n```$/, '');
+
+      return new Response(
+        JSON.stringify({ content: cleanedText }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (fetchError: unknown) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error(`AI request timed out after 60 seconds for Chapter ${chapterNumber}`);
+      }
+      throw fetchError;
     }
-
-    const data = await response.json();
-    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error('No content returned from Gemini');
-
-    const cleanedText = rawText
-      .replace(/^```markdown\n/, '')
-      .replace(/^```\n/, '')
-      .replace(/\n```$/, '');
-
-    return new Response(
-      JSON.stringify({ content: cleanedText }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
 
   } catch (error) {
     console.error('Error generating chapter:', error);
