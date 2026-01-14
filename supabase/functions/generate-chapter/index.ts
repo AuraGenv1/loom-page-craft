@@ -10,9 +10,11 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { bookId, chapterNumber, chapterTitle, topic, tableOfContents, language = 'en' } = await req.json();
+    const { chapterNumber, chapterTitle, topic, tableOfContents, language = 'en' } = await req.json();
 
-    // 1. Generate Content with Gemini
+    console.log(`Generating Chapter ${chapterNumber}: "${chapterTitle}" for "${topic}"`);
+
+    // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
     Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
@@ -36,27 +38,7 @@ serve(async (req) => {
 
     if (!content) throw new Error('Gemini returned empty content');
 
-    // 2. NUCLEAR SAVE: Write directly to Database via REST API (Bypasses RLS & Import issues)
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const columnName = `chapter${chapterNumber}_content`;
-
-    const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/books?id=eq.${bookId}`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_SERVICE_ROLE_KEY!,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({ [columnName]: content })
-    });
-
-    if (!dbRes.ok) {
-      const dbErr = await dbRes.text();
-      console.error('Database Save Failed:', dbErr);
-      throw new Error(`Failed to save to DB: ${dbErr}`);
-    }
+    console.log(`Successfully generated Chapter ${chapterNumber}, length: ${content.length}`);
 
     return new Response(JSON.stringify({ content }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -429,7 +429,16 @@ const Index = () => {
         if (cancelled) return;
 
         if (!error && data?.content) {
-          // Mark as complete immediately by saving content into local state
+          // Save to database first - this triggers the Realtime subscription
+          const columnName = `chapter${nextMissingChapter}_content`;
+          await supabase
+            .from('books')
+            .update({ [columnName]: data.content })
+            .eq('id', bookId);
+          
+          console.log(`Saved Chapter ${nextMissingChapter} to database`);
+          
+          // Also update local state immediately
           setBookData((prev) => {
             if (!prev) return prev;
             const key = `chapter${nextMissingChapter}Content` as keyof BookData;
