@@ -34,6 +34,15 @@ import ProgressDownloadButton from '@/components/ProgressDownloadButton';
 
 type ViewState = 'landing' | 'loading' | 'book';
 
+// Title Case helper function
+const toTitleCase = (str: string): string => {
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
 // Generate or retrieve a session ID for anonymous users
 const getSessionId = (): string => {
   const stored = localStorage.getItem('loom_page_session_id');
@@ -399,8 +408,8 @@ const Index = () => {
     let cancelled = false;
 
     const run = async () => {
-      // Add 2-second delay to ensure database record is ready
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add 3-second delay to ensure database record is fully saved
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       if (cancelled) return;
       
@@ -766,8 +775,9 @@ const Index = () => {
     }
   };
 
-  // Use AI-generated display title or fallback
-  const displayTitle = bookData?.displayTitle || bookData?.title || `Master ${topic}`;
+  // Use AI-generated display title or fallback - always Title Case
+  const rawDisplayTitle = bookData?.displayTitle || bookData?.title || `Master ${topic}`;
+  const displayTitle = toTitleCase(rawDisplayTitle);
   const subtitle = bookData?.subtitle;
 
   return (

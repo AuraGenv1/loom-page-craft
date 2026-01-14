@@ -74,12 +74,21 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
       // PRO-TIP HANDLER - Blue Box Style with Lightbulb (EXACT match)
       blockquote: ({ children }: any) => {
-        const textContent = Array.isArray(children) 
-          ? children.map((c: any) => c?.props?.children || "").join("") 
-          : children?.toString() || "";
+        // Extract text content recursively from React children
+        const extractText = (node: any): string => {
+          if (typeof node === 'string') return node;
+          if (typeof node === 'number') return String(node);
+          if (!node) return '';
+          if (Array.isArray(node)) return node.map(extractText).join('');
+          if (node.props?.children) return extractText(node.props.children);
+          return '';
+        };
         
-        if (textContent.toLowerCase().includes("pro-tip")) {
-          const cleanText = textContent.replace(/pro-tip:?\*\*?/gi, "").replace(/\*\*/g, "").trim();
+        const textContent = extractText(children);
+        const isProTip = textContent.toLowerCase().includes('pro-tip') || textContent.toLowerCase().includes('pro tip');
+        
+        if (isProTip) {
+          const cleanText = textContent.replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, "").replace(/\*\*/g, "").trim();
           return (
             <div 
               className="my-8 p-6 rounded-xl"
