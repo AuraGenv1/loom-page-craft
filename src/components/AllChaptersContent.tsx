@@ -25,17 +25,21 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+    const [generatedChapters, setGeneratedChapters] = useState<Set<number>>(new Set());
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (num) => chapterRefs.current[num - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       getChapterRefs: () => chapterRefs.current,
     }));
 
-    const generateImage = async (id: string, description: string) => {
-      if (inlineImages[id] || loadingImages.has(id)) return;
+    const generateImage = async (id: string, description: string, chapterNum: number) => {
+      // Limit to ONE image per chapter for luxury aesthetic
+      if (generatedChapters.has(chapterNum) || inlineImages[id] || loadingImages.has(id)) return;
+      
+      setGeneratedChapters(prev => new Set(prev).add(chapterNum));
       setLoadingImages(prev => new Set(prev).add(id));
       try {
-        console.log("Generating image for:", description);
+        console.log("Generating image for chapter", chapterNum, ":", description);
         const { data, error } = await supabase.functions.invoke('generate-cover-image', {
           body: { topic, caption: description, variant: 'diagram', sessionId },
         });
@@ -49,38 +53,26 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       }
     };
 
+    // Extract first image from content for placement after title
+    const extractPrimaryImage = (markdownContent: string) => {
+      const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (imageMatch) {
+        return { alt: imageMatch[1], src: imageMatch[2] };
+      }
+      return null;
+    };
+
+    // Remove images from content for separate placement
+    const contentWithoutImages = (markdownContent: string) => {
+      return markdownContent.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
+    };
+
     // SYNCED MARKDOWN COMPONENTS - Matches ChapterContent exactly
-    const MarkdownComponents = {
-      // IMAGE HANDLER - Looks for Markdown image tags ![alt](url)
-      img: ({ src, alt }: any) => {
-        const imageId = `img-${(alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
-        
-        // Trigger generation if not exists
-        if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId)) {
-          setTimeout(() => generateImage(imageId, alt || topic), 100);
-        }
+    const createMarkdownComponents = (chapterNum: number) => ({
+      // IMAGE HANDLER - Skip, images handled separately
+      img: () => null,
 
-        const displayUrl = inlineImages[imageId] || src;
-        const isLoading = loadingImages.has(imageId);
-
-        return (
-          <div className="my-8 flex flex-col items-center">
-            <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden">
-              {isLoading ? (
-                <div className="flex flex-col items-center">
-                  <ImageIcon className="w-10 h-10 text-muted-foreground" />
-                  <Skeleton className="h-4 w-32 mt-2" />
-                </div>
-              ) : (
-                <img src={displayUrl} alt={alt || 'Generated image'} className="object-cover w-full h-full" />
-              )}
-            </div>
-            {alt && <p className="text-sm text-muted-foreground mt-2 text-center">{alt}</p>}
-          </div>
-        );
-      },
-
-      // PRO-TIP HANDLER - Blue Box Style (EXACT match to ChapterContent)
+      // PRO-TIP HANDLER - Blue Box Style with Lightbulb (EXACT match)
       blockquote: ({ children }: any) => {
         const textContent = Array.isArray(children) 
           ? children.map((c: any) => c?.props?.children || "").join("") 
@@ -132,6 +124,38 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       p: ({ children }: any) => <p className="text-foreground/80 font-serif leading-relaxed text-lg mb-6">{children}</p>,
       ul: ({ children }: any) => <ul className="list-disc pl-6 my-4 space-y-2">{children}</ul>,
       li: ({ children }: any) => <li className="text-foreground/80 font-serif leading-relaxed">{children}</li>,
+    });
+
+    // Primary Image Component for each chapter
+    const PrimaryImageSection = ({ chapterNum, content }: { chapterNum: number; content: string }) => {
+      const primaryImage = extractPrimaryImage(content);
+      if (!primaryImage) return null;
+      
+      const imageId = `ch${chapterNum}-img-${(primaryImage.alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
+      
+      // Trigger generation if not exists
+      if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId) && !generatedChapters.has(chapterNum)) {
+        setTimeout(() => generateImage(imageId, primaryImage.alt || topic, chapterNum), 100);
+      }
+
+      const displayUrl = inlineImages[imageId] || primaryImage.src;
+      const isLoading = loadingImages.has(imageId);
+
+      return (
+        <div className="my-8 flex flex-col items-center">
+          <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden">
+            {isLoading ? (
+              <div className="flex flex-col items-center">
+                <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                <Skeleton className="h-4 w-32 mt-2" />
+              </div>
+            ) : (
+              <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
+            )}
+          </div>
+          {primaryImage.alt && <p className="text-sm text-muted-foreground mt-2 text-center">{primaryImage.alt}</p>}
+        </div>
+      );
     };
 
     const chapters = Array.from({ length: 10 }, (_, i) => ({
@@ -145,6 +169,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
           const isLocked = !isFullAccess && chapter.number > 1;
           const chapterTitle = bookData.tableOfContents?.find((c:any) => c.chapter === chapter.number)?.title || `Chapter ${chapter.number}`;
           const isCurrentlyLoading = loadingChapter === chapter.number;
+          const cleanContent = chapter.content ? contentWithoutImages(chapter.content) : '';
           
           return (
             <section
@@ -152,7 +177,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
               ref={(el) => { chapterRefs.current[idx] = el; }}
               className="w-full max-w-3xl mx-auto py-16 px-6 md:px-12 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative mb-8"
             >
-              <header className="mb-12 pb-8 border-b border-border/30">
+              <header className="mb-8 pb-8 border-b border-border/30">
                 <p className="text-sm uppercase tracking-wider text-muted-foreground mb-2">Chapter {chapter.number}</p>
                 <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground leading-tight">{chapterTitle}</h2>
               </header>
@@ -165,7 +190,11 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
               ) : (
                 <div className="prose prose-lg max-w-none">
                   {chapter.content ? (
-                    <ReactMarkdown components={MarkdownComponents}>{chapter.content}</ReactMarkdown>
+                    <>
+                      {/* Primary Image - Immediately after title, before content */}
+                      <PrimaryImageSection chapterNum={chapter.number} content={chapter.content} />
+                      <ReactMarkdown components={createMarkdownComponents(chapter.number)}>{cleanContent}</ReactMarkdown>
+                    </>
                   ) : (
                     // Weaving loader active for chapters 2-10 when generating
                     <WeavingLoader text={`Weaving Chapter ${chapter.number}...`} />

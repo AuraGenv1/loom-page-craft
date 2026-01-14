@@ -390,12 +390,20 @@ const Index = () => {
     if (!nextMissingChapter) return;
     if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
 
+    // Ensure Chapter 1 is saved before starting Chapter 2
+    if (nextMissingChapter === 2 && !bookData.chapter1Content) return;
+
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
 
     let cancelled = false;
 
     const run = async () => {
+      // Add 2-second delay to ensure database record is ready
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      if (cancelled) return;
+      
       setLoadingChapter(nextMissingChapter);
 
       try {
@@ -431,7 +439,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
+  }, [isPaid, bookId, bookData?.tableOfContents, bookData?.chapter1Content, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
