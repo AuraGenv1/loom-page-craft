@@ -399,16 +399,13 @@ const Index = () => {
     if (!nextMissingChapter) return;
     if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
 
-    // Ensure Chapter 1 is saved before starting Chapter 2
-    if (nextMissingChapter === 2 && !bookData.chapter1Content) return;
-
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
 
     let cancelled = false;
 
     const run = async () => {
-      // Add 3-second delay to ensure database record is fully saved
+      // Add 3-second delay FIRST to ensure database record is fully saved before any checks
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       if (cancelled) return;
@@ -428,7 +425,13 @@ const Index = () => {
 
         if (cancelled) return;
 
-        if (!error && data?.content) {
+        if (error) {
+          console.error(`Error generating chapter ${nextMissingChapter}:`, error);
+          setLoadingChapter(null); // Reset on error to prevent infinite loading
+          return;
+        }
+
+        if (data?.content) {
           // Mark as complete immediately by saving content into local state
           setBookData((prev) => {
             if (!prev) return prev;
@@ -438,6 +441,7 @@ const Index = () => {
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
+        setLoadingChapter(null); // Reset on error to prevent infinite loading
       } finally {
         if (!cancelled) setLoadingChapter(null);
       }
@@ -448,7 +452,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, bookData?.chapter1Content, viewState, nextMissingChapter, loadingChapter, topic, language]);
+  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);

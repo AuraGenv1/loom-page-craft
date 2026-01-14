@@ -98,7 +98,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         };
         
         const textContent = extractText(children);
-        const isProTip = textContent.toLowerCase().includes('pro-tip') || textContent.toLowerCase().includes('pro tip');
+        // Simplified check: look for "tip" anywhere in blockquote text (case-insensitive)
+        const isProTip = textContent.toLowerCase().includes('tip');
         
         if (isProTip) {
           const cleanText = textContent.replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, "").replace(/\*\*/g, "").trim();
