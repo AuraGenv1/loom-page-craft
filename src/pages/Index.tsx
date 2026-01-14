@@ -103,6 +103,7 @@ const Index = () => {
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
+  const [isGeneratingChapter, setIsGeneratingChapter] = useState(false);
   const allChaptersRef = useRef<AllChaptersContentHandle>(null);
   const chapter1Ref = useRef<HTMLElement>(null);
 
@@ -398,6 +399,7 @@ const Index = () => {
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
     if (!nextMissingChapter) return;
     if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
+    if (isGeneratingChapter) return; // LOCK: prevent multiple simultaneous generation attempts
 
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
@@ -440,14 +442,16 @@ const Index = () => {
 
       if (cancelled) return;
 
-      // Show "Drafting" spinner
+      // LOCK: Set generating flag BEFORE any async operations
+      setIsGeneratingChapter(true);
       setLoadingChapter(nextMissingChapter);
 
       // Small delay to allow database sync
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       if (cancelled) {
         setLoadingChapter(null);
+        setIsGeneratingChapter(false);
         return;
       }
 
@@ -470,7 +474,6 @@ const Index = () => {
         if (error) {
           console.error(`Error generating chapter ${nextMissingChapter}:`, error);
           toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
-          setLoadingChapter(null);
           return;
         }
 
@@ -485,9 +488,12 @@ const Index = () => {
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
         toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
-        setLoadingChapter(null);
       } finally {
-        if (!cancelled) setLoadingChapter(null);
+        // ALWAYS release the lock and clear loading state
+        if (!cancelled) {
+          setLoadingChapter(null);
+          setIsGeneratingChapter(false);
+        }
       }
     };
 
@@ -495,8 +501,9 @@ const Index = () => {
 
     return () => {
       cancelled = true;
+      // Note: We don't reset isGeneratingChapter here because the async operation may still be in progress
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
+  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, isGeneratingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
