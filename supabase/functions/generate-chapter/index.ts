@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// FORCE UPDATE: Adding Context-Awareness to prevent repetition
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -88,6 +88,28 @@ Write ONLY the markdown content.`;
       .replace(/^```markdown\n/, '')
       .replace(/^```\n/, '')
       .replace(/\n```$/, '');
+
+    // Save the generated chapter directly to the database
+    if (bookId) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+      
+      const columnName = `chapter${chapterNumber}_content`;
+      console.log(`Saving ${columnName} to database for book ${bookId}`);
+      
+      const { error: updateError } = await supabase
+        .from('books')
+        .update({ [columnName]: cleanedText })
+        .eq('id', bookId);
+      
+      if (updateError) {
+        console.error('Error saving chapter to database:', updateError);
+      } else {
+        console.log(`Successfully saved ${columnName} to database`);
+      }
+    }
 
     return new Response(
       JSON.stringify({ content: cleanedText }),

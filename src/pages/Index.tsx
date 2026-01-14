@@ -399,11 +399,10 @@ const Index = () => {
     if (!nextMissingChapter) return;
     if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
 
-    // Ensure Chapter 1 is saved before starting Chapter 2
-    if (nextMissingChapter === 2 && !bookData.chapter1Content) return;
-
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
+
+    console.log('Triggering generation for Chapter', nextMissingChapter);
 
     let cancelled = false;
 
@@ -422,6 +421,7 @@ const Index = () => {
             chapterNumber: nextMissingChapter,
             chapterTitle: tocEntry.title,
             topic,
+            tableOfContents: bookData.tableOfContents,
             language,
           },
         });
@@ -448,7 +448,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, bookData?.chapter1Content, viewState, nextMissingChapter, loadingChapter, topic, language]);
+  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
