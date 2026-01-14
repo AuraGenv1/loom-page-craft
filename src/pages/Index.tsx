@@ -98,6 +98,7 @@ const Index = () => {
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const isGeneratingRef = useRef(false);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
@@ -394,27 +395,26 @@ const Index = () => {
     bookData?.chapter10Content,
   ]);
 
+  // Fixed Effect: Uses Ref to prevent self-cancellation during re-renders
   useEffect(() => {
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
     if (!nextMissingChapter) return;
-    if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
-
-    const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
-    if (!tocEntry) return;
-
-    console.log('Triggering generation for Chapter', nextMissingChapter);
-
-    let cancelled = false;
+    
+    // STOP if we are already generating (The Lock)
+    if (isGeneratingRef.current) return;
+    
+    // The Lock: Claim this process immediately
+    isGeneratingRef.current = true;
+    setLoadingChapter(nextMissingChapter);
 
     const run = async () => {
-      // Add 3-second delay to ensure database record is fully saved
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      if (cancelled) return;
-      
-      setLoadingChapter(nextMissingChapter);
-
       try {
+        console.log('STARTING GENERATION for Chapter', nextMissingChapter);
+        
+        // 1. Call the AI
+        const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
+        if (!tocEntry) throw new Error('No TOC entry found');
+        
         const { data, error } = await supabase.functions.invoke('generate-chapter', {
           body: {
             bookId,
@@ -425,46 +425,44 @@ const Index = () => {
             language,
           },
         });
-
-        if (cancelled) return;
-
-        if (!error && data?.content) {
-          // 1. Update UI IMMEDIATELY (optimistic update - unblocks next chapter)
-          setBookData((prev) => {
-            if (!prev) return prev;
-            const key = `chapter${nextMissingChapter}Content` as keyof BookData;
-            return { ...prev, [key]: data.content };
+        
+        if (error) throw error;
+        if (!data?.content) throw new Error('No content returned');
+        
+        // 2. SUCCESS: Update UI FIRST (Optimistic)
+        console.log('AI Finished. Updating UI...');
+        setBookData((prev) => {
+          if (!prev) return prev;
+          const key = `chapter${nextMissingChapter}Content` as keyof BookData;
+          return { ...prev, [key]: data.content };
+        });
+        
+        // 3. Save to DB (Fire & Forget - don't let it block the UI)
+        const columnName = `chapter${nextMissingChapter}_content`;
+        supabase
+          .from('books')
+          .update({ [columnName]: data.content })
+          .eq('id', bookId)
+          .then(({ error: saveError }) => {
+            if (saveError) console.warn('Background save warning:', saveError);
           });
           
-          console.log(`Chapter ${nextMissingChapter} loaded into UI`);
-          
-          // 2. Save to database in background (non-blocking)
-          const columnName = `chapter${nextMissingChapter}_content`;
-          supabase
-            .from('books')
-            .update({ [columnName]: data.content })
-            .eq('id', bookId)
-            .then(({ error: saveError }) => {
-              if (saveError) {
-                console.warn("Background save failed:", saveError);
-              } else {
-                console.log(`Chapter ${nextMissingChapter} saved to database`);
-              }
-            });
-        }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
       } finally {
-        if (!cancelled) setLoadingChapter(null);
+        // RELEASE THE LOCK
+        isGeneratingRef.current = false;
+        setLoadingChapter(null);
       }
     };
 
     run();
 
+    // Clean-up: If the user leaves the page entirely, unlock.
     return () => {
-      cancelled = true;
+      // We DO NOT set cancelled=true here anymore, to prevent the self-cancellation bug.
     };
-  }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
+  }, [isPaid, bookId, viewState, nextMissingChapter, topic, language]); // REMOVED 'bookData' and 'loadingChapter' from dependencies
 
   const handleSearch = async (query: string) => {
     setTopic(query);
