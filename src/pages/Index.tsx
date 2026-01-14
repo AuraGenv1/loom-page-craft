@@ -429,21 +429,28 @@ const Index = () => {
         if (cancelled) return;
 
         if (!error && data?.content) {
-          // Save to database first - this triggers the Realtime subscription
-          const columnName = `chapter${nextMissingChapter}_content`;
-          await supabase
-            .from('books')
-            .update({ [columnName]: data.content })
-            .eq('id', bookId);
-          
-          console.log(`Saved Chapter ${nextMissingChapter} to database`);
-          
-          // Also update local state immediately
+          // 1. Update UI IMMEDIATELY (optimistic update - unblocks next chapter)
           setBookData((prev) => {
             if (!prev) return prev;
             const key = `chapter${nextMissingChapter}Content` as keyof BookData;
             return { ...prev, [key]: data.content };
           });
+          
+          console.log(`Chapter ${nextMissingChapter} loaded into UI`);
+          
+          // 2. Save to database in background (non-blocking)
+          const columnName = `chapter${nextMissingChapter}_content`;
+          supabase
+            .from('books')
+            .update({ [columnName]: data.content })
+            .eq('id', bookId)
+            .then(({ error: saveError }) => {
+              if (saveError) {
+                console.warn("Background save failed:", saveError);
+              } else {
+                console.log(`Chapter ${nextMissingChapter} saved to database`);
+              }
+            });
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
