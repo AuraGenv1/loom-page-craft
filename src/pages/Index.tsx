@@ -404,13 +404,11 @@ const Index = () => {
 
     let cancelled = false;
 
-    const run = async () => {
-      // Add 3-second delay FIRST to ensure database record is fully saved before any checks
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
+    // Show "Drafting" immediately, but delay the actual generation call
+    setLoadingChapter(nextMissingChapter);
+
+    const timer = setTimeout(async () => {
       if (cancelled) return;
-      
-      setLoadingChapter(nextMissingChapter);
 
       try {
         const { data, error } = await supabase.functions.invoke('generate-chapter', {
@@ -427,7 +425,7 @@ const Index = () => {
 
         if (error) {
           console.error(`Error generating chapter ${nextMissingChapter}:`, error);
-          setLoadingChapter(null); // Reset on error to prevent infinite loading
+          setLoadingChapter(null);
           return;
         }
 
@@ -441,16 +439,15 @@ const Index = () => {
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
-        setLoadingChapter(null); // Reset on error to prevent infinite loading
+        setLoadingChapter(null);
       } finally {
         if (!cancelled) setLoadingChapter(null);
       }
-    };
-
-    run();
+    }, 3000);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
