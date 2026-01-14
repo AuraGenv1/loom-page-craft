@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,119 +7,65 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    // NOW ACCEPTING tableOfContents from the frontend to check for context
     const { bookId, chapterNumber, chapterTitle, topic, tableOfContents, language = 'en' } = await req.json();
 
-    if (!topic || !chapterTitle) {
-      throw new Error('Missing required fields');
-    }
-
-    console.log(`GENERATING CHAPTER ${chapterNumber}: "${chapterTitle}"`);
-
+    // 1. Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured');
+    const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
+    Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
+    Language: ${language}.
+    Format: Markdown. 1000 words. Professional tone. Include a > **Pro-Tip**.`;
 
-    const languageNames: Record<string, string> = {
-      en: 'English', es: 'Spanish', fr: 'French', de: 'German',
-      it: 'Italian', pt: 'Portuguese', zh: 'Chinese', ja: 'Japanese',
-    };
-    const targetLanguage = languageNames[language] || 'English';
-
-    // Create a string of the full outline so the AI sees the big picture
-    let outlineContext = "";
-    if (tableOfContents && Array.isArray(tableOfContents)) {
-      outlineContext = tableOfContents
-        .map((ch: any) => `Ch ${ch.chapter}: ${ch.title}`)
-        .join("\n");
-    }
-
-    const prompt = `You are an expert author writing a comprehensive textbook on "${topic}".
-
-**CONTEXT - THE BOOK OUTLINE:**
-${outlineContext}
-
-**CURRENT TASK:**
-Write the full content for **Chapter ${chapterNumber}: ${chapterTitle}**.
-
-**CRITICAL INSTRUCTIONS TO AVOID REPETITION:**
-1. You are writing ONLY Chapter ${chapterNumber}.
-2. Do NOT write a general introduction to "${topic}" (that was covered in Chapter 1).
-3. Do NOT cover topics from other chapters in the outline above.
-4. Jump straight into the specific subject matter of "${chapterTitle}".
-
-**Content Requirements:**
-1. **Language:** Write in ${targetLanguage}.
-2. **Length:** Detailed and deep (Aim for 1,500+ words).
-3. **Pro-Tip:** Include a Pro-Tip block: > **Pro-Tip:** [Tip]
-4. **Tone:** Professional, authoritative, and educational.
-
-Write ONLY the markdown content.`;
-
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
-
-    const response = await fetch(url, {
+    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-        },
+        generationConfig: { temperature: 0.7 }
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI service error: ${response.status} - ${errorText}`);
+    const geminiData = await geminiRes.json();
+    let content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Clean markdown
+    content = content.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+
+    if (!content) throw new Error('Gemini returned empty content');
+
+    // 2. NUCLEAR SAVE: Write directly to Database via REST API (Bypasses RLS & Import issues)
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const columnName = `chapter${chapterNumber}_content`;
+
+    const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/books?id=eq.${bookId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ [columnName]: content })
+    });
+
+    if (!dbRes.ok) {
+      const dbErr = await dbRes.text();
+      console.error('Database Save Failed:', dbErr);
+      throw new Error(`Failed to save to DB: ${dbErr}`);
     }
 
-    const data = await response.json();
-    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error('No content returned from Gemini');
-
-    const cleanedText = rawText
-      .replace(/^```markdown\n/, '')
-      .replace(/^```\n/, '')
-      .replace(/\n```$/, '');
-
-    // Save the generated chapter directly to the database
-    if (bookId) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      );
-      
-      const columnName = `chapter${chapterNumber}_content`;
-      console.log(`Saving ${columnName} to database for book ${bookId}`);
-      
-      const { error: updateError } = await supabase
-        .from('books')
-        .update({ [columnName]: cleanedText })
-        .eq('id', bookId);
-      
-      if (updateError) {
-        console.error('Error saving chapter to database:', updateError);
-      } else {
-        console.log(`Successfully saved ${columnName} to database`);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({ content: cleanedText }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ content }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
-    console.error('Error generating chapter:', error);
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('Error:', error);
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 });
