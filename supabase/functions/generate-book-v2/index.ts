@@ -29,8 +29,10 @@ TITLE FORMAT (STRICT - 3 LINES):
 - Line 2 (Subtitle): A unique, specific subtitle (NOT generic like "Your Complete Guide")
 - Line 3 (Description): "A Comprehensive Guide to ${topicTitleCase}"
 
-IMAGE CONSTRAINT (STRICT):
-- The image_description MUST be limited to architecture, landscapes, and landmarks. NO PEOPLE. Focus on the most iconic architectural feature of the city or location.
+STRICT VISUAL RULE:
+- The image description MUST be of a famous architectural landmark, landscape, or empty luxury interior.
+- ABSOLUTELY NO PEOPLE, FACES, or CROWDS.
+- Chapter 1 image MUST be the city's most iconic landmark (e.g., The Colosseum for Rome) at sunset/golden hour.
 
 Return ONLY valid JSON in this exact format:
 {
@@ -55,7 +57,7 @@ CHAPTER 1 REQUIREMENTS:
 - Write approximately 1,500 words of high-quality, engaging content
 - Start with ONE image immediately after the opening paragraph: ![descriptive alt text](placeholder)
 - MUST include EXACTLY ONE image per chapter (placed after intro paragraph)
-- Image descriptions MUST focus on architecture, landscapes, or landmarks - NO PEOPLE
+- Image alt text MUST describe architecture, landscapes, or landmarks - ABSOLUTELY NO PEOPLE
 - MUST include at least one Pro-Tip using this EXACT format: > **Pro-Tip:** Your tip text here
 - Use proper markdown headings (## and ###)
 - Include bullet points and lists where appropriate`;

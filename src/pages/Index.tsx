@@ -104,7 +104,7 @@ const Index = () => {
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
   const [isGeneratingChapter, setIsGeneratingChapter] = useState(false);
-  const isCurrentlyGenerating = useRef(false); // STRICT LOCK: useRef to prevent re-renders triggering loops
+  const isGeneratingRef = useRef(false); // STRICT LOCK: prevents flip-flop loop
   const allChaptersRef = useRef<AllChaptersContentHandle>(null);
   const chapter1Ref = useRef<HTMLElement>(null);
 
@@ -397,11 +397,13 @@ const Index = () => {
   ]);
 
   useEffect(() => {
+    // STRICT LOCK CHECK - Must be FIRST before any other logic
+    if (isGeneratingRef.current) return;
+    
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
     if (!nextMissingChapter) return;
-    if (loadingChapter !== null) return; // ensure only ONE chapter shows spinner / is requested
-    if (isGeneratingChapter) return; // State-based lock
-    if (isCurrentlyGenerating.current) return; // REF-based strict lock - prevents flip-flop
+    if (loadingChapter !== null) return;
+    if (isGeneratingChapter) return;
 
     const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
     if (!tocEntry) return;
@@ -410,8 +412,10 @@ const Index = () => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const run = async () => {
+      // Double-check ref lock inside async function
+      if (isGeneratingRef.current) return;
+      
       // First, check if the chapter already exists in the chapters table
-      // This prevents generating duplicates when the books object hasn't refreshed yet
       try {
         const { data: existingChapter } = await supabase
           .from('chapters')
@@ -440,30 +444,29 @@ const Index = () => {
         }
       } catch (err) {
         console.error(`Error checking chapters table for chapter ${nextMissingChapter}:`, err);
-        // Continue with generation if check fails
       }
 
       if (cancelled) return;
 
-      // STRICT LOCK: Set BOTH locks BEFORE any async operations
-      isCurrentlyGenerating.current = true;
+      // STRICT LOCK: Set ref lock IMMEDIATELY before any API call
+      isGeneratingRef.current = true;
       setIsGeneratingChapter(true);
       setLoadingChapter(nextMissingChapter);
 
-      // 15-second timeout safety net - releases lock if something gets stuck
+      // 30-second timeout safety net - releases lock if something gets stuck
       timeoutId = setTimeout(() => {
         console.warn(`Chapter ${nextMissingChapter} generation timeout - releasing lock`);
-        isCurrentlyGenerating.current = false;
+        isGeneratingRef.current = false;
         setLoadingChapter(null);
         setIsGeneratingChapter(false);
-      }, 15000);
+      }, 30000);
 
       // Small delay to allow database sync
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       if (cancelled) {
         if (timeoutId) clearTimeout(timeoutId);
-        isCurrentlyGenerating.current = false;
+        isGeneratingRef.current = false;
         setLoadingChapter(null);
         setIsGeneratingChapter(false);
         return;
@@ -498,6 +501,10 @@ const Index = () => {
             const key = `chapter${nextMissingChapter}Content` as keyof BookData;
             return { ...prev, [key]: data.content };
           });
+          
+          // IMPORTANT: Only release lock AFTER database has confirmed the save
+          // Wait for database to fully sync before releasing the lock
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
@@ -506,11 +513,11 @@ const Index = () => {
         // Clear the timeout since we're done
         if (timeoutId) clearTimeout(timeoutId);
         
-        // SAFETY DELAY: Wait 3 seconds before releasing lock to prevent flip-flop
-        // This ensures the database has fully confirmed the save before we allow another generation
+        // Release lock only after everything is complete
         if (!cancelled) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          isCurrentlyGenerating.current = false;
+          // Additional safety delay to ensure database sync
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          isGeneratingRef.current = false;
           setLoadingChapter(null);
           setIsGeneratingChapter(false);
         }
@@ -522,7 +529,7 @@ const Index = () => {
     return () => {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
-      // STRICT LOCK: Never reset isCurrentlyGenerating.current in cleanup - operation may still be in progress
+      // NEVER reset isGeneratingRef.current in cleanup - API call may still be in progress
     };
   }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, isGeneratingChapter, topic, language]);
 

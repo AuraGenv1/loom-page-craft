@@ -1,7 +1,7 @@
 import { forwardRef, useState, useEffect, useRef } from 'react';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import ReactMarkdown from 'react-markdown';
@@ -112,20 +112,15 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
               style={{ backgroundColor: '#f8fafc', borderLeft: '4px solid #000000' }}
             >
               <div className="flex items-start gap-4">
-                <div
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-md"
-                  style={{ backgroundColor: '#ffffff' }}
-                >
-                  <Lightbulb 
-                    className="w-5 h-5" 
-                    fill="yellow" 
-                    color="orange" 
-                    strokeWidth={1.5} 
-                  />
-                </div>
+                <Sparkles 
+                  className="w-5 h-5 flex-shrink-0 mt-1" 
+                  color="black" 
+                  fill="none" 
+                  strokeWidth={1.5} 
+                />
                 <div>
                   <p
-                    className="text-sm uppercase tracking-widest font-bold mb-2"
+                    className="text-[10px] uppercase tracking-[0.25em] font-bold mb-2"
                     style={{ color: '#000000' }}
                   >
                     Pro-Tip
