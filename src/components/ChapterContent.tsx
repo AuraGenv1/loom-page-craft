@@ -96,33 +96,36 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
           if (node.props?.children) return extractText(node.props.children);
           return '';
         };
-        
+
         const textContent = extractText(children);
-        // Simplified check: look for "tip" anywhere in blockquote text (case-insensitive)
-        const isProTip = textContent.toLowerCase().includes('tip');
-        
+        const isProTip = /\bpro\s*[- ]?\s*tip\b/i.test(textContent);
+
         if (isProTip) {
-          const cleanText = textContent.replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, "").replace(/\*\*/g, "").trim();
+          const cleanText = textContent
+            .replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, '')
+            .replace(/\*\*/g, '')
+            .trim();
+
           return (
-            <div 
+            <div
               className="my-8 p-6 rounded-xl"
               style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6' }}
             >
               <div className="flex items-start gap-4">
-                <div 
+                <div
                   className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
                   style={{ backgroundColor: '#dbeafe' }}
                 >
                   <Lightbulb className="w-5 h-5" style={{ color: '#3b82f6' }} />
                 </div>
                 <div>
-                  <p 
+                  <p
                     className="text-sm uppercase tracking-widest font-bold mb-2"
                     style={{ color: '#1d4ed8' }}
                   >
                     Pro-Tip
                   </p>
-                  <p 
+                  <p
                     className="font-serif leading-relaxed text-lg"
                     style={{ color: '#1e40af', lineHeight: '1.7' }}
                   >
@@ -133,6 +136,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             </div>
           );
         }
+
         return (
           <blockquote className="border-l-2 border-foreground/15 pl-8 my-10 italic text-foreground/60 font-serif text-lg md:text-xl">
             {children}
