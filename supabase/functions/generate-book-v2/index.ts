@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper: Convert to Title Case
+const toTitleCase = (str: string): string => {
+  return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -14,19 +19,20 @@ serve(async (req) => {
     if (!topic) return new Response(JSON.stringify({ error: 'Missing topic' }), { status: 400, headers: corsHeaders });
 
     const cleanTopic = topic.replace(/\b(travel )?guide\b/gi, '').trim();
+    const topicTitleCase = toTitleCase(cleanTopic);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const prompt = `You are an expert book author. Create a complete book outline and write Chapter 1 for: "${cleanTopic}".
 
 TITLE FORMAT (STRICT - 3 LINES):
-- Line 1: The location/topic name only (e.g., "Barcelona" or "Japanese Cooking")
-- Line 2: A unique, specific subtitle (NOT generic like "Your Complete Guide")
-- Line 3: "A Comprehensive Guide to ${cleanTopic}"
+- Line 1 (Topic Name): "${topicTitleCase}" (Title Case, the location/topic name only)
+- Line 2 (Subtitle): A unique, specific subtitle (NOT generic like "Your Complete Guide")
+- Line 3 (Description): "A Comprehensive Guide to ${topicTitleCase}"
 
 Return ONLY valid JSON in this exact format:
 {
-  "title": "The unique title for line 2",
-  "topic_name": "${cleanTopic}",
+  "title": "The unique subtitle for line 2",
+  "topic_name": "${topicTitleCase}",
   "chapters": [
     {"chapter_number": 1, "title": "Introduction"},
     {"chapter_number": 2, "title": "Chapter 2 Title"},
@@ -44,8 +50,9 @@ Return ONLY valid JSON in this exact format:
 
 CHAPTER 1 REQUIREMENTS:
 - Write approximately 1,500 words of high-quality, engaging content
+- Start with ONE image immediately after the opening paragraph: ![descriptive alt text](placeholder)
+- MUST include EXACTLY ONE image per chapter (placed after intro paragraph)
 - MUST include at least one Pro-Tip using this EXACT format: > **Pro-Tip:** Your tip text here
-- MUST include at least one image using this EXACT format: ![descriptive alt text](placeholder)
 - Use proper markdown headings (## and ###)
 - Include bullet points and lists where appropriate`;
 
@@ -66,9 +73,9 @@ CHAPTER 1 REQUIREMENTS:
       title: aiData.title,
       tableOfContents: aiData.chapters.map((ch: any) => ({ chapter: ch.chapter_number, title: ch.title })),
       chapter1Content: aiData.chapter_1_content,
-      displayTitle: aiData.topic_name || cleanTopic,
+      displayTitle: aiData.topic_name || topicTitleCase,
       subtitle: aiData.title,
-      description: `A Comprehensive Guide to ${cleanTopic}`,
+      description: `A Comprehensive Guide to ${topicTitleCase}`,
       localResources: [],
       hasDisclaimer: false
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

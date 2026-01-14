@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useRef } from 'react';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
 import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
@@ -24,6 +24,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
   ({ topic, content, localResources, hasDisclaimer, sessionId, onChapterReady }, ref) => {
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+    const [primaryImageGenerated, setPrimaryImageGenerated] = useState(false);
+    const imageCountRef = useRef(0);
     
     // Signal when Chapter 1 is finished rendering
     useEffect(() => {
@@ -38,11 +40,17 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
 
     // --- IMAGE GENERATOR ---
     const generateImage = async (id: string, description: string) => {
-      if (inlineImages[id] || loadingImages.has(id)) return;
+      // Limit to ONE image per chapter for luxury aesthetic
+      if (primaryImageGenerated || inlineImages[id] || loadingImages.has(id)) return;
+      
+      imageCountRef.current += 1;
+      if (imageCountRef.current > 1) return;
+      
+      setPrimaryImageGenerated(true);
       setLoadingImages(prev => new Set(prev).add(id));
       
       try {
-        console.log("Generating image for:", description);
+        console.log("Generating primary chapter image for:", description);
         const { data, error } = await supabase.functions.invoke('generate-cover-image', {
           body: { topic, caption: description, variant: 'diagram', sessionId },
         });
@@ -56,38 +64,28 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       }
     };
 
+    // Extract first image from content for placement after title
+    const extractPrimaryImage = (markdownContent: string) => {
+      const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (imageMatch) {
+        return { alt: imageMatch[1], src: imageMatch[2] };
+      }
+      return null;
+    };
+
+    // Remove images from content for separate placement
+    const contentWithoutImages = (content || "").replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
+    const primaryImage = extractPrimaryImage(content || "");
+
     // --- MARKDOWN COMPONENTS ---
     const MarkdownComponents = {
-      // IMAGE HANDLER - Looks for Markdown image tags ![alt](url)
+      // IMAGE HANDLER - Now only handles inline images (primary image is separate)
       img: ({ src, alt }: any) => {
-        const imageId = `img-${(alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
-        
-        // Trigger generation if not exists
-        if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId)) {
-          setTimeout(() => generateImage(imageId, alt || topic), 100);
-        }
-
-        const displayUrl = inlineImages[imageId] || src;
-        const isLoading = loadingImages.has(imageId);
-
-        return (
-          <div className="my-8 flex flex-col items-center">
-            <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden">
-              {isLoading ? (
-                <div className="flex flex-col items-center">
-                  <ImageIcon className="w-10 h-10 text-muted-foreground" />
-                  <Skeleton className="h-4 w-32 mt-2" />
-                </div>
-              ) : (
-                <img src={displayUrl} alt={alt || 'Generated image'} className="object-cover w-full h-full" />
-              )}
-            </div>
-            {alt && <p className="text-sm text-muted-foreground mt-2 text-center">{alt}</p>}
-          </div>
-        );
+        // Skip - images are handled separately
+        return null;
       },
 
-      // PRO-TIP HANDLER - Blue Box Style
+      // PRO-TIP HANDLER - Blue Box Style with Lightbulb
       blockquote: ({ children }: any) => {
         const textContent = Array.isArray(children) 
           ? children.map((c: any) => c?.props?.children || "").join("") 
@@ -141,11 +139,42 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       li: ({ children }: any) => <li className="text-foreground/80 font-serif leading-relaxed">{children}</li>,
     };
 
-    const cleanContent = (content || "").replace(/^⚠️.*$/m, "").trim();
+    const cleanContent = contentWithoutImages.replace(/^⚠️.*$/m, "").trim();
+
+    // Primary Image Component - Placed after title
+    const PrimaryImageSection = () => {
+      if (!primaryImage) return null;
+      
+      const imageId = `primary-img-${(primaryImage.alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
+      
+      // Trigger generation if not exists
+      if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId) && !primaryImageGenerated) {
+        setTimeout(() => generateImage(imageId, primaryImage.alt || topic), 100);
+      }
+
+      const displayUrl = inlineImages[imageId] || primaryImage.src;
+      const isLoading = loadingImages.has(imageId);
+
+      return (
+        <div className="my-8 flex flex-col items-center">
+          <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden">
+            {isLoading ? (
+              <div className="flex flex-col items-center">
+                <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                <Skeleton className="h-4 w-32 mt-2" />
+              </div>
+            ) : (
+              <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
+            )}
+          </div>
+          {primaryImage.alt && <p className="text-sm text-muted-foreground mt-2 text-center">{primaryImage.alt}</p>}
+        </div>
+      );
+    };
 
     return (
       <article ref={ref} className="w-full max-w-3xl mx-auto py-16 md:py-20 px-6 md:px-12 animate-fade-up animation-delay-300 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative">
-        <header className="mb-14 text-center">
+        <header className="mb-8 text-center">
           <p className="text-[10px] md:text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">Chapter One</p>
           <h1 className="font-serif text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">Introduction to {topic}</h1>
           <div className="flex items-center justify-center gap-3 mt-8">
@@ -154,6 +183,10 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
             <div className="w-12 h-[1px] bg-foreground/15" />
           </div>
         </header>
+        
+        {/* Primary Image - Immediately after title, before content */}
+        <PrimaryImageSection />
+        
         <div className="prose prose-lg max-w-none space-y-8 text-foreground/85 leading-relaxed h-auto">
           {hasDisclaimer && content?.includes('⚠️') && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 my-8">
