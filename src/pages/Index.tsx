@@ -404,11 +404,52 @@ const Index = () => {
 
     let cancelled = false;
 
-    // Show "Drafting" immediately, but delay the actual generation call
-    setLoadingChapter(nextMissingChapter);
+    const run = async () => {
+      // First, check if the chapter already exists in the chapters table
+      // This prevents generating duplicates when the books object hasn't refreshed yet
+      try {
+        const { data: existingChapter } = await supabase
+          .from('chapters')
+          .select('content, status')
+          .eq('book_id', bookId)
+          .eq('chapter_number', nextMissingChapter)
+          .maybeSingle();
 
-    const timer = setTimeout(async () => {
+        if (cancelled) return;
+
+        // If chapter exists with content, update local state and skip generation
+        if (existingChapter?.content && existingChapter.status === 'completed') {
+          console.log(`Chapter ${nextMissingChapter} already exists in chapters table, updating local state`);
+          setBookData((prev) => {
+            if (!prev) return prev;
+            const key = `chapter${nextMissingChapter}Content` as keyof BookData;
+            return { ...prev, [key]: existingChapter.content };
+          });
+          return;
+        }
+
+        // If chapter is being generated (status = 'generating'), wait and don't start another
+        if (existingChapter?.status === 'generating') {
+          console.log(`Chapter ${nextMissingChapter} is already being generated, waiting...`);
+          return;
+        }
+      } catch (err) {
+        console.error(`Error checking chapters table for chapter ${nextMissingChapter}:`, err);
+        // Continue with generation if check fails
+      }
+
       if (cancelled) return;
+
+      // Show "Drafting" spinner
+      setLoadingChapter(nextMissingChapter);
+
+      // Small delay to allow database sync
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      if (cancelled) {
+        setLoadingChapter(null);
+        return;
+      }
 
       try {
         console.log(`Calling generate-chapter for Chapter ${nextMissingChapter}: "${tocEntry.title}"`);
@@ -428,6 +469,7 @@ const Index = () => {
 
         if (error) {
           console.error(`Error generating chapter ${nextMissingChapter}:`, error);
+          toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
           setLoadingChapter(null);
           return;
         }
@@ -442,15 +484,17 @@ const Index = () => {
         }
       } catch (err) {
         console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
+        toast.error(`Failed to generate Chapter ${nextMissingChapter}. Please refresh.`);
         setLoadingChapter(null);
       } finally {
         if (!cancelled) setLoadingChapter(null);
       }
-    }, 3000);
+    };
+
+    run();
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [isPaid, bookId, bookData?.tableOfContents, viewState, nextMissingChapter, loadingChapter, topic, language]);
 
