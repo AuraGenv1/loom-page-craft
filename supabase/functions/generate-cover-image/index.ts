@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type Variant = "cover" | "diagram";
+type Variant = "cover" | "diagram" | "back-cover";
 
 // Fallback placeholder image - always works, never crashes
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
@@ -39,6 +39,15 @@ const isTravelTopic = (topic: string): boolean => {
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string): string => {
   const location = extractGeographicLocation(topicOrTitle);
   const isTravel = isTravelTopic(topicOrTitle);
+
+  // Back cover variant: minimalist texture-focused backgrounds
+  if (variant === "back-cover") {
+    const keywords = ["texture", "abstract", "minimal", "background", "paper"];
+    if (location) {
+      return `${location} texture background minimal`;
+    }
+    return `${topicOrTitle} texture background abstract minimal`;
+  }
 
   if (variant === "diagram" && caption) {
     const locationSuffix = location ? ` ${location}` : "";
@@ -129,7 +138,7 @@ serve(async (req) => {
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    const resolvedVariant: Variant = variant === "diagram" ? "diagram" : "cover";
+    const resolvedVariant: Variant = variant === "diagram" ? "diagram" : variant === "back-cover" ? "back-cover" : "cover";
 
     // ============ PEXELS API KEY - CRITICAL ============
     const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY");

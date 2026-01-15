@@ -34,4 +34,6 @@ export interface BookData {
   localResources: LocalResource[];
   hasDisclaimer?: boolean;
   coverImageUrl?: string | string[];
+  back_cover_url?: string;
+  spine_text?: string;
 }
