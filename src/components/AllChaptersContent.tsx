@@ -1,11 +1,22 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Lightbulb, Pencil, Save, X, RefreshCw, Check } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface AllChaptersContentProps {
   topic: string;
@@ -13,6 +24,8 @@ interface AllChaptersContentProps {
   loadingChapter?: number | null;
   isFullAccess?: boolean;
   sessionId?: string;
+  bookId?: string;
+  onBookDataUpdate?: (newData: any) => void;
 }
 
 export interface AllChaptersContentHandle {
@@ -21,16 +34,139 @@ export interface AllChaptersContentHandle {
 }
 
 const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersContentProps>(
-  ({ topic, bookData, loadingChapter, isFullAccess, sessionId }, ref) => {
+  ({ topic, bookData, loadingChapter, isFullAccess, sessionId, bookId, onBookDataUpdate }, ref) => {
     const chapterRefs = useRef<(HTMLElement | null)[]>([]);
     const [inlineImages, setInlineImages] = useState<Record<string, string>>({});
     const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
     const [generatedChapters, setGeneratedChapters] = useState<Set<number>>(new Set());
+    
+    // Admin editing state
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedContent, setEditedContent] = useState<Record<number, string>>({});
+    const [editedTitles, setEditedTitles] = useState<Record<number, string>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [regenerateDialog, setRegenerateDialog] = useState<{ chapterNum: number; currentAlt: string } | null>(null);
+    const [newImagePrompt, setNewImagePrompt] = useState('');
+    const [isRegenerating, setIsRegenerating] = useState(false);
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (num) => chapterRefs.current[num - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       getChapterRefs: () => chapterRefs.current,
     }));
+
+    // Initialize edited content when entering edit mode
+    const handleEnterEditMode = () => {
+      const contentMap: Record<number, string> = {};
+      const titleMap: Record<number, string> = {};
+      for (let i = 1; i <= 10; i++) {
+        const content = bookData[`chapter${i}Content`];
+        if (content) contentMap[i] = content;
+        const tocEntry = bookData.tableOfContents?.find((c: any) => c.chapter === i);
+        if (tocEntry) titleMap[i] = tocEntry.title;
+      }
+      setEditedContent(contentMap);
+      setEditedTitles(titleMap);
+      setIsEditing(true);
+    };
+
+    const handleCancelEdit = () => {
+      setIsEditing(false);
+      setEditedContent({});
+      setEditedTitles({});
+    };
+
+    const handleSaveChanges = async () => {
+      if (!bookId) {
+        toast.error('No book ID available');
+        return;
+      }
+
+      setIsSaving(true);
+      try {
+        // Build update object for chapters
+        const updateData: Record<string, any> = {};
+        Object.entries(editedContent).forEach(([chapterNum, content]) => {
+          updateData[`chapter${chapterNum}_content`] = content;
+        });
+
+        // Update table of contents with new titles
+        const updatedToc = bookData.tableOfContents?.map((entry: any) => ({
+          ...entry,
+          title: editedTitles[entry.chapter] || entry.title,
+        })) || [];
+        updateData.table_of_contents = updatedToc;
+
+        const { error } = await supabase
+          .from('books')
+          .update(updateData)
+          .eq('id', bookId);
+
+        if (error) throw error;
+
+        // Update local state via callback
+        if (onBookDataUpdate) {
+          const newBookData = { ...bookData };
+          Object.entries(editedContent).forEach(([chapterNum, content]) => {
+            newBookData[`chapter${chapterNum}Content`] = content;
+          });
+          newBookData.tableOfContents = updatedToc;
+          onBookDataUpdate(newBookData);
+        }
+
+        toast.success('Changes saved successfully!');
+        setIsEditing(false);
+        setEditedContent({});
+        setEditedTitles({});
+      } catch (err) {
+        console.error('Save failed:', err);
+        toast.error('Failed to save changes');
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    const handleRegenerateImage = async () => {
+      if (!regenerateDialog || !newImagePrompt.trim()) return;
+
+      setIsRegenerating(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+          body: { 
+            topic, 
+            caption: newImagePrompt.trim(), 
+            variant: 'diagram', 
+            sessionId 
+          },
+        });
+
+        if (error) throw error;
+        if (!data?.imageUrl) throw new Error('No image returned');
+
+        const chapterNum = regenerateDialog.chapterNum;
+        const currentContent = editedContent[chapterNum] || bookData[`chapter${chapterNum}Content`] || '';
+        
+        // Replace the first image in the markdown with new one
+        const newContent = currentContent.replace(
+          /!\[([^\]]*)\]\(([^)]+)\)/,
+          `![${newImagePrompt.trim()}](${data.imageUrl})`
+        );
+
+        setEditedContent(prev => ({ ...prev, [chapterNum]: newContent }));
+        
+        // Also update inline images cache
+        const imageId = `ch${chapterNum}-img-${newImagePrompt.trim().replace(/\s+/g, '-').substring(0, 20)}`;
+        setInlineImages(prev => ({ ...prev, [imageId]: data.imageUrl }));
+
+        toast.success('Image regenerated!');
+        setRegenerateDialog(null);
+        setNewImagePrompt('');
+      } catch (err) {
+        console.error('Image regeneration failed:', err);
+        toast.error('Failed to regenerate image');
+      } finally {
+        setIsRegenerating(false);
+      }
+    };
 
     const generateImage = async (id: string, description: string, chapterNum: number) => {
       // Limit to ONE image per chapter for luxury aesthetic
@@ -152,14 +288,32 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
       return (
         <div className="my-8 flex flex-col items-center">
-          <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden">
+          <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden group">
             {isLoading ? (
               <div className="flex flex-col items-center">
                 <ImageIcon className="w-10 h-10 text-muted-foreground" />
                 <Skeleton className="h-4 w-32 mt-2" />
               </div>
             ) : (
-              <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
+              <>
+                <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
+                {isEditing && (
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setRegenerateDialog({ chapterNum, currentAlt: primaryImage.alt || '' });
+                        setNewImagePrompt(primaryImage.alt || '');
+                      }}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Regenerate Image
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
           {primaryImage.alt && <p className="text-sm text-muted-foreground mt-2 text-center">{primaryImage.alt}</p>}
@@ -174,11 +328,67 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
     return (
       <div className="relative z-10">
+        {/* Admin Toolbar - Only visible when isFullAccess */}
+        {isFullAccess && (
+          <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border p-4 mb-6 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-primary" />
+              <span className="font-medium text-foreground">
+                {isEditing ? 'Edit Mode Active' : 'Admin Tools'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                    className="gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveChanges}
+                    disabled={isSaving}
+                    className="gap-2"
+                  >
+                    {isSaving ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEnterEditMode}
+                  className="gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit Mode
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {chapters.map((chapter, idx) => {
           const isLocked = !isFullAccess && chapter.number > 1;
-          const chapterTitle = bookData.tableOfContents?.find((c:any) => c.chapter === chapter.number)?.title || `Chapter ${chapter.number}`;
+          const chapterTitle = isEditing 
+            ? editedTitles[chapter.number] || bookData.tableOfContents?.find((c:any) => c.chapter === chapter.number)?.title || `Chapter ${chapter.number}`
+            : bookData.tableOfContents?.find((c:any) => c.chapter === chapter.number)?.title || `Chapter ${chapter.number}`;
           const isCurrentlyLoading = loadingChapter === chapter.number;
-          const cleanContent = chapter.content ? contentWithoutImages(chapter.content) : '';
+          const displayContent = isEditing 
+            ? editedContent[chapter.number] || chapter.content 
+            : chapter.content;
+          const cleanContent = displayContent ? contentWithoutImages(displayContent) : '';
           
           return (
             <section
@@ -188,7 +398,15 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             >
               <header className="mb-8 pb-8 border-b border-border/30">
                 <p className="text-sm uppercase tracking-wider text-muted-foreground mb-2">Chapter {chapter.number}</p>
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground leading-tight">{chapterTitle}</h2>
+                {isEditing ? (
+                  <Input
+                    value={editedTitles[chapter.number] || chapterTitle}
+                    onChange={(e) => setEditedTitles(prev => ({ ...prev, [chapter.number]: e.target.value }))}
+                    className="text-2xl md:text-3xl font-display font-bold border-dashed"
+                  />
+                ) : (
+                  <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground leading-tight">{chapterTitle}</h2>
+                )}
               </header>
 
               {isLocked ? (
@@ -198,11 +416,21 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                 </div>
               ) : (
                 <div className="prose prose-lg max-w-none">
-                  {chapter.content ? (
+                  {displayContent ? (
                     <>
                       {/* Primary Image - Immediately after title, before content */}
-                      <PrimaryImageSection chapterNum={chapter.number} content={chapter.content} />
-                      <ReactMarkdown components={createMarkdownComponents(chapter.number)}>{cleanContent}</ReactMarkdown>
+                      <PrimaryImageSection chapterNum={chapter.number} content={displayContent} />
+                      
+                      {isEditing ? (
+                        <Textarea
+                          value={editedContent[chapter.number] || chapter.content || ''}
+                          onChange={(e) => setEditedContent(prev => ({ ...prev, [chapter.number]: e.target.value }))}
+                          className="min-h-[400px] font-mono text-sm border-dashed resize-y"
+                          placeholder="Enter markdown content..."
+                        />
+                      ) : (
+                        <ReactMarkdown components={createMarkdownComponents(chapter.number)}>{cleanContent}</ReactMarkdown>
+                      )}
                     </>
                   ) : (
                     // Weaving loader active for chapters 2-10 when generating
@@ -217,6 +445,50 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
             </section>
           );
         })}
+
+        {/* Image Regeneration Dialog */}
+        <Dialog open={!!regenerateDialog} onOpenChange={(open) => !open && setRegenerateDialog(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Regenerate Chapter Image</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Enter a new description for the image. This will generate a fresh image from Pexels.
+              </p>
+              <Input
+                value={newImagePrompt}
+                onChange={(e) => setNewImagePrompt(e.target.value)}
+                placeholder="e.g., Sunset over Barcelona's Gothic Quarter"
+                className="w-full"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRegenerateDialog(null);
+                  setNewImagePrompt('');
+                }}
+                disabled={isRegenerating}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRegenerateImage}
+                disabled={isRegenerating || !newImagePrompt.trim()}
+                className="gap-2"
+              >
+                {isRegenerating ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                {isRegenerating ? 'Generating...' : 'Regenerate'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

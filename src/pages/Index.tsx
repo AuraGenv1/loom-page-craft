@@ -1069,6 +1069,8 @@ const Index = () => {
                   loadingChapter={loadingChapter}
                   isFullAccess={isPaid}
                   sessionId={getSessionId()}
+                  bookId={bookId || undefined}
+                  onBookDataUpdate={(newData) => setBookData(prev => prev ? { ...prev, ...newData } : newData)}
                   bookData={{
                     chapter1Content: bookData?.chapter1Content,
                     chapter2Content: bookData?.chapter2Content,
