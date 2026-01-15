@@ -28,6 +28,8 @@ interface BookCoverProps {
   backCoverUrl?: string;
   spineText?: string;
   bookData?: BookData;
+  /** True if all 10 chapters are generated - enables cover editing */
+  isGenerationComplete?: boolean;
   onCoverUpdate?: (updates: { coverImageUrls?: string[]; backCoverUrl?: string; spineText?: string }) => void;
 }
 
@@ -44,6 +46,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     backCoverUrl,
     spineText: initialSpineText,
     bookData,
+    isGenerationComplete = false,
     onCoverUpdate
   }, ref) => {
     const TopicIcon = getTopicIcon(topic || propTitle);
@@ -453,16 +456,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           ref={ref}
           className="w-full max-w-md mx-auto aspect-[3/4] gradient-paper rounded-sm shadow-book p-10 md:p-12 flex flex-col justify-between animate-page-turn relative overflow-hidden border border-border/30"
         >
-          {/* Admin Edit Button */}
+          {/* Admin Edit Button - Locked while generating */}
           {isAdmin && (
             <Button
               onClick={() => setStudioOpen(true)}
               variant="secondary"
               size="sm"
-              className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md"
+              disabled={!isGenerationComplete}
+              className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md disabled:opacity-50"
             >
               <Pencil className="w-4 h-4 mr-1" />
-              Edit Cover / Export KDP
+              {isGenerationComplete ? 'Edit Cover / Export KDP' : 'Generating Book...'}
             </Button>
           )}
 
@@ -892,7 +896,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 </div>
               </TabsContent>
 
-              {/* TAB 4: Full Wrap Preview */}
+              {/* TAB 4: Full Wrap Preview - With Full Composite Front Cover */}
               <TabsContent value="wrap" className="space-y-4 pt-4">
                 <div className="space-y-6">
                   <div>
@@ -902,45 +906,96 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                     </p>
                   </div>
                   
-                  <div className="flex items-stretch justify-center gap-0 border rounded-lg overflow-hidden shadow-lg mx-auto" style={{ maxWidth: '600px' }}>
+                  <div className="flex items-stretch justify-center gap-0 border rounded-lg overflow-hidden shadow-lg mx-auto" style={{ maxWidth: '700px' }}>
                     {/* Back Cover */}
                     <div className="w-40 sm:w-52 aspect-[3/4] bg-secondary/20 relative">
                       {localBackCoverUrl ? (
-                        <img src={localBackCoverUrl} alt="Back" className="w-full h-full object-cover" />
+                        <>
+                          <img src={localBackCoverUrl} alt="Back" className="w-full h-full object-cover" />
+                          {/* Blurb Placeholder Overlay */}
+                          <div className="absolute inset-0 p-3 flex flex-col justify-between">
+                            <div className="bg-black/60 backdrop-blur-sm rounded p-2 mt-8">
+                              <p className="text-white text-[8px] leading-relaxed italic">
+                                Your compelling book description goes here...
+                              </p>
+                            </div>
+                            <div className="bg-black/60 backdrop-blur-sm rounded p-1 text-center">
+                              <p className="text-white/80 text-[7px]">www.loomandpage.com</p>
+                            </div>
+                          </div>
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs bg-muted/50">
                           Back Cover
                         </div>
                       )}
-                      <div className="absolute bottom-2 left-2 right-2 text-[8px] text-muted-foreground/70">
-                        {/* Back cover text placeholder */}
-                      </div>
                     </div>
-                    {/* Spine */}
+                    {/* Spine - Black text on white/custom background */}
                     <div 
-                      className="w-5 sm:w-6 flex items-center justify-center"
+                      className="w-5 sm:w-6 flex flex-col items-center justify-between py-3"
                       style={{ backgroundColor: spineColor }}
                     >
+                      {/* Edition Text at TOP */}
                       <span 
-                        className="text-white text-[7px] sm:text-[8px] font-medium whitespace-nowrap"
+                        className="text-[6px] sm:text-[7px] font-serif whitespace-nowrap"
                         style={{ 
                           writingMode: 'vertical-rl',
                           textOrientation: 'mixed',
-                          transform: 'rotate(180deg)'
+                          transform: 'rotate(180deg)',
+                          color: spineTextColor,
+                          opacity: 0.7
                         }}
                       >
-                        {(spineText || title).slice(0, 40)}
+                        {editionText}
+                      </span>
+                      {/* Title at BOTTOM */}
+                      <span 
+                        className="text-[7px] sm:text-[8px] font-serif font-medium whitespace-nowrap"
+                        style={{ 
+                          writingMode: 'vertical-rl',
+                          textOrientation: 'mixed',
+                          transform: 'rotate(180deg)',
+                          color: spineTextColor
+                        }}
+                      >
+                        {(spineText || title).slice(0, 35)}
                       </span>
                     </div>
-                    {/* Front Cover */}
-                    <div className="w-40 sm:w-52 aspect-[3/4] bg-secondary/20 relative">
-                      {displayUrl ? (
-                        <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs bg-muted/50">
-                          Front Cover
-                        </div>
-                      )}
+                    {/* Front Cover - Full Composite View (Image + Title Overlay) */}
+                    <div className="w-40 sm:w-52 aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 relative overflow-hidden flex flex-col p-3">
+                      {/* Cover Image */}
+                      <div className="relative w-full aspect-square mb-2 flex-shrink-0">
+                        {displayUrl ? (
+                          <div className="w-full h-full rounded overflow-hidden border border-foreground/10">
+                            <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full rounded bg-secondary/30 flex items-center justify-center text-muted-foreground text-xs">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      {/* Title Overlay */}
+                      <div className="flex-1 flex flex-col items-center text-center justify-start">
+                        {parsedTitle.category && (
+                          <p className="text-[6px] uppercase tracking-[0.2em] text-muted-foreground/60 font-sans font-medium mb-0.5">
+                            {parsedTitle.category}
+                          </p>
+                        )}
+                        <h1 className="font-serif text-[10px] sm:text-xs font-medium text-foreground leading-tight mb-1">
+                          {parsedTitle.mainTitle.slice(0, 50)}
+                        </h1>
+                        <div className="w-6 h-[1px] bg-foreground/20 mb-1" />
+                        {subtitle && (
+                          <p className="text-[6px] uppercase tracking-[0.15em] text-muted-foreground/50 font-serif">
+                            {subtitle.slice(0, 40)}
+                          </p>
+                        )}
+                      </div>
+                      {/* Bottom Branding */}
+                      <div className="text-center pt-1">
+                        <span className="font-serif text-[7px] text-muted-foreground/50">Loom & Page</span>
+                      </div>
                     </div>
                   </div>
 

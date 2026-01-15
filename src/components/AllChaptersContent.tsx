@@ -44,6 +44,9 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const [isEditing, setIsEditing] = useState(false);
     const [editedContent, setEditedContent] = useState<Record<number, string>>({});
     const [editedTitles, setEditedTitles] = useState<Record<number, string>>({});
+    // Separate image captions from body text for safe editing
+    const [editedImageCaptions, setEditedImageCaptions] = useState<Record<number, string>>({});
+    const [editedBodyText, setEditedBodyText] = useState<Record<number, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [regenerateDialog, setRegenerateDialog] = useState<{ chapterNum: number; currentAlt: string } | null>(null);
     const [newImagePrompt, setNewImagePrompt] = useState('');
@@ -54,18 +57,41 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       getChapterRefs: () => chapterRefs.current,
     }));
 
-    // Initialize edited content when entering edit mode
+    // Parse image and body text from markdown content
+    const parseImageAndBody = (markdownContent: string) => {
+      const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (imageMatch) {
+        const imageMarkdown = imageMatch[0];
+        const caption = imageMatch[1];
+        const url = imageMatch[2];
+        const bodyText = markdownContent.replace(imageMarkdown, '').trim();
+        return { caption, url, bodyText, hasImage: true };
+      }
+      return { caption: '', url: '', bodyText: markdownContent, hasImage: false };
+    };
+
+    // Initialize edited content when entering edit mode - split image from body
     const handleEnterEditMode = () => {
       const contentMap: Record<number, string> = {};
       const titleMap: Record<number, string> = {};
+      const captionMap: Record<number, string> = {};
+      const bodyMap: Record<number, string> = {};
+      
       for (let i = 1; i <= 10; i++) {
         const content = bookData[`chapter${i}Content`];
-        if (content) contentMap[i] = content;
+        if (content) {
+          contentMap[i] = content;
+          const parsed = parseImageAndBody(content);
+          captionMap[i] = parsed.caption;
+          bodyMap[i] = parsed.bodyText;
+        }
         const tocEntry = bookData.tableOfContents?.find((c: any) => c.chapter === i);
         if (tocEntry) titleMap[i] = tocEntry.title;
       }
       setEditedContent(contentMap);
       setEditedTitles(titleMap);
+      setEditedImageCaptions(captionMap);
+      setEditedBodyText(bodyMap);
       setIsEditing(true);
     };
 
@@ -73,6 +99,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       setIsEditing(false);
       setEditedContent({});
       setEditedTitles({});
+      setEditedImageCaptions({});
+      setEditedBodyText({});
     };
 
     const handleSaveChanges = async () => {
@@ -83,11 +111,27 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
       setIsSaving(true);
       try {
-        // Build update object for chapters
+        // Build update object for chapters - recombine image and body text
         const updateData: Record<string, any> = {};
-        Object.entries(editedContent).forEach(([chapterNum, content]) => {
-          updateData[`chapter${chapterNum}_content`] = content;
-        });
+        
+        for (const [chapterNumStr, originalContent] of Object.entries(editedContent)) {
+          const chapterNum = parseInt(chapterNumStr);
+          const parsed = parseImageAndBody(originalContent);
+          
+          // Get updated caption and body
+          const newCaption = editedImageCaptions[chapterNum] ?? parsed.caption;
+          const newBody = editedBodyText[chapterNum] ?? parsed.bodyText;
+          
+          // Recombine: if there was an image, preserve it with updated caption
+          let finalContent: string;
+          if (parsed.hasImage) {
+            finalContent = `![${newCaption}](${parsed.url})\n\n${newBody}`;
+          } else {
+            finalContent = newBody;
+          }
+          
+          updateData[`chapter${chapterNum}_content`] = finalContent;
+        }
 
         // Update table of contents with new titles
         const updatedToc = bookData.tableOfContents?.map((entry: any) => ({
@@ -106,9 +150,23 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         // Update local state via callback
         if (onBookDataUpdate) {
           const newBookData = { ...bookData };
-          Object.entries(editedContent).forEach(([chapterNum, content]) => {
-            newBookData[`chapter${chapterNum}Content`] = content;
-          });
+          
+          for (const [chapterNumStr, originalContent] of Object.entries(editedContent)) {
+            const chapterNum = parseInt(chapterNumStr);
+            const parsed = parseImageAndBody(originalContent);
+            const newCaption = editedImageCaptions[chapterNum] ?? parsed.caption;
+            const newBody = editedBodyText[chapterNum] ?? parsed.bodyText;
+            
+            let finalContent: string;
+            if (parsed.hasImage) {
+              finalContent = `![${newCaption}](${parsed.url})\n\n${newBody}`;
+            } else {
+              finalContent = newBody;
+            }
+            
+            newBookData[`chapter${chapterNum}Content`] = finalContent;
+          }
+          
           newBookData.tableOfContents = updatedToc;
           onBookDataUpdate(newBookData);
         }
@@ -117,6 +175,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         setIsEditing(false);
         setEditedContent({});
         setEditedTitles({});
+        setEditedImageCaptions({});
+        setEditedBodyText({});
       } catch (err) {
         console.error('Save failed:', err);
         toast.error('Failed to save changes');
@@ -427,12 +487,45 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                       <PrimaryImageSection chapterNum={chapter.number} content={displayContent} />
                       
                       {isEditing ? (
-                        <Textarea
-                          value={editedContent[chapter.number] || chapter.content || ''}
-                          onChange={(e) => setEditedContent(prev => ({ ...prev, [chapter.number]: e.target.value }))}
-                          className="min-h-[400px] font-mono text-sm border-dashed resize-y"
-                          placeholder="Enter markdown content..."
-                        />
+                        <div className="space-y-6">
+                          {/* Image Caption Editor - Separate from body text */}
+                          {(() => {
+                            const parsed = parseImageAndBody(editedContent[chapter.number] || chapter.content || '');
+                            if (parsed.hasImage) {
+                              return (
+                                <div className="p-4 border border-dashed border-border/50 rounded-lg bg-secondary/10">
+                                  <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                                    <ImageIcon className="w-4 h-4" />
+                                    Image Caption / Alt Text
+                                  </label>
+                                  <Input
+                                    value={editedImageCaptions[chapter.number] ?? parsed.caption}
+                                    onChange={(e) => setEditedImageCaptions(prev => ({ ...prev, [chapter.number]: e.target.value }))}
+                                    placeholder="Enter image caption..."
+                                    className="border-dashed"
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    This text is used for accessibility and SEO
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                          
+                          {/* Body Text Editor - No image markdown */}
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                              Chapter Body Text
+                            </label>
+                            <Textarea
+                              value={editedBodyText[chapter.number] ?? parseImageAndBody(editedContent[chapter.number] || chapter.content || '').bodyText}
+                              onChange={(e) => setEditedBodyText(prev => ({ ...prev, [chapter.number]: e.target.value }))}
+                              className="min-h-[400px] font-mono text-sm border-dashed resize-y"
+                              placeholder="Enter markdown content (without images)..."
+                            />
+                          </div>
+                        </div>
                       ) : (
                         <ReactMarkdown components={createMarkdownComponents(chapter.number)}>{cleanContent}</ReactMarkdown>
                       )}

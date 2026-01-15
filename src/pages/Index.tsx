@@ -917,6 +917,22 @@ const Index = () => {
                 isAdmin={isAdmin}
                 bookId={bookId || undefined}
                 bookData={bookData || undefined}
+                isGenerationComplete={(() => {
+                  // Check if all 10 chapters are present
+                  const allChaptersReady = [
+                    bookData?.chapter1Content,
+                    bookData?.chapter2Content,
+                    bookData?.chapter3Content,
+                    bookData?.chapter4Content,
+                    bookData?.chapter5Content,
+                    bookData?.chapter6Content,
+                    bookData?.chapter7Content,
+                    bookData?.chapter8Content,
+                    bookData?.chapter9Content,
+                    bookData?.chapter10Content,
+                  ].every(Boolean);
+                  return allChaptersReady;
+                })()}
                 onCoverUpdate={(updates) => {
                   // Update local state immediately when Cover Studio makes changes
                   if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);

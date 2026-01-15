@@ -41,18 +41,18 @@ const isTravelTopic = (topic: string): boolean => {
  * PRIORITY: customPrompt takes precedence over auto-generated queries
  * SAFETY: 
  * - Auto-generated images: strict "no people" filter
- * - Custom prompts: USE EXACTLY as provided, only append quality keywords
+ * - Custom prompts: Allow crowds but add quality keywords
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
   // Strict safety keywords for AUTO-GENERATED images (no people)
   const AUTO_SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
   
-  // For custom prompts: ONLY quality enhancement, NO restrictions
-  const CUSTOM_PROMPT_QUALITY = "4k high resolution";
+  // For custom prompts: Quality enhancement + architectural style (allows crowds)
+  const CUSTOM_PROMPT_QUALITY = "high quality architectural style 4k";
 
-  // CUSTOM PROMPT OVERRIDE: Use EXACTLY as provided with quality boost only
+  // CUSTOM PROMPT: Use as provided but add quality keywords (NO "no people")
   if (customPrompt && customPrompt.trim().length > 0) {
-    console.log("Using custom prompt EXACTLY (unlocked mode):", customPrompt);
+    console.log("Using custom prompt with quality enhancement:", customPrompt);
     return `${customPrompt.trim()} ${CUSTOM_PROMPT_QUALITY}`;
   }
 
@@ -88,8 +88,8 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
  */
 async function fetchPexelsImages(query: string, apiKey: string, orientation: string = "landscape"): Promise<string[]> {
   try {
-    // Random page (1-10) to shuffle results and prevent getting same images
-    const randomPage = Math.floor(Math.random() * 10) + 1;
+    // Random page (1-3) to shuffle results while keeping relevance high
+    const randomPage = Math.floor(Math.random() * 3) + 1;
     console.log("Pexels search query:", query, "orientation:", orientation, "page:", randomPage);
 
     const controller = new AbortController();
