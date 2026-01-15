@@ -37,23 +37,46 @@ const isTravelTopic = (topic: string): boolean => {
 };
 
 /**
+ * STRICT SAFETY SANITIZER
+ * Removes forbidden human keywords from input text before sending to Pexels
+ */
+const sanitizeInput = (input: string): string => {
+  const FORBIDDEN_KEYWORDS = [
+    'woman', 'women', 'man', 'men', 'person', 'people', 
+    'girl', 'boy', 'child', 'children', 'face', 'couple', 'selfie'
+  ];
+  
+  let sanitized = input.toLowerCase();
+  for (const keyword of FORBIDDEN_KEYWORDS) {
+    // Remove the forbidden word (case-insensitive, with word boundaries)
+    const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+    sanitized = sanitized.replace(regex, '');
+  }
+  
+  // Clean up extra spaces
+  return sanitized.replace(/\s+/g, ' ').trim();
+};
+
+/**
  * Build search query for Pexels
  * PRIORITY: customPrompt takes precedence over auto-generated queries
  * SAFETY: 
- * - Auto-generated images: strict "no people" filter
- * - Custom prompts: Allow crowds but add quality keywords
+ * - ALL images: strict sanitization + "still life, object focus, no people"
+ * - Custom prompts: Use as provided (after sanitization) + quality keywords
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
-  // Strict safety keywords for AUTO-GENERATED images (no people)
-  const AUTO_SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
+  // Strict safety keywords for ALL images
+  const SAFETY_SUFFIX = "still life object focus no people";
   
-  // For custom prompts: Quality enhancement + architectural style (allows crowds)
-  const CUSTOM_PROMPT_QUALITY = "high quality architectural style 4k";
+  // For custom prompts: Quality enhancement only
+  const CUSTOM_PROMPT_QUALITY = "4k high resolution";
 
-  // CUSTOM PROMPT: Use as provided but add quality keywords (NO "no people")
+  // CUSTOM PROMPT: Sanitize first, then add quality + safety keywords
   if (customPrompt && customPrompt.trim().length > 0) {
-    console.log("Using custom prompt with quality enhancement:", customPrompt);
-    return `${customPrompt.trim()} ${CUSTOM_PROMPT_QUALITY}`;
+    const sanitized = sanitizeInput(customPrompt.trim());
+    console.log("Original custom prompt:", customPrompt);
+    console.log("Sanitized custom prompt:", sanitized);
+    return `${sanitized} ${CUSTOM_PROMPT_QUALITY} ${SAFETY_SUFFIX}`;
   }
 
   const location = extractGeographicLocation(topicOrTitle);
@@ -63,23 +86,25 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
   if (variant === "back-cover") {
     // Abstract textures and backgrounds for back covers
     if (location) {
-      return `${location} texture abstract background ${AUTO_SAFETY_KEYWORDS}`;
+      return `${location} texture abstract background ${SAFETY_SUFFIX}`;
     }
-    return `abstract texture background minimalist ${AUTO_SAFETY_KEYWORDS}`;
+    return `abstract texture background minimalist ${SAFETY_SUFFIX}`;
   }
 
-  // Diagram/chapter images: prioritize caption with safety
+  // Diagram/chapter images: sanitize caption and add safety
   if (variant === "diagram" && caption) {
+    const sanitizedCaption = sanitizeInput(caption);
     const locationSuffix = location ? ` ${location}` : "";
-    return `${caption}${locationSuffix} ${AUTO_SAFETY_KEYWORDS}`;
+    return `${sanitizedCaption}${locationSuffix} ${SAFETY_SUFFIX}`;
   }
 
-  // Cover image: prioritize location grounding for travel topics
+  // Cover image: sanitize and prioritize location grounding for travel topics
+  const sanitizedTopic = sanitizeInput(topicOrTitle);
   if (isTravel && location) {
-    return `${location} landmark architecture ${AUTO_SAFETY_KEYWORDS}`;
+    return `${location} landmark architecture ${SAFETY_SUFFIX}`;
   }
 
-  return `${topicOrTitle} ${AUTO_SAFETY_KEYWORDS}`;
+  return `${sanitizedTopic} ${SAFETY_SUFFIX}`;
 };
 
 /**

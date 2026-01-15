@@ -582,9 +582,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col items-center">
                     <h3 className="font-medium mb-3">Current Front Cover</h3>
-                    {/* Full Cover Layout Preview - constrained to match dashboard card size */}
-                    <div className="max-w-[280px] w-full">
-                      <div className="aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col">
+                    {/* Full Cover Layout Preview - constrained width, no yellow tint in preview */}
+                    <div className="w-[260px] mx-auto">
+                      <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col">
                         {/* Cover Image */}
                         <div className="relative w-full aspect-square mb-4 flex-shrink-0">
                           {displayUrl ? (
@@ -906,9 +906,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                     </p>
                   </div>
                   
-                  <div className="flex items-stretch justify-center gap-0 border rounded-lg overflow-hidden shadow-lg mx-auto" style={{ maxWidth: '700px' }}>
-                    {/* Back Cover */}
-                    <div className="w-40 sm:w-52 aspect-[3/4] bg-secondary/20 relative">
+                  {/* Centered Full Wrap Container */}
+                  <div className="flex justify-center items-center">
+                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '700px' }}>
+                      {/* Back Cover */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
                       {localBackCoverUrl ? (
                         <>
                           <img src={localBackCoverUrl} alt="Back" className="w-full h-full object-cover" />
@@ -930,39 +932,38 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         </div>
                       )}
                     </div>
-                    {/* Spine - Black text on white/custom background */}
-                    <div 
-                      className="w-5 sm:w-6 flex flex-col items-center justify-between py-3"
-                      style={{ backgroundColor: spineColor }}
-                    >
-                      {/* Edition Text at TOP */}
-                      <span 
-                        className="text-[6px] sm:text-[7px] font-serif whitespace-nowrap"
-                        style={{ 
-                          writingMode: 'vertical-rl',
-                          textOrientation: 'mixed',
-                          transform: 'rotate(180deg)',
-                          color: spineTextColor,
-                          opacity: 0.7
-                        }}
+                      {/* Spine - Black text on white/custom background */}
+                      <div 
+                        className="w-5 sm:w-6 flex flex-col items-center justify-between py-3 flex-shrink-0"
+                        style={{ backgroundColor: spineColor }}
                       >
-                        {editionText}
-                      </span>
-                      {/* Title at BOTTOM */}
-                      <span 
-                        className="text-[7px] sm:text-[8px] font-serif font-medium whitespace-nowrap"
-                        style={{ 
-                          writingMode: 'vertical-rl',
-                          textOrientation: 'mixed',
-                          transform: 'rotate(180deg)',
-                          color: spineTextColor
-                        }}
-                      >
-                        {(spineText || title).slice(0, 35)}
-                      </span>
-                    </div>
-                    {/* Front Cover - Full Composite View (Image + Title Overlay) */}
-                    <div className="w-40 sm:w-52 aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 relative overflow-hidden flex flex-col p-3">
+                        {/* Edition Text at TOP */}
+                        <span 
+                          className="text-[6px] sm:text-[7px] font-serif whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)',
+                            color: '#000000'
+                          }}
+                        >
+                          {editionText}
+                        </span>
+                        {/* Title at BOTTOM */}
+                        <span 
+                          className="text-[7px] sm:text-[8px] font-serif font-medium whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)',
+                            color: '#000000'
+                          }}
+                        >
+                          {(spineText || title).slice(0, 35)}
+                        </span>
+                      </div>
+                      {/* Front Cover - Full Composite View (Image + Title Overlay) - No yellow tint */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col p-3 flex-shrink-0">
                       {/* Cover Image */}
                       <div className="relative w-full aspect-square mb-2 flex-shrink-0">
                         {displayUrl ? (
@@ -998,6 +999,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                       </div>
                     </div>
                   </div>
+                </div>
 
                   <Button onClick={handleDownloadKDP} className="w-full max-w-md mx-auto block" size="lg">
                     <Download className="w-4 h-4 mr-2" />
