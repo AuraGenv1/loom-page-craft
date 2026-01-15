@@ -1,7 +1,7 @@
 import { forwardRef, useState, useEffect, useRef } from 'react';
 import LocalResources from './LocalResources';
 import { LocalResource } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Lightbulb } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import ReactMarkdown from 'react-markdown';
@@ -85,7 +85,7 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         return null;
       },
 
-      // PRO-TIP HANDLER - Blue Box Style with Lightbulb
+      // PRO-TIP HANDLER - "The Onyx" Luxury Design Style
       blockquote: ({ children }: any) => {
         // Extract text content recursively from React children
         const extractText = (node: any): string => {
@@ -103,28 +103,14 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         if (isProTip) {
           const cleanText = textContent.replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, "").replace(/\*\*/g, "").trim();
           return (
-            <div 
-              className="my-8 p-6 rounded-xl"
-              style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6' }}
-            >
-              <div className="flex items-start gap-4">
-                <div 
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: '#dbeafe' }}
-                >
-                  <Lightbulb className="w-5 h-5" style={{ color: '#3b82f6' }} />
-                </div>
+            <div className="my-8 p-6 bg-white border-l-4 border-black">
+              <div className="flex items-start gap-3">
+                <Key className="w-4 h-4 text-black flex-shrink-0 mt-0.5" />
                 <div>
-                  <p 
-                    className="text-sm uppercase tracking-widest font-bold mb-2"
-                    style={{ color: '#1d4ed8' }}
-                  >
-                    Pro-Tip
+                  <p className="text-xs font-bold tracking-[0.2em] uppercase text-black mb-2">
+                    PRO TIP
                   </p>
-                  <p 
-                    className="font-serif leading-relaxed text-lg"
-                    style={{ color: '#1e40af', lineHeight: '1.7' }}
-                  >
+                  <p className="font-serif text-gray-800 italic leading-relaxed text-lg">
                     {cleanText}
                   </p>
                 </div>
