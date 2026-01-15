@@ -36,4 +36,5 @@ export interface BookData {
   coverImageUrl?: string | string[];
   back_cover_url?: string;
   spine_text?: string;
+  editionYear?: number;
 }
