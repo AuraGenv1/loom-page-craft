@@ -67,7 +67,21 @@ CHAPTER 1 REQUIREMENTS:
 
     const data = await response.json();
     let rawText = data.candidates[0].content.parts[0].text;
-    const aiData = JSON.parse(rawText.substring(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1));
+    
+    // Clean markdown code blocks
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '');
+    
+    // Escape newlines inside the string to prevent JSON parse errors
+    rawText = rawText.replace(/\n/g, '\\n').replace(/\r/g, '');
+    
+    // Find the first '{' and last '}' to ensure we only parse the JSON object
+    const firstOpen = rawText.indexOf('{');
+    const lastClose = rawText.lastIndexOf('}');
+    if (firstOpen !== -1 && lastClose !== -1) {
+      rawText = rawText.substring(firstOpen, lastClose + 1);
+    }
+    
+    const aiData = JSON.parse(rawText);
 
     return new Response(JSON.stringify({
       title: aiData.title,
