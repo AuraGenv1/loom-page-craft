@@ -65,23 +65,30 @@ CHAPTER 1 REQUIREMENTS:
       }),
     });
 
-    const data = await response.json();
-    let rawText = data.candidates[0].content.parts[0].text;
-    
-    // Clean markdown code blocks
-    rawText = rawText.replace(/```json/g, '').replace(/```/g, '');
-    
-    // Escape newlines inside the string to prevent JSON parse errors
-    rawText = rawText.replace(/\n/g, '\\n').replace(/\r/g, '');
-    
-    // Find the first '{' and last '}' to ensure we only parse the JSON object
-    const firstOpen = rawText.indexOf('{');
-    const lastClose = rawText.lastIndexOf('}');
-    if (firstOpen !== -1 && lastClose !== -1) {
-      rawText = rawText.substring(firstOpen, lastClose + 1);
+    const geminiData = await response.json();
+    let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // 1. Extract ONLY the JSON object (ignore markdown or intro text)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("Gemini Raw Output:", text);
+      throw new Error("No JSON object found in AI response");
     }
-    
-    const aiData = JSON.parse(rawText);
+    let cleanJson = jsonMatch[0];
+
+    // 2. Sanitize: Remove bad control characters but KEEP formatting
+    cleanJson = cleanJson.replace(/[\u0000-\u001F]+/g, (match: string) => {
+      if (match === '\n' || match === '\r' || match === '\t') return match;
+      return '';
+    });
+
+    let aiData;
+    try {
+      aiData = JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("JSON Parse Failed. Cleaned Text:", cleanJson);
+      throw new Error(`Failed to parse book data: ${(e as Error).message}`);
+    }
 
     return new Response(JSON.stringify({
       title: aiData.title,
