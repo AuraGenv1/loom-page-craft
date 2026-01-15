@@ -346,7 +346,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         await generateCleanPDF({
           topic: topic || title,
           bookData,
-          coverImageUrl: displayUrl || undefined
+          coverImageUrl: displayUrl || undefined,
+          isKdpManuscript: true
         });
         toast.success('Manuscript PDF downloaded!');
       } catch (err) {
