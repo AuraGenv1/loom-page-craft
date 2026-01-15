@@ -145,17 +145,22 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         const chapterNum = regenerateDialog.chapterNum;
         const currentContent = editedContent[chapterNum] || bookData[`chapter${chapterNum}Content`] || '';
         
+        // Force browser to reload image by appending timestamp
+        const timestamp = Date.now();
+        const cleanUrl = data.imageUrl.split('?')[0]; // Remove existing params if any
+        const newUrl = `${cleanUrl}?t=${timestamp}&w=800&q=80`;
+        
         // Replace the first image in the markdown with new one
         const newContent = currentContent.replace(
           /!\[([^\]]*)\]\(([^)]+)\)/,
-          `![${newImagePrompt.trim()}](${data.imageUrl})`
+          `![${newImagePrompt.trim()}](${newUrl})`
         );
 
         setEditedContent(prev => ({ ...prev, [chapterNum]: newContent }));
         
-        // Also update inline images cache
+        // Also update the inline cache with the new timestamped URL
         const imageId = `ch${chapterNum}-img-${newImagePrompt.trim().replace(/\s+/g, '-').substring(0, 20)}`;
-        setInlineImages(prev => ({ ...prev, [imageId]: data.imageUrl }));
+        setInlineImages(prev => ({ ...prev, [imageId]: newUrl }));
 
         toast.success('Image regenerated!');
         setRegenerateDialog(null);
