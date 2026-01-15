@@ -908,7 +908,26 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover title={displayTitle} subtitle={subtitle} topic={topic} coverImageUrls={coverImageUrls} isLoadingImage={isLoadingCoverImage} />
+              <BookCover 
+                title={displayTitle} 
+                subtitle={subtitle} 
+                topic={topic} 
+                coverImageUrls={coverImageUrls} 
+                isLoadingImage={isLoadingCoverImage}
+                isAdmin={isAdmin}
+                bookId={bookId || undefined}
+                bookData={bookData || undefined}
+                onCoverUpdate={(updates) => {
+                  // Update local state immediately when Cover Studio makes changes
+                  if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
+                  
+                  // Merge other updates (spine, back cover) into bookData
+                  setBookData(prev => {
+                    if (!prev) return prev;
+                    return { ...prev, ...updates };
+                  });
+                }}
+              />
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
