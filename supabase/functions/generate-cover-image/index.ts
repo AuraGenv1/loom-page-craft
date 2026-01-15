@@ -41,19 +41,19 @@ const isTravelTopic = (topic: string): boolean => {
  * PRIORITY: customPrompt takes precedence over auto-generated queries
  * SAFETY: 
  * - Auto-generated images: strict "no people" filter
- * - Custom prompts: relaxed filter for street photography scenes
+ * - Custom prompts: USE EXACTLY as provided, only append quality keywords
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
   // Strict safety keywords for AUTO-GENERATED images (no people)
   const AUTO_SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
   
-  // Relaxed safety for CUSTOM PROMPTS - allows crowds/street scenes
-  const CUSTOM_PROMPT_SAFETY = "wide angle street photography depth of field";
+  // For custom prompts: ONLY quality enhancement, NO restrictions
+  const CUSTOM_PROMPT_QUALITY = "4k high resolution";
 
-  // CUSTOM PROMPT OVERRIDE: Use relaxed safety (allows people in crowds)
+  // CUSTOM PROMPT OVERRIDE: Use EXACTLY as provided with quality boost only
   if (customPrompt && customPrompt.trim().length > 0) {
-    console.log("Using custom prompt for search (relaxed mode):", customPrompt);
-    return `${customPrompt.trim()} ${CUSTOM_PROMPT_SAFETY}`;
+    console.log("Using custom prompt EXACTLY (unlocked mode):", customPrompt);
+    return `${customPrompt.trim()} ${CUSTOM_PROMPT_QUALITY}`;
   }
 
   const location = extractGeographicLocation(topicOrTitle);
@@ -88,13 +88,15 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
  */
 async function fetchPexelsImages(query: string, apiKey: string, orientation: string = "landscape"): Promise<string[]> {
   try {
-    console.log("Pexels search query:", query, "orientation:", orientation);
+    // Random page (1-10) to shuffle results and prevent getting same images
+    const randomPage = Math.floor(Math.random() * 10) + 1;
+    console.log("Pexels search query:", query, "orientation:", orientation, "page:", randomPage);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     const response = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=${orientation}`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=${orientation}&page=${randomPage}`,
       {
         headers: { Authorization: apiKey },
         signal: controller.signal,

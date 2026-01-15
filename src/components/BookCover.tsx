@@ -50,9 +50,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [imageLoaded, setImageLoaded] = useState(false);
     const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
     
-    // Editable title/subtitle state (initialized from props)
+    // Editable title/subtitle/edition state (initialized from props)
     const [localTitle, setLocalTitle] = useState(propTitle);
     const [localSubtitle, setLocalSubtitle] = useState(propSubtitle || '');
+    const [editionText, setEditionText] = useState('2026 Edition');
     
     // Sync props to local state when they change
     useEffect(() => {
@@ -360,20 +361,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         const textRgb = hexToRgb(spineTextColor);
         
-        // Spine text (rotated) - Title at TOP (after rotation)
+        // Edition Text at TOP of spine (left on rotated spine)
         pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-        pdf.setFontSize(11);
-        const spineDisplayText = spineText || title;
-        // Position title near top of spine (accounting for rotation)
-        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, 0.8, {
+        pdf.setFontSize(7);
+        pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, {
           angle: 90,
           align: 'left'
         });
         
-        // 2026 Edition at BOTTOM of spine (space-between)
-        pdf.setFontSize(7);
-        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-        pdf.text('2026 Edition', coverWidth + spineWidth / 2, pageHeight - 0.5, {
+        // Spine Title at BOTTOM of spine (right on rotated spine)
+        pdf.setFontSize(11);
+        const spineDisplayText = spineText || title;
+        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.6, {
           angle: 90,
           align: 'right'
         });
@@ -771,7 +770,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         className="w-20 h-96 rounded flex flex-col items-center justify-between py-6 px-2 shadow-lg border"
                         style={{ backgroundColor: spineColor }}
                       >
-                        {/* Main Title at START */}
+                        {/* Edition Text at TOP (Left on spine) */}
+                        <span 
+                          className="text-[10px] font-serif whitespace-nowrap"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)',
+                            color: spineTextColor,
+                            opacity: 0.7
+                          }}
+                        >
+                          {editionText}
+                        </span>
+                        {/* Main Title at BOTTOM (Right on spine) */}
                         <span 
                           className="text-sm font-serif font-medium whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis"
                           style={{ 
@@ -783,27 +795,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         >
                           {spineText || title}
                         </span>
-                        {/* 2026 Edition at END */}
-                        <span 
-                          className="text-[10px] font-serif whitespace-nowrap"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)',
-                            color: spineTextColor,
-                            opacity: 0.7
-                          }}
-                        >
-                          2026 Edition
-                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="spine-text" className="text-base font-medium">Spine Text</Label>
+                      <Label htmlFor="edition-text" className="text-base font-medium">Edition Text</Label>
                       <p className="text-sm text-muted-foreground mb-2">
-                        Usually the book title. Keep it concise for readability.
+                        Displayed at the top of the spine (e.g., "2026 Edition")
+                      </p>
+                      <Input
+                        id="edition-text"
+                        value={editionText}
+                        onChange={(e) => setEditionText(e.target.value)}
+                        placeholder="2026 Edition"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="spine-text" className="text-base font-medium">Spine Title</Label>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Usually the book title. Displayed at the bottom of the spine.
                       </p>
                       <Input
                         id="spine-text"
