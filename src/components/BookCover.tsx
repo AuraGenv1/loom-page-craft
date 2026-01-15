@@ -55,7 +55,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [frontPrompt, setFrontPrompt] = useState('');
     const [backPrompt, setBackPrompt] = useState('');
     const [spineText, setSpineText] = useState(initialSpineText || title);
-    const [spineColor, setSpineColor] = useState('#1a1a2e');
+    const [spineColor, setSpineColor] = useState('#000000'); // Default to black
     const [isRegeneratingFront, setIsRegeneratingFront] = useState(false);
     const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
     const [localBackCoverUrl, setLocalBackCoverUrl] = useState(backCoverUrl || '');
@@ -233,7 +233,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       toast.success('Spine settings saved!');
     };
 
-    // Download KDP Full Wrap PDF
+    // Download KDP Full Wrap PDF - With Text Overlays
     const handleDownloadKDP = async () => {
       toast.info('Generating KDP cover PDF...');
       
@@ -283,14 +283,32 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
         }
 
+        // Back cover blurb overlay - draw semi-transparent box with text
+        const backCenterX = coverWidth / 2;
+        // Draw darker overlay for text readability
+        pdf.setFillColor(30, 30, 30);
+        pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(10);
+        pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
+
         // Spine (center)
         pdf.setFillColor(spineColor);
         pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
         
-        // Spine text (rotated)
+        // Spine text (rotated) - with serif-like styling
         pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(12);
-        pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight / 2, {
+        pdf.setFontSize(11);
+        const spineDisplayText = spineText || title;
+        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight / 2, {
+          angle: 90,
+          align: 'center'
+        });
+        
+        // 2026 Edition on spine bottom
+        pdf.setFontSize(7);
+        pdf.setTextColor(200, 200, 200);
+        pdf.text('2026 Edition', coverWidth + spineWidth / 2, pageHeight - 0.5, {
           angle: 90,
           align: 'center'
         });
@@ -305,23 +323,30 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           }
         }
 
-        // Add title on front cover (overlaid on image)
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(28);
+        // Front cover text overlays with shadow effect
         const frontCenterX = coverWidth + spineWidth + coverWidth / 2;
-        // Add text shadow effect with multiple layers
+        
+        // Title shadow
         pdf.setTextColor(0, 0, 0);
-        pdf.text(title, frontCenterX + 0.02, 1.52, { align: 'center' });
+        pdf.setFontSize(28);
+        pdf.text(title, frontCenterX + 0.02, 1.52, { align: 'center', maxWidth: coverWidth - 0.5 });
+        // Title main
         pdf.setTextColor(255, 255, 255);
-        pdf.text(title, frontCenterX, 1.5, { align: 'center' });
+        pdf.text(title, frontCenterX, 1.5, { align: 'center', maxWidth: coverWidth - 0.5 });
 
+        // Subtitle
         if (subtitle) {
           pdf.setFontSize(14);
           pdf.setTextColor(0, 0, 0);
-          pdf.text(subtitle, frontCenterX + 0.01, 2.02, { align: 'center' });
-          pdf.setTextColor(200, 200, 200);
-          pdf.text(subtitle, frontCenterX, 2.0, { align: 'center' });
+          pdf.text(subtitle, frontCenterX + 0.01, 2.02, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.setTextColor(220, 220, 220);
+          pdf.text(subtitle, frontCenterX, 2.0, { align: 'center', maxWidth: coverWidth - 0.5 });
         }
+
+        // Bottom branding on front cover
+        pdf.setFontSize(9);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
 
         const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
         pdf.save(filename);
@@ -484,19 +509,46 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Manuscript</TabsTrigger>
               </TabsList>
 
-              {/* TAB 1: Front Cover */}
+              {/* TAB 1: Front Cover - Full Layout Preview */}
               <TabsContent value="front" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <h3 className="font-medium mb-3">Current Front Cover</h3>
-                    <div className="aspect-[3/4] bg-secondary/20 rounded-lg overflow-hidden border max-w-[300px]">
-                      {displayUrl ? (
-                        <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                          No image generated
-                        </div>
-                      )}
+                    {/* Full Cover Layout Preview - matches main card view */}
+                    <div className="aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 rounded-sm shadow-lg overflow-hidden border max-w-[300px] relative p-6 flex flex-col">
+                      {/* Cover Image */}
+                      <div className="relative w-full aspect-square mb-4 flex-shrink-0">
+                        {displayUrl ? (
+                          <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10">
+                            <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full rounded-lg bg-secondary/30 flex items-center justify-center text-muted-foreground">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      {/* Title Overlay */}
+                      <div className="flex-1 flex flex-col items-center text-center">
+                        {parsedTitle.category && (
+                          <p className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground/60 font-sans font-medium mb-1">
+                            {parsedTitle.category}
+                          </p>
+                        )}
+                        <h1 className="font-serif text-lg font-medium text-foreground leading-tight mb-2">
+                          {parsedTitle.mainTitle}
+                        </h1>
+                        <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
+                        {subtitle && (
+                          <p className="text-[8px] uppercase tracking-[0.2em] text-muted-foreground/50 font-serif">
+                            {subtitle}
+                          </p>
+                        )}
+                      </div>
+                      {/* Bottom Branding */}
+                      <div className="text-center pt-2">
+                        <span className="font-serif text-[10px] text-muted-foreground/50">Loom & Page</span>
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-4">
@@ -535,14 +587,29 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 </div>
               </TabsContent>
 
-              {/* TAB 2: Back Cover */}
+              {/* TAB 2: Back Cover - With Blurb Placeholder */}
               <TabsContent value="back" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <h3 className="font-medium mb-3">Current Back Cover</h3>
-                    <div className="aspect-[3/4] bg-secondary/20 rounded-lg overflow-hidden border max-w-[300px]">
+                    <div className="aspect-[3/4] bg-secondary/20 rounded-lg overflow-hidden border max-w-[300px] relative">
                       {localBackCoverUrl ? (
-                        <img src={localBackCoverUrl} alt="Back Cover" className="w-full h-full object-cover" />
+                        <>
+                          <img src={localBackCoverUrl} alt="Back Cover" className="w-full h-full object-cover" />
+                          {/* Blurb Placeholder Overlay */}
+                          <div className="absolute inset-0 p-6 flex flex-col justify-between">
+                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 mt-12">
+                              <p className="text-white text-xs leading-relaxed italic">
+                                "Your compelling book description goes here. This is where you'll hook readers with an irresistible summary of what they'll discover inside. Make every word count!"
+                              </p>
+                            </div>
+                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-3 text-center">
+                              <p className="text-white/80 text-[10px] font-medium">
+                                www.loomandpage.com
+                              </p>
+                            </div>
+                          </div>
+                        </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
                           <BookOpen className="w-12 h-12 opacity-50" />
@@ -587,18 +654,19 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 </div>
               </TabsContent>
 
-              {/* TAB 3: Spine */}
+              {/* TAB 3: Spine - Improved with 2026 Edition */}
               <TabsContent value="spine" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex justify-center">
                     <div>
                       <h3 className="font-medium mb-3 text-center">Spine Preview</h3>
                       <div 
-                        className="w-20 h-96 rounded flex items-center justify-center shadow-lg"
+                        className="w-20 h-96 rounded flex flex-col items-center justify-between py-4 shadow-lg"
                         style={{ backgroundColor: spineColor }}
                       >
+                        {/* Main Title */}
                         <span 
-                          className="text-white text-sm font-medium whitespace-nowrap max-w-[350px] overflow-hidden text-ellipsis"
+                          className="text-white text-sm font-serif font-medium whitespace-nowrap max-w-[350px] overflow-hidden text-ellipsis flex-1 flex items-center"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
@@ -606,6 +674,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                           }}
                         >
                           {spineText || title}
+                        </span>
+                        {/* 2026 Edition at bottom */}
+                        <span 
+                          className="text-white/70 text-[10px] font-serif whitespace-nowrap mt-2"
+                          style={{ 
+                            writingMode: 'vertical-rl',
+                            textOrientation: 'mixed',
+                            transform: 'rotate(180deg)'
+                          }}
+                        >
+                          2026 Edition
                         </span>
                       </div>
                     </div>
@@ -636,7 +715,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         <Input
                           value={spineColor}
                           onChange={(e) => setSpineColor(e.target.value)}
-                          placeholder="#1a1a2e"
+                          placeholder="#000000"
                           className="flex-1"
                         />
                       </div>
@@ -644,10 +723,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                     <div className="pt-4">
                       <h4 className="font-medium mb-2">Quick Colors</h4>
                       <div className="flex gap-2 flex-wrap">
-                        {['#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#00b894', '#d63031', '#fdcb6e', '#e17055'].map(color => (
+                        {['#000000', '#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#00b894', '#d63031', '#fdcb6e'].map(color => (
                           <button
                             key={color}
-                            className="w-10 h-10 rounded border-2 border-transparent hover:border-foreground/30 transition-colors"
+                            className={`w-10 h-10 rounded border-2 transition-colors ${spineColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-foreground/30'}`}
                             style={{ backgroundColor: color }}
                             onClick={() => setSpineColor(color)}
                           />

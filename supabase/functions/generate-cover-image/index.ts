@@ -39,13 +39,18 @@ const isTravelTopic = (topic: string): boolean => {
 /**
  * Build search query for Pexels
  * PRIORITY: customPrompt takes precedence over auto-generated queries
+ * SAFETY: Always append safety keywords to prevent model release issues
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
-  // CUSTOM PROMPT OVERRIDE: If provided, use it directly with quality enhancers
+  // Safety keywords to prevent model release issues - applies to ALL variants
+  const SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
+  const CUSTOM_PROMPT_SAFETY = "wide shot unrecognizable distance";
+
+  // CUSTOM PROMPT OVERRIDE: If provided, use it directly with safety enhancers
   if (customPrompt && customPrompt.trim().length > 0) {
-    // Return the custom prompt as-is - Pexels will search for it
     console.log("Using custom prompt for search:", customPrompt);
-    return customPrompt.trim();
+    // Append safety keywords for custom prompts
+    return `${customPrompt.trim()} ${CUSTOM_PROMPT_SAFETY} ${SAFETY_KEYWORDS}`;
   }
 
   const location = extractGeographicLocation(topicOrTitle);
@@ -54,24 +59,24 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
   // Back cover variant: minimalist texture-focused backgrounds
   if (variant === "back-cover") {
     // Abstract textures and backgrounds for back covers
-    const textureKeywords = ["texture", "abstract", "pattern", "background", "marble", "gradient"];
     if (location) {
-      return `${location} texture abstract background`;
+      return `${location} texture abstract background ${SAFETY_KEYWORDS}`;
     }
-    return `abstract texture background minimalist`;
+    return `abstract texture background minimalist ${SAFETY_KEYWORDS}`;
   }
 
+  // Diagram/chapter images: prioritize caption with safety
   if (variant === "diagram" && caption) {
     const locationSuffix = location ? ` ${location}` : "";
-    return `${caption}${locationSuffix}`;
+    return `${caption}${locationSuffix} ${SAFETY_KEYWORDS}`;
   }
 
   // Cover image: prioritize location grounding for travel topics
   if (isTravel && location) {
-    return `${location} landmark architecture`;
+    return `${location} landmark architecture ${SAFETY_KEYWORDS}`;
   }
 
-  return topicOrTitle;
+  return `${topicOrTitle} ${SAFETY_KEYWORDS}`;
 };
 
 /**
