@@ -33,8 +33,8 @@ interface BookCoverProps {
 
 const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
   ({ 
-    title, 
-    subtitle, 
+    title: propTitle, 
+    subtitle: propSubtitle, 
     topic = '', 
     coverImageUrls = [], 
     coverImageUrl, 
@@ -46,21 +46,40 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     bookData,
     onCoverUpdate
   }, ref) => {
-    const TopicIcon = getTopicIcon(topic || title);
+    const TopicIcon = getTopicIcon(topic || propTitle);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
+    
+    // Editable title/subtitle state (initialized from props)
+    const [localTitle, setLocalTitle] = useState(propTitle);
+    const [localSubtitle, setLocalSubtitle] = useState(propSubtitle || '');
+    
+    // Sync props to local state when they change
+    useEffect(() => {
+      setLocalTitle(propTitle);
+    }, [propTitle]);
+    
+    useEffect(() => {
+      setLocalSubtitle(propSubtitle || '');
+    }, [propSubtitle]);
+    
+    // Use local state for display
+    const title = localTitle;
+    const subtitle = localSubtitle;
     
     // Cover Studio state
     const [studioOpen, setStudioOpen] = useState(false);
     const [frontPrompt, setFrontPrompt] = useState('');
     const [backPrompt, setBackPrompt] = useState('');
-    const [spineText, setSpineText] = useState(initialSpineText || title);
-    const [spineColor, setSpineColor] = useState('#000000'); // Default to black
+    const [spineText, setSpineText] = useState(initialSpineText || propTitle);
+    const [spineColor, setSpineColor] = useState('#ffffff'); // Default to WHITE
+    const [spineTextColor, setSpineTextColor] = useState('#000000'); // Default to BLACK
     const [isRegeneratingFront, setIsRegeneratingFront] = useState(false);
     const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
     const [localBackCoverUrl, setLocalBackCoverUrl] = useState(backCoverUrl || '');
     const [localFrontUrls, setLocalFrontUrls] = useState<string[]>(coverImageUrls);
     const [isDownloadingManuscript, setIsDownloadingManuscript] = useState(false);
+    const [isSavingText, setIsSavingText] = useState(false);
     
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
@@ -233,6 +252,39 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       toast.success('Spine settings saved!');
     };
 
+    // Save title/subtitle changes to database
+    const handleSaveTextChanges = async () => {
+      if (!bookId) {
+        toast.error('Cannot save: Book ID not available');
+        return;
+      }
+      
+      setIsSavingText(true);
+      try {
+        const { error } = await supabase
+          .from('books')
+          .update({ 
+            title: localTitle,
+            // Note: subtitle is derived from topic, so we update topic if needed
+          })
+          .eq('id', bookId);
+        
+        if (error) throw error;
+        
+        // Update spine text to match new title if it was using the default
+        if (spineText === propTitle) {
+          setSpineText(localTitle);
+        }
+        
+        toast.success('Title and subtitle saved!');
+      } catch (err) {
+        console.error('Failed to save text changes:', err);
+        toast.error('Failed to save changes');
+      } finally {
+        setIsSavingText(false);
+      }
+    };
+
     // Download KDP Full Wrap PDF - With Text Overlays
     const handleDownloadKDP = async () => {
       toast.info('Generating KDP cover PDF...');
@@ -292,25 +344,38 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFontSize(10);
         pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
 
-        // Spine (center)
+        // Spine (center) - with space-between layout
         pdf.setFillColor(spineColor);
         pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
         
-        // Spine text (rotated) - with serif-like styling
-        pdf.setTextColor(255, 255, 255);
+        // Parse spine text color to RGB
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 0, g: 0, b: 0 };
+        };
+        
+        const textRgb = hexToRgb(spineTextColor);
+        
+        // Spine text (rotated) - Title at TOP (after rotation)
+        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
         pdf.setFontSize(11);
         const spineDisplayText = spineText || title;
-        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight / 2, {
+        // Position title near top of spine (accounting for rotation)
+        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, 0.8, {
           angle: 90,
-          align: 'center'
+          align: 'left'
         });
         
-        // 2026 Edition on spine bottom
+        // 2026 Edition at BOTTOM of spine (space-between)
         pdf.setFontSize(7);
-        pdf.setTextColor(200, 200, 200);
+        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
         pdf.text('2026 Edition', coverWidth + spineWidth / 2, pageHeight - 0.5, {
           angle: 90,
-          align: 'center'
+          align: 'right'
         });
 
         // Front cover (right side)
@@ -509,53 +574,95 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Manuscript</TabsTrigger>
               </TabsList>
 
-              {/* TAB 1: Front Cover - Full Layout Preview */}
+              {/* TAB 1: Front Cover - Full Layout Preview with Editable Title/Subtitle */}
               <TabsContent value="front" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+                  <div className="flex flex-col items-center">
                     <h3 className="font-medium mb-3">Current Front Cover</h3>
-                    {/* Full Cover Layout Preview - matches main card view */}
-                    <div className="aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 rounded-sm shadow-lg overflow-hidden border max-w-[300px] relative p-6 flex flex-col">
-                      {/* Cover Image */}
-                      <div className="relative w-full aspect-square mb-4 flex-shrink-0">
-                        {displayUrl ? (
-                          <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10">
-                            <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-full h-full rounded-lg bg-secondary/30 flex items-center justify-center text-muted-foreground">
-                            No image
-                          </div>
-                        )}
-                      </div>
-                      {/* Title Overlay */}
-                      <div className="flex-1 flex flex-col items-center text-center">
-                        {parsedTitle.category && (
-                          <p className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground/60 font-sans font-medium mb-1">
-                            {parsedTitle.category}
-                          </p>
-                        )}
-                        <h1 className="font-serif text-lg font-medium text-foreground leading-tight mb-2">
-                          {parsedTitle.mainTitle}
-                        </h1>
-                        <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
-                        {subtitle && (
-                          <p className="text-[8px] uppercase tracking-[0.2em] text-muted-foreground/50 font-serif">
-                            {subtitle}
-                          </p>
-                        )}
-                      </div>
-                      {/* Bottom Branding */}
-                      <div className="text-center pt-2">
-                        <span className="font-serif text-[10px] text-muted-foreground/50">Loom & Page</span>
+                    {/* Full Cover Layout Preview - constrained to match dashboard card size */}
+                    <div className="max-w-[280px] w-full">
+                      <div className="aspect-[3/4] bg-gradient-to-br from-amber-50 via-stone-100 to-amber-50 rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col">
+                        {/* Cover Image */}
+                        <div className="relative w-full aspect-square mb-4 flex-shrink-0">
+                          {displayUrl ? (
+                            <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10">
+                              <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-full h-full rounded-lg bg-secondary/30 flex items-center justify-center text-muted-foreground">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        {/* Title Overlay - Uses local editable state */}
+                        <div className="flex-1 flex flex-col items-center text-center">
+                          {parsedTitle.category && (
+                            <p className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground/60 font-sans font-medium mb-1">
+                              {parsedTitle.category}
+                            </p>
+                          )}
+                          <h1 className="font-serif text-lg font-medium text-foreground leading-tight mb-2">
+                            {parsedTitle.mainTitle}
+                          </h1>
+                          <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
+                          {subtitle && (
+                            <p className="text-[8px] uppercase tracking-[0.2em] text-muted-foreground/50 font-serif">
+                              {subtitle}
+                            </p>
+                          )}
+                        </div>
+                        {/* Bottom Branding */}
+                        <div className="text-center pt-2">
+                          <span className="font-serif text-[10px] text-muted-foreground/50">Loom & Page</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-4">
+                    {/* Editable Title/Subtitle Fields */}
+                    <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
+                      <h4 className="font-medium text-sm">Edit Cover Text</h4>
+                      <div>
+                        <Label htmlFor="cover-title" className="text-sm">Title</Label>
+                        <Input
+                          id="cover-title"
+                          value={localTitle}
+                          onChange={(e) => setLocalTitle(e.target.value)}
+                          placeholder="Book title..."
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="cover-subtitle" className="text-sm">Subtitle</Label>
+                        <Input
+                          id="cover-subtitle"
+                          value={localSubtitle}
+                          onChange={(e) => setLocalSubtitle(e.target.value)}
+                          placeholder="Subtitle..."
+                          className="mt-1"
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleSaveTextChanges} 
+                        disabled={isSavingText}
+                        variant="secondary"
+                        className="w-full"
+                      >
+                        {isSavingText ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Text Changes'
+                        )}
+                      </Button>
+                    </div>
+                    
                     <div>
                       <Label htmlFor="front-prompt" className="text-base font-medium">Custom Image Prompt</Label>
                       <p className="text-sm text-muted-foreground mb-2">
-                        Describe the exact image you want (e.g., "Snowy Aspen streets at night with warm cafe lights")
+                        Describe the exact image you want (e.g., "Rush hour crowds in Times Square at sunset")
                       </p>
                       <Textarea
                         id="front-prompt"
@@ -654,34 +761,37 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 </div>
               </TabsContent>
 
-              {/* TAB 3: Spine - Improved with 2026 Edition */}
+              {/* TAB 3: Spine - White background, black text, space-between layout */}
               <TabsContent value="spine" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex justify-center">
                     <div>
                       <h3 className="font-medium mb-3 text-center">Spine Preview</h3>
                       <div 
-                        className="w-20 h-96 rounded flex flex-col items-center justify-between py-4 shadow-lg"
+                        className="w-20 h-96 rounded flex flex-col items-center justify-between py-6 px-2 shadow-lg border"
                         style={{ backgroundColor: spineColor }}
                       >
-                        {/* Main Title */}
+                        {/* Main Title at START */}
                         <span 
-                          className="text-white text-sm font-serif font-medium whitespace-nowrap max-w-[350px] overflow-hidden text-ellipsis flex-1 flex items-center"
+                          className="text-sm font-serif font-medium whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
+                            transform: 'rotate(180deg)',
+                            color: spineTextColor
                           }}
                         >
                           {spineText || title}
                         </span>
-                        {/* 2026 Edition at bottom */}
+                        {/* 2026 Edition at END */}
                         <span 
-                          className="text-white/70 text-[10px] font-serif whitespace-nowrap mt-2"
+                          className="text-[10px] font-serif whitespace-nowrap"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
-                            transform: 'rotate(180deg)'
+                            transform: 'rotate(180deg)',
+                            color: spineTextColor,
+                            opacity: 0.7
                           }}
                         >
                           2026 Edition
@@ -715,20 +825,51 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         <Input
                           value={spineColor}
                           onChange={(e) => setSpineColor(e.target.value)}
+                          placeholder="#ffffff"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="spine-text-color" className="text-base font-medium">Spine Text Color</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Input
+                          id="spine-text-color"
+                          type="color"
+                          value={spineTextColor}
+                          onChange={(e) => setSpineTextColor(e.target.value)}
+                          className="w-20 h-12 p-1 cursor-pointer"
+                        />
+                        <Input
+                          value={spineTextColor}
+                          onChange={(e) => setSpineTextColor(e.target.value)}
                           placeholder="#000000"
                           className="flex-1"
                         />
                       </div>
                     </div>
                     <div className="pt-4">
-                      <h4 className="font-medium mb-2">Quick Colors</h4>
+                      <h4 className="font-medium mb-2">Quick Background Colors</h4>
                       <div className="flex gap-2 flex-wrap">
-                        {['#000000', '#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#00b894', '#d63031', '#fdcb6e'].map(color => (
+                        {['#ffffff', '#f5f5f5', '#000000', '#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#fdcb6e'].map(color => (
                           <button
                             key={color}
-                            className={`w-10 h-10 rounded border-2 transition-colors ${spineColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-foreground/30'}`}
+                            className={`w-10 h-10 rounded border-2 transition-colors ${spineColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
                             style={{ backgroundColor: color }}
                             onClick={() => setSpineColor(color)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <h4 className="font-medium mb-2">Quick Text Colors</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {['#000000', '#1a1a1a', '#333333', '#ffffff', '#f5f5f5', '#6c5ce7', '#d63031'].map(color => (
+                          <button
+                            key={color}
+                            className={`w-10 h-10 rounded border-2 transition-colors ${spineTextColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setSpineTextColor(color)}
                           />
                         ))}
                       </div>
