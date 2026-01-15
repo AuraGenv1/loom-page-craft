@@ -39,18 +39,21 @@ const isTravelTopic = (topic: string): boolean => {
 /**
  * Build search query for Pexels
  * PRIORITY: customPrompt takes precedence over auto-generated queries
- * SAFETY: Always append safety keywords to prevent model release issues
+ * SAFETY: 
+ * - Auto-generated images: strict "no people" filter
+ * - Custom prompts: relaxed filter for street photography scenes
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
-  // Safety keywords to prevent model release issues - applies to ALL variants
-  const SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
-  const CUSTOM_PROMPT_SAFETY = "wide shot unrecognizable distance";
+  // Strict safety keywords for AUTO-GENERATED images (no people)
+  const AUTO_SAFETY_KEYWORDS = "architecture scenery landscape wide angle no people";
+  
+  // Relaxed safety for CUSTOM PROMPTS - allows crowds/street scenes
+  const CUSTOM_PROMPT_SAFETY = "wide angle street photography depth of field";
 
-  // CUSTOM PROMPT OVERRIDE: If provided, use it directly with safety enhancers
+  // CUSTOM PROMPT OVERRIDE: Use relaxed safety (allows people in crowds)
   if (customPrompt && customPrompt.trim().length > 0) {
-    console.log("Using custom prompt for search:", customPrompt);
-    // Append safety keywords for custom prompts
-    return `${customPrompt.trim()} ${CUSTOM_PROMPT_SAFETY} ${SAFETY_KEYWORDS}`;
+    console.log("Using custom prompt for search (relaxed mode):", customPrompt);
+    return `${customPrompt.trim()} ${CUSTOM_PROMPT_SAFETY}`;
   }
 
   const location = extractGeographicLocation(topicOrTitle);
@@ -60,23 +63,23 @@ const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: stri
   if (variant === "back-cover") {
     // Abstract textures and backgrounds for back covers
     if (location) {
-      return `${location} texture abstract background ${SAFETY_KEYWORDS}`;
+      return `${location} texture abstract background ${AUTO_SAFETY_KEYWORDS}`;
     }
-    return `abstract texture background minimalist ${SAFETY_KEYWORDS}`;
+    return `abstract texture background minimalist ${AUTO_SAFETY_KEYWORDS}`;
   }
 
   // Diagram/chapter images: prioritize caption with safety
   if (variant === "diagram" && caption) {
     const locationSuffix = location ? ` ${location}` : "";
-    return `${caption}${locationSuffix} ${SAFETY_KEYWORDS}`;
+    return `${caption}${locationSuffix} ${AUTO_SAFETY_KEYWORDS}`;
   }
 
   // Cover image: prioritize location grounding for travel topics
   if (isTravel && location) {
-    return `${location} landmark architecture ${SAFETY_KEYWORDS}`;
+    return `${location} landmark architecture ${AUTO_SAFETY_KEYWORDS}`;
   }
 
-  return `${topicOrTitle} ${SAFETY_KEYWORDS}`;
+  return `${topicOrTitle} ${AUTO_SAFETY_KEYWORDS}`;
 };
 
 /**
