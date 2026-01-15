@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Lightbulb, Pencil, Save, X, RefreshCw, Check } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -273,7 +273,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       // IMAGE HANDLER - Skip, images handled separately
       img: () => null,
 
-      // PRO-TIP HANDLER - Blue Box Style with Lightbulb (EXACT match)
+      // PRO-TIP HANDLER - "The Onyx" Luxury Design Style (EXACT match with ChapterContent)
       blockquote: ({ children }: any) => {
         // Extract text content recursively from React children
         const extractText = (node: any): string => {
@@ -291,28 +291,14 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
         if (isProTip) {
           const cleanText = textContent.replace(/\*?\*?pro[- ]?tip:?\*?\*?/gi, "").replace(/\*\*/g, "").trim();
           return (
-            <div 
-              className="my-8 p-6 rounded-xl"
-              style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6' }}
-            >
-              <div className="flex items-start gap-4">
-                <div 
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: '#dbeafe' }}
-                >
-                  <Lightbulb className="w-5 h-5" style={{ color: '#3b82f6' }} />
-                </div>
+            <div className="my-8 p-6 bg-white border-l-4 border-black">
+              <div className="flex items-start gap-3">
+                <Key className="w-4 h-4 text-black flex-shrink-0 mt-0.5" />
                 <div>
-                  <p 
-                    className="text-sm uppercase tracking-widest font-bold mb-2"
-                    style={{ color: '#1d4ed8' }}
-                  >
-                    Pro-Tip
+                  <p className="text-xs font-bold tracking-[0.2em] uppercase text-black mb-2">
+                    PRO TIP
                   </p>
-                  <p 
-                    className="font-serif leading-relaxed text-lg"
-                    style={{ color: '#1e40af', lineHeight: '1.7' }}
-                  >
+                  <p className="font-serif text-gray-800 italic leading-relaxed text-lg">
                     {cleanText}
                   </p>
                 </div>
