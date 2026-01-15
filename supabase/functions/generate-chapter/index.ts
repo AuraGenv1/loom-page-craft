@@ -17,9 +17,12 @@ serve(async (req) => {
     // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
-    Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
-    Language: ${language}.
-    Format: Markdown. 1000 words. Professional tone. Include a > **Pro-Tip**.`;
+    
+CRITICAL INSTRUCTION: You MUST start every chapter with a markdown image placeholder describing a visual relevant to that specific chapter. Format: ![Detailed description of visual](placeholder). This is required for ALL chapters.
+
+Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
+Language: ${language}.
+Format: Markdown. 1000 words. Professional tone. Include a > **Pro-Tip**.`;
 
     const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
