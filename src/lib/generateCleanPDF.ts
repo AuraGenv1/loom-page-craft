@@ -16,100 +16,123 @@ export const generateCleanPDF = async ({
   isKdpManuscript = false,
   returnBlob = false 
 }: GeneratePDFOptions): Promise<Blob | void> => {
-  // 1. Create PDF (Standard 6x9 or Letter)
   const format = isKdpManuscript ? [6, 9] : 'letter';
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'in',
-    format: format
-  });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format: format });
 
-  // 2. Setup Dimensions
   const title = bookData.displayTitle || topic;
   const pageWidth = isKdpManuscript ? 6 : 8.5;
   const pageHeight = isKdpManuscript ? 9 : 11;
-  const margin = 0.75;
+  const margin = 0.8; 
   const writableWidth = pageWidth - (margin * 2);
 
-  // 3. Title Page
-  doc.setFont('times', 'bold');
-  doc.setFontSize(24);
-  const splitTitle = doc.splitTextToSize(title, writableWidth);
-  doc.text(splitTitle, pageWidth / 2, 3, { align: 'center' });
+  const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(new Image()); 
+      img.src = url;
+    });
+  };
 
+  // Title Page
+  doc.setFont('times', 'bold');
+  doc.setFontSize(28);
+  const splitTitle = doc.splitTextToSize(title, writableWidth);
+  let yPos = 3.5;
+  doc.text(splitTitle, pageWidth / 2, yPos, { align: 'center' });
+  
   if (bookData.subtitle) {
+    yPos += (splitTitle.length * 0.5);
     doc.setFontSize(14);
     doc.setFont('times', 'italic');
     const splitSub = doc.splitTextToSize(bookData.subtitle, writableWidth);
-    doc.text(splitSub, pageWidth / 2, 4.5, { align: 'center' });
+    doc.text(splitSub, pageWidth / 2, yPos, { align: 'center' });
   }
 
   doc.setFontSize(10);
   doc.setFont('times', 'normal');
-  doc.text("Loom & Page", pageWidth / 2, 8, { align: 'center' });
+  doc.text("Loom & Page", pageWidth / 2, pageHeight - 1, { align: 'center' });
 
-  // 4. Table of Contents
+  // TOC
   doc.addPage();
   doc.setFont('times', 'bold');
   doc.setFontSize(16);
-  doc.text("Table of Contents", pageWidth / 2, margin, { align: 'center' });
+  doc.text("Table of Contents", pageWidth / 2, margin + 0.5, { align: 'center' });
   
   doc.setFont('times', 'normal');
   doc.setFontSize(12);
   const chapters = bookData.tableOfContents || [];
-  let yPos = margin + 0.5;
+  yPos = margin + 1.5;
   
   chapters.forEach((ch: any) => {
-    if (yPos > pageHeight - margin) {
-      doc.addPage();
-      yPos = margin;
-    }
+    if (yPos > pageHeight - margin) { doc.addPage(); yPos = margin + 0.5; }
     doc.text(`Chapter ${ch.chapter}: ${ch.title}`, margin, yPos);
-    yPos += 0.3;
+    yPos += 0.35;
   });
 
-  // 5. Chapters
+  // Chapters
   for (const ch of chapters) {
     doc.addPage();
-    
-    // Header
     doc.setFont('times', 'bold');
-    doc.setFontSize(18);
-    doc.text(`Chapter ${ch.chapter}`, pageWidth / 2, margin, { align: 'center' });
     doc.setFontSize(14);
-    doc.text(ch.title, pageWidth / 2, margin + 0.4, { align: 'center' });
+    doc.text(`CHAPTER ${ch.chapter}`, pageWidth / 2, margin + 0.5, { align: 'center' });
     
-    // Body Content
-    doc.setFont('times', 'normal');
-    doc.setFontSize(11);
-    
-    const content = bookData[`chapter${ch.chapter}Content`] || "";
-    // Clean markdown specifically for PDF print
-    const cleanText = content
-      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '') // Remove images
-      .replace(/[#*>`]/g, '') // Remove markdown symbols
-      .replace(/\n\n/g, '\n'); // Normalize spacing
+    doc.setFontSize(20);
+    const titleLines = doc.splitTextToSize(ch.title, writableWidth);
+    doc.text(titleLines, pageWidth / 2, margin + 0.9, { align: 'center' });
+    yPos = margin + 1.5 + (titleLines.length * 0.3);
 
-    const textLines = doc.splitTextToSize(cleanText, writableWidth);
+    const content = bookData[`chapter${ch.chapter}Content`] || "";
+    const lines = content.split('\n');
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(11.5);
     
-    // Handle pagination for long chapters
-    let currentY = margin + 1;
-    const lineHeight = 0.2;
-    
-    for (const line of textLines) {
-      if (currentY > pageHeight - margin) {
-        doc.addPage();
-        currentY = margin;
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) continue;
+
+      if (yPos > pageHeight - margin) { doc.addPage(); yPos = margin + 0.5; }
+
+      // Handle Image
+      const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
+      if (imgMatch && imgMatch[1]) {
+        try {
+           const img = await loadImage(imgMatch[1]);
+           if (img.width > 0) {
+             const imgAspect = img.width / img.height;
+             const renderWidth = Math.min(4, writableWidth);
+             const renderHeight = renderWidth / imgAspect;
+             if (yPos + renderHeight > pageHeight - margin) { doc.addPage(); yPos = margin + 0.5; }
+             doc.addImage(img, 'JPEG', (pageWidth - renderWidth) / 2, yPos, renderWidth, renderHeight);
+             yPos += renderHeight + 0.3;
+           }
+        } catch (e) {}
+        continue;
       }
-      doc.text(line, margin, currentY);
-      currentY += lineHeight;
+
+      // Handle Headers
+      if (line.startsWith('#')) {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(14);
+        yPos += 0.2;
+        const text = line.replace(/#+\s*/, '');
+        const splitText = doc.splitTextToSize(text, writableWidth);
+        doc.text(splitText, margin, yPos);
+        yPos += (splitText.length * 0.22) + 0.1;
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11.5);
+        continue;
+      }
+
+      const cleanLine = line.replace(/\*\*/g, '').replace(/\*/g, '');
+      const splitText = doc.splitTextToSize(cleanLine, writableWidth);
+      doc.text(splitText, margin, yPos);
+      yPos += (splitText.length * 0.22) + 0.15;
     }
   }
 
-  // 6. Output
-  if (returnBlob) {
-    return doc.output('blob');
-  } else {
-    doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
-  }
+  if (returnBlob) return doc.output('blob');
+  doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
 };
