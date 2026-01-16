@@ -5,7 +5,7 @@ import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText, RefreshCw, Sparkles } from 'lucide-react';
+import { Plus, BookOpen, Calendar, MoreVertical, Trash2, Download, FileText, RefreshCw, Sparkles, Package } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,10 @@ import { toast } from 'sonner';
 import { generateGuidePDF } from '@/lib/generatePDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
 import { generateKindleHTML } from '@/lib/generateKindle';
+import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { BookData } from '@/lib/bookTypes';
+import JSZip from 'jszip';
+import jsPDF from 'jspdf';
 
 interface SavedBook {
   id: string;
@@ -225,6 +228,178 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Kindle generation error:', error);
       toast.error('Failed to generate Kindle file', { id: 'kindle-gen' });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadKDPPackage = async (book: SavedBook['books']) => {
+    if (!book) return;
+    
+    setDownloadingId(book.id + '-kdp');
+    try {
+      toast.loading('Generating KDP Package... This may take a minute.', { id: 'kdp-gen' });
+      
+      const bookData: BookData = {
+        title: book.title,
+        displayTitle: book.title.split(' ').slice(0, 5).join(' '),
+        subtitle: `A Curated Guide`,
+        tableOfContents: book.table_of_contents || [],
+        chapter1Content: book.chapter1_content,
+        chapter2Content: book.chapter2_content || undefined,
+        chapter3Content: book.chapter3_content || undefined,
+        chapter4Content: book.chapter4_content || undefined,
+        chapter5Content: book.chapter5_content || undefined,
+        chapter6Content: book.chapter6_content || undefined,
+        chapter7Content: book.chapter7_content || undefined,
+        chapter8Content: book.chapter8_content || undefined,
+        chapter9Content: book.chapter9_content || undefined,
+        chapter10Content: book.chapter10_content || undefined,
+        localResources: book.local_resources || [],
+        hasDisclaimer: book.has_disclaimer,
+        coverImageUrl: book.cover_image_url?.[0] || undefined,
+      };
+
+      const zip = new JSZip();
+      const safeTitle = book.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const coverUrl = book.cover_image_url?.[0] || '';
+
+      // 1. Generate Cover PDF (simplified version for dashboard)
+      toast.loading('Creating cover PDF...', { id: 'kdp-gen' });
+      const coverPdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'in',
+        format: [9.25, 12.485]
+      });
+      const pageWidth = 12.485;
+      const pageHeight = 9.25;
+      const spineWidth = 0.485;
+      const cvWidth = (pageWidth - spineWidth) / 2;
+
+      coverPdf.setFillColor('#ffffff');
+      coverPdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      
+      // Front cover area
+      coverPdf.setFontSize(24);
+      coverPdf.text(book.title, cvWidth + spineWidth + cvWidth / 2, 4, { align: 'center', maxWidth: cvWidth - 1 });
+      coverPdf.setFontSize(12);
+      coverPdf.text('Loom & Page', cvWidth + spineWidth + cvWidth / 2, pageHeight - 0.5, { align: 'center' });
+
+      zip.file('Cover-File.pdf', coverPdf.output('blob'));
+
+      // 2. Generate Manuscript PDF
+      toast.loading('Creating manuscript PDF...', { id: 'kdp-gen' });
+      const manuscriptBlob = await generateCleanPDF({
+        topic: book.topic,
+        bookData,
+        coverImageUrl: coverUrl || undefined,
+        isKdpManuscript: true,
+        returnBlob: true
+      });
+      if (manuscriptBlob) {
+        zip.file('Manuscript.pdf', manuscriptBlob);
+      }
+
+      // 3. Generate EPUB
+      toast.loading('Creating Kindle eBook...', { id: 'kdp-gen' });
+      const epubZip = new JSZip();
+      epubZip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+      epubZip.file('META-INF/container.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);
+
+      const chapters = book.table_of_contents || [];
+      const manifestItems: string[] = [];
+      const spineItems: string[] = [];
+
+      epubZip.file('OEBPS/cover.xhtml', `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${book.title}</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>
+<body>
+  <div class="cover">
+    <h1>${book.title}</h1>
+    <p>Loom & Page</p>
+  </div>
+</body>
+</html>`);
+      manifestItems.push('<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>');
+      spineItems.push('<itemref idref="cover"/>');
+
+      for (let i = 0; i < chapters.length; i++) {
+        const ch = chapters[i];
+        const content = bookData[`chapter${ch.chapter}Content` as keyof BookData] as string || '';
+        const cleanContent = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').replace(/[#*>`]/g, '');
+        
+        epubZip.file(`OEBPS/chapter${i + 1}.xhtml`, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Chapter ${ch.chapter}</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>
+<body>
+  <h1>Chapter ${ch.chapter}: ${ch.title}</h1>
+  <p>${cleanContent.replace(/\n\n/g, '</p><p>')}</p>
+</body>
+</html>`);
+        manifestItems.push(`<item id="chapter${i + 1}" href="chapter${i + 1}.xhtml" media-type="application/xhtml+xml"/>`);
+        spineItems.push(`<itemref idref="chapter${i + 1}"/>`);
+      }
+
+      epubZip.file('OEBPS/styles.css', `body { font-family: serif; margin: 1em; line-height: 1.6; }
+h1 { font-size: 1.5em; margin-bottom: 0.5em; }
+.cover { text-align: center; padding: 2em; }
+p { margin-bottom: 1em; }`);
+      manifestItems.push('<item id="styles" href="styles.css" media-type="text/css"/>');
+
+      epubZip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uid">urn:uuid:${crypto.randomUUID()}</dc:identifier>
+    <dc:title>${book.title}</dc:title>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
+  </metadata>
+  <manifest>
+    ${manifestItems.join('\n    ')}
+  </manifest>
+  <spine>
+    ${spineItems.join('\n    ')}
+  </spine>
+</package>`);
+
+      const epubBlob = await epubZip.generateAsync({ type: 'blob' });
+      zip.file('Kindle-eBook.epub', epubBlob);
+
+      // 4. Add Kindle Cover JPG
+      if (coverUrl) {
+        try {
+          const response = await fetch(coverUrl);
+          if (response.ok) {
+            const kindleCoverBlob = await response.blob();
+            zip.file('Kindle_Cover.jpg', kindleCoverBlob);
+          }
+        } catch (e) {
+          console.warn('Could not fetch cover image for Kindle');
+        }
+      }
+
+      // Generate ZIP and download
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}-KDP-Package.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('KDP Package downloaded successfully!', { id: 'kdp-gen' });
+    } catch (error) {
+      console.error('KDP package generation error:', error);
+      toast.error('Failed to generate KDP package', { id: 'kdp-gen' });
     } finally {
       setDownloadingId(null);
     }
@@ -637,31 +812,19 @@ const Dashboard = () => {
                     <div className="space-y-2">
                       {(saved.books?.is_purchased || isAdmin) ? (
                         <>
-                          {/* Primary action row for purchased */}
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 gap-1.5 text-xs"
-                              onClick={() => handleDownloadPDF(saved.books)}
-                              disabled={downloadingId === saved.books?.id}
-                            >
-                              <Download className="h-3 w-3" />
-                              PDF
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 gap-1.5 text-xs"
-                              onClick={() => handleDownloadKindle(saved.books)}
-                              disabled={downloadingId === saved.books?.id + '-kindle'}
-                            >
-                              <FileText className="h-3 w-3" />
-                              Kindle
-                            </Button>
-                          </div>
+                          {/* Single KDP Export button */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full gap-1.5 text-xs"
+                            onClick={() => handleDownloadKDPPackage(saved.books)}
+                            disabled={downloadingId === saved.books?.id + '-kdp'}
+                          >
+                            <Package className="h-3 w-3" />
+                            {downloadingId === saved.books?.id + '-kdp' ? 'Generating...' : 'KDP Export'}
+                          </Button>
                           
-                          {/* Secondary action row */}
+                          {/* Update Edition button */}
                           <Button
                             size="sm"
                             variant="outline"
