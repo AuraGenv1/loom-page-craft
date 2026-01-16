@@ -24,6 +24,7 @@ interface CleanPDFOptions {
   bookData: BookData;
   coverImageUrl?: string | null;
   isKdpManuscript?: boolean;
+  returnBlob?: boolean;
 }
 
 /**
@@ -301,7 +302,7 @@ const resolveCoverImageForPDF = async (url: string): Promise<string> => {
   }
 };
 
-export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, isKdpManuscript = false }: CleanPDFOptions): Promise<void> => {
+export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, isKdpManuscript = false, returnBlob = false }: CleanPDFOptions): Promise<Blob | void> => {
   const displayTitle = bookData.displayTitle || bookData.title || `${topic} Guide`;
   const subtitle = bookData.subtitle || "A Comprehensive Guide";
   const editionYear = bookData.editionYear || new Date().getFullYear();
@@ -507,8 +508,15 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, isKdpMa
 
   try {
     console.log("[CleanPDF] Generating PDF with html2pdf...");
-    await html2pdf().set(opt).from(container).save();
-    console.log("[CleanPDF] PDF saved successfully");
+    
+    if (returnBlob) {
+      const blob = await html2pdf().set(opt).from(container).output('blob');
+      console.log("[CleanPDF] PDF blob generated successfully");
+      return blob;
+    } else {
+      await html2pdf().set(opt).from(container).save();
+      console.log("[CleanPDF] PDF saved successfully");
+    }
   } finally {
     document.body.removeChild(container);
   }
