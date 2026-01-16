@@ -538,36 +538,48 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
 
         // 1. Generate Cover PDF (Full Wrap)
-        toast.info('Creating cover PDF...');
+        toast.info('Creating 1/4: Print Cover PDF...');
         const coverPdf = await generateCoverPDFBlob();
         if (coverPdf) {
           zip.file('Cover-File.pdf', coverPdf);
+        } else {
+            console.error("Failed to generate Cover PDF blob");
         }
 
-        // 2. Generate Manuscript PDF (Real 200+ page with TOC and images)
-        toast.info('Creating manuscript PDF...');
+        // 2. Generate Manuscript PDF (Interior)
+        toast.info('Creating 2/4: Manuscript PDF...');
         const manuscriptBlob = await generateManuscriptPDFBlob();
         if (manuscriptBlob) {
           zip.file('Manuscript.pdf', manuscriptBlob);
+        } else {
+             console.error("Failed to generate Manuscript PDF blob");
         }
 
-        // 3. Generate EPUB
-        toast.info('Creating Kindle eBook...');
-        const epubBlob = await generateEPUBBlob();
+        // 3. Generate EPUB (Kindle eBook)
+        toast.info('Creating 3/4: Kindle eBook...');
+        const epubBlob = await generateGuideEPUB({
+          title,
+          topic: topic || title,
+          bookData: bookData!,
+          coverImageUrl: displayUrl,
+          returnBlob: true
+        });
         if (epubBlob) {
           zip.file('Kindle-eBook.epub', epubBlob);
         }
 
         // 4. Add Kindle Cover JPG
-        toast.info('Adding Kindle cover image...');
+        toast.info('Creating 4/4: Kindle Cover Image...');
         const kindleCoverBlob = await fetchKindleCoverBlob();
         if (kindleCoverBlob) {
           zip.file('Kindle_Cover.jpg', kindleCoverBlob);
         }
 
         // Generate ZIP and download
+        toast.success('Compressing files...');
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
+        
         const a = document.createElement('a');
         a.href = url;
         a.download = `${safeTitle}-KDP-Package.zip`;
@@ -579,7 +591,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         toast.success('KDP Package downloaded successfully!');
       } catch (err) {
         console.error('Failed to generate KDP package:', err);
-        toast.error('Failed to generate KDP package');
+        toast.error('Failed to generate KDP package. See console.');
       } finally {
         setIsGeneratingPackage(false);
       }
@@ -700,20 +712,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Manuscript PDF as Blob using generateCleanPDF
+    // Helper: Generate Manuscript PDF as Blob
     const generateManuscriptPDFBlob = async (): Promise<Blob | null> => {
       try {
         const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
         
         const blob = await generateCleanPDF({
           topic: topic || title,
-          bookData,
+          bookData: bookData!,
           coverImageUrl: validCoverUrl,
-          isKdpManuscript: true,
-          returnBlob: true
+          isKdpManuscript: true, // Forces 6x9 size
+          returnBlob: true // Returns blob instead of saving
         });
         
-        return blob || null;
+        return (blob as Blob) || null;
       } catch (err) {
         console.error('Error generating manuscript PDF:', err);
         return null;
