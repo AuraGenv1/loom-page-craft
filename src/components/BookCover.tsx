@@ -1004,7 +1004,7 @@ p { margin-bottom: 1em; }`);
                     <div className="w-[260px] mx-auto">
                       <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col">
                         {/* Cover Image */}
-                        <div className="relative w-full aspect-square mb-4 flex-shrink-0">
+                        <div className="relative w-[60%] mx-auto aspect-square mb-6 flex-shrink-0">
                           {displayUrl ? (
                             <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10">
                               <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
@@ -1022,12 +1022,12 @@ p { margin-bottom: 1em; }`);
                               {parsedTitle.category}
                             </p>
                           )}
-                          <h1 className="font-serif text-lg font-medium text-foreground leading-tight mb-2">
+                          <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-2">
                             {parsedTitle.mainTitle}
                           </h1>
                           <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
                           {subtitle && (
-                            <p className="text-[8px] uppercase tracking-[0.2em] text-muted-foreground/50 font-serif">
+                            <p className="text-[8px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif">
                               {subtitle}
                             </p>
                           )}
