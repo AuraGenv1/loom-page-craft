@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload, Plus } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload, Plus, Trash2 } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -458,6 +458,20 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       const displayUrl = inlineImages[imageId] || primaryImage.src;
       const isLoading = loadingImages.has(imageId);
 
+      // Handler to remove image from chapter content
+      const handleRemoveImage = () => {
+        const currentContent = editedContent[chapterNum] || bookData[`chapter${chapterNum}Content`] || '';
+        const newContent = currentContent.replace(/!\[([^\]]*)\]\(([^)]+)\)\s*/g, '').trim();
+        setEditedContent(prev => ({ ...prev, [chapterNum]: newContent }));
+        // Also clear the cached inline image
+        setInlineImages(prev => {
+          const updated = { ...prev };
+          delete updated[imageId];
+          return updated;
+        });
+        toast.success('Image removed. Save changes to confirm.');
+      };
+
       return (
         <div className="my-8 flex flex-col items-center">
           <div className="relative w-full max-w-xl h-60 bg-secondary/30 rounded-lg flex items-center justify-center overflow-hidden group">
@@ -499,6 +513,15 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                         <Upload className="w-4 h-4" />
                       )}
                       Upload
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleRemoveImage}
+                      className="gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remove
                     </Button>
                   </div>
                 )}
@@ -676,6 +699,23 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                               className="min-h-[400px] font-mono text-sm border-dashed resize-y"
                               placeholder="Enter markdown content (without images)..."
                             />
+                          </div>
+                          
+                          {/* Local Save Button - at bottom of each chapter edit section */}
+                          <div className="flex justify-end pt-4 border-t border-border/30">
+                            <Button
+                              size="sm"
+                              onClick={handleSaveChanges}
+                              disabled={isSaving}
+                              className="gap-2"
+                            >
+                              {isSaving ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                              {isSaving ? 'Saving...' : 'Save Chapter'}
+                            </Button>
                           </div>
                         </div>
                       ) : (
