@@ -975,6 +975,7 @@ const Index = () => {
                           bookData={bookData}
                           topic={topic}
                           coverImageUrls={coverImageUrls}
+                          isAdmin={isAdmin}
                         />
                       ) : (
                         <>
