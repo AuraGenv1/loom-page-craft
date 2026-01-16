@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload, Plus } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -403,7 +403,50 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     // Primary Image Component for each chapter
     const PrimaryImageSection = ({ chapterNum, content }: { chapterNum: number; content: string }) => {
       const primaryImage = extractPrimaryImage(content);
-      if (!primaryImage) return null;
+      
+      // Handle case where no image exists - show "Add Chapter Image" button in edit mode
+      if (!primaryImage) {
+        if (isEditing) {
+          return (
+            <div className="my-8 flex flex-col items-center">
+              <div className="relative w-full max-w-xl h-40 bg-secondary/20 rounded-lg flex items-center justify-center border-2 border-dashed border-border/50">
+                <div className="flex flex-col items-center gap-3">
+                  <Plus className="w-8 h-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">No chapter image</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setRegenerateDialog({ chapterNum, currentAlt: `${topic} illustration` });
+                        setNewImagePrompt(`${topic} illustration for chapter ${chapterNum}`);
+                      }}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Generate Image
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPendingUploadChapter({ chapterNum, currentAlt: `${topic} illustration` });
+                        chapterImageUploadRef.current?.click();
+                      }}
+                      disabled={isUploadingChapterImage}
+                      className="gap-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Upload Image
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      }
       
       const imageId = `ch${chapterNum}-img-${(primaryImage.alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
       
@@ -552,7 +595,26 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
               className="w-full max-w-3xl mx-auto py-16 px-6 md:px-12 bg-gradient-to-b from-background to-secondary/10 shadow-paper border border-border/20 rounded-sm relative mb-8"
             >
               <header className="mb-8 pb-8 border-b border-border/30">
-                <p className="text-sm uppercase tracking-wider text-muted-foreground mb-2">Chapter {chapter.number}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm uppercase tracking-wider text-muted-foreground">Chapter {chapter.number}</p>
+                  {isFullAccess && !isEditing && !isLocked && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleEnterEditMode();
+                        // Scroll to this chapter after entering edit mode
+                        setTimeout(() => {
+                          chapterRefs.current[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }}
+                      className="gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
                 {isEditing ? (
                   <Input
                     value={editedTitles[chapter.number] || chapterTitle}

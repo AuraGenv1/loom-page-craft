@@ -544,7 +544,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           zip.file('Cover-File.pdf', coverPdf);
         }
 
-        // 2. Generate Manuscript PDF
+        // 2. Generate Manuscript PDF (Real 200+ page with TOC and images)
         toast.info('Creating manuscript PDF...');
         const manuscriptBlob = await generateManuscriptPDFBlob();
         if (manuscriptBlob) {
@@ -556,6 +556,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const epubBlob = await generateEPUBBlob();
         if (epubBlob) {
           zip.file('Kindle-eBook.epub', epubBlob);
+        }
+
+        // 4. Add Kindle Cover JPG
+        toast.info('Adding Kindle cover image...');
+        const kindleCoverBlob = await fetchKindleCoverBlob();
+        if (kindleCoverBlob) {
+          zip.file('Kindle_Cover.jpg', kindleCoverBlob);
         }
 
         // Generate ZIP and download
@@ -644,35 +651,45 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFontSize(11);
         pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
 
-        // Front cover
+        // Front cover - Square image centered, text below
+        const frontPanelX = coverWidth + spineWidth;
+        const frontCenterX = frontPanelX + coverWidth / 2;
+        const imageSize = coverWidth - 1; // Square size with margin
+        const imageX = frontPanelX + (coverWidth - imageSize) / 2; // Center horizontally
+        const imageY = 0.5; // Top margin
+
         if (displayUrl) {
           try {
             const frontImg = await loadImage(displayUrl);
-            pdf.addImage(frontImg, 'JPEG', coverWidth + spineWidth + 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
+            pdf.addImage(frontImg, 'JPEG', imageX, imageY, imageSize, imageSize);
           } catch (e) {
             console.warn('Could not load front cover image');
           }
         }
 
-        // Front cover text
-        const frontCenterX = coverWidth + spineWidth + coverWidth / 2;
+        // Front cover text - BELOW the image
+        const textStartY = imageY + imageSize + 0.4;
+        
+        // Title with shadow
         pdf.setTextColor(0, 0, 0);
-        pdf.setFontSize(28);
-        pdf.text(title, frontCenterX + 0.02, 1.52, { align: 'center', maxWidth: coverWidth - 0.5 });
+        pdf.setFontSize(24);
+        pdf.text(title, frontCenterX + 0.02, textStartY + 0.02, { align: 'center', maxWidth: coverWidth - 0.5 });
         pdf.setTextColor(255, 255, 255);
-        pdf.text(title, frontCenterX, 1.5, { align: 'center', maxWidth: coverWidth - 0.5 });
+        pdf.text(title, frontCenterX, textStartY, { align: 'center', maxWidth: coverWidth - 0.5 });
 
+        // Subtitle
         if (subtitle) {
-          pdf.setFontSize(14);
+          pdf.setFontSize(12);
           pdf.setTextColor(0, 0, 0);
-          pdf.text(subtitle, frontCenterX + 0.01, 2.02, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.text(subtitle, frontCenterX + 0.01, textStartY + 0.52, { align: 'center', maxWidth: coverWidth - 0.5 });
           pdf.setTextColor(220, 220, 220);
-          pdf.text(subtitle, frontCenterX, 2.0, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.text(subtitle, frontCenterX, textStartY + 0.5, { align: 'center', maxWidth: coverWidth - 0.5 });
         }
 
+        // Footer branding
         pdf.setFontSize(9);
         pdf.setTextColor(255, 255, 255);
-        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
+        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.4, { align: 'center' });
 
         return pdf.output('blob');
       } catch (err) {
@@ -681,45 +698,36 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Manuscript PDF as Blob
+    // Helper: Generate Manuscript PDF as Blob using generateCleanPDF
     const generateManuscriptPDFBlob = async (): Promise<Blob | null> => {
       try {
-        // We'll use a workaround - generate and capture the blob
-        // The generateCleanPDF function downloads directly, so we need to modify our approach
-        // For now, we'll create a simple manuscript PDF using jsPDF
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
+        const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
         
-        // Title page
-        pdf.setFontSize(24);
-        pdf.text(title, 4.25, 4, { align: 'center' });
-        if (subtitle) {
-          pdf.setFontSize(14);
-          pdf.text(subtitle, 4.25, 4.5, { align: 'center' });
-        }
-        pdf.setFontSize(12);
-        pdf.text('Loom & Page', 4.25, 9, { align: 'center' });
-
-        // Add chapters
-        const chapters = bookData.tableOfContents || [];
-        for (let i = 0; i < chapters.length; i++) {
-          const ch = chapters[i];
-          const content = bookData[`chapter${ch.chapter}Content`];
-          if (!content) continue;
-
-          pdf.addPage();
-          pdf.setFontSize(18);
-          pdf.text(`Chapter ${ch.chapter}: ${ch.title}`, 1, 1);
-          pdf.setFontSize(11);
-          
-          // Simple text wrapping
-          const cleanContent = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').replace(/[#*>`]/g, '');
-          const lines = pdf.splitTextToSize(cleanContent, 6.5);
-          pdf.text(lines.slice(0, 50), 1, 1.5); // Limit lines per page
-        }
-
-        return pdf.output('blob');
+        const blob = await generateCleanPDF({
+          topic: topic || title,
+          bookData,
+          coverImageUrl: validCoverUrl,
+          isKdpManuscript: true,
+          returnBlob: true
+        });
+        
+        return blob || null;
       } catch (err) {
         console.error('Error generating manuscript PDF:', err);
+        return null;
+      }
+    };
+
+    // Helper: Fetch Kindle Cover JPG as Blob
+    const fetchKindleCoverBlob = async (): Promise<Blob | null> => {
+      if (!displayUrl || displayUrl.trim().length === 0) return null;
+      
+      try {
+        const response = await fetch(displayUrl);
+        if (!response.ok) throw new Error('Failed to fetch cover image');
+        return await response.blob();
+      } catch (err) {
+        console.error('Error fetching Kindle cover:', err);
         return null;
       }
     };
