@@ -657,11 +657,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFillColor('#ffffff');
         pdf.rect(frontPanelX, 0, coverWidth, pageHeight, 'F');
 
-        // 5. Draw Front Cover Image: Square, 70% width, centered, 1 inch from top
-        const imageWidth = coverWidth * 0.7;
-        const imageSize = imageWidth; // Square aspect ratio
-        const imageX = frontPanelX + (coverWidth - imageWidth) / 2; // Center horizontally
-        const imageY = 1.0; // 1 inch margin from top
+        // 5. Draw Front Cover Image: Square 4.5x4.5 inches, placed at Y=1.0 inch, centered horizontally
+        const imageSize = 4.5; // 4.5x4.5 inch square
+        const imageX = frontPanelX + (coverWidth - imageSize) / 2; // Center horizontally
+        const imageY = 1.0; // 1 inch from top
 
         if (displayUrl) {
           try {
@@ -676,22 +675,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           }
         }
 
-        // 6. Draw Title/Subtitle - Centered BELOW the image
-        const textStartY = imageY + imageSize + 0.5;
-        
-        // Title - large serif font
+        // 6. Draw Title - Centered BELOW the image at Y=6.0 inch
+        const titleY = 6.0;
         pdf.setTextColor(0, 0, 0);
         pdf.setFontSize(22);
-        pdf.text(title, frontCenterX, textStartY, { align: 'center', maxWidth: coverWidth - 0.8 });
+        pdf.text(title, frontCenterX, titleY, { align: 'center', maxWidth: coverWidth - 0.8 });
 
-        // Subtitle - smaller sans-serif style
+        // 7. Draw Subtitle - Centered BELOW the title
         if (subtitle) {
           pdf.setFontSize(11);
           pdf.setTextColor(100, 100, 100);
-          pdf.text(subtitle, frontCenterX, textStartY + 0.5, { align: 'center', maxWidth: coverWidth - 0.8 });
+          pdf.text(subtitle, frontCenterX, titleY + 0.5, { align: 'center', maxWidth: coverWidth - 0.8 });
         }
 
-        // 7. Draw Footer (Loom & Page) - at the very bottom
+        // 8. Draw Footer (Loom & Page) - at the very bottom
         pdf.setFontSize(9);
         pdf.setTextColor(100, 100, 100);
         pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
@@ -737,8 +734,25 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate EPUB as Blob
+    // Helper: Generate EPUB as Blob using generateGuideEPUB
     const generateEPUBBlob = async (): Promise<Blob | null> => {
+      try {
+        const blob = await generateGuideEPUB({
+          title,
+          topic: topic || title,
+          bookData: bookData!,
+          coverImageUrl: displayUrl,
+          returnBlob: true
+        });
+        return blob || null;
+      } catch (err) {
+        console.error('Error generating EPUB:', err);
+        return null;
+      }
+    };
+
+    // Legacy inline EPUB generator (kept as fallback reference)
+    const generateEPUBBlobLegacy = async (): Promise<Blob | null> => {
       try {
         const epubZip = new JSZip();
         
