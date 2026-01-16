@@ -7,13 +7,16 @@ interface GeneratePDFOptions {
   coverImageUrl?: string;
   isKdpManuscript?: boolean;
   returnBlob?: boolean;
+  includeCoverPage?: boolean;
 }
 
-export const generateCleanPDF = async ({
-  topic,
-  bookData,
+export const generateCleanPDF = async ({ 
+  topic, 
+  bookData, 
+  coverImageUrl, 
   isKdpManuscript = false,
-  returnBlob = false
+  returnBlob = false,
+  includeCoverPage = false
 }: GeneratePDFOptions): Promise<Blob | void> => {
   const format = isKdpManuscript ? [6, 9] : 'letter';
   const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format });
@@ -31,13 +34,50 @@ export const generateCleanPDF = async ({
     img.src = url;
   });
 
-  // Title Page
+  // --- 1. COVER PAGE (Optional - for Guests) ---
+  if (includeCoverPage) {
+    // Dark Onyx Background
+    doc.setFillColor(20, 20, 20); 
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    
+    // Cover Image (Top 60%)
+    if (coverImageUrl) {
+      try {
+        const img = await loadImage(coverImageUrl);
+        if (img.width > 0) {
+          doc.addImage(img, 'JPEG', 0, 0, pageWidth, pageHeight * 0.6); 
+        }
+      } catch (e) {}
+    }
+
+    // Title Block (Bottom 40%)
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, pageHeight * 0.6, pageWidth, pageHeight * 0.4, 'F');
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(28);
+    const titleLines = doc.splitTextToSize(title, writableWidth);
+    doc.text(titleLines, pageWidth / 2, pageHeight * 0.7, { align: 'center' });
+    
+    if (bookData.subtitle) {
+      doc.setFontSize(14);
+      doc.setFont('times', 'italic');
+      doc.setTextColor(80, 80, 80);
+      doc.text(doc.splitTextToSize(bookData.subtitle, writableWidth), pageWidth / 2, pageHeight * 0.8, { align: 'center' });
+    }
+    
+    doc.addPage();
+  }
+
+  // --- 2. TITLE PAGE ---
+  doc.setTextColor(0, 0, 0);
   doc.setFont('times', 'bold');
   doc.setFontSize(24);
   const splitTitle = doc.splitTextToSize(title, writableWidth);
   let yPos = 3.5;
   doc.text(splitTitle, pageWidth / 2, yPos, { align: 'center' });
-
+  
   if (bookData.subtitle) {
     yPos += (splitTitle.length * 0.4) + 0.5;
     doc.setFontSize(14);
@@ -45,7 +85,7 @@ export const generateCleanPDF = async ({
     doc.text(doc.splitTextToSize(bookData.subtitle, writableWidth), pageWidth / 2, yPos, { align: 'center' });
   }
 
-  // TOC
+  // --- 3. TOC ---
   doc.addPage();
   doc.setFont('times', 'bold');
   doc.setFontSize(16);
@@ -64,15 +104,17 @@ export const generateCleanPDF = async ({
     yPos += 0.35;
   });
 
-  // Chapters
+  // --- 4. CHAPTERS (With Pro-Tips & Images) ---
   for (const ch of chapters) {
     doc.addPage();
     doc.setFont('times', 'bold');
     doc.setFontSize(14);
+    doc.setTextColor(100, 100, 100);
     doc.text(`CHAPTER ${ch.chapter}`, pageWidth / 2, margin + 0.5, { align: 'center' });
     doc.setFontSize(18);
-    const titleLines = doc.splitTextToSize(ch.title, writableWidth);
-    doc.text(titleLines, pageWidth / 2, margin + 0.9, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    const chapterTitleLines = doc.splitTextToSize(ch.title, writableWidth);
+    doc.text(chapterTitleLines, pageWidth / 2, margin + 0.9, { align: 'center' });
     yPos = margin + 1.8;
 
     const content = bookData[`chapter${ch.chapter}Content`] || "";
@@ -93,32 +135,18 @@ export const generateCleanPDF = async ({
         yPos = margin + 0.5;
       }
 
-      // Headers (###)
-      if (line.startsWith('#')) {
-        doc.setFont('times', 'bold');
-        doc.setFontSize(13);
-        yPos += 0.2;
-        const text = line.replace(/#+\s*/, '');
-        const split = doc.splitTextToSize(text, writableWidth);
-        doc.text(split, margin, yPos);
-        yPos += (split.length * 0.22) + 0.1;
-        doc.setFont('times', 'normal');
-        doc.setFontSize(11);
-        continue;
-      }
-
       // Images (![alt](url))
       const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
       if (imgMatch && imgMatch[1]) {
         try {
-          if (yPos + 3 > pageHeight - margin) {
+          if (yPos + 3.5 > pageHeight - margin) {
             doc.addPage();
             yPos = margin + 0.5;
           }
           const img = await loadImage(imgMatch[1]);
           if (img.width > 0) {
             const aspect = img.width / img.height;
-            const w = Math.min(4, writableWidth);
+            const w = Math.min(4.5, writableWidth);
             const h = w / aspect;
             doc.addImage(img, 'JPEG', (pageWidth - w) / 2, yPos, w, h);
             yPos += h + 0.3;
@@ -127,7 +155,41 @@ export const generateCleanPDF = async ({
         continue;
       }
 
-      // Plain Text
+      // Headers (###)
+      if (line.startsWith('#')) {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(13);
+        yPos += 0.25;
+        const text = line.replace(/#+\s*/, '');
+        const split = doc.splitTextToSize(text, writableWidth);
+        doc.text(split, margin, yPos);
+        yPos += (split.length * 0.22) + 0.15;
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11);
+        continue;
+      }
+
+      // Pro-Tips (> Text) - Gray Box
+      if (line.startsWith('>')) {
+        doc.setFont('times', 'italic');
+        const text = line.replace(/^>\s*/, '').replace(/\*\*/g, '');
+        const split = doc.splitTextToSize(text, writableWidth - 0.4);
+        const boxHeight = (split.length * 0.22) + 0.4;
+        
+        doc.setFillColor(245, 245, 245);
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(margin, yPos, writableWidth, boxHeight, 0.1, 0.1, 'FD');
+        
+        doc.setTextColor(60, 60, 60);
+        doc.text(split, margin + 0.2, yPos + 0.3);
+        
+        yPos += boxHeight + 0.2;
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('times', 'normal');
+        continue;
+      }
+
+      // Standard Text
       const cleanLine = line.replace(/\*\*/g, '').replace(/\*/g, '');
       const splitText = doc.splitTextToSize(cleanLine, writableWidth);
       doc.text(splitText, margin, yPos);
@@ -136,5 +198,5 @@ export const generateCleanPDF = async ({
   }
 
   if (returnBlob) return doc.output('blob');
-  doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
 };
