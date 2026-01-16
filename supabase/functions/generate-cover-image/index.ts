@@ -65,8 +65,8 @@ const sanitizeInput = (input: string): string => {
  * - Custom prompts: Use as provided (after sanitization) + quality keywords
  */
 const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
-  // Strict safety keywords for ALL images - enhanced to block humans
-  const SAFETY_SUFFIX = "no people no human no face still life object focus minimalist";
+  // Strict safety keywords for ALL images
+  const SAFETY_SUFFIX = "still life object focus no people";
   
   // For custom prompts: Quality enhancement only
   const CUSTOM_PROMPT_QUALITY = "4k high resolution";
