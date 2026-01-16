@@ -600,15 +600,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // Helper: Generate Cover PDF as Blob
     const generateCoverPDFBlob = async (): Promise<Blob | null> => {
       try {
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'in',
-          format: [9.25, 12.485]
-        });
-
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
         const pageWidth = 12.485;
         const pageHeight = 9.25;
-        const spineWidth = 0.485;
+        
+        // Auto-detect if book is thick enough for spine text (>79 pages)
+        // 34 pages = NO spine text allowed
+        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4; 
+        const hasSpineText = estimatedPages > 79;
+        const spineWidth = hasSpineText ? 0.485 : 0.25; // Thinner spine for thin books
         const coverWidth = (pageWidth - spineWidth) / 2;
 
         const loadImage = (url: string): Promise<HTMLImageElement> => {
@@ -626,89 +626,73 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
         };
 
-        // 1. Draw Background Color (entire canvas)
+        // Background
         pdf.setFillColor(spineColor);
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-        // 2. Draw Back Cover
+        // Back Cover (Placeholder or Image)
         if (localBackCoverUrl) {
           try {
             const backImg = await loadImage(localBackCoverUrl);
             pdf.addImage(backImg, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
           } catch (e) {
-            pdf.setFillColor('#f0f0f0');
+            pdf.setFillColor('#111111'); 
             pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
           }
         } else {
-          pdf.setFillColor('#f0f0f0');
+          pdf.setFillColor('#111111'); 
           pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
         }
 
-        // Back cover blurb overlay
-        const backCenterX = coverWidth / 2;
-        pdf.setFillColor(30, 30, 30);
-        pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
-        pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
-
-        // 3. Draw Spine (Center)
+        // Spine
         pdf.setFillColor(spineColor);
         pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        if (hasSpineText) {
+          // Only draw text if book is thick
+          const textRgb = hexToRgb(spineTextColor);
+          pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+          pdf.setFontSize(11);
+          pdf.text(spineText || title, coverWidth + spineWidth/2, pageHeight/2, { angle: 90, align: 'center' });
+        }
 
-        const textRgb = hexToRgb(spineTextColor);
-        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-        pdf.setFontSize(7);
-        pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, { angle: 90, align: 'left' });
-        pdf.setFontSize(11);
-        pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
-
-        // 4. Draw Front Cover Panel Background (white/clean)
-        const frontPanelX = coverWidth + spineWidth;
-        const frontCenterX = frontPanelX + coverWidth / 2;
+        // Front Cover Background
+        const frontX = coverWidth + spineWidth;
+        const frontCenterX = frontX + coverWidth / 2;
         pdf.setFillColor('#ffffff');
-        pdf.rect(frontPanelX, 0, coverWidth, pageHeight, 'F');
+        pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // 5. Draw Front Cover Image: Square 4.5x4.5 inches, placed at Y=1.0 inch, centered horizontally
-        const imageSize = 4.5; // 4.5x4.5 inch square
-        const imageX = frontPanelX + (coverWidth - imageSize) / 2; // Center horizontally
-        const imageY = 1.0; // 1 inch from top
-
+        // Front Image - Fix scaling (Square 4.5")
         if (displayUrl) {
           try {
-            const frontImg = await loadImage(displayUrl);
-            // Draw image maintaining square aspect ratio (no stretching)
-            pdf.addImage(frontImg, 'JPEG', imageX, imageY, imageSize, imageSize);
+            const img = await loadImage(displayUrl);
+            pdf.addImage(img, 'JPEG', frontX + (coverWidth - 4.5) / 2, 1.5, 4.5, 4.5);
           } catch (e) {
             console.warn('Could not load front cover image');
-            // Draw placeholder
-            pdf.setFillColor('#e0e0e0');
-            pdf.rect(imageX, imageY, imageSize, imageSize, 'F');
           }
         }
 
-        // 6. Draw Title - Centered BELOW the image at Y=6.0 inch
-        const titleY = 6.0;
+        // Title
+        pdf.setFontSize(24);
         pdf.setTextColor(0, 0, 0);
-        pdf.setFontSize(22);
-        pdf.text(title, frontCenterX, titleY, { align: 'center', maxWidth: coverWidth - 0.8 });
+        const splitTitle = pdf.splitTextToSize(title, coverWidth - 1);
+        pdf.text(splitTitle, frontCenterX, 6.8, { align: 'center' });
 
-        // 7. Draw Subtitle - Centered BELOW the title
+        // Subtitle
         if (subtitle) {
-          pdf.setFontSize(11);
+          pdf.setFontSize(12);
           pdf.setTextColor(100, 100, 100);
-          pdf.text(subtitle, frontCenterX, titleY + 0.5, { align: 'center', maxWidth: coverWidth - 0.8 });
+          pdf.text(subtitle, frontCenterX, 7.4, { align: 'center', maxWidth: coverWidth - 1 });
         }
 
-        // 8. Draw Footer (Loom & Page) - at the very bottom
+        // Footer
         pdf.setFontSize(9);
         pdf.setTextColor(100, 100, 100);
         pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
 
         return pdf.output('blob');
-      } catch (err) {
-        console.error('Error generating cover PDF:', err);
-        return null;
+      } catch (e) { 
+        console.error('Error generating cover PDF:', e);
+        return null; 
       }
     };
 
