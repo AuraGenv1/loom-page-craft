@@ -16,12 +16,13 @@ serve(async (req) => {
 
     // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
+    const prompt = `STRICT RULE: If the book topic is academic (Math, Algebra, Calculus, History, Science, Philosophy, Economics, Finance, Programming, Statistics, Physics, Chemistry, Biology), DO NOT output any markdown image syntax. Output ONLY text. Images are forbidden for abstract topics.
 
-CRITICAL INSTRUCTION FOR IMAGES:
-- Analyze the book topic carefully.
-- If the topic is VISUAL (Travel, Cooking, DIY, Art, Photography, Architecture, Nature, Fashion, Interior Design), you MUST start the chapter with a markdown image placeholder. Format: ![Detailed visual description](placeholder)
-- If the topic is ABSTRACT (Mathematics, Philosophy, Business Theory, History, Finance, Programming, Science Theory), DO NOT include any image placeholder. Focus purely on text content to optimize for print costs.
+Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
+
+IMAGE DECISION:
+- If the topic is VISUAL (Travel, Cooking, DIY, Art, Photography, Architecture, Nature, Fashion, Interior Design, Gardening, Crafts), you MUST start the chapter with a markdown image placeholder. Format: ![Detailed visual description](placeholder)
+- If the topic is ABSTRACT or ACADEMIC (as listed above), DO NOT include any image placeholder. Focus purely on text content to optimize for print costs.
 
 Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
 Language: ${language}.

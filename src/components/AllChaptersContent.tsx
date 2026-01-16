@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -51,6 +51,8 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const [regenerateDialog, setRegenerateDialog] = useState<{ chapterNum: number; currentAlt: string } | null>(null);
     const [newImagePrompt, setNewImagePrompt] = useState('');
     const [isRegenerating, setIsRegenerating] = useState(false);
+    const [isUploadingChapterImage, setIsUploadingChapterImage] = useState(false);
+    const chapterImageInputRef = useRef<HTMLInputElement>(null);
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (num) => chapterRefs.current[num - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -323,6 +325,61 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     });
 
     // Primary Image Component for each chapter
+    const handleChapterImageUpload = async (chapterNum: number, file: File, currentAlt: string) => {
+      if (!file || !sessionId) return;
+      
+      // Validate file
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be less than 5MB');
+        return;
+      }
+
+      setIsUploadingChapterImage(true);
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `chapter-${chapterNum}-${Date.now()}.${fileExt}`;
+        const filePath = `${sessionId}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('book-images')
+          .upload(filePath, file, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('book-images')
+          .getPublicUrl(filePath);
+
+        const newUrl = urlData.publicUrl;
+        const timestamp = Date.now();
+        const finalUrl = `${newUrl}?t=${timestamp}`;
+
+        // Update the chapter content with new image URL
+        const currentContent = editedContent[chapterNum] || bookData[`chapter${chapterNum}Content`] || '';
+        const newContent = currentContent.replace(
+          /!\[([^\]]*)\]\(([^)]+)\)/,
+          `![Uploaded Image](${finalUrl})`
+        );
+
+        setEditedContent(prev => ({ ...prev, [chapterNum]: newContent }));
+        
+        // Update inline images cache
+        const imageId = `ch${chapterNum}-img-uploaded-${timestamp}`;
+        setInlineImages(prev => ({ ...prev, [imageId]: finalUrl }));
+
+        toast.success('Image uploaded successfully!');
+      } catch (err) {
+        console.error('Chapter image upload failed:', err);
+        toast.error('Failed to upload image');
+      } finally {
+        setIsUploadingChapterImage(false);
+      }
+    };
+
     const PrimaryImageSection = ({ chapterNum, content }: { chapterNum: number; content: string }) => {
       const primaryImage = extractPrimaryImage(content);
       if (!primaryImage) return null;
@@ -349,7 +406,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
               <>
                 <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
                 {isEditing && (
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
@@ -360,7 +417,34 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                       className="gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
-                      Regenerate Image
+                      Regenerate
+                    </Button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id={`chapter-image-upload-${chapterNum}`}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleChapterImageUpload(chapterNum, file, primaryImage.alt || '');
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={isUploadingChapterImage}
+                      onClick={() => document.getElementById(`chapter-image-upload-${chapterNum}`)?.click()}
+                      className="gap-2"
+                    >
+                      {isUploadingChapterImage ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      Upload
                     </Button>
                   </div>
                 )}
