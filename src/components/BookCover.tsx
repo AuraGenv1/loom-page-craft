@@ -609,11 +609,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           });
         };
 
-        // Background
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
+        };
+
+        // 1. Draw Background Color (entire canvas)
         pdf.setFillColor(spineColor);
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-        // Back cover
+        // 2. Draw Back Cover
         if (localBackCoverUrl) {
           try {
             const backImg = await loadImage(localBackCoverUrl);
@@ -627,7 +632,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
         }
 
-        // Back cover blurb
+        // Back cover blurb overlay
         const backCenterX = coverWidth / 2;
         pdf.setFillColor(30, 30, 30);
         pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
@@ -635,61 +640,61 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFontSize(10);
         pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
 
-        // Spine
+        // 3. Draw Spine (Center)
         pdf.setFillColor(spineColor);
         pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
 
-        const hexToRgb = (hex: string) => {
-          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-          return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
-        };
         const textRgb = hexToRgb(spineTextColor);
-
         pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
         pdf.setFontSize(7);
         pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, { angle: 90, align: 'left' });
         pdf.setFontSize(11);
         pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
 
-        // Front cover - Square image centered, text below
+        // 4. Draw Front Cover Panel Background (white/clean)
         const frontPanelX = coverWidth + spineWidth;
         const frontCenterX = frontPanelX + coverWidth / 2;
-        const imageSize = coverWidth - 1; // Square size with margin
-        const imageX = frontPanelX + (coverWidth - imageSize) / 2; // Center horizontally
-        const imageY = 0.5; // Top margin
+        pdf.setFillColor('#ffffff');
+        pdf.rect(frontPanelX, 0, coverWidth, pageHeight, 'F');
+
+        // 5. Draw Front Cover Image: Square, 70% width, centered, 1 inch from top
+        const imageWidth = coverWidth * 0.7;
+        const imageSize = imageWidth; // Square aspect ratio
+        const imageX = frontPanelX + (coverWidth - imageWidth) / 2; // Center horizontally
+        const imageY = 1.0; // 1 inch margin from top
 
         if (displayUrl) {
           try {
             const frontImg = await loadImage(displayUrl);
+            // Draw image maintaining square aspect ratio (no stretching)
             pdf.addImage(frontImg, 'JPEG', imageX, imageY, imageSize, imageSize);
           } catch (e) {
             console.warn('Could not load front cover image');
+            // Draw placeholder
+            pdf.setFillColor('#e0e0e0');
+            pdf.rect(imageX, imageY, imageSize, imageSize, 'F');
           }
         }
 
-        // Front cover text - BELOW the image
-        const textStartY = imageY + imageSize + 0.4;
+        // 6. Draw Title/Subtitle - Centered BELOW the image
+        const textStartY = imageY + imageSize + 0.5;
         
-        // Title with shadow
+        // Title - large serif font
         pdf.setTextColor(0, 0, 0);
-        pdf.setFontSize(24);
-        pdf.text(title, frontCenterX + 0.02, textStartY + 0.02, { align: 'center', maxWidth: coverWidth - 0.5 });
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(title, frontCenterX, textStartY, { align: 'center', maxWidth: coverWidth - 0.5 });
+        pdf.setFontSize(22);
+        pdf.text(title, frontCenterX, textStartY, { align: 'center', maxWidth: coverWidth - 0.8 });
 
-        // Subtitle
+        // Subtitle - smaller sans-serif style
         if (subtitle) {
-          pdf.setFontSize(12);
-          pdf.setTextColor(0, 0, 0);
-          pdf.text(subtitle, frontCenterX + 0.01, textStartY + 0.52, { align: 'center', maxWidth: coverWidth - 0.5 });
-          pdf.setTextColor(220, 220, 220);
-          pdf.text(subtitle, frontCenterX, textStartY + 0.5, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.setFontSize(11);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(subtitle, frontCenterX, textStartY + 0.5, { align: 'center', maxWidth: coverWidth - 0.8 });
         }
 
-        // Footer branding
+        // 7. Draw Footer (Loom & Page) - at the very bottom
         pdf.setFontSize(9);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.4, { align: 'center' });
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
 
         return pdf.output('blob');
       } catch (err) {
@@ -1443,8 +1448,9 @@ p { margin-bottom: 1em; }`);
                     </p>
                     <ul className="text-left list-disc list-inside space-y-2 mb-6 text-sm text-muted-foreground">
                       <li><strong>Cover-File.pdf</strong> — Full wrap cover with spine</li>
-                      <li><strong>Manuscript.pdf</strong> — Interior text with chapters</li>
+                      <li><strong>Manuscript.pdf</strong> — Interior text with TOC & images</li>
                       <li><strong>Kindle-eBook.epub</strong> — Kindle eBook format</li>
+                      <li><strong>Kindle_Cover.jpg</strong> — eBook cover image</li>
                     </ul>
                     
                     <Button 
@@ -1470,14 +1476,14 @@ p { margin-bottom: 1em; }`);
                   {/* Individual Downloads */}
                   <div className="p-6 border rounded-lg bg-secondary/10">
                     <h4 className="font-medium mb-4">Or Download Individually</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3">
                       <Button 
                         variant="outline"
                         onClick={handleDownloadKDP} 
                         className="w-full"
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        Cover PDF
+                        Download Cover PDF
                       </Button>
                       <Button 
                         variant="outline"
@@ -1490,7 +1496,29 @@ p { margin-bottom: 1em; }`);
                         ) : (
                           <FileText className="w-4 h-4 mr-2" />
                         )}
-                        Manuscript PDF
+                        Download Manuscript PDF
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={async () => {
+                          const epubBlob = await generateEPUBBlob();
+                          if (epubBlob) {
+                            const url = URL.createObjectURL(epubBlob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}-Kindle.epub`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast.success('Kindle eBook downloaded!');
+                          }
+                        }}
+                        disabled={!bookData}
+                        className="w-full"
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Download Kindle eBook (EPUB)
                       </Button>
                     </div>
                   </div>
