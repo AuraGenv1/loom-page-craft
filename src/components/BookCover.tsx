@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState, useCallback } from 'react';
+import { forwardRef, useEffect, useState, useCallback, useRef } from 'react';
 import { getTopicIcon } from '@/lib/iconMap';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText } from 'lucide-react';
+import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import JSZip from 'jszip';
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
-
+import { generateGuideEPUB } from '@/lib/generateEPUB';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -84,6 +85,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [localFrontUrls, setLocalFrontUrls] = useState<string[]>(coverImageUrls);
     const [isDownloadingManuscript, setIsDownloadingManuscript] = useState(false);
     const [isSavingText, setIsSavingText] = useState(false);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+    const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
+    const coverUploadRef = useRef<HTMLInputElement>(null);
     
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
@@ -450,6 +454,375 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
+    // Handle cover image upload
+    const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be smaller than 5MB');
+        return;
+      }
+
+      setIsUploadingCover(true);
+      try {
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `cover_${bookId || Date.now()}_${Date.now()}.${fileExt}`;
+        const filePath = `covers/${fileName}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('book-images')
+          .upload(filePath, file, { 
+            cacheControl: '3600',
+            upsert: true 
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('book-images')
+          .getPublicUrl(filePath);
+
+        const publicUrl = publicUrlData.publicUrl;
+        
+        // Update local state
+        const newUrls = [publicUrl];
+        setLocalFrontUrls(newUrls);
+        setLockedUrls(newUrls);
+        setCurrentUrlIndex(0);
+        setImageLoaded(false);
+
+        // Save to database if bookId exists
+        if (bookId) {
+          await supabase.from('books').update({ cover_image_url: newUrls }).eq('id', bookId);
+        }
+
+        onCoverUpdate?.({ coverImageUrls: newUrls });
+        toast.success('Cover image uploaded!');
+      } catch (err) {
+        console.error('Failed to upload cover:', err);
+        toast.error('Failed to upload cover image');
+      } finally {
+        setIsUploadingCover(false);
+        // Clear file input
+        if (coverUploadRef.current) {
+          coverUploadRef.current.value = '';
+        }
+      }
+    };
+
+    // Generate unified KDP Package ZIP
+    const handleDownloadKDPPackage = async () => {
+      if (!bookData) {
+        toast.error('Book data not available');
+        return;
+      }
+
+      setIsGeneratingPackage(true);
+      toast.info('Generating KDP Package... This may take a minute.');
+
+      try {
+        const zip = new JSZip();
+        const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+
+        // 1. Generate Cover PDF (Full Wrap)
+        toast.info('Creating cover PDF...');
+        const coverPdf = await generateCoverPDFBlob();
+        if (coverPdf) {
+          zip.file('Cover-File.pdf', coverPdf);
+        }
+
+        // 2. Generate Manuscript PDF
+        toast.info('Creating manuscript PDF...');
+        const manuscriptBlob = await generateManuscriptPDFBlob();
+        if (manuscriptBlob) {
+          zip.file('Manuscript.pdf', manuscriptBlob);
+        }
+
+        // 3. Generate EPUB
+        toast.info('Creating Kindle eBook...');
+        const epubBlob = await generateEPUBBlob();
+        if (epubBlob) {
+          zip.file('Kindle-eBook.epub', epubBlob);
+        }
+
+        // Generate ZIP and download
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeTitle}-KDP-Package.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast.success('KDP Package downloaded successfully!');
+      } catch (err) {
+        console.error('Failed to generate KDP package:', err);
+        toast.error('Failed to generate KDP package');
+      } finally {
+        setIsGeneratingPackage(false);
+      }
+    };
+
+    // Helper: Generate Cover PDF as Blob
+    const generateCoverPDFBlob = async (): Promise<Blob | null> => {
+      try {
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'in',
+          format: [9.25, 12.485]
+        });
+
+        const pageWidth = 12.485;
+        const pageHeight = 9.25;
+        const spineWidth = 0.485;
+        const coverWidth = (pageWidth - spineWidth) / 2;
+
+        const loadImage = (url: string): Promise<HTMLImageElement> => {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+          });
+        };
+
+        // Background
+        pdf.setFillColor(spineColor);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+
+        // Back cover
+        if (localBackCoverUrl) {
+          try {
+            const backImg = await loadImage(localBackCoverUrl);
+            pdf.addImage(backImg, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
+          } catch (e) {
+            pdf.setFillColor('#f0f0f0');
+            pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
+          }
+        } else {
+          pdf.setFillColor('#f0f0f0');
+          pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
+        }
+
+        // Back cover blurb
+        const backCenterX = coverWidth / 2;
+        pdf.setFillColor(30, 30, 30);
+        pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(10);
+        pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
+
+        // Spine
+        pdf.setFillColor(spineColor);
+        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
+        };
+        const textRgb = hexToRgb(spineTextColor);
+
+        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+        pdf.setFontSize(7);
+        pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, { angle: 90, align: 'left' });
+        pdf.setFontSize(11);
+        pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
+
+        // Front cover
+        if (displayUrl) {
+          try {
+            const frontImg = await loadImage(displayUrl);
+            pdf.addImage(frontImg, 'JPEG', coverWidth + spineWidth + 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
+          } catch (e) {
+            console.warn('Could not load front cover image');
+          }
+        }
+
+        // Front cover text
+        const frontCenterX = coverWidth + spineWidth + coverWidth / 2;
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(28);
+        pdf.text(title, frontCenterX + 0.02, 1.52, { align: 'center', maxWidth: coverWidth - 0.5 });
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(title, frontCenterX, 1.5, { align: 'center', maxWidth: coverWidth - 0.5 });
+
+        if (subtitle) {
+          pdf.setFontSize(14);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(subtitle, frontCenterX + 0.01, 2.02, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.setTextColor(220, 220, 220);
+          pdf.text(subtitle, frontCenterX, 2.0, { align: 'center', maxWidth: coverWidth - 0.5 });
+        }
+
+        pdf.setFontSize(9);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
+
+        return pdf.output('blob');
+      } catch (err) {
+        console.error('Error generating cover PDF:', err);
+        return null;
+      }
+    };
+
+    // Helper: Generate Manuscript PDF as Blob
+    const generateManuscriptPDFBlob = async (): Promise<Blob | null> => {
+      try {
+        // We'll use a workaround - generate and capture the blob
+        // The generateCleanPDF function downloads directly, so we need to modify our approach
+        // For now, we'll create a simple manuscript PDF using jsPDF
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: 'letter' });
+        
+        // Title page
+        pdf.setFontSize(24);
+        pdf.text(title, 4.25, 4, { align: 'center' });
+        if (subtitle) {
+          pdf.setFontSize(14);
+          pdf.text(subtitle, 4.25, 4.5, { align: 'center' });
+        }
+        pdf.setFontSize(12);
+        pdf.text('Loom & Page', 4.25, 9, { align: 'center' });
+
+        // Add chapters
+        const chapters = bookData.tableOfContents || [];
+        for (let i = 0; i < chapters.length; i++) {
+          const ch = chapters[i];
+          const content = bookData[`chapter${ch.chapter}Content`];
+          if (!content) continue;
+
+          pdf.addPage();
+          pdf.setFontSize(18);
+          pdf.text(`Chapter ${ch.chapter}: ${ch.title}`, 1, 1);
+          pdf.setFontSize(11);
+          
+          // Simple text wrapping
+          const cleanContent = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').replace(/[#*>`]/g, '');
+          const lines = pdf.splitTextToSize(cleanContent, 6.5);
+          pdf.text(lines.slice(0, 50), 1, 1.5); // Limit lines per page
+        }
+
+        return pdf.output('blob');
+      } catch (err) {
+        console.error('Error generating manuscript PDF:', err);
+        return null;
+      }
+    };
+
+    // Helper: Generate EPUB as Blob
+    const generateEPUBBlob = async (): Promise<Blob | null> => {
+      try {
+        const epubZip = new JSZip();
+        
+        // EPUB mimetype
+        epubZip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+        
+        // Container XML
+        epubZip.file('META-INF/container.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);
+
+        // Generate chapter files
+        const chapters = bookData.tableOfContents || [];
+        const manifestItems: string[] = [];
+        const spineItems: string[] = [];
+
+        // Cover page
+        epubZip.file('OEBPS/cover.xhtml', `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${title}</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>
+<body>
+  <div class="cover">
+    <h1>${title}</h1>
+    ${subtitle ? `<p>${subtitle}</p>` : ''}
+    <p>Loom & Page</p>
+  </div>
+</body>
+</html>`);
+        manifestItems.push('<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>');
+        spineItems.push('<itemref idref="cover"/>');
+
+        // TOC page
+        epubZip.file('OEBPS/toc.xhtml', `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>
+<body>
+  <h1>Table of Contents</h1>
+  <ol>
+    ${chapters.map((ch: any, i: number) => `<li><a href="chapter${i + 1}.xhtml">Chapter ${ch.chapter}: ${ch.title}</a></li>`).join('\n')}
+  </ol>
+</body>
+</html>`);
+        manifestItems.push('<item id="toc" href="toc.xhtml" media-type="application/xhtml+xml"/>');
+        spineItems.push('<itemref idref="toc"/>');
+
+        // Chapters
+        for (let i = 0; i < chapters.length; i++) {
+          const ch = chapters[i];
+          const content = bookData[`chapter${ch.chapter}Content`] || '';
+          const cleanContent = content.replace(/!\[([^\]]*)\]\([^)]+\)/g, '').replace(/[#*>`]/g, '');
+          
+          epubZip.file(`OEBPS/chapter${i + 1}.xhtml`, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Chapter ${ch.chapter}</title><link rel="stylesheet" type="text/css" href="styles.css"/></head>
+<body>
+  <h1>Chapter ${ch.chapter}: ${ch.title}</h1>
+  <p>${cleanContent.replace(/\n\n/g, '</p><p>')}</p>
+</body>
+</html>`);
+          manifestItems.push(`<item id="chapter${i + 1}" href="chapter${i + 1}.xhtml" media-type="application/xhtml+xml"/>`);
+          spineItems.push(`<itemref idref="chapter${i + 1}"/>`);
+        }
+
+        // Styles
+        epubZip.file('OEBPS/styles.css', `body { font-family: serif; margin: 1em; line-height: 1.6; }
+h1 { font-size: 1.5em; margin-bottom: 0.5em; }
+.cover { text-align: center; padding: 2em; }
+p { margin-bottom: 1em; }`);
+        manifestItems.push('<item id="styles" href="styles.css" media-type="text/css"/>');
+
+        // content.opf
+        epubZip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uid">urn:uuid:${crypto.randomUUID()}</dc:identifier>
+    <dc:title>${title}</dc:title>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
+  </metadata>
+  <manifest>
+    ${manifestItems.join('\n    ')}
+  </manifest>
+  <spine>
+    ${spineItems.join('\n    ')}
+  </spine>
+</package>`);
+
+        return await epubZip.generateAsync({ type: 'blob' });
+      } catch (err) {
+        console.error('Error generating EPUB:', err);
+        return null;
+      }
+    };
+
     return (
       <>
         <div
@@ -574,7 +947,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 <TabsTrigger value="back" className="text-xs sm:text-sm">Back Cover</TabsTrigger>
                 <TabsTrigger value="spine" className="text-xs sm:text-sm">Spine</TabsTrigger>
                 <TabsTrigger value="wrap" className="text-xs sm:text-sm">Full Wrap</TabsTrigger>
-                <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Manuscript</TabsTrigger>
+                <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Export</TabsTrigger>
               </TabsList>
 
               {/* TAB 1: Front Cover - Full Layout Preview with Editable Title/Subtitle */}
@@ -675,24 +1048,59 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                         rows={4}
                       />
                     </div>
-                    <Button 
-                      onClick={handleRegenerateFront} 
-                      disabled={isRegeneratingFront}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {isRegeneratingFront ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Regenerating...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Regenerate Front Cover
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={handleRegenerateFront} 
+                        disabled={isRegeneratingFront}
+                        className="flex-1"
+                        size="lg"
+                      >
+                        {isRegeneratingFront ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Regenerating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Regenerate
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    {/* Upload Cover Image */}
+                    <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">
+                      <h4 className="font-medium text-sm mb-2">Or Upload Your Own Image</h4>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Upload a custom cover image (JPG, PNG, max 5MB)
+                      </p>
+                      <input
+                        ref={coverUploadRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCoverUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => coverUploadRef.current?.click()}
+                        disabled={isUploadingCover}
+                        className="w-full"
+                      >
+                        {isUploadingCover ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Cover Image
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </TabsContent>
@@ -1012,44 +1420,72 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
                 </div>
               </TabsContent>
 
-              {/* TAB 5: Manuscript */}
+              {/* TAB 5: Export - Unified KDP Package */}
               <TabsContent value="manuscript" className="space-y-4 pt-4">
                 <div className="max-w-lg mx-auto text-center space-y-6">
-                  <div className="p-8 border rounded-lg bg-secondary/10">
-                    <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-xl font-medium mb-2">Interior Manuscript</h3>
+                  {/* Unified KDP Package */}
+                  <div className="p-8 border-2 border-primary/20 rounded-lg bg-primary/5">
+                    <Package className="w-16 h-16 mx-auto mb-4 text-primary" />
+                    <h3 className="text-xl font-bold mb-2">Complete KDP Package</h3>
                     <p className="text-muted-foreground mb-6">
-                      Download your book's interior text formatted for Amazon KDP. 
-                      This includes the cover page, table of contents, and all chapters.
+                      Download everything you need for Amazon KDP in one ZIP file:
                     </p>
+                    <ul className="text-left list-disc list-inside space-y-2 mb-6 text-sm text-muted-foreground">
+                      <li><strong>Cover-File.pdf</strong> — Full wrap cover with spine</li>
+                      <li><strong>Manuscript.pdf</strong> — Interior text with chapters</li>
+                      <li><strong>Kindle-eBook.epub</strong> — Kindle eBook format</li>
+                    </ul>
                     
                     <Button 
-                      onClick={handleDownloadManuscript} 
-                      disabled={isDownloadingManuscript || !bookData}
+                      onClick={handleDownloadKDPPackage} 
+                      disabled={isGeneratingPackage || !bookData}
                       className="w-full"
                       size="lg"
                     >
-                      {isDownloadingManuscript ? (
+                      {isGeneratingPackage ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Generating Manuscript...
+                          Generating Package...
                         </>
                       ) : (
                         <>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download KDP Manuscript (PDF)
+                          <Package className="w-4 h-4 mr-2" />
+                          Download KDP Package (ZIP)
                         </>
                       )}
                     </Button>
                   </div>
 
+                  {/* Individual Downloads */}
+                  <div className="p-6 border rounded-lg bg-secondary/10">
+                    <h4 className="font-medium mb-4">Or Download Individually</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Button 
+                        variant="outline"
+                        onClick={handleDownloadKDP} 
+                        className="w-full"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Cover PDF
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={handleDownloadManuscript} 
+                        disabled={isDownloadingManuscript || !bookData}
+                        className="w-full"
+                      >
+                        {isDownloadingManuscript ? (
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4 mr-2" />
+                        )}
+                        Manuscript PDF
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="text-sm text-muted-foreground space-y-2">
-                    <p><strong>Tip:</strong> For best results on Amazon KDP:</p>
-                    <ul className="text-left list-disc list-inside space-y-1">
-                      <li>Upload the Full Wrap PDF as your "Cover"</li>
-                      <li>Upload the Manuscript PDF as your "Manuscript"</li>
-                      <li>Select 6" × 9" (15.24 × 22.86 cm) as your trim size</li>
-                    </ul>
+                    <p><strong>Tip:</strong> For Amazon KDP, select 6" × 9" trim size.</p>
                   </div>
                 </div>
               </TabsContent>
