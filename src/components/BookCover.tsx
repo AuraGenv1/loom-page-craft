@@ -876,6 +876,7 @@ p { margin-bottom: 1em; }`);
           {/* Admin Edit Button - Locked while generating */}
           {isAdmin && (
             <Button
+              id="kdp-studio-trigger"
               onClick={() => setStudioOpen(true)}
               variant="secondary"
               size="sm"
