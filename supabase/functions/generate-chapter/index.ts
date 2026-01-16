@@ -17,8 +17,11 @@ serve(async (req) => {
     // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
-    
-CRITICAL INSTRUCTION: You MUST start every chapter with a markdown image placeholder describing a visual relevant to that specific chapter. Format: ![Detailed description of visual](placeholder). This is required for ALL chapters.
+
+CRITICAL INSTRUCTION FOR IMAGES:
+- Analyze the book topic carefully.
+- If the topic is VISUAL (Travel, Cooking, DIY, Art, Photography, Architecture, Nature, Fashion, Interior Design), you MUST start the chapter with a markdown image placeholder. Format: ![Detailed visual description](placeholder)
+- If the topic is ABSTRACT (Mathematics, Philosophy, Business Theory, History, Finance, Programming, Science Theory), DO NOT include any image placeholder. Focus purely on text content to optimize for print costs.
 
 Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
 Language: ${language}.
