@@ -439,10 +439,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       toast.info('Generating manuscript PDF...');
 
       try {
+        // Check if displayUrl is valid before passing
+        const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
+        
         await generateCleanPDF({
           topic: topic || title,
           bookData,
-          coverImageUrl: displayUrl || undefined,
+          coverImageUrl: validCoverUrl,
           isKdpManuscript: true
         });
         toast.success('Manuscript PDF downloaded!');
