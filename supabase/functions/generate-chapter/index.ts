@@ -16,7 +16,9 @@ serve(async (req) => {
 
     // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const prompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
+    const prompt = `STRICT RULE: If the book topic is academic (Math, Algebra, History, Science, Philosophy), DO NOT output any markdown image syntax. Output ONLY text. Images are forbidden for abstract topics.
+
+Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
 
 CRITICAL INSTRUCTION FOR IMAGES:
 - Analyze the book topic carefully.
