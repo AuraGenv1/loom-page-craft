@@ -112,19 +112,19 @@ const ProgressDownloadButton = ({
       setIsConverting(true);
       toast.loading('Preparing guide...', { id: 'pdf-gen' });
 
-      // Process images
       const { processedBookData, base64CoverUrl } = await processBookImages(bookData, coverImageUrls || []);
       
+      // NEW: Pass includeCoverPage: true
       await generateCleanPDF({
         topic,
         bookData: processedBookData,
         coverImageUrl: base64CoverUrl !== TRANSPARENT_PIXEL ? base64CoverUrl : undefined,
+        includeCoverPage: true
       });
 
       toast.success('Downloaded!', { id: 'pdf-gen' });
       onClick?.();
     } catch (e) {
-      console.error(e);
       toast.error('Download failed', { id: 'pdf-gen' });
     } finally {
       setIsConverting(false);
@@ -143,27 +143,27 @@ const ProgressDownloadButton = ({
     <div className="w-full flex flex-col items-center gap-2">
       <button
         onClick={isAdmin ? handleAdminClick : handleUserDownload}
-        disabled={!canDownload}
-        className={`
-          relative w-full max-w-xs h-14 rounded-lg font-serif text-base font-medium
-          transition-all duration-300 overflow-hidden
-          ${canDownload 
-            ? 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-lg hover:shadow-xl' 
-            : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-          }
-        `}
+        disabled={!isAdmin && !canDownload}
+        className={`relative overflow-hidden w-full max-w-md h-14 rounded-md border border-neutral-800 font-serif text-lg transition-all duration-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-80`}
+        style={{ background: '#f5f5f5', color: '#000000' }}
       >
-        {/* Progress Bar (Users Only) */}
+        {/* Progress Bar (Gray/Black) */}
         {!isAdmin && (
           <div 
-            className="absolute inset-0 bg-emerald-600/30 transition-all duration-500"
-            style={{ width: `${progress}%` }}
+            className="absolute inset-0 bg-neutral-900 transition-all duration-700 ease-out" 
+            style={{ width: `${progress}%` }} 
           />
         )}
-
-        <span className="relative z-10 flex items-center justify-center gap-2">
+        {/* Text Layer */}
+        <span 
+          className="relative z-10 flex items-center justify-center gap-3 h-full px-6"
+          style={{ 
+            mixBlendMode: 'difference', 
+            color: 'white' 
+          }}
+        >
           {isCompiling ? <Loader2 className="w-5 h-5 animate-spin" /> : isAdmin ? <Package className="w-5 h-5" /> : <Download className="w-5 h-5" />}
-          {getLabel()}
+          <span className="font-medium tracking-wide">{getLabel()}</span>
         </span>
       </button>
 
