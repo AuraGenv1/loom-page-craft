@@ -523,6 +523,37 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
+    // Helper: Generate Kindle Cover JPG as Blob (canvas-based)
+    const generateCoverJPGBlob = async (): Promise<Blob | null> => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1600;
+      canvas.height = 2560;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      ctx.fillStyle = spineColor;
+      ctx.fillRect(0, 0, 1600, 2560);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 800, 1600, 1760);
+
+      if (displayUrl) {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = displayUrl;
+        await new Promise(r => { img.onload = r; img.onerror = r; });
+        if (img.width > 0) {
+          ctx.drawImage(img, 200, 400, 1200, 1200);
+        }
+      }
+
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 140px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(title, 800, 1800, 1400);
+
+      return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/jpeg', 0.9));
+    };
+
     // Generate unified KDP Package ZIP
     const handleDownloadKDPPackage = async () => {
       if (!bookData) {
@@ -543,7 +574,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (coverPdf) {
           zip.file('Cover-File.pdf', coverPdf);
         } else {
-            console.error("Failed to generate Cover PDF blob");
+          console.error("Failed to generate Cover PDF blob");
         }
 
         // 2. Generate Manuscript PDF (Interior)
@@ -552,7 +583,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (manuscriptBlob) {
           zip.file('Manuscript.pdf', manuscriptBlob);
         } else {
-             console.error("Failed to generate Manuscript PDF blob");
+          console.error("Failed to generate Manuscript PDF blob");
         }
 
         // 3. Generate EPUB (Kindle eBook)
@@ -568,9 +599,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           zip.file('Kindle-eBook.epub', epubBlob);
         }
 
-        // 4. Add Kindle Cover JPG
+        // 4. Add Kindle Cover JPG (canvas-generated)
         toast.info('Creating 4/4: Kindle Cover Image...');
-        const kindleCoverBlob = await fetchKindleCoverBlob();
+        const kindleCoverBlob = await generateCoverJPGBlob();
         if (kindleCoverBlob) {
           zip.file('Kindle_Cover.jpg', kindleCoverBlob);
         }
@@ -601,15 +632,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const generateCoverPDFBlob = async (): Promise<Blob | null> => {
       try {
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
-        const pageWidth = 12.485;
-        const pageHeight = 9.25;
-        
-        // Auto-detect if book is thick enough for spine text (>79 pages)
-        // 34 pages = NO spine text allowed
-        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4; 
+        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4;
         const hasSpineText = estimatedPages > 79;
-        const spineWidth = hasSpineText ? 0.485 : 0.25; // Thinner spine for thin books
-        const coverWidth = (pageWidth - spineWidth) / 2;
+        const spineWidth = hasSpineText ? 0.485 : 0.2;
+        const coverWidth = (12.485 - spineWidth) / 2;
 
         const loadImage = (url: string): Promise<HTMLImageElement> => {
           return new Promise((resolve, reject) => {
@@ -626,42 +652,39 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
         };
 
-        // Background
+        // Background (Back Cover)
         pdf.setFillColor(spineColor);
-        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-
-        // Back Cover (Placeholder or Image)
-        if (localBackCoverUrl) {
+        pdf.rect(0, 0, 12.485, 9.25, 'F');
+        
+        if (!localBackCoverUrl) {
+          pdf.setFillColor('#111111');
+          pdf.rect(0.125, 0.125, coverWidth - 0.25, 9, 'F');
+        } else {
           try {
             const backImg = await loadImage(localBackCoverUrl);
-            pdf.addImage(backImg, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
+            pdf.addImage(backImg, 'JPEG', 0.125, 0.125, coverWidth - 0.25, 9);
           } catch (e) {
-            pdf.setFillColor('#111111'); 
-            pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
+            pdf.setFillColor('#111111');
+            pdf.rect(0.125, 0.125, coverWidth - 0.25, 9, 'F');
           }
-        } else {
-          pdf.setFillColor('#111111'); 
-          pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
         }
 
         // Spine
         pdf.setFillColor(spineColor);
-        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        pdf.rect(coverWidth, 0, spineWidth, 9.25, 'F');
         if (hasSpineText) {
-          // Only draw text if book is thick
           const textRgb = hexToRgb(spineTextColor);
           pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
           pdf.setFontSize(11);
-          pdf.text(spineText || title, coverWidth + spineWidth/2, pageHeight/2, { angle: 90, align: 'center' });
+          pdf.text(title, coverWidth + spineWidth / 2, 4.6, { angle: 90, align: 'center' });
         }
 
-        // Front Cover Background
+        // Front Cover
         const frontX = coverWidth + spineWidth;
-        const frontCenterX = frontX + coverWidth / 2;
         pdf.setFillColor('#ffffff');
-        pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
+        pdf.rect(frontX, 0, coverWidth, 9.25, 'F');
 
-        // Front Image - Fix scaling (Square 4.5")
+        // Front Image (Square 4.5")
         if (displayUrl) {
           try {
             const img = await loadImage(displayUrl);
@@ -675,24 +698,24 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFontSize(24);
         pdf.setTextColor(0, 0, 0);
         const splitTitle = pdf.splitTextToSize(title, coverWidth - 1);
-        pdf.text(splitTitle, frontCenterX, 6.8, { align: 'center' });
+        pdf.text(splitTitle, frontX + coverWidth / 2, 6.8, { align: 'center' });
 
         // Subtitle
         if (subtitle) {
           pdf.setFontSize(12);
           pdf.setTextColor(100, 100, 100);
-          pdf.text(subtitle, frontCenterX, 7.4, { align: 'center', maxWidth: coverWidth - 1 });
+          pdf.text(subtitle, frontX + coverWidth / 2, 7.4, { align: 'center', maxWidth: coverWidth - 1 });
         }
 
         // Footer
         pdf.setFontSize(9);
         pdf.setTextColor(100, 100, 100);
-        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
+        pdf.text('Loom & Page', frontX + coverWidth / 2, 8.75, { align: 'center' });
 
         return pdf.output('blob');
-      } catch (e) { 
+      } catch (e) {
         console.error('Error generating cover PDF:', e);
-        return null; 
+        return null;
       }
     };
 
