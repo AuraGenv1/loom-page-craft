@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check } from 'lucide-react';
+import { AlertTriangle, ImageIcon, Key, Pencil, Save, X, RefreshCw, Check, Upload } from 'lucide-react';
 import WeavingLoader from '@/components/WeavingLoader';
 import ReactMarkdown from 'react-markdown';
 import LocalResources from '@/components/LocalResources';
@@ -51,6 +51,9 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const [regenerateDialog, setRegenerateDialog] = useState<{ chapterNum: number; currentAlt: string } | null>(null);
     const [newImagePrompt, setNewImagePrompt] = useState('');
     const [isRegenerating, setIsRegenerating] = useState(false);
+    const [isUploadingChapterImage, setIsUploadingChapterImage] = useState(false);
+    const chapterImageUploadRef = useRef<HTMLInputElement>(null);
+    const [pendingUploadChapter, setPendingUploadChapter] = useState<{ chapterNum: number; currentAlt: string } | null>(null);
 
     useImperativeHandle(ref, () => ({
       scrollToChapter: (num) => chapterRefs.current[num - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -254,7 +257,82 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
       }
     };
 
-    // Extract first image from content for placement after title
+    // Handle chapter image upload
+    const handleChapterImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !pendingUploadChapter) return;
+
+      const { chapterNum, currentAlt } = pendingUploadChapter;
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be smaller than 5MB');
+        return;
+      }
+
+      setIsUploadingChapterImage(true);
+      try {
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `chapter_${bookId || Date.now()}_ch${chapterNum}_${Date.now()}.${fileExt}`;
+        const filePath = `chapters/${fileName}`;
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('book-images')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('book-images')
+          .getPublicUrl(filePath);
+
+        const newUrl = urlData.publicUrl;
+
+        // Update edited content with new image URL
+        const currentContent = editedContent[chapterNum] || bookData[`chapter${chapterNum}Content`] || '';
+        const altText = currentAlt || 'Chapter illustration';
+        
+        // Replace existing image or add new one
+        let newContent: string;
+        if (currentContent.match(/!\[([^\]]*)\]\(([^)]+)\)/)) {
+          newContent = currentContent.replace(
+            /!\[([^\]]*)\]\(([^)]+)\)/,
+            `![${altText}](${newUrl})`
+          );
+        } else {
+          newContent = `![${altText}](${newUrl})\n\n${currentContent}`;
+        }
+
+        setEditedContent(prev => ({ ...prev, [chapterNum]: newContent }));
+
+        // Update inline images state immediately
+        const imageId = `ch${chapterNum}-img-${altText.replace(/\s+/g, '-').substring(0, 20)}`;
+        setInlineImages(prev => ({ ...prev, [imageId]: newUrl }));
+
+        toast.success('Chapter image uploaded!');
+        setPendingUploadChapter(null);
+      } catch (err) {
+        console.error('Chapter image upload failed:', err);
+        toast.error('Failed to upload image');
+      } finally {
+        setIsUploadingChapterImage(false);
+        // Reset file input
+        if (chapterImageUploadRef.current) {
+          chapterImageUploadRef.current.value = '';
+        }
+      }
+    };
     const extractPrimaryImage = (markdownContent: string) => {
       const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
       if (imageMatch) {
@@ -349,7 +427,7 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
               <>
                 <img src={displayUrl} alt={primaryImage.alt || 'Chapter illustration'} className="object-cover w-full h-full" />
                 {isEditing && (
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
@@ -360,7 +438,24 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
                       className="gap-2"
                     >
                       <RefreshCw className="w-4 h-4" />
-                      Regenerate Image
+                      Regenerate
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setPendingUploadChapter({ chapterNum, currentAlt: primaryImage.alt || '' });
+                        chapterImageUploadRef.current?.click();
+                      }}
+                      disabled={isUploadingChapterImage}
+                      className="gap-2"
+                    >
+                      {isUploadingChapterImage ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      Upload
                     </Button>
                   </div>
                 )}
@@ -379,6 +474,15 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
 
     return (
       <div className="relative z-10">
+        {/* Hidden file input for chapter image uploads */}
+        <input
+          ref={chapterImageUploadRef}
+          type="file"
+          accept="image/*"
+          onChange={handleChapterImageUpload}
+          className="hidden"
+        />
+        
         {/* Admin Toolbar - Only visible when isFullAccess */}
         {isFullAccess && (
           <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border p-4 mb-6 flex items-center justify-between shadow-sm">
