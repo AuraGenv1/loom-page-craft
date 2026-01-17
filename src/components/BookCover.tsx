@@ -525,60 +525,84 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
     // Helper: Generate Kindle Cover JPG as Blob (canvas-based)
     const generateCoverJPGBlob = async (): Promise<Blob | null> => {
-      try {
-        const canvas = document.createElement('canvas');
-        // Kindle Ideal Ratio: 1600 x 2560 (1:1.6)
-        canvas.width = 1600;
-        canvas.height = 2560;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1600; canvas.height = 2560; 
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
 
-        // 1. Background
-        ctx.fillStyle = spineColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 1600, 2560);
 
-        // 2. White Panel (Bottom 2/3rds style)
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 800, 1600, 1760);
-
-        // 3. Image (Square, Centered)
-        if (displayUrl) {
-          const img = new Image();
-          img.crossOrigin = "Anonymous";
-          img.src = displayUrl;
-          await new Promise((r) => { img.onload = r; img.onerror = r; });
-          
-          // Draw image 1200x1200px centered
-          if (img.width > 0) {
-            ctx.drawImage(img, 200, 400, 1200, 1200);
-          }
-        }
-
-        // 4. Text (Title)
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 140px serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(title, 800, 1800, 1400); // Max width 1400
-
-        // 5. Subtitle
-        if (subtitle) {
-          ctx.font = 'italic 60px serif';
-          ctx.fillStyle = '#555555';
-          ctx.fillText(subtitle, 800, 1950, 1400);
-        }
-
-        // 6. Branding
-        ctx.font = '40px sans-serif';
-        ctx.fillStyle = '#888888';
-        ctx.fillText("LOOM & PAGE", 800, 2400);
-
-        return new Promise((resolve) => {
-          canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
-        });
-      } catch (e) {
-        console.error("JPG Gen failed", e);
-        return null;
+      // 1. IMAGE (Square, Centered Top)
+      if (displayUrl) {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = displayUrl;
+        await new Promise((r) => { img.onload = r; img.onerror = r; });
+        ctx.drawImage(img, 100, 200, 1400, 1400); 
       }
+
+      // 2. TITLE
+      const textStart = 1750;
+      ctx.fillStyle = '#000000';
+      ctx.font = '500 130px serif';
+      ctx.textAlign = 'center';
+      
+      const words = title.split(' ');
+      let line = '';
+      let y = textStart;
+      const lineHeight = 150;
+      for(let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        if (ctx.measureText(testLine).width > 1400 && n > 0) {
+          ctx.fillText(line, 800, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else { line = testLine; }
+      }
+      ctx.fillText(line, 800, y);
+
+      // 3. SEPARATOR
+      y += 60;
+      ctx.beginPath(); ctx.moveTo(700, y); ctx.lineTo(900, y);
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4; ctx.stroke();
+
+      // 4. SUBTITLE
+      if (subtitle) {
+         y += 80;
+         ctx.font = 'italic 50px serif';
+         ctx.fillStyle = '#666666';
+         ctx.fillText(subtitle.toUpperCase(), 800, y);
+      }
+
+      // 5. LOGO (Manual Draw)
+      y += 150;
+      const lx = 760; // 800 - 40
+      const ly = y;
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(lx + 10, ly); ctx.lineTo(lx + 10, ly + 80);
+      ctx.moveTo(lx + 40, ly); ctx.lineTo(lx + 40, ly + 80);
+      ctx.moveTo(lx + 70, ly); ctx.lineTo(lx + 70, ly + 80);
+      ctx.moveTo(lx, ly + 40); ctx.lineTo(lx + 80, ly + 40);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // 6. BRAND
+      y += 130;
+      ctx.font = '400 30px serif';
+      ctx.fillStyle = '#999999';
+      ctx.fillText("Loom & Page", 800, y);
+
+      // 7. DISCLAIMER
+      y += 60;
+      ctx.font = 'italic 24px sans-serif';
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText("AI-generated content for creative inspiration only.", 800, y);
+      ctx.fillText("Not professional advice.", 800, y + 35);
+
+      return new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
     };
 
     // Generate unified KDP Package ZIP
@@ -634,27 +658,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // Helper: Generate Cover PDF as Blob
     const generateCoverPDFBlob = async (): Promise<Blob | null> => {
       try {
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'in',
-          format: [12.485, 9.25] // Full wrap size
-        });
-        const pageWidth = 12.485;
-        const pageHeight = 9.25;
-
-        // SPINE CALCULATION
-        // KDP requires ~80 pages for text on spine.
-        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4;
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
+        const pageWidth = 12.485; const pageHeight = 9.25;
+        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4; 
         const hasSpineText = estimatedPages > 79;
-        const spineWidth = hasSpineText ? 0.485 : 0.2; // Thinner spine for thin books
-
+        const spineWidth = hasSpineText ? 0.485 : 0.2; 
         const coverWidth = (pageWidth - spineWidth) / 2;
 
-        // 1. Draw Background Color
-        pdf.setFillColor(spineColor);
-        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-
-        // 2. Draw Back Cover
+        // Back & Spine
+        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F');
         if (localBackCoverUrl) {
           try {
             const img = new Image();
@@ -664,54 +676,68 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             pdf.addImage(img, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
           } catch (e) {}
         } else {
-          // Better placeholder for back cover
-          pdf.setFillColor('#1a1a1a');
-          pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
+          pdf.setFillColor('#111111'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F');
+        }
+        
+        pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        if (hasSpineText) { 
+            pdf.setTextColor(0,0,0); pdf.setFontSize(10);
+            pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
         }
 
-        // 3. Draw Spine
-        pdf.setFillColor(spineColor);
-        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
-        // ONLY Draw Spine Text if book is thick enough
-        if (hasSpineText) {
-          pdf.setTextColor(0, 0, 0);
-          pdf.setFontSize(11);
-          pdf.text(spineText || title, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'center' });
-        }
+        // --- FRONT COVER ---
+        const frontX = coverWidth + spineWidth;
+        const centerX = frontX + (coverWidth / 2);
+        pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // 4. Draw Front Cover Background
-        const frontPanelX = coverWidth + spineWidth;
-        const frontCenterX = frontPanelX + coverWidth / 2;
-        pdf.setFillColor('#ffffff');
-        pdf.rect(frontPanelX, 0, coverWidth, pageHeight, 'F');
-
-        // 5. Draw Front Cover Image (FIXED SCALING)
-        const imageSize = 4.5;
-        const imageX = frontCenterX - (imageSize / 2);
-        const imageY = 1.5;
+        // 1. IMAGE (Square 4.5")
+        const imgSize = 4.5;
+        const imgY = 1.2;
         if (displayUrl) {
-          try {
-            const img = new Image();
-            img.src = displayUrl;
-            img.crossOrigin = "Anonymous";
-            await new Promise((r) => { img.onload = r; img.onerror = r; });
-            pdf.addImage(img, 'JPEG', imageX, imageY, imageSize, imageSize);
-          } catch (e) {}
+           const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
+           await new Promise(r => { img.onload = r; img.onerror = r; });
+           pdf.addImage(img, 'JPEG', centerX - (imgSize/2), imgY, imgSize, imgSize);
         }
 
-        // 6. Draw Title - Centered BELOW the image
-        const titleY = imageY + imageSize + 0.8;
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont('times', 'bold');
-        pdf.setFontSize(24);
+        // 2. TITLE
+        let textY = imgY + imgSize + 0.6;
+        pdf.setTextColor(0,0,0); pdf.setFont('times', 'bold'); pdf.setFontSize(22);
         const splitTitle = pdf.splitTextToSize(title, coverWidth - 1);
-        pdf.text(splitTitle, frontCenterX, titleY, { align: 'center' });
+        pdf.text(splitTitle, centerX, textY, { align: 'center' });
+        textY += (splitTitle.length * 0.35);
+
+        // 3. SEPARATOR
+        textY += 0.1;
+        pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.01);
+        pdf.line(centerX - 0.5, textY, centerX + 0.5, textY);
+        textY += 0.3;
+
+        // 4. SUBTITLE
+        if (subtitle) {
+          pdf.setFontSize(10); pdf.setFont('times', 'italic'); pdf.setTextColor(100, 100, 100);
+          const splitSub = pdf.splitTextToSize(subtitle.toUpperCase(), coverWidth - 1.5);
+          pdf.text(splitSub, centerX, textY, { align: 'center' });
+          textY += 0.5;
+        }
+
+        // 5. LOGO
+        const ly = textY + 0.1;
+        const s = 0.3; 
+        pdf.setDrawColor(0,0,0); pdf.setLineWidth(0.02);
+        pdf.line(centerX - 0.1, ly, centerX - 0.1, ly + s);
+        pdf.line(centerX, ly, centerX, ly + s);
+        pdf.line(centerX + 0.1, ly, centerX + 0.1, ly + s);
+        pdf.line(centerX - 0.15, ly + s/2, centerX + 0.15, ly + s/2);
+
+        // 6. BRAND & DISCLAIMER
+        pdf.setFont('times', 'normal'); pdf.setFontSize(9); pdf.setTextColor(150, 150, 150);
+        pdf.text("Loom & Page", centerX, ly + s + 0.2, { align: 'center' });
+        pdf.setFontSize(7); pdf.setTextColor(180, 180, 180);
+        pdf.text("AI-generated content for creative inspiration only.", centerX, ly + s + 0.45, { align: 'center' });
+        pdf.text("Not professional advice.", centerX, ly + s + 0.58, { align: 'center' });
 
         return pdf.output('blob');
-      } catch (err) {
-        console.error('Error generating cover PDF:', err);
-        return null;
-      }
+      } catch(e) { return null; }
     };
 
     // Helper: Generate Manuscript PDF as Blob
@@ -1032,10 +1058,19 @@ p { margin-bottom: 1em; }`);
                             </p>
                           )}
                         </div>
-                        {/* Bottom Branding */}
-                        <div className="text-center pt-2">
-                          <span className="font-serif text-[10px] text-muted-foreground/50">Loom & Page</span>
+                        {/* 5. LOGO (SVG) */}
+                        <div className="relative w-6 h-6 opacity-50 mb-2 mx-auto">
+                          <div className="absolute left-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute right-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
                         </div>
+                        {/* 6. BRAND */}
+                        <span className="font-serif text-[10px] text-muted-foreground/50 block mb-2 text-center">Loom & Page</span>
+                        {/* 7. DISCLAIMER */}
+                        <p className="text-[7px] text-muted-foreground/30 leading-tight italic text-center">
+                          AI-generated content for creative inspiration only.<br/>Not professional advice.
+                        </p>
                       </div>
                     </div>
                   </div>
