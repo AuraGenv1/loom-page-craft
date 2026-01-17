@@ -533,44 +533,46 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       // Background
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1600, 2560);
 
-      // 1. IMAGE (Square, Centered Top)
+      // 1. IMAGE (Reduced to 1000px width = ~60% of 1600)
       if (displayUrl) {
         const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
         await new Promise((r) => { img.onload = r; img.onerror = r; });
-        ctx.drawImage(img, 100, 200, 1400, 1400); 
+        // Centered: (1600 - 1000) / 2 = 300 x position
+        ctx.drawImage(img, 300, 250, 1000, 1000); 
       }
 
-      // 2. TITLE
-      ctx.fillStyle = '#000000'; ctx.font = '500 130px serif'; ctx.textAlign = 'center';
-      const words = title.split(' ');
-      let line = ''; let y = 1750;
+      // 2. TITLE (Bold, nicely spaced)
+      const textStart = 1450; // Moved up since image is smaller
+      ctx.fillStyle = '#000000'; ctx.font = 'bold 120px serif'; ctx.textAlign = 'center';
+      const words = title.split(' '); let line = ''; let y = textStart;
       for(let n = 0; n < words.length; n++) {
-        if (ctx.measureText(line + words[n]).width > 1400 && n > 0) { ctx.fillText(line, 800, y); line = words[n] + ' '; y += 150; }
-        else { line += words[n] + ' '; }
+        if (ctx.measureText(line + words[n]).width > 1200 && n > 0) {
+          ctx.fillText(line, 800, y); line = words[n] + ' '; y += 140;
+        } else { line += words[n] + ' '; }
       }
       ctx.fillText(line, 800, y);
 
       // 3. SEPARATOR
-      y += 60;
+      y += 80;
       ctx.beginPath(); ctx.moveTo(700, y); ctx.lineTo(900, y);
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 4; ctx.stroke();
 
       // 4. SUBTITLE
       if (subtitle) {
-         y += 80; ctx.font = 'italic 50px serif'; ctx.fillStyle = '#666666';
+         y += 100; ctx.font = 'italic 45px serif'; ctx.fillStyle = '#666666';
          ctx.fillText(subtitle.toUpperCase(), 800, y);
       }
 
-      // 5. LOGO (Manual Draw)
-      y += 150; 
+      // 5. LOGO (Full Opacity)
+      y += 180; 
       const lx = 760; 
-      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 1.0; // Darker
       ctx.beginPath();
       ctx.moveTo(lx+10, y); ctx.lineTo(lx+10, y+80);
       ctx.moveTo(lx+40, y); ctx.lineTo(lx+40, y+80);
       ctx.moveTo(lx+70, y); ctx.lineTo(lx+70, y+80);
       ctx.moveTo(lx, y+40); ctx.lineTo(lx+80, y+40);
-      ctx.stroke(); ctx.globalAlpha = 1.0;
+      ctx.stroke();
 
       // 6. BRAND
       y += 130;
@@ -642,15 +644,24 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
         const pageWidth = 12.485; const pageHeight = 9.25;
         const spineWidth = 0.485; const coverWidth = (pageWidth - spineWidth) / 2;
-        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F'); // Back/Spine
-        if (!localBackCoverUrl) { pdf.setFillColor('#111111'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
         
+        // Back Cover (Light Gray Fix)
+        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F');
+        if (!localBackCoverUrl) { pdf.setFillColor('#f0f0f0'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
+        
+        // Spine (Force Text - No Check)
+        pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        pdf.setTextColor(0,0,0); pdf.setFontSize(10);
+        // Force text regardless of page count
+        pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
+        
+        // Front Cover Background
         const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // 1. IMAGE (Square 4.5")
-        const imgSize = 4.5; const imgY = 1.2;
+        // 1. IMAGE (Reduced to 3.5 inches = Matches Visual)
+        const imgSize = 3.5; const imgY = 1.0;
         if (displayUrl) {
            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
            await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -658,9 +669,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // 2. TITLE
-        let textY = imgY + imgSize + 0.6;
+        let textY = imgY + imgSize + 0.8;
         pdf.setTextColor(0,0,0); pdf.setFont('times', 'bold'); pdf.setFontSize(22);
-        const splitTitle = pdf.splitTextToSize(title, coverWidth - 1);
+        const splitTitle = pdf.splitTextToSize(title, 3.5); // Wrap to image width
         pdf.text(splitTitle, centerX, textY, { align: 'center' });
         textY += (splitTitle.length * 0.35);
 
@@ -673,7 +684,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // 4. SUBTITLE
         if (subtitle) {
           pdf.setFontSize(10); pdf.setFont('times', 'italic'); pdf.setTextColor(100, 100, 100);
-          pdf.text(pdf.splitTextToSize(subtitle.toUpperCase(), coverWidth - 1.5), centerX, textY, { align: 'center' });
+          pdf.text(pdf.splitTextToSize(subtitle.toUpperCase(), 3.5), centerX, textY, { align: 'center' });
           textY += 0.5;
         }
 
@@ -1393,42 +1404,42 @@ p { margin-bottom: 1em; }`);
                           {(spineText || title).slice(0, 35)}
                         </span>
                       </div>
-                      {/* Front Cover - Full Composite View (Image + Title Overlay) - No yellow tint */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col p-3 flex-shrink-0">
-                      {/* Cover Image */}
-                      <div className="relative w-full aspect-square mb-2 flex-shrink-0">
-                        {displayUrl ? (
-                          <div className="w-full h-full rounded overflow-hidden border border-foreground/10">
+                      {/* Front Cover - Full Composite View (Matches Front Cover Tab) */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col items-center text-center p-3 flex-shrink-0">
+                        {/* 1. IMAGE (Constrained 60%) */}
+                        <div className="relative w-[60%] aspect-square mb-2 flex-shrink-0 border border-foreground/10 rounded overflow-hidden bg-secondary/10">
+                          {displayUrl ? (
                             <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-full h-full rounded bg-secondary/30 flex items-center justify-center text-muted-foreground text-xs">
-                            No image
-                          </div>
-                        )}
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[6px]">No Image</div>
+                          )}
+                        </div>
+                        
+                        {/* 2. TITLE */}
+                        <h1 className="font-serif text-[9px] sm:text-[10px] font-medium text-foreground leading-tight mb-1">{parsedTitle.mainTitle}</h1>
+                        
+                        {/* 3. SEPARATOR */}
+                        <div className="w-6 h-[1px] bg-foreground/20 mb-1 mx-auto" />
+                        
+                        {/* 4. SUBTITLE */}
+                        {subtitle && <p className="text-[5px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif mb-2">{subtitle}</p>}
+                        
+                        {/* 5. LOGO (SVG) */}
+                        <div className="relative w-3 h-3 opacity-50 mb-1 mx-auto">
+                          <div className="absolute left-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
+                          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
+                          <div className="absolute right-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
+                          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
+                        </div>
+                        
+                        {/* 6. BRAND */}
+                        <span className="font-serif text-[6px] text-muted-foreground/50 block mb-0.5">Loom & Page</span>
+                        
+                        {/* 7. DISCLAIMER */}
+                        <p className="text-[4px] text-muted-foreground/30 leading-tight italic">
+                          AI-generated content for creative inspiration only.<br/>Not professional advice.
+                        </p>
                       </div>
-                      {/* Title Overlay */}
-                      <div className="flex-1 flex flex-col items-center text-center justify-start">
-                        {parsedTitle.category && (
-                          <p className="text-[6px] uppercase tracking-[0.2em] text-muted-foreground/60 font-sans font-medium mb-0.5">
-                            {parsedTitle.category}
-                          </p>
-                        )}
-                        <h1 className="font-serif text-[10px] sm:text-xs font-medium text-foreground leading-tight mb-1">
-                          {parsedTitle.mainTitle.slice(0, 50)}
-                        </h1>
-                        <div className="w-6 h-[1px] bg-foreground/20 mb-1" />
-                        {subtitle && (
-                          <p className="text-[6px] uppercase tracking-[0.15em] text-muted-foreground/50 font-serif">
-                            {subtitle.slice(0, 40)}
-                          </p>
-                        )}
-                      </div>
-                      {/* Bottom Branding */}
-                      <div className="text-center pt-1">
-                        <span className="font-serif text-[7px] text-muted-foreground/50">Loom & Page</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
