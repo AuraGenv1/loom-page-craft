@@ -531,35 +531,22 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (!ctx) return null;
 
       // Background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 1600, 2560);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1600, 2560);
 
       // 1. IMAGE (Square, Centered Top)
       if (displayUrl) {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = displayUrl;
+        const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
         await new Promise((r) => { img.onload = r; img.onerror = r; });
         ctx.drawImage(img, 100, 200, 1400, 1400); 
       }
 
       // 2. TITLE
-      const textStart = 1750;
-      ctx.fillStyle = '#000000';
-      ctx.font = '500 130px serif';
-      ctx.textAlign = 'center';
-      
+      ctx.fillStyle = '#000000'; ctx.font = '500 130px serif'; ctx.textAlign = 'center';
       const words = title.split(' ');
-      let line = '';
-      let y = textStart;
-      const lineHeight = 150;
+      let line = ''; let y = 1750;
       for(let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        if (ctx.measureText(testLine).width > 1400 && n > 0) {
-          ctx.fillText(line, 800, y);
-          line = words[n] + ' ';
-          y += lineHeight;
-        } else { line = testLine; }
+        if (ctx.measureText(line + words[n]).width > 1400 && n > 0) { ctx.fillText(line, 800, y); line = words[n] + ' '; y += 150; }
+        else { line += words[n] + ' '; }
       }
       ctx.fillText(line, 800, y);
 
@@ -570,35 +557,29 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
       // 4. SUBTITLE
       if (subtitle) {
-         y += 80;
-         ctx.font = 'italic 50px serif';
-         ctx.fillStyle = '#666666';
+         y += 80; ctx.font = 'italic 50px serif'; ctx.fillStyle = '#666666';
          ctx.fillText(subtitle.toUpperCase(), 800, y);
       }
 
       // 5. LOGO (Manual Draw)
-      y += 150;
-      const lx = 760; // 800 - 40
-      const ly = y;
-      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 0.6;
+      y += 150; 
+      const lx = 760; 
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 0.4;
       ctx.beginPath();
-      ctx.moveTo(lx + 10, ly); ctx.lineTo(lx + 10, ly + 80);
-      ctx.moveTo(lx + 40, ly); ctx.lineTo(lx + 40, ly + 80);
-      ctx.moveTo(lx + 70, ly); ctx.lineTo(lx + 70, ly + 80);
-      ctx.moveTo(lx, ly + 40); ctx.lineTo(lx + 80, ly + 40);
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
+      ctx.moveTo(lx+10, y); ctx.lineTo(lx+10, y+80);
+      ctx.moveTo(lx+40, y); ctx.lineTo(lx+40, y+80);
+      ctx.moveTo(lx+70, y); ctx.lineTo(lx+70, y+80);
+      ctx.moveTo(lx, y+40); ctx.lineTo(lx+80, y+40);
+      ctx.stroke(); ctx.globalAlpha = 1.0;
 
       // 6. BRAND
       y += 130;
-      ctx.font = '400 30px serif';
-      ctx.fillStyle = '#999999';
+      ctx.font = '400 30px serif'; ctx.fillStyle = '#999999';
       ctx.fillText("Loom & Page", 800, y);
 
       // 7. DISCLAIMER
       y += 60;
-      ctx.font = 'italic 24px sans-serif';
-      ctx.fillStyle = '#aaaaaa';
+      ctx.font = 'italic 24px sans-serif'; ctx.fillStyle = '#aaaaaa';
       ctx.fillText("AI-generated content for creative inspiration only.", 800, y);
       ctx.fillText("Not professional advice.", 800, y + 35);
 
@@ -660,39 +641,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       try {
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
         const pageWidth = 12.485; const pageHeight = 9.25;
-        const estimatedPages = (bookData?.tableOfContents?.length || 10) * 4; 
-        const hasSpineText = estimatedPages > 79;
-        const spineWidth = hasSpineText ? 0.485 : 0.2; 
-        const coverWidth = (pageWidth - spineWidth) / 2;
-
-        // Back & Spine
-        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F');
-        if (localBackCoverUrl) {
-          try {
-            const img = new Image();
-            img.src = localBackCoverUrl;
-            img.crossOrigin = "Anonymous";
-            await new Promise((r) => { img.onload = r; img.onerror = r; });
-            pdf.addImage(img, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
-          } catch (e) {}
-        } else {
-          pdf.setFillColor('#111111'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F');
-        }
+        const spineWidth = 0.485; const coverWidth = (pageWidth - spineWidth) / 2;
+        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F'); // Back/Spine
+        if (!localBackCoverUrl) { pdf.setFillColor('#111111'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
         
-        pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
-        if (hasSpineText) { 
-            pdf.setTextColor(0,0,0); pdf.setFontSize(10);
-            pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
-        }
-
-        // --- FRONT COVER ---
-        const frontX = coverWidth + spineWidth;
+        const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
         // 1. IMAGE (Square 4.5")
-        const imgSize = 4.5;
-        const imgY = 1.2;
+        const imgSize = 4.5; const imgY = 1.2;
         if (displayUrl) {
            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
            await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -715,19 +673,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // 4. SUBTITLE
         if (subtitle) {
           pdf.setFontSize(10); pdf.setFont('times', 'italic'); pdf.setTextColor(100, 100, 100);
-          const splitSub = pdf.splitTextToSize(subtitle.toUpperCase(), coverWidth - 1.5);
-          pdf.text(splitSub, centerX, textY, { align: 'center' });
+          pdf.text(pdf.splitTextToSize(subtitle.toUpperCase(), coverWidth - 1.5), centerX, textY, { align: 'center' });
           textY += 0.5;
         }
 
         // 5. LOGO
-        const ly = textY + 0.1;
-        const s = 0.3; 
+        const ly = textY + 0.1; const s = 0.3; 
         pdf.setDrawColor(0,0,0); pdf.setLineWidth(0.02);
-        pdf.line(centerX - 0.1, ly, centerX - 0.1, ly + s);
-        pdf.line(centerX, ly, centerX, ly + s);
-        pdf.line(centerX + 0.1, ly, centerX + 0.1, ly + s);
-        pdf.line(centerX - 0.15, ly + s/2, centerX + 0.15, ly + s/2);
+        pdf.line(centerX-0.1, ly, centerX-0.1, ly+s);
+        pdf.line(centerX, ly, centerX, ly+s);
+        pdf.line(centerX+0.1, ly, centerX+0.1, ly+s);
+        pdf.line(centerX-0.15, ly+s/2, centerX+0.15, ly+s/2);
 
         // 6. BRAND & DISCLAIMER
         pdf.setFont('times', 'normal'); pdf.setFontSize(9); pdf.setTextColor(150, 150, 150);
@@ -1027,37 +983,22 @@ p { margin-bottom: 1em; }`);
                   <div className="flex flex-col items-center">
                     <h3 className="font-medium mb-3">Current Front Cover</h3>
                     {/* Full Cover Layout Preview - constrained width, no yellow tint in preview */}
-                    <div className="w-[260px] mx-auto">
-                      <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col">
-                        {/* Cover Image */}
-                        <div className="relative w-[60%] mx-auto aspect-square mb-6 flex-shrink-0">
-                          {displayUrl ? (
-                            <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10">
-                              <img src={displayUrl} alt="Front Cover" className="w-full h-full object-cover" />
-                            </div>
-                          ) : (
-                            <div className="w-full h-full rounded-lg bg-secondary/30 flex items-center justify-center text-muted-foreground">
-                              No image
-                            </div>
-                          )}
+                    <div className="w-[280px] mx-auto">
+                      <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col items-center text-center">
+                        {/* 1. IMAGE (Constrained 60%) */}
+                        <div className="relative w-[60%] aspect-square mb-6 flex-shrink-0 border-2 border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
+                          {displayUrl ? <img src={displayUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>}
                         </div>
-                        {/* Title Overlay - Uses local editable state */}
-                        <div className="flex-1 flex flex-col items-center text-center">
-                          {parsedTitle.category && (
-                            <p className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground/60 font-sans font-medium mb-1">
-                              {parsedTitle.category}
-                            </p>
-                          )}
-                          <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-2">
-                            {parsedTitle.mainTitle}
-                          </h1>
-                          <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
-                          {subtitle && (
-                            <p className="text-[8px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif">
-                              {subtitle}
-                            </p>
-                          )}
-                        </div>
+                        
+                        {/* 2. TITLE */}
+                        <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-3">{parsedTitle.mainTitle}</h1>
+                        
+                        {/* 3. SEPARATOR */}
+                        <div className="w-12 h-[1px] bg-foreground/20 mb-3 mx-auto" />
+                        
+                        {/* 4. SUBTITLE */}
+                        {subtitle && <p className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground/60 font-serif mb-6">{subtitle}</p>}
+                        
                         {/* 5. LOGO (SVG) */}
                         <div className="relative w-6 h-6 opacity-50 mb-2 mx-auto">
                           <div className="absolute left-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
@@ -1065,10 +1006,12 @@ p { margin-bottom: 1em; }`);
                           <div className="absolute right-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
                         </div>
+                        
                         {/* 6. BRAND */}
-                        <span className="font-serif text-[10px] text-muted-foreground/50 block mb-2 text-center">Loom & Page</span>
+                        <span className="font-serif text-[10px] text-muted-foreground/50 block mb-2">Loom & Page</span>
+                        
                         {/* 7. DISCLAIMER */}
-                        <p className="text-[7px] text-muted-foreground/30 leading-tight italic text-center">
+                        <p className="text-[7px] text-muted-foreground/30 leading-tight italic">
                           AI-generated content for creative inspiration only.<br/>Not professional advice.
                         </p>
                       </div>
