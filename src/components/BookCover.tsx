@@ -537,7 +537,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (displayUrl) {
         const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
         await new Promise((r) => { img.onload = r; img.onerror = r; });
-        // Center X = (1600 - 1000) / 2 = 300
         ctx.drawImage(img, 300, 200, 1000, 1000); 
       }
 
@@ -562,22 +561,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
          ctx.fillText(subtitle.toUpperCase(), 800, y);
       }
 
-      // 5. LOGO (Fixed Manual Drawing)
+      // 5. LOGO (FIXED MANUAL DRAWING)
       y += 180; 
       const lx = 760; 
       ctx.strokeStyle = '#000000'; ctx.lineWidth = 5; ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      // 3 Vertical Lines (Taller)
+      // Verticals (80px tall)
       ctx.moveTo(lx+10, y); ctx.lineTo(lx+10, y+80);
       ctx.moveTo(lx+40, y); ctx.lineTo(lx+40, y+80);
       ctx.moveTo(lx+70, y); ctx.lineTo(lx+70, y+80);
-      // 1 Horizontal Line
+      // Horizontal
       ctx.moveTo(lx, y+40); ctx.lineTo(lx+80, y+40);
       ctx.stroke(); 
-      // Corner Detail
-      ctx.beginPath();
-      ctx.moveTo(lx+80, y+20); ctx.lineTo(lx+80, y); ctx.lineTo(lx+60, y);
-      ctx.stroke();
       ctx.globalAlpha = 1.0;
 
       // 6. BRAND
@@ -651,7 +646,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const pageWidth = 12.485; const pageHeight = 9.25;
         const spineWidth = 0.485; const coverWidth = (pageWidth - spineWidth) / 2;
 
-        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F'); // Back/Spine
+        // Back Cover (Light Gray)
+        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F');
         if (!localBackCoverUrl) { pdf.setFillColor('#f0f0f0'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
         
         // Spine Text
@@ -659,11 +655,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setTextColor(0,0,0); pdf.setFontSize(10);
         pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
 
+        // Front Cover
         const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // 1. IMAGE (3.5 inches = ~60%)
+        // 1. IMAGE (3.5 inches)
         const imgSize = 3.5; const imgY = 1.0;
         if (displayUrl) {
            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
@@ -691,18 +688,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           textY += 0.5;
         }
 
-        // 5. LOGO (Corrected PDF Drawing)
+        // 5. LOGO (Fixed Manual Drawing)
         const ly = textY + 0.2; const s = 0.3; 
         pdf.setDrawColor(0,0,0); pdf.setLineWidth(0.02);
-        // 3 Verticals
-        pdf.line(centerX-0.1, ly, centerX-0.1, ly+s);
-        pdf.line(centerX, ly, centerX, ly+s);
-        pdf.line(centerX+0.1, ly, centerX+0.1, ly+s);
-        // 1 Horizontal
-        pdf.line(centerX-0.15, ly+s/2, centerX+0.15, ly+s/2);
-        // Corner
-        pdf.line(centerX+0.15, ly, centerX+0.15, ly+0.1);
-        pdf.line(centerX+0.15, ly, centerX+0.05, ly);
+        pdf.line(centerX-0.1, ly, centerX-0.1, ly+s); // V1
+        pdf.line(centerX, ly, centerX, ly+s);         // V2
+        pdf.line(centerX+0.1, ly, centerX+0.1, ly+s); // V3
+        pdf.line(centerX-0.15, ly+s/2, centerX+0.15, ly+s/2); // H
 
         // 6. BRAND & DISCLAIMER
         pdf.setFont('times', 'normal'); pdf.setFontSize(9); pdf.setTextColor(150, 150, 150);
@@ -1008,28 +1000,22 @@ p { margin-bottom: 1em; }`);
                         <div className="relative w-[60%] aspect-square mb-6 flex-shrink-0 border-2 border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
                           {displayUrl ? <img src={displayUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>}
                         </div>
-                        
                         {/* 2. TITLE */}
                         <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-3">{parsedTitle.mainTitle}</h1>
-                        
                         {/* 3. SEPARATOR */}
                         <div className="w-12 h-[1px] bg-foreground/20 mb-3 mx-auto" />
-                        
                         {/* 4. SUBTITLE */}
                         {subtitle && <p className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground/60 font-serif mb-6">{subtitle}</p>}
-                        
-                        {/* 5. LOGO (Corrected Aspect Ratio) */}
-                        <div className="relative w-8 h-8 opacity-60 mb-2 mx-auto">
+                        {/* 5. LOGO (FIXED HEIGHT) */}
+                        <div className="relative w-8 h-8 opacity-60 mb-2 mx-auto flex-shrink-0">
                           <div className="absolute left-1 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute right-1 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
                         </div>
-                        
                         {/* 6. BRAND */}
                         <span className="font-serif text-[10px] text-muted-foreground/50 block mb-2">Loom & Page</span>
-                        
                         {/* 7. DISCLAIMER */}
                         <p className="text-[7px] text-muted-foreground/30 leading-tight italic">
                           AI-generated content for creative inspiration only.<br/>Not professional advice.
@@ -1359,7 +1345,7 @@ p { margin-bottom: 1em; }`);
                   
                   {/* Centered Full Wrap Container */}
                   <div className="flex justify-center items-center">
-                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(1.2)', transformOrigin: 'top center', marginBottom: '80px' }}>
+                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(1.3)', transformOrigin: 'top center', marginBottom: '100px' }}>
                       {/* Back Cover */}
                       <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
                       {localBackCoverUrl ? (
@@ -1423,28 +1409,22 @@ p { margin-bottom: 1em; }`);
                             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[6px]">No Image</div>
                           )}
                         </div>
-                        
                         {/* 2. TITLE */}
                         <h1 className="font-serif text-[9px] sm:text-[10px] font-medium text-foreground leading-tight mb-1">{parsedTitle.mainTitle}</h1>
-                        
                         {/* 3. SEPARATOR */}
                         <div className="w-6 h-[1px] bg-foreground/20 mb-1 mx-auto" />
-                        
                         {/* 4. SUBTITLE */}
                         {subtitle && <p className="text-[5px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif mb-2">{subtitle}</p>}
-                        
-                        {/* 5. LOGO (Corrected Aspect Ratio) */}
-                        <div className="relative w-4 h-4 opacity-60 mb-1 mx-auto">
+                        {/* 5. LOGO (FIXED HEIGHT) */}
+                        <div className="relative w-4 h-4 opacity-60 mb-1 mx-auto flex-shrink-0">
                           <div className="absolute left-[2px] top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
                           <div className="absolute left-1/2 -translate-x-1/2 top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
                           <div className="absolute right-[2px] top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
                           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
                           <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r border-t border-foreground rounded-tr-sm opacity-60" />
                         </div>
-                        
                         {/* 6. BRAND */}
                         <span className="font-serif text-[6px] text-muted-foreground/50 block mb-0.5">Loom & Page</span>
-                        
                         {/* 7. DISCLAIMER */}
                         <p className="text-[4px] text-muted-foreground/30 leading-tight italic">
                           AI-generated content for creative inspiration only.<br/>Not professional advice.
