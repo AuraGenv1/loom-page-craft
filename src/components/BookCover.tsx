@@ -533,29 +533,28 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       // Background
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1600, 2560);
 
-      // 1. IMAGE (Reduced to 1000px width = ~60% of 1600)
+      // 1. IMAGE (1000px Wide = ~60% Width, Centered)
       if (displayUrl) {
         const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
         await new Promise((r) => { img.onload = r; img.onerror = r; });
-        // Centered: (1600 - 1000) / 2 = 300 x position
-        ctx.drawImage(img, 300, 250, 1000, 1000); 
+        // Center X = (1600 - 1000) / 2 = 300
+        ctx.drawImage(img, 300, 200, 1000, 1000); 
       }
 
-      // 2. TITLE (Bold, nicely spaced)
-      const textStart = 1450; // Moved up since image is smaller
-      ctx.fillStyle = '#000000'; ctx.font = 'bold 120px serif'; ctx.textAlign = 'center';
-      const words = title.split(' '); let line = ''; let y = textStart;
+      // 2. TITLE
+      ctx.fillStyle = '#000000'; ctx.font = '500 120px serif'; ctx.textAlign = 'center';
+      const words = title.split(' ');
+      let line = ''; let y = 1450;
       for(let n = 0; n < words.length; n++) {
-        if (ctx.measureText(line + words[n]).width > 1200 && n > 0) {
-          ctx.fillText(line, 800, y); line = words[n] + ' '; y += 140;
-        } else { line += words[n] + ' '; }
+        if (ctx.measureText(line + words[n]).width > 1200 && n > 0) { ctx.fillText(line, 800, y); line = words[n] + ' '; y += 140; }
+        else { line += words[n] + ' '; }
       }
       ctx.fillText(line, 800, y);
 
       // 3. SEPARATOR
       y += 80;
       ctx.beginPath(); ctx.moveTo(700, y); ctx.lineTo(900, y);
-      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4; ctx.stroke();
 
       // 4. SUBTITLE
       if (subtitle) {
@@ -563,16 +562,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
          ctx.fillText(subtitle.toUpperCase(), 800, y);
       }
 
-      // 5. LOGO (Full Opacity)
+      // 5. LOGO (Fixed Manual Drawing)
       y += 180; 
       const lx = 760; 
-      ctx.strokeStyle = '#000000'; ctx.lineWidth = 4; ctx.globalAlpha = 1.0; // Darker
+      ctx.strokeStyle = '#000000'; ctx.lineWidth = 5; ctx.globalAlpha = 0.6;
       ctx.beginPath();
+      // 3 Vertical Lines (Taller)
       ctx.moveTo(lx+10, y); ctx.lineTo(lx+10, y+80);
       ctx.moveTo(lx+40, y); ctx.lineTo(lx+40, y+80);
       ctx.moveTo(lx+70, y); ctx.lineTo(lx+70, y+80);
+      // 1 Horizontal Line
       ctx.moveTo(lx, y+40); ctx.lineTo(lx+80, y+40);
+      ctx.stroke(); 
+      // Corner Detail
+      ctx.beginPath();
+      ctx.moveTo(lx+80, y+20); ctx.lineTo(lx+80, y); ctx.lineTo(lx+60, y);
       ctx.stroke();
+      ctx.globalAlpha = 1.0;
 
       // 6. BRAND
       y += 130;
@@ -644,23 +650,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
         const pageWidth = 12.485; const pageHeight = 9.25;
         const spineWidth = 0.485; const coverWidth = (pageWidth - spineWidth) / 2;
-        
-        // Back Cover (Light Gray Fix)
-        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F');
+
+        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F'); // Back/Spine
         if (!localBackCoverUrl) { pdf.setFillColor('#f0f0f0'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
         
-        // Spine (Force Text - No Check)
+        // Spine Text
         pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
         pdf.setTextColor(0,0,0); pdf.setFontSize(10);
-        // Force text regardless of page count
         pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
-        
-        // Front Cover Background
+
         const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // 1. IMAGE (Reduced to 3.5 inches = Matches Visual)
+        // 1. IMAGE (3.5 inches = ~60%)
         const imgSize = 3.5; const imgY = 1.0;
         if (displayUrl) {
            const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
@@ -671,7 +674,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // 2. TITLE
         let textY = imgY + imgSize + 0.8;
         pdf.setTextColor(0,0,0); pdf.setFont('times', 'bold'); pdf.setFontSize(22);
-        const splitTitle = pdf.splitTextToSize(title, 3.5); // Wrap to image width
+        const splitTitle = pdf.splitTextToSize(title, 3.5); 
         pdf.text(splitTitle, centerX, textY, { align: 'center' });
         textY += (splitTitle.length * 0.35);
 
@@ -688,13 +691,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           textY += 0.5;
         }
 
-        // 5. LOGO
-        const ly = textY + 0.1; const s = 0.3; 
+        // 5. LOGO (Corrected PDF Drawing)
+        const ly = textY + 0.2; const s = 0.3; 
         pdf.setDrawColor(0,0,0); pdf.setLineWidth(0.02);
+        // 3 Verticals
         pdf.line(centerX-0.1, ly, centerX-0.1, ly+s);
         pdf.line(centerX, ly, centerX, ly+s);
         pdf.line(centerX+0.1, ly, centerX+0.1, ly+s);
+        // 1 Horizontal
         pdf.line(centerX-0.15, ly+s/2, centerX+0.15, ly+s/2);
+        // Corner
+        pdf.line(centerX+0.15, ly, centerX+0.15, ly+0.1);
+        pdf.line(centerX+0.15, ly, centerX+0.05, ly);
 
         // 6. BRAND & DISCLAIMER
         pdf.setFont('times', 'normal'); pdf.setFontSize(9); pdf.setTextColor(150, 150, 150);
@@ -1010,12 +1018,13 @@ p { margin-bottom: 1em; }`);
                         {/* 4. SUBTITLE */}
                         {subtitle && <p className="text-[9px] uppercase tracking-[0.3em] text-muted-foreground/60 font-serif mb-6">{subtitle}</p>}
                         
-                        {/* 5. LOGO (SVG) */}
-                        <div className="relative w-6 h-6 opacity-50 mb-2 mx-auto">
-                          <div className="absolute left-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
-                          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
-                          <div className="absolute right-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
+                        {/* 5. LOGO (Corrected Aspect Ratio) */}
+                        <div className="relative w-8 h-8 opacity-60 mb-2 mx-auto">
+                          <div className="absolute left-1 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute right-1 top-1 bottom-1 w-[1.5px] bg-foreground rounded-full" />
                           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
+                          <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
                         </div>
                         
                         {/* 6. BRAND */}
@@ -1350,7 +1359,7 @@ p { margin-bottom: 1em; }`);
                   
                   {/* Centered Full Wrap Container */}
                   <div className="flex justify-center items-center">
-                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '700px' }}>
+                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(1.2)', transformOrigin: 'top center', marginBottom: '80px' }}>
                       {/* Back Cover */}
                       <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
                       {localBackCoverUrl ? (
@@ -1424,12 +1433,13 @@ p { margin-bottom: 1em; }`);
                         {/* 4. SUBTITLE */}
                         {subtitle && <p className="text-[5px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif mb-2">{subtitle}</p>}
                         
-                        {/* 5. LOGO (SVG) */}
-                        <div className="relative w-3 h-3 opacity-50 mb-1 mx-auto">
-                          <div className="absolute left-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
-                          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
-                          <div className="absolute right-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
+                        {/* 5. LOGO (Corrected Aspect Ratio) */}
+                        <div className="relative w-4 h-4 opacity-60 mb-1 mx-auto">
+                          <div className="absolute left-[2px] top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
+                          <div className="absolute left-1/2 -translate-x-1/2 top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
+                          <div className="absolute right-[2px] top-[2px] bottom-[2px] w-[1px] bg-foreground rounded-full" />
                           <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
+                          <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r border-t border-foreground rounded-tr-sm opacity-60" />
                         </div>
                         
                         {/* 6. BRAND */}
