@@ -78,12 +78,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [backPrompt, setBackPrompt] = useState('');
     const [spineText, setSpineText] = useState(initialSpineText || propTitle);
     const [spineColor, setSpineColor] = useState('#ffffff'); // Default to WHITE
-    
-    // Editable back cover text state
-    const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
-    const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you're exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.");
-    const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
-    const [dedicationText, setDedicationText] = useState("");
     const [spineTextColor, setSpineTextColor] = useState('#000000'); // Default to BLACK
     const [isRegeneratingFront, setIsRegeneratingFront] = useState(false);
     const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
@@ -351,39 +345,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
         // Back cover blurb overlay - draw semi-transparent box with text
         const backCenterX = coverWidth / 2;
-        
-        // Dark Overlay Box for main content
+        // Draw darker overlay for text readability
         pdf.setFillColor(30, 30, 30);
-        pdf.roundedRect(0.5, 2.5, coverWidth - 1, 3.5, 0.1, 0.1, 'F');
-        
-        // Header
+        pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
         pdf.setTextColor(255, 255, 255);
-        pdf.setFont('times', 'bold');
-        pdf.setFontSize(12);
-        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 3.0, { align: 'center' });
-        
-        let bodyStartY = 3.4;
-        // Dedication
-        if (dedicationText) {
-          pdf.setFont('times', 'italic');
-          pdf.setFontSize(10);
-          pdf.text(dedicationText, backCenterX, 3.2, { align: 'center' });
-          bodyStartY = 3.5;
-        }
-        
-        // Body
-        pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(10);
-        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.5);
-        pdf.text(splitBody, backCenterX, bodyStartY, { align: 'center' });
-        
-        // CTA Box
-        pdf.setFillColor(30, 30, 30);
-        pdf.roundedRect(0.5, 7.5, coverWidth - 1, 0.8, 0.1, 0.1, 'F');
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(backCoverCTA, backCenterX, 8.0, { align: 'center' });
+        pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
 
         // Spine (center) - with space-between layout
         pdf.setFillColor(spineColor);
@@ -722,43 +689,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setFontSize(7); pdf.setTextColor(180, 180, 180);
         pdf.text("AI-generated content for creative inspiration only.", centerX, ly + s + 0.6, { align: 'center' });
         pdf.text("Not professional advice.", centerX, ly + s + 0.73, { align: 'center' });
-        
-        // 8. BACK COVER TEXT (if back cover image exists)
-        if (localBackCoverUrl) {
-          const backCenterX = coverWidth / 2;
-          
-          // Dark overlay box for header + body
-          pdf.setFillColor(30, 30, 30);
-          pdf.rect(0.5, 2.5, coverWidth - 1, 3.5, 'F');
-          
-          // Header
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFont('times', 'bold');
-          pdf.setFontSize(12);
-          pdf.text(backCoverTitle.toUpperCase(), backCenterX, 3.0, { align: 'center' });
-          
-          let bodyStartY = 3.4;
-          // Dedication (If exists, draw it and push body down)
-          if (dedicationText) {
-            pdf.setFont('times', 'italic');
-            pdf.setFontSize(10);
-            pdf.text(dedicationText, backCenterX, 3.2, { align: 'center' });
-            bodyStartY = 3.5; // Push body text down slightly
-          }
-          
-          // Body
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(10);
-          const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.5);
-          pdf.text(splitBody, backCenterX, bodyStartY, { align: 'center' });
-          
-          // CTA box at bottom
-          pdf.setFillColor(30, 30, 30);
-          pdf.rect(0.5, 7.5, coverWidth - 1, 0.8, 'F');
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(10);
-          pdf.text(backCoverCTA, backCenterX, 8.0, { align: 'center' });
-        }
 
         return pdf.output('blob');
       } catch(e) { return null; }
@@ -1227,76 +1157,32 @@ p { margin-bottom: 1em; }`);
                   <div>
                     <h3 className="font-medium mb-3">Current Back Cover</h3>
                     <div className="aspect-[3/4] bg-secondary/20 rounded-lg overflow-hidden border max-w-[300px] relative">
-                      {/* Background Layer: Image OR Default Color */}
                       {localBackCoverUrl ? (
-                        <img src={localBackCoverUrl} alt="Back Cover" className="absolute inset-0 w-full h-full object-cover" />
+                        <>
+                          <img src={localBackCoverUrl} alt="Back Cover" className="w-full h-full object-cover" />
+                          {/* Blurb Placeholder Overlay */}
+                          <div className="absolute inset-0 p-6 flex flex-col justify-between">
+                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 mt-12">
+                              <p className="text-white text-xs leading-relaxed italic">
+                                "Your compelling book description goes here. This is where you'll hook readers with an irresistible summary of what they'll discover inside. Make every word count!"
+                              </p>
+                            </div>
+                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-3 text-center">
+                              <p className="text-white/80 text-[10px] font-medium">
+                                www.loomandpage.com
+                              </p>
+                            </div>
+                          </div>
+                        </>
                       ) : (
-                        <div className="absolute inset-0 w-full h-full bg-[#f0f0f0]" />
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
+                          <BookOpen className="w-12 h-12 opacity-50" />
+                          <span>No back cover yet</span>
+                        </div>
                       )}
-                      {/* Text Layer: Always Visible */}
-                      <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
-                        <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 mt-12 text-center border border-white/10">
-                          <h4 className="text-white text-[10px] font-serif font-medium mb-1 uppercase tracking-widest">{backCoverTitle}</h4>
-                          {dedicationText && (
-                            <p className="text-white/80 text-[8px] font-serif italic mb-2">{dedicationText}</p>
-                          )}
-                          <p className="text-white/90 text-xs leading-relaxed font-sans font-light italic">
-                            {backCoverBody}
-                          </p>
-                        </div>
-                        <div className="bg-black/60 backdrop-blur-sm rounded-lg p-3 text-center border border-white/10">
-                          <p className="text-white text-[10px] font-medium tracking-wide">
-                            {backCoverCTA}
-                          </p>
-                        </div>
-                      </div>
                     </div>
                   </div>
                   <div className="space-y-4">
-                    <div className="space-y-3 p-4 border rounded-lg bg-secondary/10 mb-4">
-                      <h4 className="font-medium text-sm">Back Cover Text</h4>
-                      
-                      {/* Admin Only Fields */}
-                      <div>
-                        <Label className="text-xs">Header {isAdmin && "(Admin)"}</Label>
-                        <Input 
-                          value={backCoverTitle} 
-                          onChange={(e) => setBackCoverTitle(e.target.value)} 
-                          className="mt-1" 
-                          disabled={!isAdmin} 
-                        />
-                      </div>
-                      
-                      {/* Dedication Field (For Everyone) */}
-                      <div>
-                        <Label className="text-xs">Dedication / Subtitle (Optional)</Label>
-                        <Input 
-                          value={dedicationText} 
-                          onChange={(e) => setDedicationText(e.target.value)} 
-                          className="mt-1" 
-                          placeholder='e.g. "Prepared for the Smith Family"'
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Body {isAdmin && "(Admin)"}</Label>
-                        <Textarea 
-                          value={backCoverBody} 
-                          onChange={(e) => setBackCoverBody(e.target.value)} 
-                          rows={6} 
-                          className="text-xs mt-1" 
-                          disabled={!isAdmin} 
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Call to Action {isAdmin && "(Admin)"}</Label>
-                        <Input 
-                          value={backCoverCTA} 
-                          onChange={(e) => setBackCoverCTA(e.target.value)} 
-                          className="mt-1" 
-                          disabled={!isAdmin} 
-                        />
-                      </div>
-                    </div>
                     <div>
                       <Label htmlFor="back-prompt" className="text-base font-medium">Back Cover Prompt</Label>
                       <p className="text-sm text-muted-foreground mb-2">
@@ -1479,30 +1365,27 @@ p { margin-bottom: 1em; }`);
                     <div className="flex items-stretch gap-0 border overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
                       {/* Back Cover */}
                       <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
-                        {/* Background Layer: Image OR Default Color */}
-                        {localBackCoverUrl ? (
-                          <img src={localBackCoverUrl} alt="Back" className="absolute inset-0 w-full h-full object-cover" />
-                        ) : (
-                          <div className="absolute inset-0 w-full h-full bg-[#f0f0f0]" />
-                        )}
-                        {/* Text Layer: Always Visible */}
-                        <div className="absolute inset-0 p-2 flex flex-col justify-between z-10">
-                          <div className="bg-black/60 backdrop-blur-sm rounded p-2 mt-6 text-center border border-white/10">
-                            <h4 className="text-white text-[5px] font-serif font-medium mb-0.5 uppercase tracking-widest">{backCoverTitle}</h4>
-                            {dedicationText && (
-                              <p className="text-white/80 text-[4px] font-serif italic mb-1">{dedicationText}</p>
-                            )}
-                            <p className="text-white/90 text-[4px] leading-relaxed font-sans font-light italic">
-                              {backCoverBody}
-                            </p>
+                      {localBackCoverUrl ? (
+                        <>
+                          <img src={localBackCoverUrl} alt="Back" className="w-full h-full object-cover" />
+                          {/* Blurb Placeholder Overlay */}
+                          <div className="absolute inset-0 p-3 flex flex-col justify-between">
+                            <div className="bg-black/60 backdrop-blur-sm rounded p-2 mt-8">
+                              <p className="text-white text-[8px] leading-relaxed italic">
+                                Your compelling book description goes here...
+                              </p>
+                            </div>
+                            <div className="bg-black/60 backdrop-blur-sm rounded p-1 text-center">
+                              <p className="text-white/80 text-[7px]">www.loomandpage.com</p>
+                            </div>
                           </div>
-                          <div className="bg-black/60 backdrop-blur-sm rounded p-1 text-center border border-white/10">
-                            <p className="text-white text-[4px] font-medium tracking-wide">
-                              {backCoverCTA}
-                            </p>
-                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs bg-muted/50">
+                          Back Cover
                         </div>
-                      </div>
+                      )}
+                    </div>
                       {/* Spine - Smaller text */}
                       <div 
                         className="w-4 sm:w-5 flex flex-col items-center justify-between py-2 flex-shrink-0"
