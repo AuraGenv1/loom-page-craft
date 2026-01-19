@@ -83,6 +83,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
     const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you're exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.");
     const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
+    const [dedicationText, setDedicationText] = useState("");
     const [spineTextColor, setSpineTextColor] = useState('#000000'); // Default to BLACK
     const [isRegeneratingFront, setIsRegeneratingFront] = useState(false);
     const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
@@ -709,11 +710,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           pdf.setFontSize(12);
           pdf.text(backCoverTitle.toUpperCase(), backCenterX, 3.0, { align: 'center' });
           
+          let bodyStartY = 3.4;
+          // Dedication (If exists, draw it and push body down)
+          if (dedicationText) {
+            pdf.setFont('times', 'italic');
+            pdf.setFontSize(10);
+            pdf.text(dedicationText, backCenterX, 3.2, { align: 'center' });
+            bodyStartY = 3.5; // Push body text down slightly
+          }
+          
           // Body
           pdf.setFont('helvetica', 'normal');
           pdf.setFontSize(10);
           const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.5);
-          pdf.text(splitBody, backCenterX, 3.4, { align: 'center' });
+          pdf.text(splitBody, backCenterX, bodyStartY, { align: 'center' });
           
           // CTA box at bottom
           pdf.setFillColor(30, 30, 30);
@@ -1196,7 +1206,10 @@ p { margin-bottom: 1em; }`);
                           {/* Blurb Placeholder Overlay */}
                           <div className="absolute inset-0 p-6 flex flex-col justify-between">
                             <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 mt-12">
-                              <h4 className="text-white text-[10px] font-serif font-medium mb-2 uppercase tracking-widest text-center">{backCoverTitle}</h4>
+                              <h4 className="text-white text-[10px] font-serif font-medium mb-1 uppercase tracking-widest text-center">{backCoverTitle}</h4>
+                              {dedicationText && (
+                                <p className="text-white/80 text-[8px] font-serif italic text-center mb-2">{dedicationText}</p>
+                              )}
                               <p className="text-white/90 text-xs leading-relaxed italic">
                                 {backCoverBody}
                               </p>
@@ -1219,17 +1232,46 @@ p { margin-bottom: 1em; }`);
                   <div className="space-y-4">
                     <div className="space-y-3 p-4 border rounded-lg bg-secondary/10 mb-4">
                       <h4 className="font-medium text-sm">Back Cover Text</h4>
+                      
+                      {/* Admin Only Fields */}
                       <div>
-                        <Label className="text-xs">Header</Label>
-                        <Input value={backCoverTitle} onChange={(e) => setBackCoverTitle(e.target.value)} className="mt-1" />
+                        <Label className="text-xs">Header {isAdmin && "(Admin)"}</Label>
+                        <Input 
+                          value={backCoverTitle} 
+                          onChange={(e) => setBackCoverTitle(e.target.value)} 
+                          className="mt-1" 
+                          disabled={!isAdmin} 
+                        />
+                      </div>
+                      
+                      {/* Dedication Field (For Everyone) */}
+                      <div>
+                        <Label className="text-xs">Dedication / Subtitle (Optional)</Label>
+                        <Input 
+                          value={dedicationText} 
+                          onChange={(e) => setDedicationText(e.target.value)} 
+                          className="mt-1" 
+                          placeholder='e.g. "Prepared for the Smith Family"'
+                        />
                       </div>
                       <div>
-                        <Label className="text-xs">Body</Label>
-                        <Textarea value={backCoverBody} onChange={(e) => setBackCoverBody(e.target.value)} rows={6} className="text-xs mt-1" />
+                        <Label className="text-xs">Body {isAdmin && "(Admin)"}</Label>
+                        <Textarea 
+                          value={backCoverBody} 
+                          onChange={(e) => setBackCoverBody(e.target.value)} 
+                          rows={6} 
+                          className="text-xs mt-1" 
+                          disabled={!isAdmin} 
+                        />
                       </div>
                       <div>
-                        <Label className="text-xs">Call to Action</Label>
-                        <Input value={backCoverCTA} onChange={(e) => setBackCoverCTA(e.target.value)} className="mt-1" />
+                        <Label className="text-xs">Call to Action {isAdmin && "(Admin)"}</Label>
+                        <Input 
+                          value={backCoverCTA} 
+                          onChange={(e) => setBackCoverCTA(e.target.value)} 
+                          className="mt-1" 
+                          disabled={!isAdmin} 
+                        />
                       </div>
                     </div>
                     <div>
@@ -1420,7 +1462,10 @@ p { margin-bottom: 1em; }`);
                           {/* Blurb Placeholder Overlay */}
                           <div className="absolute inset-0 p-2 flex flex-col justify-between">
                             <div className="bg-black/60 backdrop-blur-sm rounded p-2 mt-6">
-                              <h4 className="text-white text-[5px] font-serif font-medium mb-1 uppercase tracking-widest text-center">{backCoverTitle}</h4>
+                              <h4 className="text-white text-[5px] font-serif font-medium mb-0.5 uppercase tracking-widest text-center">{backCoverTitle}</h4>
+                              {dedicationText && (
+                                <p className="text-white/80 text-[4px] font-serif italic text-center mb-1">{dedicationText}</p>
+                              )}
                               <p className="text-white/90 text-[4px] leading-relaxed italic">
                                 {backCoverBody}
                               </p>
