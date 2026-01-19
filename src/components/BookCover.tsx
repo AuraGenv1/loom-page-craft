@@ -982,39 +982,41 @@ p { margin-bottom: 1em; }`);
                     <h3 className="font-medium mb-3">Current Front Cover</h3>
                     {/* Full Cover Layout Preview - constrained width, no yellow tint in preview */}
                     <div className="w-[280px] mx-auto">
-                      <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-5 flex flex-col h-full">
+                      <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-6 flex flex-col h-full">
                         
-                        {/* TOP GROUP: Image, Title, Subtitle */}
+                        {/* TOP GROUP: Image, Title, Subtitle (Centered, anchored top) */}
                         <div className="flex flex-col items-center w-full">
-                          <div className="relative w-[55%] aspect-square mb-4 flex-shrink-0 border border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
+                          {/* Image: 55% Width */}
+                          <div className="relative w-[55%] aspect-square mb-6 flex-shrink-0 border border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
                             {displayUrl ? <img src={displayUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>}
                           </div>
                           
-                          <h1 className="font-serif text-lg font-medium text-foreground leading-tight mb-2 text-center max-w-[220px]">
+                          {/* Title */}
+                          <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-3 text-center max-w-[240px]">
                             {parsedTitle.mainTitle}
                           </h1>
                           
-                          <div className="w-8 h-[1px] bg-foreground/20 mb-2 mx-auto" />
+                          {/* Separator */}
+                          <div className="w-8 h-[1px] bg-foreground/20 mb-3 mx-auto" />
                           
+                          {/* Subtitle */}
                           {subtitle && (
-                            <p className="text-[8px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif text-center line-clamp-2">
+                            <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif text-center line-clamp-2">
                               {subtitle}
                             </p>
                           )}
                         </div>
 
-                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer (Pushed to bottom) */}
-                        <div className="mt-auto flex flex-col items-center w-full pb-1">
-                          {/* 5. LOGO (Fixed height to prevent stretching) */}
-                          <div className="relative w-8 h-8 opacity-60 mb-2 mx-auto flex-shrink-0">
-                            <div className="absolute left-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-1 top-0 bottom-0 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-0 top-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground rounded-tr-sm" />
-                          </div>
-                          <span className="font-serif text-[9px] text-muted-foreground/50 block mb-2">Loom & Page</span>
-                          <p className="text-[6px] text-muted-foreground/30 leading-tight italic text-center w-full px-4">
+                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer (Pushed to bottom 1/4) */}
+                        <div className="mt-auto flex flex-col items-center w-full pb-4">
+                          {/* Logo: Replaced with proper SVG to prevent stretching */}
+                          <svg width="32" height="32" viewBox="0 0 40 40" className="opacity-60 mb-2 text-foreground" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M10 5 V35 M20 5 V35 M30 5 V35 M5 20 H35 M30 5 L35 10" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          {/* Brand */}
+                          <span className="font-serif text-[10px] text-muted-foreground/50 block mb-3">Loom & Page</span>
+                          {/* Disclaimer */}
+                          <p className="text-[7px] text-muted-foreground/30 leading-tight italic text-center w-full px-2">
                             AI-generated content for creative inspiration only.<br/>Not professional advice.
                           </p>
                         </div>
