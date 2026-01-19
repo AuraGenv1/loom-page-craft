@@ -986,31 +986,39 @@ p { margin-bottom: 1em; }`);
                         
                         {/* TOP GROUP: Image, Title, Subtitle (Centered, anchored top) */}
                         <div className="flex flex-col items-center w-full">
-                          {/* Image: 55% Width */}
-                          <div className="relative w-[55%] aspect-square mb-6 flex-shrink-0 border border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
-                            {displayUrl ? <img src={displayUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>}
+                          {/* Image */}
+                          <div className="relative w-[55%] aspect-square mb-6 flex-shrink-0">
+                            {displayUrl ? (
+                              <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
+                                <img src={displayUrl} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs rounded-lg border-2 border-foreground/10 bg-secondary/10">
+                                No Image
+                              </div>
+                            )}
                           </div>
-                          
+
                           {/* Title */}
-                          <h1 className="font-serif text-xl font-medium text-foreground leading-tight mb-3 text-center max-w-[240px]">
+                          <h1 className="font-serif text-2xl font-medium text-foreground leading-tight text-center tracking-wide mb-3 max-w-[240px]">
                             {parsedTitle.mainTitle}
                           </h1>
-                          
-                          {/* Separator */}
-                          <div className="w-8 h-[1px] bg-foreground/20 mb-3 mx-auto" />
-                          
+
+                          {/* Decorative divider */}
+                          <div className="w-10 h-[1px] bg-foreground/20 mb-3" />
+
                           {/* Subtitle */}
                           {subtitle && (
-                            <p className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground/60 font-serif text-center line-clamp-2">
+                            <p className="text-[9px] uppercase tracking-[0.35em] text-muted-foreground/50 font-serif text-center line-clamp-2">
                               {subtitle}
                             </p>
                           )}
                         </div>
 
-                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer (Pushed to bottom) */}
-                        <div className="mt-auto flex flex-col items-center w-full pb-2">
-                          {/* Logo: Matching Logo.tsx exactly */}
-                          <div className="relative w-8 h-8 opacity-60 mb-2">
+                        {/* Bottom branding - matches header/footer logo exactly */}
+                        <div className="mt-auto text-center flex flex-col items-center gap-3 pt-4 pb-1">
+                          {/* Logo icon matching Logo.tsx */}
+                          <div className="relative w-8 h-8 opacity-60">
                             {/* Vertical loom lines */}
                             <div className="absolute left-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
                             <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
@@ -1020,10 +1028,13 @@ p { margin-bottom: 1em; }`);
                             {/* Corner fold detail */}
                             <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
                           </div>
-                          <span className="font-serif text-[9px] text-muted-foreground/50 block mb-2">Loom & Page</span>
-                          {/* Disclaimer */}
-                          <p className="text-[6px] text-muted-foreground/30 leading-tight italic text-center w-full px-2">
-                            AI-generated content for creative inspiration only.<br/>Not professional advice.
+
+                          <span className="font-serif text-sm font-normal tracking-tight text-muted-foreground/50">
+                            Loom & Page
+                          </span>
+
+                          <p className="text-[8px] text-center text-muted-foreground/40 leading-relaxed max-w-[200px] italic">
+                            AI-generated content for creative inspiration only. Not professional advice.
                           </p>
                         </div>
                       </div>
@@ -1423,15 +1434,15 @@ p { margin-bottom: 1em; }`);
                         {/* BOTTOM GROUP: Logo, Brand, Disclaimer */}
                         <div className="mt-auto flex flex-col items-center w-full pb-1">
                           {/* Logo: Matching Logo.tsx proportions (scaled) */}
-                          <div className="relative w-4 h-4 opacity-60 mb-0.5">
+                          <div className="relative w-3 h-3 opacity-60 mb-0.5">
                             {/* Vertical loom lines */}
-                            <div className="absolute left-0.5 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
-                            <div className="absolute right-0.5 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
+                            <div className="absolute left-[1px] top-[1px] bottom-[1px] w-[1px] bg-foreground rounded-full" />
+                            <div className="absolute left-1/2 -translate-x-1/2 top-[1px] bottom-[1px] w-[1px] bg-foreground rounded-full" />
+                            <div className="absolute right-[1px] top-[1px] bottom-[1px] w-[1px] bg-foreground rounded-full" />
                             {/* Horizontal page fold */}
                             <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
-                            {/* Corner fold detail */}
-                            <div className="absolute right-0 top-0 w-1 h-1 border-r border-t border-foreground rounded-tr-sm opacity-60" />
+                            {/* Corner fold detail (no rounding at tiny size) */}
+                            <div className="absolute right-0 top-0 w-1 h-1 border-r border-t border-foreground opacity-60" />
                           </div>
                           <span className="font-serif text-[4px] text-muted-foreground/50 block mb-0.5">Loom & Page</span>
                           <p className="text-[3px] text-muted-foreground/30 leading-tight italic text-center w-full">
