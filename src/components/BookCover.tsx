@@ -1416,44 +1416,56 @@ p { margin-bottom: 1em; }`);
                           {(spineText || title).slice(0, 35)}
                         </span>
                       </div>
-                      {/* Front Cover - Matching Front Cover Tab and Preview exactly */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col p-2 flex-shrink-0">
-                        {/* TOP GROUP: Image, Title, Subtitle */}
-                        <div className="flex flex-col items-center w-full">
-                          {/* Image - matching preview: border-2, rounded-lg */}
-                          <div className="relative w-[52%] aspect-square mb-1.5 flex-shrink-0">
-                            <div className="w-full h-full rounded overflow-hidden border border-foreground/10 bg-secondary/10">
-                              {displayUrl ? (
-                                <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[4px]">No Image</div>
+                      {/* Front Cover - scaled-down version of the Front Cover tab (1:1 spacing) */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex-shrink-0">
+                        <div className="origin-top-left scale-[0.357] sm:scale-[0.464]">
+                          <div className="w-[280px] aspect-[3/4] relative p-5 flex flex-col h-full">
+                            {/* TOP GROUP */}
+                            <div className="flex flex-col items-center w-full">
+                              <div className="relative w-[52%] aspect-square mb-4 flex-shrink-0">
+                                {displayUrl ? (
+                                  <div className="w-full h-full rounded-lg overflow-hidden border-2 border-foreground/10 relative bg-secondary/10">
+                                    <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px] rounded-lg border-2 border-foreground/10 bg-secondary/10">
+                                    No Image
+                                  </div>
+                                )}
+                              </div>
+
+                              <h1 className="font-serif text-lg font-medium text-foreground leading-tight text-center tracking-wide mb-2 max-w-[220px]">
+                                {parsedTitle.mainTitle}
+                              </h1>
+
+                              <div className="w-8 h-[1px] bg-foreground/20 mb-2" />
+
+                              {subtitle && (
+                                <p className="text-[7px] uppercase tracking-[0.3em] text-muted-foreground/50 font-serif text-center line-clamp-2">
+                                  {subtitle}
+                                </p>
                               )}
                             </div>
+
+                            {/* BOTTOM BRANDING */}
+                            <div className="mt-auto text-center flex flex-col items-center gap-2 pt-3 pb-1">
+                              <div className="relative w-6 h-6 opacity-60">
+                                <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute left-1/2 -translate-x-1/2 top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute right-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
+                              </div>
+
+                              <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
+                                Loom & Page
+                              </span>
+
+                              <p className="text-[6px] text-center text-muted-foreground/40 leading-relaxed max-w-[180px] italic">
+                                AI-generated content for creative inspiration only. Not professional advice.
+                              </p>
+                            </div>
                           </div>
-                          {/* Title */}
-                          <h1 className="font-serif text-[7px] sm:text-[8px] font-medium text-foreground leading-tight mb-0.5 text-center max-w-[95%]">{parsedTitle.mainTitle}</h1>
-                          {/* Divider */}
-                          <div className="w-3 h-[0.5px] bg-foreground/20 mb-0.5 mx-auto" />
-                          {/* Subtitle */}
-                          {subtitle && <p className="text-[3px] uppercase tracking-[0.2em] text-muted-foreground/50 font-serif line-clamp-2 text-center">{subtitle}</p>}
-                        </div>
-                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer */}
-                        <div className="mt-auto flex flex-col items-center w-full gap-[2px] pb-0.5">
-                          {/* Logo: scaled down proportionally */}
-                          <div className="relative w-2.5 h-2.5 opacity-60">
-                            {/* Vertical loom lines */}
-                            <div className="absolute left-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            {/* Horizontal page fold */}
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[0.5px] bg-foreground rounded-full" />
-                            {/* Corner fold detail */}
-                            <div className="absolute right-0 top-0 w-[3px] h-[3px] border-r-[0.5px] border-t-[0.5px] border-foreground opacity-60" />
-                          </div>
-                          <span className="font-serif text-[3.5px] text-muted-foreground/50 block">Loom & Page</span>
-                          <p className="text-[2.5px] text-muted-foreground/30 leading-tight italic text-center w-full">
-                            AI-generated content for creative inspiration only.<br/>Not professional advice.
-                          </p>
                         </div>
                       </div>
                   </div>
