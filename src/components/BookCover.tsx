@@ -1009,15 +1009,18 @@ p { margin-bottom: 1em; }`);
 
                         {/* BOTTOM GROUP: Logo, Brand, Disclaimer (Pushed to bottom) */}
                         <div className="mt-auto flex flex-col items-center w-full pb-2">
-                          {/* Logo: CSS-based matching Logo.tsx exactly */}
-                          <div className="relative w-6 h-6 opacity-60 mb-1.5">
-                            <div className="absolute left-0.5 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-0.5 top-0.5 bottom-0.5 w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
+                          {/* Logo: Matching Logo.tsx exactly */}
+                          <div className="relative w-8 h-8 opacity-60 mb-2">
+                            {/* Vertical loom lines */}
+                            <div className="absolute left-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                            <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                            <div className="absolute right-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                            {/* Horizontal page fold */}
+                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-foreground rounded-full" />
+                            {/* Corner fold detail */}
+                            <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
                           </div>
-                          <span className="font-serif text-[8px] text-muted-foreground/50 block mb-1.5">Loom & Page</span>
+                          <span className="font-serif text-[9px] text-muted-foreground/50 block mb-2">Loom & Page</span>
                           {/* Disclaimer */}
                           <p className="text-[6px] text-muted-foreground/30 leading-tight italic text-center w-full px-2">
                             AI-generated content for creative inspiration only.<br/>Not professional advice.
@@ -1419,13 +1422,16 @@ p { margin-bottom: 1em; }`);
                         </div>
                         {/* BOTTOM GROUP: Logo, Brand, Disclaimer */}
                         <div className="mt-auto flex flex-col items-center w-full pb-1">
-                          {/* Logo: CSS-based matching Logo.tsx */}
-                          <div className="relative w-3 h-3 opacity-60 mb-0.5">
-                            <div className="absolute left-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[0.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-0 top-0 w-1 h-1 border-r-[0.5px] border-t-[0.5px] border-foreground rounded-tr-sm opacity-60" />
+                          {/* Logo: Matching Logo.tsx proportions (scaled) */}
+                          <div className="relative w-4 h-4 opacity-60 mb-0.5">
+                            {/* Vertical loom lines */}
+                            <div className="absolute left-0.5 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
+                            <div className="absolute left-1/2 -translate-x-1/2 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
+                            <div className="absolute right-0.5 top-0.5 bottom-0.5 w-[1px] bg-foreground rounded-full" />
+                            {/* Horizontal page fold */}
+                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
+                            {/* Corner fold detail */}
+                            <div className="absolute right-0 top-0 w-1 h-1 border-r border-t border-foreground rounded-tr-sm opacity-60" />
                           </div>
                           <span className="font-serif text-[4px] text-muted-foreground/50 block mb-0.5">Loom & Page</span>
                           <p className="text-[3px] text-muted-foreground/30 leading-tight italic text-center w-full">
