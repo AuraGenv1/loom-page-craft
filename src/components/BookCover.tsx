@@ -1348,7 +1348,7 @@ p { margin-bottom: 1em; }`);
                   
                   {/* Centered Full Wrap Container */}
                   <div className="flex justify-center items-center">
-                    <div className="flex items-stretch gap-0 border rounded-lg overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
+                    <div className="flex items-stretch gap-0 border overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
                       {/* Back Cover */}
                       <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
                       {localBackCoverUrl ? (
@@ -1372,14 +1372,14 @@ p { margin-bottom: 1em; }`);
                         </div>
                       )}
                     </div>
-                      {/* Spine - Black text on white/custom background */}
+                      {/* Spine - Smaller text */}
                       <div 
-                        className="w-5 sm:w-6 flex flex-col items-center justify-between py-3 flex-shrink-0"
+                        className="w-4 sm:w-5 flex flex-col items-center justify-between py-2 flex-shrink-0"
                         style={{ backgroundColor: spineColor }}
                       >
                         {/* Edition Text at TOP */}
                         <span 
-                          className="text-[6px] sm:text-[7px] font-serif whitespace-nowrap"
+                          className="text-[4px] sm:text-[5px] font-serif whitespace-nowrap"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
@@ -1391,7 +1391,7 @@ p { margin-bottom: 1em; }`);
                         </span>
                         {/* Title at BOTTOM */}
                         <span 
-                          className="text-[7px] sm:text-[8px] font-serif font-medium whitespace-nowrap"
+                          className="text-[5px] sm:text-[6px] font-serif font-medium whitespace-nowrap"
                           style={{ 
                             writingMode: 'vertical-rl',
                             textOrientation: 'mixed',
@@ -1402,33 +1402,34 @@ p { margin-bottom: 1em; }`);
                           {(spineText || title).slice(0, 35)}
                         </span>
                       </div>
-                      {/* Front Cover - Full Composite View (Matches Front Cover Tab) */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col p-2 flex-shrink-0">
+                      {/* Front Cover - Matching Front Cover Tab exactly */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex flex-col p-3 flex-shrink-0">
                         {/* TOP GROUP: Image, Title, Subtitle */}
                         <div className="flex flex-col items-center w-full">
-                          <div className="relative w-[55%] aspect-square mb-1.5 flex-shrink-0 border border-foreground/10 rounded overflow-hidden bg-secondary/10">
+                          <div className="relative w-[55%] aspect-square mb-2 flex-shrink-0 border border-foreground/10 rounded-lg overflow-hidden bg-secondary/10">
                             {displayUrl ? (
                               <img src={displayUrl} alt="Front" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[6px]">No Image</div>
                             )}
                           </div>
-                          <h1 className="font-serif text-[9px] sm:text-[10px] font-medium text-foreground leading-tight mb-1 text-center">{parsedTitle.mainTitle}</h1>
-                          <div className="w-4 h-[1px] bg-foreground/20 mb-1 mx-auto" />
-                          {subtitle && <p className="text-[5px] uppercase tracking-[0.15em] text-muted-foreground/60 font-serif mb-1.5 line-clamp-2 text-center">{subtitle}</p>}
+                          <h1 className="font-serif text-[8px] sm:text-[9px] font-medium text-foreground leading-tight mb-1 text-center max-w-[90%]">{parsedTitle.mainTitle}</h1>
+                          <div className="w-4 h-[0.5px] bg-foreground/20 mb-1 mx-auto" />
+                          {subtitle && <p className="text-[4px] uppercase tracking-[0.15em] text-muted-foreground/60 font-serif mb-1 line-clamp-2 text-center">{subtitle}</p>}
                         </div>
-                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer (Pushed to bottom) */}
-                        <div className="mt-auto flex flex-col items-center w-full">
-                          <div className="relative w-4 h-4 opacity-60 mb-1 mx-auto flex-shrink-0">
-                            <div className="absolute left-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
-                            <div className="absolute right-[2px] top-0 bottom-0 w-[1px] bg-foreground rounded-full" />
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1px] bg-foreground rounded-full" />
-                            <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r border-t border-foreground rounded-tr-sm" />
+                        {/* BOTTOM GROUP: Logo, Brand, Disclaimer */}
+                        <div className="mt-auto flex flex-col items-center w-full pb-1">
+                          {/* Logo: CSS-based matching Logo.tsx */}
+                          <div className="relative w-3 h-3 opacity-60 mb-0.5">
+                            <div className="absolute left-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
+                            <div className="absolute left-1/2 -translate-x-1/2 top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
+                            <div className="absolute right-[1px] top-[1px] bottom-[1px] w-[0.5px] bg-foreground rounded-full" />
+                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[0.5px] bg-foreground rounded-full" />
+                            <div className="absolute right-0 top-0 w-1 h-1 border-r-[0.5px] border-t-[0.5px] border-foreground rounded-tr-sm opacity-60" />
                           </div>
-                          <span className="font-serif text-[5px] text-muted-foreground/50 block mb-1">Loom & Page</span>
-                          <p className="text-[4px] text-muted-foreground/30 leading-tight italic text-center w-full px-1">
-                            AI-generated.<br/>Not professional advice.
+                          <span className="font-serif text-[4px] text-muted-foreground/50 block mb-0.5">Loom & Page</span>
+                          <p className="text-[3px] text-muted-foreground/30 leading-tight italic text-center w-full">
+                            AI-generated content for creative inspiration only.<br/>Not professional advice.
                           </p>
                         </div>
                       </div>
