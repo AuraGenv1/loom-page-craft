@@ -1488,23 +1488,23 @@ p { margin-bottom: 1em; }`);
                           {/* Trim line - exact edge of cover (blue solid) */}
                           <div className="absolute pointer-events-none border-2 border-blue-500/80 z-30" style={{ inset: '0' }} />
                           
-                          {/* Safe zone - 0.25" inside trim on outer edges (green dashed) */}
-                          {/* Back cover safe zone */}
+                          {/* Safe zone - 0.25" inside trim on all outer edges (green dashed) */}
+                          {/* Back cover safe zone: inset 4px from left/top/bottom, ends 4px before spine */}
                           <div className="absolute pointer-events-none border-2 border-dashed border-green-500/70 z-30" 
                             style={{ 
                               left: '4px', 
                               top: '4px', 
                               bottom: '4px', 
-                              width: 'calc(100px - 8px - 6px)', // back cover width minus safe margins minus spine margin
+                              width: 'calc(50% - 12px - 4px)', // half of total minus spine half minus safe margins
                             }} 
                           />
-                          {/* Front cover safe zone */}
+                          {/* Front cover safe zone: inset 4px from right/top/bottom, starts 4px after spine */}
                           <div className="absolute pointer-events-none border-2 border-dashed border-green-500/70 z-30" 
                             style={{ 
                               right: '4px', 
                               top: '4px', 
                               bottom: '4px', 
-                              width: 'calc(100px - 8px - 6px)', // front cover width minus safe margins minus spine margin
+                              width: 'calc(50% - 12px - 4px)', // half of total minus spine half minus safe margins
                             }} 
                           />
                           
@@ -1513,8 +1513,8 @@ p { margin-bottom: 1em; }`);
                             style={{
                               left: '4px',
                               bottom: '4px',
-                              width: 'calc(100px - 8px - 6px)',
-                              height: '40px',
+                              width: 'calc(50% - 12px - 4px)',
+                              height: '45px',
                               backgroundColor: 'rgba(255, 165, 0, 0.15)',
                               border: '1px dashed rgba(255, 165, 0, 0.6)',
                             }}
