@@ -694,12 +694,32 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
         
         // === SPINE ===
-        pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        pdf.setFillColor(spineColor); 
+        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        
+        // Parse spine text color to RGB
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 0, g: 0, b: 0 };
+        };
         
         // Only draw spine text if page count >= 80
         if (showSpineText) {
-          pdf.setTextColor(0,0,0); pdf.setFontSize(8); 
-          pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
+          const textRgb = hexToRgb(spineTextColor);
+          pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+          
+          // Edition Text at TOP of spine
+          pdf.setFontSize(7);
+          pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, { angle: 90, align: 'left' });
+          
+          // Title at BOTTOM of spine
+          pdf.setFontSize(11);
+          const spineDisplayText = spineText || title;
+          pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
         }
 
         // === FRONT COVER ===
