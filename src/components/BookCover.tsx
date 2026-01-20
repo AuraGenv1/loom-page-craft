@@ -12,10 +12,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import JSZip from 'jszip';
+import html2canvas from 'html2canvas';
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
-import { registerPlayfairFont, setSerifFont, FONT_SIZES, LINE_HEIGHTS, CHAR_SPACING } from '@/lib/pdfFonts';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -113,6 +113,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     
     const estimatedPages = calculateEstimatedPages();
     const showSpineText = estimatedPages >= 80;
+    
+    // Dynamic spine width based on KDP White Paper calculation
+    const getSpineWidth = useCallback(() => {
+      const pages = calculateEstimatedPages();
+      // KDP White Paper: pages * 0.002252 inches
+      // Minimum spine ~0.15" for safety
+      return Math.max(0.15, pages * 0.002252);
+    }, [calculateEstimatedPages]);
+    
+    const spineWidthInches = getSpineWidth();
     
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
@@ -736,34 +746,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Download KDP Full Wrap PDF - Pixel-perfect match to visual preview
+    // Download KDP Full Wrap PDF - Using html2canvas snapshot for 100% visual parity
     const handleDownloadKDP = async () => {
-      toast.info('Generating KDP cover PDF...');
+      toast.info('Generating KDP cover PDF (snapshot)...');
 
       try {
-        const { pdf } = createKdpCoverPdf();
-        await renderKdpCoverToPdf(pdf, false);
-        const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
-        pdf.save(filename);
+        const blob = await generateCoverPDFBlob();
+        if (!blob) throw new Error('Failed to generate PDF blob');
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
         toast.success('KDP cover PDF downloaded!');
       } catch (err) {
         console.error('Failed to generate PDF:', err);
         toast.error('Failed to generate PDF');
-      }
-    };
-
-    const handleDownloadKDPDebugGuides = async () => {
-      toast.info('Generating KDP cover PDF (with guides)...');
-
-      try {
-        const { pdf } = createKdpCoverPdf();
-        await renderKdpCoverToPdf(pdf, true);
-        const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover_GUIDES.pdf`;
-        pdf.save(filename);
-        toast.success('Debug cover PDF downloaded!');
-      } catch (err) {
-        console.error('Failed to generate debug PDF:', err);
-        toast.error('Failed to generate debug PDF');
       }
     };
 
@@ -969,14 +971,43 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Cover PDF as Blob (matches handleDownloadKDP exactly)
+    // Helper: Generate Cover PDF as Blob using html2canvas snapshot
     const generateCoverPDFBlob = async (): Promise<Blob | null> => {
       try {
-        const { pdf } = createKdpCoverPdf();
-        await renderKdpCoverToPdf(pdf, false);
+        const element = document.getElementById('kdp-print-container');
+        if (!element) {
+          console.error('Print container not found');
+          throw new Error('Print container not found');
+        }
+
+        // Capture at high resolution (scale 4 = ~384 DPI)
+        const canvas = await html2canvas(element, {
+          scale: 4,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+        });
+
+        // Calculate final PDF dimensions based on dynamic spine
+        const spineW = getSpineWidth();
+        const totalWidth = 12.25 + spineW; // 6.125 * 2 + spine
+        const totalHeight = 9.25;
+
+        // Create PDF matching those exact dimensions
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'in',
+          format: [totalWidth, totalHeight],
+        });
+
+        // Place image to fill 100% of the PDF
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, totalWidth, totalHeight);
+
         return pdf.output('blob');
       } catch (e) {
         console.error('Error generating cover PDF blob:', e);
+        toast.error('Failed to generate cover PDF. Please try again.');
         return null;
       }
     };
@@ -2016,6 +2047,263 @@ p { margin-bottom: 1em; }`);
             </Tabs>
           </DialogContent>
         </Dialog>
+        
+        {/* Hidden Ghost Print Container for html2canvas snapshot */}
+        <div
+          id="kdp-print-container"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: 0,
+            // Height: 9.25 inches = 888px at 96 DPI
+            height: `${9.25 * 96}px`,
+            // Width: (6.125 * 2) + spineWidth in inches, converted to pixels
+            width: `${(12.25 + spineWidthInches) * 96}px`,
+            display: 'flex',
+            flexDirection: 'row',
+            backgroundColor: '#ffffff',
+            fontFamily: "'Playfair Display', Georgia, serif",
+          }}
+        >
+          {/* BACK COVER */}
+          <div
+            style={{
+              width: `${6.125 * 96}px`,
+              height: '100%',
+              backgroundColor: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              padding: `${0.5 * 96}px`,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Content Area - Top 2/3 */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: '12px', width: '100%' }}>
+              <h4 style={{ 
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '14pt', 
+                fontWeight: 500, 
+                color: '#000000', 
+                letterSpacing: '0.1em', 
+                textTransform: 'uppercase',
+                margin: 0,
+              }}>
+                {backCoverTitle}
+              </h4>
+              
+              {dedicationText && (
+                <p style={{ 
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '10pt', 
+                  color: '#666666', 
+                  fontStyle: 'italic',
+                  margin: 0,
+                }}>
+                  {dedicationText}
+                </p>
+              )}
+              
+              <p style={{ 
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '10pt', 
+                color: '#333333', 
+                lineHeight: 1.6,
+                maxWidth: '85%',
+                margin: 0,
+              }}>
+                {backCoverBody}
+              </p>
+              <p style={{ 
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '10pt', 
+                fontWeight: 700, 
+                color: '#000000',
+                margin: 0,
+              }}>
+                {backCoverCTA}
+              </p>
+            </div>
+            {/* Bottom 1/3 Empty Space (Barcode Zone) */}
+            <div style={{ height: '33%', width: '100%', flexShrink: 0 }} />
+          </div>
+
+          {/* SPINE */}
+          <div
+            style={{
+              width: `${spineWidthInches * 96}px`,
+              height: '100%',
+              backgroundColor: spineColor,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${0.5 * 96}px 0`,
+              boxSizing: 'border-box',
+            }}
+          >
+            {showSpineText ? (
+              <>
+                {/* Edition Text at TOP */}
+                <span
+                  style={{
+                    writingMode: 'vertical-rl',
+                    textOrientation: 'mixed',
+                    transform: 'rotate(180deg)',
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                    fontSize: '8pt',
+                    color: spineTextColor,
+                    opacity: 0.7,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {editionText}
+                </span>
+                {/* Title at BOTTOM */}
+                <span
+                  style={{
+                    writingMode: 'vertical-rl',
+                    textOrientation: 'mixed',
+                    transform: 'rotate(180deg)',
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                    fontSize: '10pt',
+                    fontWeight: 500,
+                    color: spineTextColor,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxHeight: '80%',
+                  }}
+                >
+                  {(spineText || title).slice(0, 40)}
+                </span>
+              </>
+            ) : null}
+          </div>
+
+          {/* FRONT COVER */}
+          <div
+            style={{
+              width: `${6.125 * 96}px`,
+              height: '100%',
+              backgroundColor: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: `${0.5 * 96}px`,
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* TOP GROUP */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              {/* Cover Image */}
+              <div
+                style={{
+                  width: '52%',
+                  aspectRatio: '1/1',
+                  marginBottom: '24px',
+                  overflow: 'hidden',
+                  borderRadius: '8px',
+                  border: '2px solid rgba(0,0,0,0.1)',
+                  backgroundColor: '#f5f5f5',
+                }}
+              >
+                {displayUrl ? (
+                  <img
+                    src={displayUrl}
+                    alt="Front Cover"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    crossOrigin="anonymous"
+                  />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '12pt' }}>
+                    No Image
+                  </div>
+                )}
+              </div>
+
+              {/* Title */}
+              <h1
+                style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '24pt',
+                  fontWeight: 500,
+                  color: '#000000',
+                  lineHeight: 1.2,
+                  textAlign: 'center',
+                  letterSpacing: '0.02em',
+                  marginBottom: '12px',
+                  maxWidth: '90%',
+                  margin: 0,
+                  marginTop: 0,
+                }}
+              >
+                {parsedTitle.mainTitle}
+              </h1>
+
+              {/* Separator Line */}
+              <div style={{ width: '60px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', margin: '12px 0' }} />
+
+              {/* Subtitle */}
+              {subtitle && (
+                <p
+                  style={{
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                    fontSize: '9pt',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.3em',
+                    color: 'rgba(0,0,0,0.4)',
+                    textAlign: 'center',
+                    margin: 0,
+                  }}
+                >
+                  {subtitle}
+                </p>
+              )}
+            </div>
+
+            {/* BOTTOM BRANDING */}
+            <div style={{ marginTop: 'auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingTop: '24px', paddingBottom: '8px' }}>
+              {/* Logo */}
+              <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
+                <div style={{ position: 'absolute', left: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', right: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
+                <div style={{ position: 'absolute', right: 0, top: 0, width: '8px', height: '8px', borderRight: '2px solid #000', borderTop: '2px solid #000', borderTopRightRadius: '2px', opacity: 0.6 }} />
+              </div>
+
+              {/* Brand Name */}
+              <span
+                style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '12pt',
+                  fontWeight: 400,
+                  letterSpacing: '-0.02em',
+                  color: 'rgba(0,0,0,0.4)',
+                }}
+              >
+                Loom & Page
+              </span>
+
+              {/* Disclaimer */}
+              <p
+                style={{
+                  fontSize: '7pt',
+                  textAlign: 'center',
+                  color: 'rgba(0,0,0,0.3)',
+                  lineHeight: 1.4,
+                  maxWidth: '220px',
+                  fontStyle: 'italic',
+                  margin: 0,
+                }}
+              >
+                AI-generated content for creative inspiration only. Not professional advice.
+              </p>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
