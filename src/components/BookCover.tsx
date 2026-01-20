@@ -89,6 +89,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
     const coverUploadRef = useRef<HTMLInputElement>(null);
     
+    // Back Cover Text State
+    const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
+    const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you're exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.");
+    const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
+    const [dedicationText, setDedicationText] = useState("");
+    
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
       ? localFrontUrls 
@@ -636,14 +642,46 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
         const pageWidth = 12.485; const pageHeight = 9.25;
         const spineWidth = 0.485; const coverWidth = (pageWidth - spineWidth) / 2;
-        pdf.setFillColor(spineColor); pdf.rect(0,0,pageWidth,pageHeight,'F'); 
-        if (!localBackCoverUrl) { pdf.setFillColor('#f0f0f0'); pdf.rect(0.125,0.125,coverWidth-0.25,9,'F'); }
         
-        // Spine (Smaller Font)
+        // === BACK COVER (White with Text) ===
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, coverWidth, pageHeight, 'F');
+        
+        const backCenterX = coverWidth / 2;
+        pdf.setTextColor(0, 0, 0);
+        
+        // Header
+        pdf.setFont('times', 'bold'); 
+        pdf.setFontSize(11);
+        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 1.5, { align: 'center' });
+        
+        let currentY = 2.0;
+        
+        // Dedication
+        if (dedicationText) {
+          pdf.setFont('times', 'italic');
+          pdf.setFontSize(10);
+          pdf.text(dedicationText, backCenterX, currentY, { align: 'center' });
+          currentY += 0.4;
+        }
+        
+        // Body
+        pdf.setFont('times', 'normal');
+        pdf.setFontSize(10);
+        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 2.0);
+        pdf.text(splitBody, backCenterX, currentY, { align: 'center' });
+        
+        // CTA
+        currentY += (splitBody.length * 0.2) + 0.4;
+        pdf.setFont('times', 'bold');
+        pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
+        
+        // === SPINE ===
         pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
         pdf.setTextColor(0,0,0); pdf.setFontSize(8); 
         pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
 
+        // === FRONT COVER ===
         const frontX = coverWidth + spineWidth; const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
@@ -1151,53 +1189,103 @@ p { margin-bottom: 1em; }`);
                 </div>
               </TabsContent>
 
-              {/* TAB 2: Back Cover - With Blurb Placeholder */}
+              {/* TAB 2: Back Cover - Clean White Design */}
               <TabsContent value="back" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Preview Column */}
                   <div>
                     <h3 className="font-medium mb-3">Current Back Cover</h3>
-                    <div className="aspect-[3/4] bg-secondary/20 rounded-lg overflow-hidden border max-w-[300px] relative">
-                      {localBackCoverUrl ? (
-                        <>
-                          <img src={localBackCoverUrl} alt="Back Cover" className="w-full h-full object-cover" />
-                          {/* Blurb Placeholder Overlay */}
-                          <div className="absolute inset-0 p-6 flex flex-col justify-between">
-                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4 mt-12">
-                              <p className="text-white text-xs leading-relaxed italic">
-                                "Your compelling book description goes here. This is where you'll hook readers with an irresistible summary of what they'll discover inside. Make every word count!"
-                              </p>
-                            </div>
-                            <div className="bg-black/60 backdrop-blur-sm rounded-lg p-3 text-center">
-                              <p className="text-white/80 text-[10px] font-medium">
-                                www.loomandpage.com
-                              </p>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground flex-col gap-2">
-                          <BookOpen className="w-12 h-12 opacity-50" />
-                          <span>No back cover yet</span>
-                        </div>
-                      )}
+                    <div className="aspect-[3/4] bg-white rounded-sm shadow-sm overflow-hidden border border-gray-200 relative p-8 flex flex-col items-center text-center max-w-[300px]">
+                      {/* Content Area - Top 2/3 */}
+                      <div className="flex-1 flex flex-col items-center justify-start gap-4">
+                        <h4 className="font-serif text-sm font-medium text-black tracking-wide uppercase">
+                          {backCoverTitle}
+                        </h4>
+                        
+                        {dedicationText && (
+                          <p className="font-serif text-[10px] text-gray-600 italic">
+                            {dedicationText}
+                          </p>
+                        )}
+                        
+                        <p className="font-serif text-[9px] text-gray-800 leading-relaxed max-w-[90%]">
+                          {backCoverBody}
+                        </p>
+                        <p className="font-serif text-[9px] font-bold text-black mt-2">
+                          {backCoverCTA}
+                        </p>
+                      </div>
+                      {/* Bottom 1/3 Empty Space (Visual Indicator) */}
+                      <div className="h-[33%] w-full border-t border-dashed border-gray-100 flex items-end justify-center pb-2">
+                        <span className="text-[7px] text-gray-300 uppercase tracking-widest">Barcode Area (Keep Clear)</span>
+                      </div>
                     </div>
                   </div>
+                  {/* Settings Column */}
                   <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="back-prompt" className="text-base font-medium">Back Cover Prompt</Label>
+                    <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
+                      <h4 className="font-medium text-sm">Back Cover Text {!isAdmin && <span className="text-xs text-muted-foreground">(Admin Only)</span>}</h4>
+                      <div>
+                        <Label htmlFor="back-cover-title" className="text-sm">Header</Label>
+                        <Input
+                          id="back-cover-title"
+                          value={backCoverTitle}
+                          onChange={(e) => setBackCoverTitle(e.target.value)}
+                          placeholder="Header text..."
+                          className="mt-1"
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dedication-text" className="text-sm">Dedication / Subtitle</Label>
+                        <Input
+                          id="dedication-text"
+                          value={dedicationText}
+                          onChange={(e) => setDedicationText(e.target.value)}
+                          placeholder="e.g., Prepared for the Smith Family"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="back-cover-body" className="text-sm">Body Text</Label>
+                        <Textarea
+                          id="back-cover-body"
+                          value={backCoverBody}
+                          onChange={(e) => setBackCoverBody(e.target.value)}
+                          placeholder="Book description..."
+                          rows={4}
+                          className="mt-1"
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="back-cover-cta" className="text-sm">Call to Action</Label>
+                        <Input
+                          id="back-cover-cta"
+                          value={backCoverCTA}
+                          onChange={(e) => setBackCoverCTA(e.target.value)}
+                          placeholder="CTA text..."
+                          className="mt-1"
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="border-t pt-4">
+                      <Label htmlFor="back-prompt" className="text-base font-medium">Back Cover Image (Optional)</Label>
                       <p className="text-sm text-muted-foreground mb-2">
-                        Typically a texture or abstract background (e.g., "Marble texture with gold veins", "Blurred city lights")
+                        Generate a background image if desired
                       </p>
                       <Textarea
                         id="back-prompt"
                         value={backPrompt}
                         onChange={(e) => setBackPrompt(e.target.value)}
                         placeholder="Enter a texture or abstract background description..."
-                        rows={4}
+                        rows={3}
                       />
                     </div>
                     <Button 
-                      onClick={handleGenerateBack} 
+                      onClick={handleGenerateBack}
                       disabled={isRegeneratingBack}
                       className="w-full"
                       size="lg"
@@ -1363,29 +1451,32 @@ p { margin-bottom: 1em; }`);
                   {/* Centered Full Wrap Container */}
                   <div className="flex justify-center items-center">
                     <div className="flex items-stretch gap-0 border overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
-                      {/* Back Cover */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-secondary/20 relative flex-shrink-0">
-                      {localBackCoverUrl ? (
-                        <>
-                          <img src={localBackCoverUrl} alt="Back" className="w-full h-full object-cover" />
-                          {/* Blurb Placeholder Overlay */}
-                          <div className="absolute inset-0 p-3 flex flex-col justify-between">
-                            <div className="bg-black/60 backdrop-blur-sm rounded p-2 mt-8">
-                              <p className="text-white text-[8px] leading-relaxed italic">
-                                Your compelling book description goes here...
-                              </p>
-                            </div>
-                            <div className="bg-black/60 backdrop-blur-sm rounded p-1 text-center">
-                              <p className="text-white/80 text-[7px]">www.loomandpage.com</p>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs bg-muted/50">
-                          Back Cover
+                      {/* Back Cover - Clean White Design */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 p-2 flex flex-col items-center text-center">
+                        {/* Content Area - Top 2/3 */}
+                        <div className="flex-1 flex flex-col items-center justify-start gap-1">
+                          <h4 className="font-serif text-[6px] font-medium text-black tracking-wide uppercase">
+                            {backCoverTitle}
+                          </h4>
+                          
+                          {dedicationText && (
+                            <p className="font-serif text-[4px] text-gray-600 italic">
+                              {dedicationText}
+                            </p>
+                          )}
+                          
+                          <p className="font-serif text-[4px] text-gray-800 leading-relaxed max-w-[90%]">
+                            {backCoverBody}
+                          </p>
+                          <p className="font-serif text-[4px] font-bold text-black mt-0.5">
+                            {backCoverCTA}
+                          </p>
                         </div>
-                      )}
-                    </div>
+                        {/* Bottom 1/3 Empty Space */}
+                        <div className="h-[33%] w-full border-t border-dashed border-gray-200 flex items-end justify-center pb-1">
+                          <span className="text-[3px] text-gray-300 uppercase tracking-widest">Barcode Area</span>
+                        </div>
+                      </div>
                       {/* Spine - Smaller text */}
                       <div 
                         className="w-4 sm:w-5 flex flex-col items-center justify-between py-2 flex-shrink-0"
