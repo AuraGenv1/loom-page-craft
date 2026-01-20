@@ -1,16 +1,16 @@
 // PDF Font Embedding Utility
-// Fetches and caches Playfair Display font for jsPDF usage
+// Uses bundled TTF for exact font parity with web preview
 
 import jsPDF from 'jspdf';
 
-// Google Fonts CDN URL for Playfair Display Regular (woff2 format)
-const PLAYFAIR_FONT_URL = 'https://fonts.gstatic.com/s/playfairdisplay/v37/nuFiD-vYSZviVYUb_rj3ij__anPXDTnCjmHKM4nYO7KN_qiTXtHA-Q.woff2';
+// Import the bundled TTF font
+import PlayfairRegularTTF from '@/assets/fonts/PlayfairDisplay-Regular.ttf';
 
 // Cache the font data
 let playfairFontBase64: string | null = null;
 
 /**
- * Fetches Playfair Display font and converts to base64
+ * Fetches Playfair Display TTF font and converts to base64
  */
 async function fetchPlayfairFont(): Promise<string | null> {
   if (playfairFontBase64) {
@@ -18,10 +18,10 @@ async function fetchPlayfairFont(): Promise<string | null> {
   }
 
   try {
-    // Try direct fetch first
-    const response = await fetch(PLAYFAIR_FONT_URL, { mode: 'cors' });
+    // Fetch the bundled TTF file
+    const response = await fetch(PlayfairRegularTTF);
     if (!response.ok) {
-      console.warn('Failed to fetch Playfair Display font');
+      console.warn('Failed to fetch bundled Playfair Display TTF');
       return null;
     }
 
@@ -47,8 +47,10 @@ export async function registerPlayfairFont(pdf: jsPDF): Promise<boolean> {
   
   if (fontData) {
     try {
-      pdf.addFileToVFS('PlayfairDisplay-Regular.woff2', fontData);
-      pdf.addFont('PlayfairDisplay-Regular.woff2', 'PlayfairDisplay', 'normal');
+      pdf.addFileToVFS('PlayfairDisplay-Regular.ttf', fontData);
+      pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'normal');
+      pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'bold'); // Use regular for bold until we have bold TTF
+      pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'italic'); // Use regular for italic until we have italic TTF
       return true;
     } catch (error) {
       console.warn('Failed to register Playfair Display font:', error);
@@ -69,30 +71,23 @@ export function setSerifFont(pdf: jsPDF, hasPlayfair: boolean, style: 'normal' |
   }
 }
 
-// Font size mapping from preview pixels to PDF points
-// Preview container is 280px wide, PDF front cover is 6" wide
-// Scale factor: 6" / 280px = 0.0214" per pixel
-// 1 inch = 72 points, so 1px ≈ 1.54pt at this scale
-// However, for visual matching, we calibrate based on appearance:
+// Font size mapping - calibrated to match preview scaling
+// Preview: 130px back cover width → PDF: 6" = 432pt
+// Scale: 432pt / 130px = 3.32pt per px
+// text-[6px] → 6 * 3.32 = ~20pt (but visually it's smaller, use 14pt)
+// text-[4px] → 4 * 3.32 = ~13pt (visually use 9pt)
 
 export const FONT_SIZES = {
-  // Preview text-lg (18px) → 24pt for clear print title
+  // Back cover - matched to preview
+  backHeader: 14,      // text-[6px] scaled
+  backBody: 9,         // text-[4px] scaled  
+  backCTA: 9,          // text-[4px] font-bold scaled
+  backDedication: 8,   // text-[4px] italic
+  // Front cover
   title: 22,
-  // Preview text-[7px] → ~10pt for readable subtitle
   subtitle: 9,
-  // Preview text-[10px] → ~13pt for brand
   brand: 11,
-  // Preview text-[6px] → ~8pt for disclaimer
   disclaimer: 7,
-  // Back cover - matched to preview CSS
-  // Section 1: text-sm (14px) = 14pt
-  backHeader: 14,
-  // Section 2: text-[9px] = 9pt
-  backBody: 9,
-  // Section 3: text-[9px] font-bold = 9pt
-  backCTA: 9,
-  // Dedication: text-[10px] = 10pt
-  backDedication: 10,
   // Spine
   spineEdition: 7,
   spineTitle: 9,
@@ -101,13 +96,15 @@ export const FONT_SIZES = {
 // Letter spacing mapping (charSpace in jsPDF)
 // tracking-wide = 0.025em in Tailwind
 export const CHAR_SPACING = {
-  trackingWide: 0.02, // For back cover header "tracking-wide"
+  trackingWide: 0.02,
 };
 
-// Line heights in inches for proper vertical spacing
+// Line heights - leading-relaxed = 1.625
 export const LINE_HEIGHTS = {
-  title: 0.34,      // 22pt / 72 * 1.1 line height
-  subtitle: 0.16,   // 9pt / 72 * 1.3 (tracking adds height)
-  brand: 0.18,      // 11pt / 72 * 1.2
-  disclaimer: 0.12, // 7pt / 72 * 1.2
+  relaxed: 1.625,
+  normal: 1.4,
+  title: 0.34,
+  subtitle: 0.16,
+  brand: 0.18,
+  disclaimer: 0.12,
 };

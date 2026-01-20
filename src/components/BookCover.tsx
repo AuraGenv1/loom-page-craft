@@ -15,7 +15,7 @@ import JSZip from 'jszip';
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
-import { registerPlayfairFont, setSerifFont, FONT_SIZES, LINE_HEIGHTS } from '@/lib/pdfFonts';
+import { registerPlayfairFont, setSerifFont, FONT_SIZES, LINE_HEIGHTS, CHAR_SPACING } from '@/lib/pdfFonts';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -468,53 +468,55 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setTextColor(0, 0, 0);
       }
       
-      // === BACK COVER TEXT - Calibrated to match preview grid coordinates ===
-      // Preview: 130px wide × 170px tall → PDF: 6" × 9"
-      // The key is matching LINE WRAPPING, not just width percentages
+      // === BACK COVER TEXT - Matched to preview exactly ===
+      // Preview uses: text-[6px] header, text-[4px] body/CTA, max-w-[90%], leading-relaxed
+      // Preview back cover: 130px wide → PDF: 6" wide
+      // Scale factor: 6" / 130px = 0.0462" per px
       
-      // Section 1: Header - full width for single line
-      const headerWidth = coverWidth * 0.85;
-      // Section 2: Body - NARROW width to force 5-line wrap (currently 3 lines at 77%)
-      // To get 5 lines from 3: need ~60% of current width = 77% * 0.6 = 46%
-      const bodyWidth = coverWidth * 0.45;
-      // Section 3: CTA - moderate width
-      const ctaWidth = coverWidth * 0.60;
-
+      // Body width: max-w-[90%] of 130px = 117px → 5.4" (90% of 6")
+      const bodyWidth = coverWidth * 0.90;
+      
       // === SECTION 1: Header "CREATED WITH LOOM & PAGE" ===
+      // Preview: text-[6px] tracking-wide uppercase
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(10);
-      const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), headerWidth);
+      pdf.setFontSize(FONT_SIZES.backHeader);
+      const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), bodyWidth);
       pdf.text(splitHeader, backCenterX, 0.60, { 
         align: 'center',
-        charSpace: 0.015
+        charSpace: CHAR_SPACING.trackingWide
       });
 
-      // === SECTION 2: Body paragraph ===
-      // Must wrap to exactly 5 lines - using narrow width to force wrapping
-      pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(8);
-      pdf.setTextColor(40, 40, 40);
-      const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
-      console.log('PDF body lines:', splitBody.length, 'at width:', bodyWidth);
-      pdf.text(splitBody, backCenterX, 1.10, { 
-        align: 'center', 
-        lineHeightFactor: 1.5
-      });
-
-      // Dedication (if present) - placed between header and body
+      // Dedication (if present) - between header and body
+      // Preview: text-[4px] italic
       if (dedicationText) {
         pdf.setFont(fontName, 'italic');
-        pdf.setFontSize(7);
+        pdf.setFontSize(FONT_SIZES.backDedication);
         pdf.setTextColor(80, 80, 80);
-        pdf.text(dedicationText, backCenterX, 0.88, { align: 'center' });
+        pdf.text(dedicationText, backCenterX, 0.95, { align: 'center' });
       }
 
+      // === SECTION 2: Body paragraph ===
+      // Preview: text-[4px] leading-relaxed max-w-[90%]
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.backBody);
+      pdf.setTextColor(40, 40, 40);
+      const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
+      const bodyStartY = dedicationText ? 1.20 : 1.00;
+      pdf.text(splitBody, backCenterX, bodyStartY, { 
+        align: 'center', 
+        lineHeightFactor: LINE_HEIGHTS.relaxed
+      });
+
       // === SECTION 3: CTA ===
+      // Preview: text-[4px] font-bold
+      // Position based on body height
+      const lineHeight = (FONT_SIZES.backBody / 72) * LINE_HEIGHTS.relaxed;
+      const ctaY = bodyStartY + (splitBody.length * lineHeight) + 0.25;
       pdf.setFont(fontName, 'bold');
-      pdf.setFontSize(8);
+      pdf.setFontSize(FONT_SIZES.backCTA);
       pdf.setTextColor(0, 0, 0);
-      pdf.text(backCoverCTA, backCenterX, 2.40, { align: 'center' });
+      pdf.text(backCoverCTA, backCenterX, ctaY, { align: 'center' });
 
       // === SPINE ===
       const spineRgb = hexToRgb(spineColor);
