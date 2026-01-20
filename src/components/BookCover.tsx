@@ -311,11 +311,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // --- KDP COVER PDF RENDERING ---
     // NOTE: jsPDF custom `format` array order is easy to get wrong; always read width/height from pageSize.
     const createKdpCoverPdf = () => {
-      // Use swapped format (H, W) + landscape, then read actual page size.
-      // This matches KDP full-wrap dimensions: 12.485" × 9.25".
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [9.25, 12.485] });
-      const pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
-      const pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
+      // KDP full-wrap dimensions (includes bleed) for current preset:
+      // 12.485" (W) × 9.25" (H)
+      const desiredW = 12.485;
+      const desiredH = 9.25;
+
+      // jsPDF custom format + orientation can be inconsistent; always verify actual page size.
+      let pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [desiredW, desiredH] });
+      let pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
+      let pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
+
+      // If jsPDF produced the swapped dimensions, fall back to a portrait doc with explicit dimensions.
+      const isCorrect =
+        Math.abs(pageWidth - desiredW) < 0.02 && Math.abs(pageHeight - desiredH) < 0.02;
+
+      if (!isCorrect) {
+        pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [desiredW, desiredH] });
+        pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
+        pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
+      }
+
       return { pdf, pageWidth, pageHeight };
     };
 
@@ -356,7 +371,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       return canvas.toDataURL('image/jpeg', 0.95);
     };
 
-    const renderKdpCoverToPdf = async (pdf: jsPDF) => {
+    const renderKdpCoverToPdf = async (pdf: jsPDF, includeGuides = false) => {
       const pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
       const pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
 
@@ -503,6 +518,50 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       pdf.setLineWidth(0.01);
       pdf.line(centerX + lineGap + 0.03, logoY, centerX + lineGap + 0.1, logoY);
       pdf.line(centerX + lineGap + 0.1, logoY, centerX + lineGap + 0.1, logoY + 0.07);
+
+      // === DEBUG GUIDES (optional) ===
+      if (includeGuides) {
+        const bleed = 0.125; // inches
+        const safeFromTrim = 0.25;
+        const safe = bleed + safeFromTrim; // 0.375" from page edge
+
+        // Bleed edge (page edge) - red dashed
+        pdf.setDrawColor(220, 38, 38);
+        pdf.setLineWidth(0.01);
+        pdf.setLineDashPattern([0.08, 0.05], 0);
+        pdf.rect(0, 0, pageWidth, pageHeight);
+
+        // Trim - blue solid
+        pdf.setDrawColor(37, 99, 235);
+        pdf.setLineDashPattern([], 0);
+        pdf.setLineWidth(0.01);
+        pdf.rect(bleed, bleed, pageWidth - bleed * 2, pageHeight - bleed * 2);
+
+        // Safe - green dashed
+        pdf.setDrawColor(34, 197, 94);
+        pdf.setLineDashPattern([0.08, 0.05], 0);
+        pdf.setLineWidth(0.01);
+        pdf.rect(safe, safe, pageWidth - safe * 2, pageHeight - safe * 2);
+
+        // Spine boundaries - teal dotted
+        pdf.setDrawColor(13, 148, 136);
+        pdf.setLineDashPattern([0.03, 0.05], 0);
+        pdf.setLineWidth(0.01);
+        pdf.line(coverWidth, bleed, coverWidth, pageHeight - bleed);
+        pdf.line(coverWidth + spineWidth, bleed, coverWidth + spineWidth, pageHeight - bleed);
+
+        // Barcode zone (bottom third of back cover within trim) - orange dashed
+        const backTrimX = bleed;
+        const backTrimW = coverWidth - bleed * 2;
+        const backTrimY = bleed;
+        const backTrimH = pageHeight - bleed * 2;
+        const barcodeH = backTrimH / 3;
+        const barcodeY = backTrimY + backTrimH - barcodeH;
+        pdf.setDrawColor(249, 115, 22);
+        pdf.setLineDashPattern([0.08, 0.05], 0);
+        pdf.setLineWidth(0.01);
+        pdf.rect(backTrimX, barcodeY, backTrimW, barcodeH);
+      }
     };
 
     // Download KDP Full Wrap PDF - Pixel-perfect match to visual preview
@@ -511,13 +570,28 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
       try {
         const { pdf } = createKdpCoverPdf();
-        await renderKdpCoverToPdf(pdf);
+        await renderKdpCoverToPdf(pdf, false);
         const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
         pdf.save(filename);
         toast.success('KDP cover PDF downloaded!');
       } catch (err) {
         console.error('Failed to generate PDF:', err);
         toast.error('Failed to generate PDF');
+      }
+    };
+
+    const handleDownloadKDPDebugGuides = async () => {
+      toast.info('Generating KDP cover PDF (with guides)...');
+
+      try {
+        const { pdf } = createKdpCoverPdf();
+        await renderKdpCoverToPdf(pdf, true);
+        const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover_GUIDES.pdf`;
+        pdf.save(filename);
+        toast.success('Debug cover PDF downloaded!');
+      } catch (err) {
+        console.error('Failed to generate debug PDF:', err);
+        toast.error('Failed to generate debug PDF');
       }
     };
 
@@ -727,7 +801,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const generateCoverPDFBlob = async (): Promise<Blob | null> => {
       try {
         const { pdf } = createKdpCoverPdf();
-        await renderKdpCoverToPdf(pdf);
+        await renderKdpCoverToPdf(pdf, false);
         return pdf.output('blob');
       } catch (e) {
         console.error('Error generating cover PDF blob:', e);
@@ -1697,6 +1771,14 @@ p { margin-bottom: 1em; }`);
                       >
                         <Download className="w-4 h-4 mr-2" />
                         Download Cover PDF
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={handleDownloadKDPDebugGuides} 
+                        className="w-full"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Cover PDF (with Guides)
                       </Button>
                       <Button 
                         variant="outline"
