@@ -473,24 +473,32 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.text((spineText || title).slice(0, 35), coverWidth + spineWidth / 2, pageHeight - 0.4, { angle: 90, align: 'right' });
       }
 
-      // === FRONT COVER (match HTML preview proportions) ===
+      // === FRONT COVER (flow-based layout matching HTML preview) ===
+      // The preview uses a 3:4 aspect container (~6" x 8" visual) while PDF is 6" x 9.25".
+      // To match, we use flow-based positioning (stacking top-to-bottom) with fixed gaps
+      // instead of anchoring branding to the absolute page bottom.
       const frontX = coverWidth + spineWidth;
       const centerX = frontX + coverWidth / 2;
       pdf.setFillColor(255, 255, 255);
       pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-      // Match the preview's `p-5` padding (~0.43") and bottom spacing.
+      // KDP margins
+      const bleed = 0.125;
+      const safeFromTrim = 0.25;
+      const safeEdge = bleed + safeFromTrim; // 0.375" from page edge
+
+      // The preview's 3:4 container maps to roughly 6" x 8" printable area.
+      // We'll center content vertically within that "virtual" height.
+      const virtualHeight = 8.0; // matches preview's 3:4 aspect for 6" wide cover
+      const vOffset = (pageHeight - virtualHeight) / 2; // center the 8" block in 9.25"
+
       const padding = 0.45;
-      const bleed = 0.125; // KDP bleed per edge
-      const safeFromTrim = 0.25; // KDP safe distance from trim
-      const safeEdge = bleed + safeFromTrim; // distance from page edge to safe line
-      const bottomPadding = Math.max(0.45, safeEdge + 0.05); // keep all branding inside safe
       const innerWidth = coverWidth - padding * 2;
 
-      // IMAGE: preview uses `w-[52%] aspect-square`
+      // IMAGE: preview uses `w-[52%] aspect-square` with mb-4
       const imgSize = innerWidth * 0.52;
       const imgX = centerX - imgSize / 2;
-      const imgY = padding;
+      const imgY = vOffset + padding;
 
       if (displayUrl) {
         try {
@@ -506,25 +514,24 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
       }
 
-      // TITLE: preview `text-lg` with `max-w-[220px]` (~78.5% of 280px)
-      let y = imgY + imgSize + 0.34; // mb-4
+      // TITLE: preview `text-lg` (~16pt) with max-w ~78.5%
+      let y = imgY + imgSize + 0.30;
       const titleMaxW = innerWidth * 0.785;
       pdf.setTextColor(0, 0, 0);
       pdf.setFont('times', 'normal');
       pdf.setFontSize(16);
       const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, titleMaxW);
       pdf.text(splitTitle, centerX, y, { align: 'center' });
-      y += splitTitle.length * 0.26 + 0.17; // leading-tight + mb-2
+      y += splitTitle.length * 0.26 + 0.15;
 
-      // Separator `w-8` (~0.68")
+      // Separator ~0.68"
       pdf.setDrawColor(180, 180, 180);
       pdf.setLineWidth(0.005);
       const sepLen = 0.68;
       pdf.line(centerX - sepLen / 2, y, centerX + sepLen / 2, y);
-      y += 0.17; // mb-2
+      y += 0.15;
 
-      // SUBTITLE: preview `text-[7px] uppercase` line-clamp-2, max-w 180px (~64.3% of 280px)
-      let yAfterSubtitle = y;
+      // SUBTITLE: ~5.5pt uppercase
       if (subtitle) {
         const subtitleMaxW = innerWidth * 0.643;
         pdf.setFont('times', 'normal');
@@ -532,38 +539,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setTextColor(120, 120, 120);
         const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), subtitleMaxW).slice(0, 2);
         pdf.text(subtitleLines, centerX, y, { align: 'center' });
-        // estimate subtitle block height (pt->in * line-height)
-        const ptToIn = (pt: number) => pt / 72;
-        const subtitleLineHeight = ptToIn(5.5) * 1.35;
-        yAfterSubtitle = y + subtitleLines.length * subtitleLineHeight;
-      } else {
-        yAfterSubtitle = y;
+        y += subtitleLines.length * 0.12 + 0.08;
       }
 
-      // === BOTTOM BRANDING (match preview block: logo + brand + disclaimer near bottom) ===
-      // Keep disclaimer safely inside the green safe line and avoid exaggerated dead-space.
-      let bottomY = pageHeight - bottomPadding;
-      // If the gap from subtitle -> branding is huge, pull branding up (still within safe).
-      const maxGap = 2.0; // inches
-      if (bottomY - yAfterSubtitle > maxGap) bottomY = yAfterSubtitle + maxGap;
-
-      // Disclaimer (2 lines to match intended wrap)
-      pdf.setFont('times', 'italic');
-      pdf.setFontSize(5);
-      pdf.setTextColor(160, 160, 160);
-      pdf.text('AI-generated content for creative inspiration only.', centerX, bottomY - 0.10, { align: 'center' });
-      pdf.text('Not professional advice.', centerX, bottomY, { align: 'center' });
-
-      // Brand name
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(8);
-      pdf.setTextColor(140, 140, 140);
-      pdf.text('Loom & Page', centerX, bottomY - 0.38, { align: 'center' });
+      // === BOTTOM BRANDING (flow after subtitle with fixed gap, not page-bottom anchored) ===
+      // The gap between subtitle and branding in the preview is roughly 1.2" equivalent.
+      y += 0.8; // gap to logo
 
       // Logo
-      const logoY = bottomY - 0.85;
       const logoH = 0.35;
       const lineGap = 0.08;
+      const logoY = y;
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.012);
       pdf.line(centerX - lineGap, logoY, centerX - lineGap, logoY + logoH);
@@ -573,6 +559,21 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       pdf.setLineWidth(0.01);
       pdf.line(centerX + lineGap + 0.03, logoY, centerX + lineGap + 0.1, logoY);
       pdf.line(centerX + lineGap + 0.1, logoY, centerX + lineGap + 0.1, logoY + 0.07);
+      y = logoY + logoH + 0.12;
+
+      // Brand name
+      pdf.setFont('times', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(140, 140, 140);
+      pdf.text('Loom & Page', centerX, y, { align: 'center' });
+      y += 0.18;
+
+      // Disclaimer (2 lines)
+      pdf.setFont('times', 'italic');
+      pdf.setFontSize(5);
+      pdf.setTextColor(160, 160, 160);
+      pdf.text('AI-generated content for creative inspiration only.', centerX, y, { align: 'center' });
+      pdf.text('Not professional advice.', centerX, y + 0.10, { align: 'center' });
 
       // === DEBUG GUIDES (optional) ===
       if (includeGuides) {
