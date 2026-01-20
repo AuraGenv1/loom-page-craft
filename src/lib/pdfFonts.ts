@@ -3,23 +3,25 @@
 
 import jsPDF from 'jspdf';
 
-// Import the bundled TTF fonts
+// Import the bundled TTF font (only Regular available currently)
 import PlayfairRegularTTF from '@/assets/fonts/PlayfairDisplay-Regular.ttf';
-import PlayfairBoldTTF from '@/assets/fonts/PlayfairDisplay-Bold.ttf';
-import PlayfairItalicTTF from '@/assets/fonts/PlayfairDisplay-Italic.ttf';
 
-// Cache font data by filename
-const fontBase64Cache: Record<string, string> = {};
+// Cache the font data
+let playfairFontBase64: string | null = null;
 
 /**
  * Fetches Playfair Display TTF font and converts to base64
  */
-async function fetchFontBase64(fontUrl: string, cacheKey: string): Promise<string | null> {
-  if (fontBase64Cache[cacheKey]) return fontBase64Cache[cacheKey];
+async function fetchPlayfairFont(): Promise<string | null> {
+  if (playfairFontBase64) {
+    return playfairFontBase64;
+  }
+
   try {
-    const response = await fetch(fontUrl);
+    // Fetch the bundled TTF file
+    const response = await fetch(PlayfairRegularTTF);
     if (!response.ok) {
-      console.warn(`Failed to fetch bundled font: ${cacheKey}`);
+      console.warn('Failed to fetch bundled Playfair Display TTF');
       return null;
     }
 
@@ -27,11 +29,11 @@ async function fetchFontBase64(fontUrl: string, cacheKey: string): Promise<strin
     const base64 = btoa(
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
-
-    fontBase64Cache[cacheKey] = base64;
+    
+    playfairFontBase64 = base64;
     return base64;
   } catch (error) {
-    console.warn(`Could not load font ${cacheKey}:`, error);
+    console.warn('Could not load Playfair Display font:', error);
     return null;
   }
 }
@@ -41,37 +43,22 @@ async function fetchFontBase64(fontUrl: string, cacheKey: string): Promise<strin
  * Falls back to 'times' if font loading fails
  */
 export async function registerPlayfairFont(pdf: jsPDF): Promise<boolean> {
-  const regular = await fetchFontBase64(PlayfairRegularTTF, 'PlayfairDisplay-Regular.ttf');
-  if (!regular) return false;
-
-  const bold = await fetchFontBase64(PlayfairBoldTTF, 'PlayfairDisplay-Bold.ttf');
-  const italic = await fetchFontBase64(PlayfairItalicTTF, 'PlayfairDisplay-Italic.ttf');
-
-  try {
-    pdf.addFileToVFS('PlayfairDisplay-Regular.ttf', regular);
-    pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'normal');
-
-    if (bold) {
-      pdf.addFileToVFS('PlayfairDisplay-Bold.ttf', bold);
-      pdf.addFont('PlayfairDisplay-Bold.ttf', 'PlayfairDisplay', 'bold');
-    } else {
-      // Fallback: map bold to regular if the bold file cannot be loaded
+  const fontData = await fetchPlayfairFont();
+  
+  if (fontData) {
+    try {
+      pdf.addFileToVFS('PlayfairDisplay-Regular.ttf', fontData);
+      pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'normal');
+      // Map bold/italic to regular until we have those TTF files
       pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'bold');
-    }
-
-    if (italic) {
-      pdf.addFileToVFS('PlayfairDisplay-Italic.ttf', italic);
-      pdf.addFont('PlayfairDisplay-Italic.ttf', 'PlayfairDisplay', 'italic');
-    } else {
-      // Fallback: map italic to regular if the italic file cannot be loaded
       pdf.addFont('PlayfairDisplay-Regular.ttf', 'PlayfairDisplay', 'italic');
+      return true;
+    } catch (error) {
+      console.warn('Failed to register Playfair Display font:', error);
     }
-
-    return true;
-  } catch (error) {
-    console.warn('Failed to register Playfair Display fonts:', error);
-    return false;
   }
+  
+  return false;
 }
 
 /**
