@@ -473,107 +473,138 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.text((spineText || title).slice(0, 35), coverWidth + spineWidth / 2, pageHeight - 0.4, { angle: 90, align: 'right' });
       }
 
-      // === FRONT COVER (flow-based layout matching HTML preview) ===
-      // The preview uses a 3:4 aspect container (~6" x 8" visual) while PDF is 6" x 9.25".
-      // To match, we use flow-based positioning (stacking top-to-bottom) with fixed gaps
-      // instead of anchoring branding to the absolute page bottom.
+      // === FRONT COVER (pixel-perfect match to HTML preview) ===
+      // The preview uses a 280px-wide 3:4 container scaled down. We map that to the 6" cover.
       const frontX = coverWidth + spineWidth;
       const centerX = frontX + coverWidth / 2;
       pdf.setFillColor(255, 255, 255);
       pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-      // KDP margins
+      // KDP safe margins (content should stay inside safe zone: 0.375" from page edge)
       const bleed = 0.125;
       const safeFromTrim = 0.25;
-      const safeEdge = bleed + safeFromTrim; // 0.375" from page edge
+      const safeEdge = bleed + safeFromTrim; // 0.375" from outer edge
 
-      // The preview's 3:4 container maps to roughly 6" x 8" printable area.
-      // We'll center content vertically within that "virtual" height.
-      const virtualHeight = 8.0; // matches preview's 3:4 aspect for 6" wide cover
-      const vOffset = (pageHeight - virtualHeight) / 2; // center the 8" block in 9.25"
-
-      const padding = 0.45;
+      // Match the preview's padding (p-5 on 280px = ~5.36% padding → on 6" = 0.32")
+      const padding = 0.38;
       const innerWidth = coverWidth - padding * 2;
 
-      // IMAGE: preview uses `w-[52%] aspect-square` with mb-4
+      // Position content starting from safe zone top
+      const contentStartY = safeEdge;
+      let y = contentStartY;
+
+      // IMAGE: preview uses `w-[52%] aspect-square` with mb-4 (~0.22" gap after)
       const imgSize = innerWidth * 0.52;
       const imgX = centerX - imgSize / 2;
-      const imgY = vOffset + padding;
+      const imgY = y;
 
       if (displayUrl) {
         try {
           const dataUrl = await imageUrlToSquareCoverJpegDataUrl(displayUrl, 1400);
           if (dataUrl) {
+            // Draw rounded rect clip approximation with light border
+            const cornerRadius = 0.08; // matches rounded-lg
             pdf.setDrawColor(220, 220, 220);
-            pdf.setLineWidth(0.007);
-            pdf.rect(imgX, imgY, imgSize, imgSize);
+            pdf.setLineWidth(0.01);
+            // Draw rounded rectangle border
+            pdf.roundedRect(imgX, imgY, imgSize, imgSize, cornerRadius, cornerRadius, 'S');
+            // Add image (jsPDF doesn't support clip, so image goes on top)
             pdf.addImage(dataUrl, 'JPEG', imgX, imgY, imgSize, imgSize);
+            // Re-draw border on top to give clean edge appearance
+            pdf.setDrawColor(0, 0, 0);
+            pdf.setLineWidth(0.005);
+            pdf.setDrawColor(200, 200, 200);
+            pdf.roundedRect(imgX, imgY, imgSize, imgSize, cornerRadius, cornerRadius, 'S');
           }
         } catch {
           console.warn('Could not load front cover image');
         }
       }
 
-      // TITLE: preview `text-lg` (~16pt) with max-w ~78.5%
-      let y = imgY + imgSize + 0.30;
-      const titleMaxW = innerWidth * 0.785;
+      // Gap after image (mb-4 ≈ 0.22")
+      y = imgY + imgSize + 0.22;
+
+      // TITLE: preview `text-lg` (~18pt for print) with max-w-[220px]/280px ≈ 78.5%
+      const titleMaxW = innerWidth * 0.80;
       pdf.setTextColor(0, 0, 0);
       pdf.setFont('times', 'normal');
-      pdf.setFontSize(16);
+      pdf.setFontSize(18);
       const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, titleMaxW);
       pdf.text(splitTitle, centerX, y, { align: 'center' });
-      y += splitTitle.length * 0.26 + 0.15;
+      // Line height for 18pt ≈ 0.28"
+      y += splitTitle.length * 0.28 + 0.10; // mb-2 ≈ 0.10"
 
-      // Separator ~0.68"
-      pdf.setDrawColor(180, 180, 180);
-      pdf.setLineWidth(0.005);
+      // Separator: preview w-8 (32px/280px = 11.4% → 0.68")
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.007);
       const sepLen = 0.68;
       pdf.line(centerX - sepLen / 2, y, centerX + sepLen / 2, y);
-      y += 0.15;
+      y += 0.10; // mb-2
 
-      // SUBTITLE: ~5.5pt uppercase
+      // SUBTITLE: preview `text-[7px]` → ~7pt, tracking-[0.3em], near full width
       if (subtitle) {
-        const subtitleMaxW = innerWidth * 0.643;
+        const subtitleMaxW = innerWidth * 0.90; // almost full width like preview
         pdf.setFont('times', 'normal');
-        pdf.setFontSize(5.5);
-        pdf.setTextColor(120, 120, 120);
-        const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), subtitleMaxW).slice(0, 2);
-        pdf.text(subtitleLines, centerX, y, { align: 'center' });
-        y += subtitleLines.length * 0.12 + 0.08;
+        pdf.setFontSize(7);
+        pdf.setTextColor(140, 140, 140);
+        // Add letter spacing effect by using char spacing
+        const subtitleText = subtitle.toUpperCase();
+        const subtitleLines = pdf.splitTextToSize(subtitleText, subtitleMaxW).slice(0, 2);
+        pdf.text(subtitleLines, centerX, y, { align: 'center', charSpace: 0.04 });
+        y += subtitleLines.length * 0.14;
       }
 
-      // === BOTTOM BRANDING (flow after subtitle with fixed gap, not page-bottom anchored) ===
-      // The gap between subtitle and branding in the preview is roughly 1.2" equivalent.
-      y += 0.8; // gap to logo
+      // === BOTTOM BRANDING (anchored to bottom safe zone like preview's mt-auto) ===
+      // Preview uses `mt-auto` which pushes branding to bottom. We anchor to bottom safe zone.
+      const bottomSafe = pageHeight - safeEdge;
+      
+      // Work backwards from bottom:
+      // Disclaimer takes ~0.18" (2 lines at 5pt)
+      // Brand name takes ~0.12" 
+      // Gap between brand and disclaimer: 0.08"
+      // Logo takes ~0.20" (smaller to match preview proportions)
+      // Gap between logo and brand: 0.10"
+      
+      const disclaimerH = 0.18;
+      const brandH = 0.12;
+      const logoH = 0.20; // reduced from 0.35 to match preview's 24x24 in 280px container
+      const gap1 = 0.10; // logo to brand
+      const gap2 = 0.06; // brand to disclaimer
+      
+      const disclaimerY = bottomSafe - disclaimerH;
+      const brandY = disclaimerY - gap2 - brandH;
+      const logoEndY = brandY - gap1;
+      const logoStartY = logoEndY - logoH;
 
-      // Logo
-      const logoH = 0.35;
-      const lineGap = 0.08;
-      const logoY = y;
+      // Logo (smaller, matching 24x24 in 280px → ~8.5% → 0.20")
+      const lineGap = 0.05; // reduced proportionally
+      const logoW = 0.20;
+      const logoCenterY = logoStartY + logoH / 2;
       pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.012);
-      pdf.line(centerX - lineGap, logoY, centerX - lineGap, logoY + logoH);
-      pdf.line(centerX, logoY, centerX, logoY + logoH);
-      pdf.line(centerX + lineGap, logoY, centerX + lineGap, logoY + logoH);
-      pdf.line(centerX - lineGap - 0.06, logoY + logoH / 2, centerX + lineGap + 0.06, logoY + logoH / 2);
-      pdf.setLineWidth(0.01);
-      pdf.line(centerX + lineGap + 0.03, logoY, centerX + lineGap + 0.1, logoY);
-      pdf.line(centerX + lineGap + 0.1, logoY, centerX + lineGap + 0.1, logoY + 0.07);
-      y = logoY + logoH + 0.12;
+      pdf.setLineWidth(0.008);
+      // Three vertical lines
+      pdf.line(centerX - lineGap, logoStartY, centerX - lineGap, logoStartY + logoH);
+      pdf.line(centerX, logoStartY, centerX, logoStartY + logoH);
+      pdf.line(centerX + lineGap, logoStartY, centerX + lineGap, logoStartY + logoH);
+      // Horizontal crossbar
+      pdf.line(centerX - lineGap - 0.04, logoCenterY, centerX + lineGap + 0.04, logoCenterY);
+      // Corner fold
+      pdf.setLineWidth(0.006);
+      pdf.line(centerX + lineGap + 0.02, logoStartY, centerX + lineGap + 0.07, logoStartY);
+      pdf.line(centerX + lineGap + 0.07, logoStartY, centerX + lineGap + 0.07, logoStartY + 0.05);
 
-      // Brand name
+      // Brand name: preview text-[10px] → 10pt, muted color
       pdf.setFont('times', 'normal');
-      pdf.setFontSize(8);
-      pdf.setTextColor(140, 140, 140);
-      pdf.text('Loom & Page', centerX, y, { align: 'center' });
-      y += 0.18;
-
-      // Disclaimer (2 lines)
-      pdf.setFont('times', 'italic');
-      pdf.setFontSize(5);
+      pdf.setFontSize(10);
       pdf.setTextColor(160, 160, 160);
-      pdf.text('AI-generated content for creative inspiration only.', centerX, y, { align: 'center' });
-      pdf.text('Not professional advice.', centerX, y + 0.10, { align: 'center' });
+      pdf.text('Loom & Page', centerX, brandY + brandH, { align: 'center' });
+
+      // Disclaimer (2 lines): preview text-[6px] → 6pt italic
+      pdf.setFont('times', 'italic');
+      pdf.setFontSize(6);
+      pdf.setTextColor(180, 180, 180);
+      pdf.text('AI-generated content for creative inspiration only.', centerX, disclaimerY + 0.08, { align: 'center' });
+      pdf.text('Not professional advice.', centerX, disclaimerY + 0.16, { align: 'center' });
 
       // === DEBUG GUIDES (optional) ===
       if (includeGuides) {
