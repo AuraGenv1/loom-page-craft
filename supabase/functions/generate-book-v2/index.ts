@@ -22,39 +22,46 @@ serve(async (req) => {
     const topicTitleCase = toTitleCase(cleanTopic);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const prompt = `You are an expert book author. Create a complete book outline and write Chapter 1 for: "${cleanTopic}".
+    
+    // UPDATED PROMPT: Enforcing strict word counts for Title/Subtitle
+    const prompt = `You are an expert book author and publisher. Create a high-concept book outline and write Chapter 1 for the topic: "${cleanTopic}".
 
-TITLE FORMAT (STRICT - 3 LINES):
-- Line 1 (Topic Name): "${topicTitleCase}" (Title Case, the location/topic name only)
-- Line 2 (Subtitle): A unique, specific subtitle (NOT generic like "Your Complete Guide")
-- Line 3 (Description): "A Comprehensive Guide to ${topicTitleCase}"
+    STRICT COVER METADATA RULES:
+    1. MAIN TITLE (Max 4 Words): Create a punchy, evocative, or abstract title. 
+       - GOOD: "The Silent Ocean", "Digital Horizons", "Velvet & Steel".
+       - BAD: "A Complete History of Oceanography".
+    2. SUBTITLE (Max 8 Words): An intriguing, specific subtitle that hints at the value.
+       - GOOD: "Uncovering the secrets of the deep blue."
+       - BAD: "A comprehensive guide to everything about oceans."
+    
+    Return ONLY valid JSON in this exact format:
+    {
+      "main_title": "Your punchy 4-word title",
+      "subtitle": "Your intriguing 8-word subtitle",
+      "topic_name": "${topicTitleCase}",
+      "chapters": [
+        {"chapter_number": 1, "title": "Introduction"},
+        {"chapter_number": 2, "title": "Chapter 2 Title"},
+        {"chapter_number": 3, "title": "Chapter 3 Title"},
+        {"chapter_number": 4, "title": "Chapter 4 Title"},
+        {"chapter_number": 5, "title": "Chapter 5 Title"},
+        {"chapter_number": 6, "title": "Chapter 6 Title"},
+        {"chapter_number": 7, "title": "Chapter 7 Title"},
+        {"chapter_number": 8, "title": "Chapter 8 Title"},
+        {"chapter_number": 9, "title": "Chapter 9 Title"},
+        {"chapter_number": 10, "title": "Conclusion"}
+      ],
+      "chapter_1_content": "Full markdown content here..."
+    }
 
-Return ONLY valid JSON in this exact format:
-{
-  "title": "The unique subtitle for line 2",
-  "topic_name": "${topicTitleCase}",
-  "chapters": [
-    {"chapter_number": 1, "title": "Introduction"},
-    {"chapter_number": 2, "title": "Chapter 2 Title"},
-    {"chapter_number": 3, "title": "Chapter 3 Title"},
-    {"chapter_number": 4, "title": "Chapter 4 Title"},
-    {"chapter_number": 5, "title": "Chapter 5 Title"},
-    {"chapter_number": 6, "title": "Chapter 6 Title"},
-    {"chapter_number": 7, "title": "Chapter 7 Title"},
-    {"chapter_number": 8, "title": "Chapter 8 Title"},
-    {"chapter_number": 9, "title": "Chapter 9 Title"},
-    {"chapter_number": 10, "title": "Conclusion"}
-  ],
-  "chapter_1_content": "Full markdown content here"
-}
-
-CHAPTER 1 REQUIREMENTS:
-- Write approximately 1,500 words of high-quality, engaging content
-- Start with ONE image immediately after the opening paragraph: ![descriptive alt text](placeholder)
-- MUST include EXACTLY ONE image per chapter (placed after intro paragraph)
-- MUST include at least one Pro-Tip using this EXACT format: > **Pro-Tip:** Your tip text here
-- Use proper markdown headings (## and ###)
-- Include bullet points and lists where appropriate`;
+    CHAPTER 1 REQUIREMENTS:
+    - Write approximately 1,500 words of high-quality, engaging content.
+    - Start with ONE image immediately after the opening paragraph: ![descriptive alt text](placeholder)
+    - MUST include EXACTLY ONE image per chapter (placed after intro paragraph).
+    - MUST include at least one Pro-Tip using this EXACT format: > **Pro-Tip:** Your tip text here
+    - Use proper markdown headings (## and ###).
+    - Include bullet points and lists where appropriate.
+    - Tone: Professional, knowledgeable, yet accessible (Magazine style).`;
 
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY, {
       method: 'POST',
@@ -90,12 +97,13 @@ CHAPTER 1 REQUIREMENTS:
       throw new Error(`Failed to parse book data: ${(e as Error).message}`);
     }
 
+    // MAP RESPONSE: Use the new "main_title" for displayTitle
     return new Response(JSON.stringify({
-      title: aiData.title,
+      title: aiData.main_title || topicTitleCase,
       tableOfContents: aiData.chapters.map((ch: any) => ({ chapter: ch.chapter_number, title: ch.title })),
       chapter1Content: aiData.chapter_1_content,
-      displayTitle: aiData.topic_name || topicTitleCase,
-      subtitle: aiData.title,
+      displayTitle: aiData.main_title || topicTitleCase, // Used for Book Cover Title
+      subtitle: aiData.subtitle || aiData.title,          // Used for Book Cover Subtitle
       description: `A Comprehensive Guide to ${topicTitleCase}`,
       localResources: [],
       hasDisclaimer: false
