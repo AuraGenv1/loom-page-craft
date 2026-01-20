@@ -321,12 +321,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       let pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
       let pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
 
-      // If jsPDF produced the swapped dimensions, fall back to a portrait doc with explicit dimensions.
+      // If jsPDF produced a swapped page (9.25 × 12.485), recreate with swapped format
+      // but keep LANDSCAPE orientation so the final result is still 12.485 × 9.25.
       const isCorrect =
         Math.abs(pageWidth - desiredW) < 0.02 && Math.abs(pageHeight - desiredH) < 0.02;
-
       if (!isCorrect) {
-        pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [desiredW, desiredH] });
+        pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [desiredH, desiredW] });
         pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
         pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
       }
@@ -334,10 +334,48 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       return { pdf, pageWidth, pageHeight };
     };
 
+    const TRANSPARENT_PIXEL =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+    // Robust Image Converter (avoids CORS/canvas-taint issues)
+    const convertImageToBase64 = async (url: string): Promise<string> => {
+      if (!url) return TRANSPARENT_PIXEL;
+      if (url.startsWith('data:')) return url;
+
+      try {
+        const response = await fetch(url, { mode: 'cors' });
+        if (response.ok) {
+          const blob = await response.blob();
+          return await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch {
+        // ignore, fallback below
+      }
+
+      try {
+        const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
+          body: { url },
+        });
+        if (!error && data?.dataUrl) return data.dataUrl;
+      } catch {
+        // ignore
+      }
+
+      return TRANSPARENT_PIXEL;
+    };
+
     const imageUrlToSquareCoverJpegDataUrl = async (url: string, sizePx: number) => {
+      // Always load a base64 data URL first so the canvas doesn't get tainted.
+      const base64 = await convertImageToBase64(url);
+      if (!base64 || base64 === TRANSPARENT_PIXEL) return null;
+
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = url;
+      img.src = base64;
       await new Promise((r) => {
         img.onload = r;
         img.onerror = r;
@@ -411,7 +449,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.0);
       pdf.text(splitBody, backCenterX, backY, { align: 'center' });
 
-      backY += splitBody.length * 0.14 + 0.3;
+      // Use a consistent line-height derived from font size (pt -> in) instead of a magic constant.
+      const ptToIn = (pt: number) => pt / 72;
+      const bodyLineHeight = ptToIn(7) * 1.25;
+      backY += splitBody.length * bodyLineHeight + 0.28;
       pdf.setFont('times', 'bold');
       pdf.setFontSize(7);
       pdf.setTextColor(0, 0, 0);
@@ -440,7 +481,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
       // Match the preview's `p-5` padding (~0.43") and bottom spacing.
       const padding = 0.45;
-      const bottomPadding = 0.35; // slightly tighter than before to reduce perceived dead space
+      const bleed = 0.125; // KDP bleed per edge
+      const safeFromTrim = 0.25; // KDP safe distance from trim
+      const safeEdge = bleed + safeFromTrim; // distance from page edge to safe line
+      const bottomPadding = Math.max(0.45, safeEdge + 0.05); // keep all branding inside safe
       const innerWidth = coverWidth - padding * 2;
 
       // IMAGE: preview uses `w-[52%] aspect-square`
@@ -480,6 +524,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       y += 0.17; // mb-2
 
       // SUBTITLE: preview `text-[7px] uppercase` line-clamp-2, max-w 180px (~64.3% of 280px)
+      let yAfterSubtitle = y;
       if (subtitle) {
         const subtitleMaxW = innerWidth * 0.643;
         pdf.setFont('times', 'normal');
@@ -487,10 +532,20 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setTextColor(120, 120, 120);
         const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), subtitleMaxW).slice(0, 2);
         pdf.text(subtitleLines, centerX, y, { align: 'center' });
+        // estimate subtitle block height (pt->in * line-height)
+        const ptToIn = (pt: number) => pt / 72;
+        const subtitleLineHeight = ptToIn(5.5) * 1.35;
+        yAfterSubtitle = y + subtitleLines.length * subtitleLineHeight;
+      } else {
+        yAfterSubtitle = y;
       }
 
       // === BOTTOM BRANDING (match preview block: logo + brand + disclaimer near bottom) ===
-      const bottomY = pageHeight - bottomPadding;
+      // Keep disclaimer safely inside the green safe line and avoid exaggerated dead-space.
+      let bottomY = pageHeight - bottomPadding;
+      // If the gap from subtitle -> branding is huge, pull branding up (still within safe).
+      const maxGap = 2.0; // inches
+      if (bottomY - yAfterSubtitle > maxGap) bottomY = yAfterSubtitle + maxGap;
 
       // Disclaimer (2 lines to match intended wrap)
       pdf.setFont('times', 'italic');
