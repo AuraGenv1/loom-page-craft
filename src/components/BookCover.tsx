@@ -468,51 +468,56 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.setTextColor(0, 0, 0);
       }
       
-      // === BACK COVER TEXT - Matched to preview exactly ===
+      // === BACK COVER TEXT - Calibrated to match preview EXACTLY ===
+      // Preview: 130px wide back cover, 170px tall content area
       // Preview uses: text-[6px] header, text-[4px] body/CTA, max-w-[90%], leading-relaxed
-      // Preview back cover: 130px wide → PDF: 6" wide
-      // Scale factor: 6" / 130px = 0.0462" per px
+      // 
+      // Key insight: Preview is scaled down by ~3.5x from actual PDF
+      // Preview text-[6px] at 130px width ≈ 10pt at 6" PDF width
+      // Preview text-[4px] at 130px width ≈ 6.5pt at 6" PDF width
       
-      // Body width: max-w-[90%] of 130px = 117px → 5.4" (90% of 6")
+      // Body width: max-w-[90%] = 5.4"
       const bodyWidth = coverWidth * 0.90;
       
       // === SECTION 1: Header "CREATED WITH LOOM & PAGE" ===
-      // Preview: text-[6px] tracking-wide uppercase
+      // Preview: text-[6px] tracking-wide uppercase, centered at top
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(FONT_SIZES.backHeader);
       const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), bodyWidth);
-      pdf.text(splitHeader, backCenterX, 0.60, { 
+      // Position at ~7% from top (matching preview's top padding)
+      pdf.text(splitHeader, backCenterX, 0.65, { 
         align: 'center',
         charSpace: CHAR_SPACING.trackingWide
       });
 
-      // Dedication (if present) - between header and body
-      // Preview: text-[4px] italic
-      if (dedicationText) {
-        pdf.setFont(fontName, 'italic');
-        pdf.setFontSize(FONT_SIZES.backDedication);
-        pdf.setTextColor(80, 80, 80);
-        pdf.text(dedicationText, backCenterX, 0.95, { align: 'center' });
-      }
-
       // === SECTION 2: Body paragraph ===
       // Preview: text-[4px] leading-relaxed max-w-[90%]
+      // Starts right after header with small gap
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(FONT_SIZES.backBody);
       pdf.setTextColor(40, 40, 40);
       const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
-      const bodyStartY = dedicationText ? 1.20 : 1.00;
+      const bodyStartY = 0.90; // Closer to header
       pdf.text(splitBody, backCenterX, bodyStartY, { 
         align: 'center', 
         lineHeightFactor: LINE_HEIGHTS.relaxed
       });
 
+      // Dedication (if present) - between body and CTA
+      if (dedicationText) {
+        pdf.setFont(fontName, 'italic');
+        pdf.setFontSize(FONT_SIZES.backDedication);
+        pdf.setTextColor(80, 80, 80);
+        const lineHeight = (FONT_SIZES.backBody / 72) * LINE_HEIGHTS.relaxed;
+        const dedicationY = bodyStartY + (splitBody.length * lineHeight) + 0.15;
+        pdf.text(dedicationText, backCenterX, dedicationY, { align: 'center' });
+      }
+
       // === SECTION 3: CTA ===
-      // Preview: text-[4px] font-bold
-      // Position based on body height
+      // Preview: text-[4px] font-bold, positioned right after body
       const lineHeight = (FONT_SIZES.backBody / 72) * LINE_HEIGHTS.relaxed;
-      const ctaY = bodyStartY + (splitBody.length * lineHeight) + 0.25;
+      const ctaY = bodyStartY + (splitBody.length * lineHeight) + (dedicationText ? 0.30 : 0.15);
       pdf.setFont(fontName, 'bold');
       pdf.setFontSize(FONT_SIZES.backCTA);
       pdf.setTextColor(0, 0, 0);

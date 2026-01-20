@@ -78,11 +78,14 @@ export function setSerifFont(pdf: jsPDF, hasPlayfair: boolean, style: 'normal' |
 // text-[4px] → 4 * 3.32 = ~13pt (visually use 9pt)
 
 export const FONT_SIZES = {
-  // Back cover - matched to preview
-  backHeader: 14,      // text-[6px] scaled
-  backBody: 9,         // text-[4px] scaled  
-  backCTA: 9,          // text-[4px] font-bold scaled
-  backDedication: 8,   // text-[4px] italic
+  // Back cover - calibrated to match preview proportions
+  // Preview: 130px back cover with text-[6px] header = 6/130 = 4.6% of width
+  // PDF: 6" back cover, so header should be visually similar = ~10pt
+  // Preview: text-[4px] body = 4/130 = 3% of width → ~6-7pt
+  backHeader: 10,      // text-[6px] → proportionally smaller
+  backBody: 6.5,       // text-[4px] → very small for proper wrapping
+  backCTA: 6.5,        // text-[4px] font-bold
+  backDedication: 6,   // text-[4px] italic
   // Front cover
   title: 22,
   subtitle: 9,
