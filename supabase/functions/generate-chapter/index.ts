@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Retry helper with exponential backoff
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      
+      // If rate limited (429) or server error (5xx), retry
+      if (res.status === 429 || res.status >= 500) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`Attempt ${attempt} failed with ${res.status}, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return res; // Return non-retryable errors
+    } catch (e) {
+      if (attempt === maxRetries) throw e;
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`Attempt ${attempt} network error, retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -14,8 +39,11 @@ serve(async (req) => {
 
     console.log(`Generating Chapter ${chapterNumber}: "${chapterTitle}" for "${topic}"`);
 
-    // Generate Content with Gemini
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
+
     const prompt = `STRICT RULE: If the book topic is academic (Math, Algebra, History, Science, Philosophy), DO NOT output any markdown image syntax. Output ONLY text. Images are forbidden for abstract topics.
 
 Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${topic}".
@@ -25,26 +53,39 @@ CRITICAL INSTRUCTION FOR IMAGES:
 - If the topic is VISUAL (Travel, Cooking, DIY, Art, Photography, Architecture, Nature, Fashion, Interior Design), you MUST start the chapter with a markdown image placeholder. Format: ![Detailed visual description](placeholder)
 - If the topic is ABSTRACT (Mathematics, Philosophy, Business Theory, History, Finance, Programming, Science Theory), DO NOT include any image placeholder. Focus purely on text content to optimize for print costs.
 
-Context: ${tableOfContents?.map((c: any) => c.title).join(', ') || ''}
+Context: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 Language: ${language}.
 Format: Markdown. 1000 words. Professional tone. Include a > **Pro-Tip**.`;
 
-    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7 }
-      }),
-    });
+    const geminiRes = await fetchWithRetry(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7 }
+        }),
+      }
+    );
 
     const geminiData = await geminiRes.json();
+    
+    // Check for API errors
+    if (geminiData.error) {
+      console.error('Gemini API error:', geminiData.error);
+      throw new Error(`Gemini API error: ${geminiData.error.message || JSON.stringify(geminiData.error)}`);
+    }
+
     let content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Clean markdown
+    // Clean markdown wrappers
     content = content.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
 
-    if (!content) throw new Error('Gemini returned empty content');
+    if (!content) {
+      console.error('Empty content. Full response:', JSON.stringify(geminiData));
+      throw new Error('Gemini returned empty content - please try again');
+    }
 
     console.log(`Successfully generated Chapter ${chapterNumber}, length: ${content.length}`);
 
