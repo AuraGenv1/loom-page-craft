@@ -170,17 +170,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     }, [currentUrlIndex, displayUrl, lockedUrls.length]);
     
-    // Parse title for premium magazine styling (Category: Main Title)
-    const parsedTitle = (() => {
-      if (title.includes(':')) {
-        const [category, ...rest] = title.split(':');
-        return {
-          category: category.trim(),
-          mainTitle: rest.join(':').trim()
-        };
-      }
-      return { category: null, mainTitle: title };
-    })();
+    // Use full title without category splitting (user requested just title + subtitle)
+    const parsedTitle = { category: null as string | null, mainTitle: title };
     
     useEffect(() => {
       // Timeout fallback: if image doesn't load in 15s, try next or show fallback
