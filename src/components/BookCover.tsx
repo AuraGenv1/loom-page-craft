@@ -1215,10 +1215,8 @@ p { margin-bottom: 1em; }`);
                           {backCoverCTA}
                         </p>
                       </div>
-                      {/* Bottom 1/3 Empty Space (Visual Indicator) */}
-                      <div className="h-[33%] w-full border-t border-dashed border-gray-100 flex items-end justify-center pb-2">
-                        <span className="text-[7px] text-gray-300 uppercase tracking-widest">Barcode Area (Keep Clear)</span>
-                      </div>
+                      {/* Bottom 1/3 Empty Space */}
+                      <div className="h-[33%] w-full flex-shrink-0" />
                     </div>
                   </div>
                   {/* Settings Column */}
@@ -1473,9 +1471,7 @@ p { margin-bottom: 1em; }`);
                           </p>
                         </div>
                         {/* Bottom 1/3 Empty Space */}
-                        <div className="h-[33%] w-full border-t border-dashed border-gray-200 flex items-end justify-center pb-1">
-                          <span className="text-[3px] text-gray-300 uppercase tracking-widest">Barcode Area</span>
-                        </div>
+                        <div className="h-[33%] w-full flex-shrink-0" />
                       </div>
                       {/* Spine - Smaller text */}
                       <div 
@@ -1562,11 +1558,6 @@ p { margin-bottom: 1em; }`);
                   </div>
                 </div>
 
-                  <Button onClick={handleDownloadKDP} className="w-full max-w-md mx-auto block" size="lg">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download KDP Cover (Full Wrap PDF)
-                  </Button>
-                  
                   <p className="text-xs text-muted-foreground text-center">
                     PDF dimensions: 12.485" × 9.25" (optimized for 6×9" trim with ~200 page spine)
                   </p>
@@ -1634,6 +1625,31 @@ p { margin-bottom: 1em; }`);
                           <FileText className="w-4 h-4 mr-2" />
                         )}
                         Download Manuscript PDF
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        className="w-full"
+                        onClick={async () => {
+                          const blob = await generateCoverJPGBlob();
+                          if (blob) {
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_Kindle_Cover.jpg`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast.success('Kindle Cover (JPG) downloaded!');
+                          }
+                        }}
+                      >
+                        <div className="flex items-center">
+                          <div className="bg-primary/10 p-1 rounded mr-2">
+                            <div className="w-3 h-4 border border-current rounded-[1px]" />
+                          </div>
+                          Download Kindle Cover (JPG)
+                        </div>
                       </Button>
                       <Button 
                         variant="outline"
