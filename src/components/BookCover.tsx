@@ -437,11 +437,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const backSafeLeft = 0.375;
       const backSafeTop = 0.375;
       const backInnerW = coverWidth - backSafeLeft * 2;
+      
+      // Back cover text widths - match preview's max-w-[90%] styling
+      const headerMaxW = backInnerW * 0.95; // Header: almost full safe zone width
+      const bodyMaxW = backInnerW * 0.70;   // Body: narrower to wrap to 5 lines like preview
 
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(FONT_SIZES.backHeader);
-      pdf.text(backCoverTitle.toUpperCase(), backCenterX, backSafeTop + 0.5, { align: 'center' });
+      // Header - split to size to use full width
+      const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), headerMaxW);
+      pdf.text(splitHeader, backCenterX, backSafeTop + 0.5, { align: 'center' });
 
       let backY = backSafeTop + 1.0;
       if (dedicationText) {
@@ -455,11 +461,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(FONT_SIZES.backBody);
       pdf.setTextColor(40, 40, 40);
-      const splitBody = pdf.splitTextToSize(backCoverBody, backInnerW - 0.5);
-      pdf.text(splitBody, backCenterX, backY, { align: 'center' });
-
+      // Body - narrower width to create 5-line wrap matching preview
+      const splitBody = pdf.splitTextToSize(backCoverBody, bodyMaxW);
+      // Increased line height multiplier (2.0) to match preview's leading-relaxed spacing
       const ptToIn = (pt: number) => pt / 72;
-      const bodyLineHeight = ptToIn(FONT_SIZES.backBody) * 1.4;
+      const bodyLineHeight = ptToIn(FONT_SIZES.backBody) * 2.0;
+      pdf.text(splitBody, backCenterX, backY, { align: 'center', lineHeightFactor: 2.0 });
+
       backY += splitBody.length * bodyLineHeight + 0.25;
       pdf.setFont(fontName, 'bold');
       pdf.setFontSize(FONT_SIZES.backCTA);
