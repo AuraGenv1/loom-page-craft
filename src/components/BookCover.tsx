@@ -15,6 +15,7 @@ import JSZip from 'jszip';
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
+import { registerPlayfairFont, setSerifFont, FONT_SIZES, LINE_HEIGHTS } from '@/lib/pdfFonts';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -413,7 +414,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
       const pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
 
-      // KDP spine width currently fixed for ~200 pages; keep existing behavior.
+      // Register Playfair Display font for consistent typography
+      const hasPlayfair = await registerPlayfairFont(pdf);
+      const fontName = hasPlayfair ? 'PlayfairDisplay' : 'times';
+
+      // KDP spine width currently fixed for ~200 pages
       const spineWidth = 0.485;
       const coverWidth = (pageWidth - spineWidth) / 2;
 
@@ -429,32 +434,35 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       pdf.rect(0, 0, coverWidth, pageHeight, 'F');
 
       const backCenterX = coverWidth / 2;
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(8);
-      pdf.text(backCoverTitle.toUpperCase(), backCenterX, 1.0, { align: 'center' });
+      const backSafeLeft = 0.375;
+      const backSafeTop = 0.375;
+      const backInnerW = coverWidth - backSafeLeft * 2;
 
-      let backY = 1.5;
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.backHeader);
+      pdf.text(backCoverTitle.toUpperCase(), backCenterX, backSafeTop + 0.5, { align: 'center' });
+
+      let backY = backSafeTop + 1.0;
       if (dedicationText) {
-        pdf.setFont('times', 'italic');
-        pdf.setFontSize(7);
+        pdf.setFont(fontName, 'italic');
+        pdf.setFontSize(FONT_SIZES.backDedication);
         pdf.setTextColor(80, 80, 80);
         pdf.text(dedicationText, backCenterX, backY, { align: 'center' });
         backY += 0.35;
       }
 
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(7);
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.backBody);
       pdf.setTextColor(40, 40, 40);
-      const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.0);
+      const splitBody = pdf.splitTextToSize(backCoverBody, backInnerW - 0.5);
       pdf.text(splitBody, backCenterX, backY, { align: 'center' });
 
-      // Use a consistent line-height derived from font size (pt -> in) instead of a magic constant.
       const ptToIn = (pt: number) => pt / 72;
-      const bodyLineHeight = ptToIn(7) * 1.25;
-      backY += splitBody.length * bodyLineHeight + 0.28;
-      pdf.setFont('times', 'bold');
-      pdf.setFontSize(7);
+      const bodyLineHeight = ptToIn(FONT_SIZES.backBody) * 1.4;
+      backY += splitBody.length * bodyLineHeight + 0.25;
+      pdf.setFont(fontName, 'bold');
+      pdf.setFontSize(FONT_SIZES.backCTA);
       pdf.setTextColor(0, 0, 0);
       pdf.text(backCoverCTA, backCenterX, backY, { align: 'center' });
 
@@ -466,34 +474,30 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (showSpineText) {
         const textRgb = hexToRgb(spineTextColor);
         pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-        pdf.setFont('times', 'normal');
-        pdf.setFontSize(6);
+        pdf.setFont(fontName, 'normal');
+        pdf.setFontSize(FONT_SIZES.spineEdition);
         pdf.text(editionText, coverWidth + spineWidth / 2, 0.4, { angle: 90, align: 'left' });
-        pdf.setFontSize(8);
+        pdf.setFontSize(FONT_SIZES.spineTitle);
         pdf.text((spineText || title).slice(0, 35), coverWidth + spineWidth / 2, pageHeight - 0.4, { angle: 90, align: 'right' });
       }
 
-      // === FRONT COVER (pixel-perfect match to HTML preview) ===
-      // The preview uses a 280px-wide 3:4 container scaled down. We map that to the 6" cover.
+      // === FRONT COVER ===
+      // Match the preview exactly: 280px container maps to 6" cover
+      // Preview uses p-5 (~18px padding) = 18/280 = 6.4% → 0.38" on 6" cover
       const frontX = coverWidth + spineWidth;
       const centerX = frontX + coverWidth / 2;
       pdf.setFillColor(255, 255, 255);
       pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-      // KDP safe margins (content should stay inside safe zone: 0.375" from page edge)
-      const bleed = 0.125;
-      const safeFromTrim = 0.25;
-      const safeEdge = bleed + safeFromTrim; // 0.375" from outer edge
-
-      // Match the preview's padding (p-5 on 280px = ~5.36% padding → on 6" = 0.32")
-      const padding = 0.38;
+      // Safe zone: 0.375" from page edges
+      const safeEdge = 0.375;
+      const padding = 0.40; // Slightly more than safe edge for visual padding
       const innerWidth = coverWidth - padding * 2;
 
-      // Position content starting from safe zone top
-      const contentStartY = safeEdge;
-      let y = contentStartY;
+      // Start content inside safe zone
+      let y = safeEdge + 0.08;
 
-      // IMAGE: preview uses `w-[52%] aspect-square` with mb-4 (~0.22" gap after)
+      // IMAGE: preview `w-[52%] aspect-square` with rounded-lg and mb-4
       const imgSize = innerWidth * 0.52;
       const imgX = centerX - imgSize / 2;
       const imgY = y;
@@ -502,18 +506,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         try {
           const dataUrl = await imageUrlToSquareCoverJpegDataUrl(displayUrl, 1400);
           if (dataUrl) {
-            // Draw rounded rect clip approximation with light border
-            const cornerRadius = 0.08; // matches rounded-lg
-            pdf.setDrawColor(220, 220, 220);
-            pdf.setLineWidth(0.01);
-            // Draw rounded rectangle border
-            pdf.roundedRect(imgX, imgY, imgSize, imgSize, cornerRadius, cornerRadius, 'S');
-            // Add image (jsPDF doesn't support clip, so image goes on top)
+            const cornerRadius = 0.10; // rounded-lg equivalent
+            // Add image
             pdf.addImage(dataUrl, 'JPEG', imgX, imgY, imgSize, imgSize);
-            // Re-draw border on top to give clean edge appearance
-            pdf.setDrawColor(0, 0, 0);
-            pdf.setLineWidth(0.005);
+            // Draw rounded border on top
             pdf.setDrawColor(200, 200, 200);
+            pdf.setLineWidth(0.012);
             pdf.roundedRect(imgX, imgY, imgSize, imgSize, cornerRadius, cornerRadius, 'S');
           }
         } catch {
@@ -521,54 +519,54 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
       }
 
-      // Gap after image (mb-4 ≈ 0.22")
-      y = imgY + imgSize + 0.22;
+      // Gap after image (mb-4 = 16px/280px = 0.34" scaled)
+      y = imgY + imgSize + 0.25;
 
-      // TITLE: preview `text-lg` (~18pt for print) with max-w-[220px]/280px ≈ 78.5%
-      const titleMaxW = innerWidth * 0.80;
+      // TITLE: preview `text-lg` = 18px → scaled to ~22pt for print
+      // max-w-[220px]/280px = 78.5%
+      const titleMaxW = innerWidth * 0.82;
       pdf.setTextColor(0, 0, 0);
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(18);
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.title);
       const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, titleMaxW);
       pdf.text(splitTitle, centerX, y, { align: 'center' });
-      // Line height for 18pt ≈ 0.28"
-      y += splitTitle.length * 0.28 + 0.10; // mb-2 ≈ 0.10"
+      y += splitTitle.length * LINE_HEIGHTS.title + 0.08;
 
-      // Separator: preview w-8 (32px/280px = 11.4% → 0.68")
-      pdf.setDrawColor(200, 200, 200);
-      pdf.setLineWidth(0.007);
-      const sepLen = 0.68;
+      // Separator: preview w-8 = 32px/280px = 11.4% of width → 0.68"
+      pdf.setDrawColor(180, 180, 180);
+      pdf.setLineWidth(0.008);
+      const sepLen = 0.70;
       pdf.line(centerX - sepLen / 2, y, centerX + sepLen / 2, y);
-      y += 0.10; // mb-2
+      y += 0.12;
 
-      // SUBTITLE: preview `text-[7px]` → ~7pt, tracking-[0.3em], near full width
+      // SUBTITLE: preview `text-[7px]` with tracking-[0.3em]
+      // Subtitle should span nearly full width like preview
       if (subtitle) {
-        const subtitleMaxW = innerWidth * 0.90; // almost full width like preview
-        pdf.setFont('times', 'normal');
-        pdf.setFontSize(7);
+        const subtitleMaxW = innerWidth * 0.95;
+        pdf.setFont(fontName, 'normal');
+        pdf.setFontSize(FONT_SIZES.subtitle);
         pdf.setTextColor(140, 140, 140);
-        // Add letter spacing effect by using char spacing
         const subtitleText = subtitle.toUpperCase();
         const subtitleLines = pdf.splitTextToSize(subtitleText, subtitleMaxW).slice(0, 2);
-        pdf.text(subtitleLines, centerX, y, { align: 'center', charSpace: 0.04 });
-        y += subtitleLines.length * 0.14;
+        // Apply letter spacing via charSpace (0.3em ≈ 0.03" at 9pt)
+        pdf.text(subtitleLines, centerX, y, { align: 'center', charSpace: 0.025 });
+        y += subtitleLines.length * LINE_HEIGHTS.subtitle;
       }
 
-      // === BOTTOM BRANDING (anchored to bottom safe zone like preview's mt-auto) ===
-      // Preview uses `mt-auto` which pushes branding to bottom. We anchor to bottom safe zone.
-      const bottomSafe = pageHeight - safeEdge;
+      // === BOTTOM BRANDING (mt-auto in preview = anchored to bottom) ===
+      const bottomSafe = pageHeight - safeEdge - 0.08;
       
-      // Work backwards from bottom:
-      // Disclaimer takes ~0.18" (2 lines at 5pt)
-      // Brand name takes ~0.12" 
-      // Gap between brand and disclaimer: 0.08"
-      // Logo takes ~0.20" (smaller to match preview proportions)
-      // Gap between logo and brand: 0.10"
+      // Calculate positions from bottom up:
+      // Disclaimer: 2 lines at 7pt ≈ 0.20" total
+      // Gap: 0.06"
+      // Brand name: 11pt ≈ 0.15"
+      // Gap: 0.12"
+      // Logo: 0.22" (matching preview's 24px in 280px = 8.5%)
       
-      const disclaimerH = 0.18;
-      const brandH = 0.12;
-      const logoH = 0.20; // reduced from 0.35 to match preview's 24x24 in 280px container
-      const gap1 = 0.10; // logo to brand
+      const disclaimerH = 0.20;
+      const brandH = 0.15;
+      const logoH = 0.22;
+      const gap1 = 0.12; // logo to brand
       const gap2 = 0.06; // brand to disclaimer
       
       const disclaimerY = bottomSafe - disclaimerH;
@@ -576,35 +574,34 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const logoEndY = brandY - gap1;
       const logoStartY = logoEndY - logoH;
 
-      // Logo (smaller, matching 24x24 in 280px → ~8.5% → 0.20")
-      const lineGap = 0.05; // reduced proportionally
-      const logoW = 0.20;
+      // Logo: 3 vertical lines + crossbar + corner fold
+      const lineGap = 0.055;
       const logoCenterY = logoStartY + logoH / 2;
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.008);
+      pdf.setDrawColor(60, 60, 60); // Slightly muted like preview opacity
+      pdf.setLineWidth(0.010);
       // Three vertical lines
       pdf.line(centerX - lineGap, logoStartY, centerX - lineGap, logoStartY + logoH);
       pdf.line(centerX, logoStartY, centerX, logoStartY + logoH);
       pdf.line(centerX + lineGap, logoStartY, centerX + lineGap, logoStartY + logoH);
       // Horizontal crossbar
-      pdf.line(centerX - lineGap - 0.04, logoCenterY, centerX + lineGap + 0.04, logoCenterY);
-      // Corner fold
-      pdf.setLineWidth(0.006);
-      pdf.line(centerX + lineGap + 0.02, logoStartY, centerX + lineGap + 0.07, logoStartY);
-      pdf.line(centerX + lineGap + 0.07, logoStartY, centerX + lineGap + 0.07, logoStartY + 0.05);
+      pdf.line(centerX - lineGap - 0.05, logoCenterY, centerX + lineGap + 0.05, logoCenterY);
+      // Corner fold (top-right)
+      pdf.setLineWidth(0.008);
+      pdf.line(centerX + lineGap + 0.03, logoStartY, centerX + lineGap + 0.08, logoStartY);
+      pdf.line(centerX + lineGap + 0.08, logoStartY, centerX + lineGap + 0.08, logoStartY + 0.055);
 
-      // Brand name: preview text-[10px] → 10pt, muted color
-      pdf.setFont('times', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(160, 160, 160);
+      // Brand name: "Loom & Page"
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.brand);
+      pdf.setTextColor(140, 140, 140);
       pdf.text('Loom & Page', centerX, brandY + brandH, { align: 'center' });
 
-      // Disclaimer (2 lines): preview text-[6px] → 6pt italic
-      pdf.setFont('times', 'italic');
-      pdf.setFontSize(6);
-      pdf.setTextColor(180, 180, 180);
+      // Disclaimer (2 lines)
+      pdf.setFont(fontName, 'italic');
+      pdf.setFontSize(FONT_SIZES.disclaimer);
+      pdf.setTextColor(160, 160, 160);
       pdf.text('AI-generated content for creative inspiration only.', centerX, disclaimerY + 0.08, { align: 'center' });
-      pdf.text('Not professional advice.', centerX, disclaimerY + 0.16, { align: 'center' });
+      pdf.text('Not professional advice.', centerX, disclaimerY + 0.17, { align: 'center' });
 
       // === DEBUG GUIDES (optional) ===
       if (includeGuides) {
