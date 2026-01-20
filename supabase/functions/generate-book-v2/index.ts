@@ -83,17 +83,34 @@ serve(async (req) => {
     }
     let cleanJson = jsonMatch[0];
 
-    // 2. Sanitize: Remove bad control characters but KEEP formatting
-    cleanJson = cleanJson.replace(/[\u0000-\u001F]+/g, (match: string) => {
-      if (match === '\n' || match === '\r' || match === '\t') return match;
-      return '';
+    // 2. Aggressive JSON sanitization to handle control characters in strings
+    // First, escape unescaped control characters within string values
+    cleanJson = cleanJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, (char: string) => {
+      // Allow actual newlines/tabs that are part of JSON structure
+      if (char === '\n' || char === '\r' || char === '\t') return char;
+      // Convert control chars to their escaped form or remove
+      const code = char.charCodeAt(0);
+      if (code === 10) return '\\n';  // newline
+      if (code === 13) return '\\r';  // carriage return
+      if (code === 9) return '\\t';   // tab
+      return ''; // Remove other control characters
+    });
+    
+    // 3. Fix common JSON issues: unescaped quotes within strings
+    // Replace literal newlines inside JSON string values with \n
+    cleanJson = cleanJson.replace(/"([^"]*?)"/g, (_match: string, content: string) => {
+      const escaped = content
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
+      return `"${escaped}"`;
     });
 
     let aiData;
     try {
       aiData = JSON.parse(cleanJson);
     } catch (e) {
-      console.error("JSON Parse Failed. Cleaned Text:", cleanJson);
+      console.error("JSON Parse Failed. Cleaned Text:", cleanJson.substring(0, 500));
       throw new Error(`Failed to parse book data: ${(e as Error).message}`);
     }
 
