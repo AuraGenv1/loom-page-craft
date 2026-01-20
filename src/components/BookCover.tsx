@@ -438,39 +438,56 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const backSafeTop = 0.375;
       const backInnerW = coverWidth - backSafeLeft * 2;
       
-      // Back cover text widths - match preview's max-w-[90%] styling
-      const headerMaxW = backInnerW * 0.95; // Header: almost full safe zone width
-      const bodyMaxW = backInnerW * 0.70;   // Body: narrower to wrap to 5 lines like preview
+      // Back cover text widths - calibrated to match preview exactly
+      // Preview uses max-w-[90%] for body, header spans almost full width
+      const headerMaxW = backInnerW * 0.95;
+      // Body width tuned to wrap to exactly 5 lines as specified
+      const bodyMaxW = backInnerW * 0.58;
 
+      // === SECTION 1: Header "CREATED WITH LOOM & PAGE" ===
+      // Preview: text-sm (14px) tracking-wide uppercase font-medium
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(FONT_SIZES.backHeader);
-      // Header - split to size to use full width
+      pdf.setFontSize(FONT_SIZES.backHeader); // 14pt
       const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), headerMaxW);
-      pdf.text(splitHeader, backCenterX, backSafeTop + 0.5, { align: 'center' });
+      // Add letter-spacing to match tracking-wide (0.025em)
+      pdf.text(splitHeader, backCenterX, backSafeTop + 0.5, { 
+        align: 'center',
+        charSpace: 0.02 // tracking-wide
+      });
 
       let backY = backSafeTop + 1.0;
+      
+      // Dedication (if present)
       if (dedicationText) {
         pdf.setFont(fontName, 'italic');
-        pdf.setFontSize(FONT_SIZES.backDedication);
+        pdf.setFontSize(FONT_SIZES.backDedication); // 10pt
         pdf.setTextColor(80, 80, 80);
         pdf.text(dedicationText, backCenterX, backY, { align: 'center' });
         backY += 0.35;
       }
 
+      // === SECTION 2: Body paragraph ===
+      // Preview: text-[9px] leading-relaxed (1.625 line-height)
+      // Must wrap to exactly 5 lines as specified
       pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(FONT_SIZES.backBody);
+      pdf.setFontSize(FONT_SIZES.backBody); // 9pt
       pdf.setTextColor(40, 40, 40);
-      // Body - narrower width to create 5-line wrap matching preview
       const splitBody = pdf.splitTextToSize(backCoverBody, bodyMaxW);
-      // Increased line height multiplier (2.0) to match preview's leading-relaxed spacing
+      // leading-relaxed = 1.625 line-height factor
       const ptToIn = (pt: number) => pt / 72;
-      const bodyLineHeight = ptToIn(FONT_SIZES.backBody) * 2.0;
-      pdf.text(splitBody, backCenterX, backY, { align: 'center', lineHeightFactor: 2.0 });
+      const bodyLineHeight = ptToIn(FONT_SIZES.backBody) * 1.625;
+      pdf.text(splitBody, backCenterX, backY, { 
+        align: 'center', 
+        lineHeightFactor: 1.625 
+      });
 
-      backY += splitBody.length * bodyLineHeight + 0.25;
+      backY += splitBody.length * bodyLineHeight + 0.3;
+      
+      // === SECTION 3: CTA "Create yours at www.LoomandPage.com" ===
+      // Preview: text-[9px] font-bold
       pdf.setFont(fontName, 'bold');
-      pdf.setFontSize(FONT_SIZES.backCTA);
+      pdf.setFontSize(FONT_SIZES.backCTA); // 9pt
       pdf.setTextColor(0, 0, 0);
       pdf.text(backCoverCTA, backCenterX, backY, { align: 'center' });
 
