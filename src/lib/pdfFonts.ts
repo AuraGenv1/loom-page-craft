@@ -84,14 +84,24 @@ export const FONT_SIZES = {
   brand: 11,
   // Preview text-[6px] → ~8pt for disclaimer
   disclaimer: 7,
-  // Back cover
-  backHeader: 12,
-  backBody: 10,
-  backCTA: 10,
-  backDedication: 9,
+  // Back cover - matched to preview CSS
+  // Section 1: text-sm (14px) = 14pt
+  backHeader: 14,
+  // Section 2: text-[9px] = 9pt
+  backBody: 9,
+  // Section 3: text-[9px] font-bold = 9pt
+  backCTA: 9,
+  // Dedication: text-[10px] = 10pt
+  backDedication: 10,
   // Spine
   spineEdition: 7,
   spineTitle: 9,
+};
+
+// Letter spacing mapping (charSpace in jsPDF)
+// tracking-wide = 0.025em in Tailwind
+export const CHAR_SPACING = {
+  trackingWide: 0.02, // For back cover header "tracking-wide"
 };
 
 // Line heights in inches for proper vertical spacing
