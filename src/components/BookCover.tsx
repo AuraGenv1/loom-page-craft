@@ -1768,30 +1768,6 @@ p { margin-bottom: 1em; }`);
                             <span className="text-[5px] text-orange-600 font-medium uppercase tracking-wide">Barcode Zone</span>
                           </div>
                           
-                          {/* DEBUG: Numbered Grid Overlay on Back Cover */}
-                          <div className="absolute pointer-events-none z-20" 
-                            style={{ 
-                              left: '0', 
-                              top: '0', 
-                              width: 'calc(50% - 12px)', // back cover width
-                              height: '100%' 
-                            }}
-                          >
-                            {/* Vertical grid lines every 10px with labels */}
-                            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130].map((x) => (
-                              <div key={`v-${x}`} className="absolute" style={{ left: `${x}px`, top: 0, bottom: 0 }}>
-                                <div className="w-px h-full bg-gray-300/60" />
-                                <span className="absolute top-0 text-[3px] text-gray-400 ml-0.5">{x}</span>
-                              </div>
-                            ))}
-                            {/* Horizontal grid lines every 10px with labels */}
-                            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170].map((y) => (
-                              <div key={`h-${y}`} className="absolute" style={{ top: `${y}px`, left: 0, right: 0 }}>
-                                <div className="h-px w-full bg-gray-300/60" />
-                                <span className="absolute left-0 text-[3px] text-gray-400 mt-0.5">{y}</span>
-                              </div>
-                            ))}
-                          </div>
                         </>
                       )}
                       
@@ -1968,14 +1944,6 @@ p { margin-bottom: 1em; }`);
                       >
                         <Download className="w-4 h-4 mr-2" />
                         Download Cover PDF
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={handleDownloadKDPDebugGuides} 
-                        className="w-full"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Cover PDF (with Guides)
                       </Button>
                       <Button 
                         variant="outline"
