@@ -316,131 +316,147 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Download KDP Full Wrap PDF - With Text Overlays
+    // Download KDP Full Wrap PDF - Matches visual preview exactly
     const handleDownloadKDP = async () => {
       toast.info('Generating KDP cover PDF...');
       
       try {
-        // KDP 6x9 book dimensions with bleed and spine
-        // Full wrap: approximately 12.485" x 9.25" at 300 DPI
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'in',
-          format: [9.25, 12.485]
-        });
-
-        const pageWidth = 12.485;
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [12.485, 9.25] });
+        const pageWidth = 12.485; 
         const pageHeight = 9.25;
-        const spineWidth = 0.485; // Approximate for ~200 pages
+        const spineWidth = 0.485; 
         const coverWidth = (pageWidth - spineWidth) / 2;
 
-        // Load images as base64
-        const loadImage = (url: string): Promise<HTMLImageElement> => {
-          return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = url;
-          });
-        };
-
-        // Draw background with spine color
-        pdf.setFillColor(spineColor);
-        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-
-        // Back cover (left side)
-        if (localBackCoverUrl) {
-          try {
-            const backImg = await loadImage(localBackCoverUrl);
-            pdf.addImage(backImg, 'JPEG', 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
-          } catch (e) {
-            console.warn('Could not load back cover image');
-            // Draw placeholder for back cover
-            pdf.setFillColor('#f0f0f0');
-            pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
-          }
-        } else {
-          // Draw placeholder for back cover
-          pdf.setFillColor('#f0f0f0');
-          pdf.rect(0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25, 'F');
-        }
-
-        // Back cover blurb overlay - draw semi-transparent box with text
-        const backCenterX = coverWidth / 2;
-        // Draw darker overlay for text readability
-        pdf.setFillColor(30, 30, 30);
-        pdf.roundedRect(0.5, 3, coverWidth - 1, 2, 0.1, 0.1, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
-        pdf.text('Your compelling book description goes here.', backCenterX, 4, { align: 'center', maxWidth: coverWidth - 1.5 });
-
-        // Spine (center) - with space-between layout
-        pdf.setFillColor(spineColor);
-        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
-        
-        // Parse spine text color to RGB
+        // Helper: Parse hex color to RGB
         const hexToRgb = (hex: string) => {
           const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
           return result ? {
             r: parseInt(result[1], 16),
             g: parseInt(result[2], 16),
             b: parseInt(result[3], 16)
-          } : { r: 0, g: 0, b: 0 };
+          } : { r: 255, g: 255, b: 255 };
         };
         
-        const textRgb = hexToRgb(spineTextColor);
+        // === BACK COVER (White with Text - Onyx Style) ===
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, coverWidth, pageHeight, 'F');
         
-        // Edition Text at TOP of spine (left on rotated spine)
-        pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-        pdf.setFontSize(7);
-        pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, {
-          angle: 90,
-          align: 'left'
-        });
+        const backCenterX = coverWidth / 2;
+        pdf.setTextColor(0, 0, 0);
         
-        // Spine Title at BOTTOM of spine (right on rotated spine)
+        // Header
+        pdf.setFont('times', 'bold'); 
         pdf.setFontSize(11);
-        const spineDisplayText = spineText || title;
-        pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.6, {
-          angle: 90,
-          align: 'right'
-        });
+        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 1.5, { align: 'center' });
+        
+        let currentY = 2.0;
+        
+        // Dedication
+        if (dedicationText) {
+          pdf.setFont('times', 'italic');
+          pdf.setFontSize(10);
+          pdf.text(dedicationText, backCenterX, currentY, { align: 'center' });
+          currentY += 0.4;
+        }
+        
+        // Body
+        pdf.setFont('times', 'normal');
+        pdf.setFontSize(10);
+        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 2.0);
+        pdf.text(splitBody, backCenterX, currentY, { align: 'center' });
+        
+        // CTA
+        currentY += (splitBody.length * 0.2) + 0.4;
+        pdf.setFont('times', 'bold');
+        pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
+        
+        // === SPINE ===
+        const spineRgb = hexToRgb(spineColor);
+        pdf.setFillColor(spineRgb.r, spineRgb.g, spineRgb.b); 
+        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
+        
+        // Only draw spine text if page count >= 80
+        if (showSpineText) {
+          const textRgb = hexToRgb(spineTextColor);
+          pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+          
+          // Edition Text at TOP of spine
+          pdf.setFontSize(7);
+          pdf.text(editionText, coverWidth + spineWidth / 2, 0.6, { angle: 90, align: 'left' });
+          
+          // Title at BOTTOM of spine
+          pdf.setFontSize(11);
+          const spineDisplayText = spineText || title;
+          pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.6, { angle: 90, align: 'right' });
+        }
 
-        // Front cover (right side)
+        // === FRONT COVER (White background with centered elements) ===
+        const frontX = coverWidth + spineWidth; 
+        const centerX = frontX + (coverWidth / 2);
+        pdf.setFillColor(255, 255, 255); 
+        pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
+
+        // 1. IMAGE (3.5 inches, centered)
+        const imgSize = 3.5; 
+        const imgY = 1.0;
         if (displayUrl) {
           try {
-            const frontImg = await loadImage(displayUrl);
-            pdf.addImage(frontImg, 'JPEG', coverWidth + spineWidth + 0.125, 0.125, coverWidth - 0.25, pageHeight - 0.25);
+            const img = new Image(); 
+            img.crossOrigin = "Anonymous"; 
+            img.src = displayUrl;
+            await new Promise(r => { img.onload = r; img.onerror = r; });
+            pdf.addImage(img, 'JPEG', centerX - (imgSize/2), imgY, imgSize, imgSize);
           } catch (e) {
             console.warn('Could not load front cover image');
           }
         }
 
-        // Front cover text overlays with shadow effect
-        const frontCenterX = coverWidth + spineWidth + coverWidth / 2;
-        
-        // Title shadow
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFontSize(28);
-        pdf.text(title, frontCenterX + 0.02, 1.52, { align: 'center', maxWidth: coverWidth - 0.5 });
-        // Title main
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(title, frontCenterX, 1.5, { align: 'center', maxWidth: coverWidth - 0.5 });
+        // 2. TITLE
+        let textY = imgY + imgSize + 0.8;
+        pdf.setTextColor(0, 0, 0); 
+        pdf.setFont('times', 'bold'); 
+        pdf.setFontSize(22);
+        const splitTitle = pdf.splitTextToSize(title, 3.5); 
+        pdf.text(splitTitle, centerX, textY, { align: 'center' });
+        textY += (splitTitle.length * 0.35);
 
-        // Subtitle
+        // 3. SEPARATOR
+        textY += 0.1; 
+        pdf.setDrawColor(200, 200, 200); 
+        pdf.setLineWidth(0.01);
+        pdf.line(centerX - 0.5, textY, centerX + 0.5, textY); 
+        textY += 0.3;
+
+        // 4. SUBTITLE
         if (subtitle) {
-          pdf.setFontSize(14);
-          pdf.setTextColor(0, 0, 0);
-          pdf.text(subtitle, frontCenterX + 0.01, 2.02, { align: 'center', maxWidth: coverWidth - 0.5 });
-          pdf.setTextColor(220, 220, 220);
-          pdf.text(subtitle, frontCenterX, 2.0, { align: 'center', maxWidth: coverWidth - 0.5 });
+          pdf.setFontSize(10); 
+          pdf.setFont('times', 'italic'); 
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(pdf.splitTextToSize(subtitle.toUpperCase(), 3.5), centerX, textY, { align: 'center' });
+          textY += 0.5;
         }
 
-        // Bottom branding on front cover
-        pdf.setFontSize(9);
-        pdf.setTextColor(255, 255, 255);
-        pdf.text('Loom & Page', frontCenterX, pageHeight - 0.5, { align: 'center' });
+        // 5. LOGO
+        const ly = textY + 0.3; 
+        const s = 0.4; 
+        pdf.setDrawColor(0, 0, 0); 
+        pdf.setLineWidth(0.02);
+        pdf.line(centerX - 0.12, ly, centerX - 0.12, ly + s);
+        pdf.line(centerX, ly, centerX, ly + s);
+        pdf.line(centerX + 0.12, ly, centerX + 0.12, ly + s);
+        pdf.line(centerX - 0.2, ly + s / 2, centerX + 0.2, ly + s / 2);
+
+        // 6. BRAND
+        pdf.setFont('times', 'normal'); 
+        pdf.setFontSize(9); 
+        pdf.setTextColor(150, 150, 150);
+        pdf.text("Loom & Page", centerX, ly + s + 0.2, { align: 'center' });
+        
+        // 7. DISCLAIMER
+        pdf.setFontSize(7); 
+        pdf.setTextColor(180, 180, 180);
+        pdf.text("AI-generated content for creative inspiration only.", centerX, ly + s + 0.6, { align: 'center' });
+        pdf.text("Not professional advice.", centerX, ly + s + 0.73, { align: 'center' });
 
         const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
         pdf.save(filename);
@@ -694,18 +710,19 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
         
         // === SPINE ===
-        pdf.setFillColor(spineColor); 
-        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
-        
-        // Parse spine text color to RGB
+        // Parse spine color to RGB
         const hexToRgb = (hex: string) => {
           const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
           return result ? {
             r: parseInt(result[1], 16),
             g: parseInt(result[2], 16),
             b: parseInt(result[3], 16)
-          } : { r: 0, g: 0, b: 0 };
+          } : { r: 255, g: 255, b: 255 };
         };
+        
+        const spineRgb = hexToRgb(spineColor);
+        pdf.setFillColor(spineRgb.r, spineRgb.g, spineRgb.b); 
+        pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
         
         // Only draw spine text if page count >= 80
         if (showSpineText) {
@@ -723,8 +740,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // === FRONT COVER ===
-        const frontX = coverWidth + spineWidth; const centerX = frontX + (coverWidth / 2);
-        pdf.setFillColor('#ffffff'); pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
+        const frontX = coverWidth + spineWidth; 
+        const centerX = frontX + (coverWidth / 2);
+        pdf.setFillColor(255, 255, 255); 
+        pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
         // 1. IMAGE (3.5 inches)
         const imgSize = 3.5; const imgY = 1.0;
