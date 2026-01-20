@@ -328,40 +328,40 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           } : { r: 255, g: 255, b: 255 };
         };
         
-        // === BACK COVER (White with Text - Onyx Style) ===
+        // === BACK COVER (White with Text - Compact Onyx Style) ===
         pdf.setFillColor(255, 255, 255);
         pdf.rect(0, 0, coverWidth, pageHeight, 'F');
         
         const backCenterX = coverWidth / 2;
         
-        // Back Cover Header - smaller, refined
+        // Back Cover Header - compact uppercase
         pdf.setTextColor(0, 0, 0);
         pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(9);
-        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 1.2, { align: 'center', charSpace: 0.03 });
+        pdf.setFontSize(7);
+        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 0.8, { align: 'center' });
         
-        let currentY = 1.8;
+        let currentY = 1.2;
         
         // Dedication
         if (dedicationText) {
           pdf.setFont('times', 'italic');
-          pdf.setFontSize(8);
-          pdf.setTextColor(80, 80, 80);
+          pdf.setFontSize(6);
+          pdf.setTextColor(100, 100, 100);
           pdf.text(dedicationText, backCenterX, currentY, { align: 'center' });
-          currentY += 0.35;
+          currentY += 0.25;
         }
         
-        // Body - refined sizing
+        // Body - smaller font, tighter wrap
         pdf.setFont('times', 'normal');
-        pdf.setFontSize(8);
-        pdf.setTextColor(50, 50, 50);
-        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.5);
+        pdf.setFontSize(6);
+        pdf.setTextColor(60, 60, 60);
+        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 0.8);
         pdf.text(splitBody, backCenterX, currentY, { align: 'center' });
         
         // CTA
-        currentY += (splitBody.length * 0.18) + 0.3;
+        currentY += (splitBody.length * 0.12) + 0.2;
         pdf.setFont('times', 'bold');
-        pdf.setFontSize(8);
+        pdf.setFontSize(6);
         pdf.setTextColor(0, 0, 0);
         pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
         
@@ -374,28 +374,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (showSpineText) {
           const textRgb = hexToRgb(spineTextColor);
           pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-          
-          // Edition Text at TOP of spine
           pdf.setFont('times', 'normal');
           pdf.setFontSize(6);
           pdf.text(editionText, coverWidth + spineWidth / 2, 0.5, { angle: 90, align: 'left' });
-          
-          // Title at BOTTOM of spine
-          pdf.setFont('times', 'normal');
-          pdf.setFontSize(9);
+          pdf.setFontSize(8);
           const spineDisplayText = (spineText || title).slice(0, 35);
           pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.5, { angle: 90, align: 'right' });
         }
 
-        // === FRONT COVER (White background with centered elements - matching preview proportions) ===
+        // === FRONT COVER ===
         const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor(255, 255, 255); 
         pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // Calculate proportional image size (~52% of cover width, matching preview)
-        const imgSize = coverWidth * 0.52; // ~3.12" for proportional look
-        const imgY = 0.8;
+        // Image - MUCH smaller to match preview (~2.5" square)
+        const imgSize = 2.5;
+        const imgY = 0.6;
         
         if (displayUrl) {
           try {
@@ -404,77 +399,75 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             img.src = displayUrl;
             await new Promise(r => { img.onload = r; img.onerror = r; });
             
-            // Draw a subtle border around image area
-            pdf.setDrawColor(230, 230, 230);
-            pdf.setLineWidth(0.02);
-            pdf.rect(centerX - (imgSize/2) - 0.02, imgY - 0.02, imgSize + 0.04, imgSize + 0.04);
-            
-            // Add the image
+            // Subtle border
+            pdf.setDrawColor(220, 220, 220);
+            pdf.setLineWidth(0.01);
+            pdf.rect(centerX - (imgSize/2), imgY, imgSize, imgSize);
             pdf.addImage(img, 'JPEG', centerX - (imgSize/2), imgY, imgSize, imgSize);
           } catch (e) {
             console.warn('Could not load front cover image');
           }
         }
 
-        // 2. TITLE - refined typography
-        let textY = imgY + imgSize + 0.5;
+        // Title
+        let textY = imgY + imgSize + 0.4;
         pdf.setTextColor(0, 0, 0); 
         pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(18);
-        const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, 4.0); 
+        pdf.setFontSize(16);
+        const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, 3.5); 
         pdf.text(splitTitle, centerX, textY, { align: 'center' });
-        textY += (splitTitle.length * 0.28);
+        textY += (splitTitle.length * 0.25);
 
-        // 3. SEPARATOR - thinner, shorter line
-        textY += 0.15; 
+        // Separator line
+        textY += 0.1; 
         pdf.setDrawColor(200, 200, 200); 
         pdf.setLineWidth(0.005);
-        pdf.line(centerX - 0.4, textY, centerX + 0.4, textY); 
-        textY += 0.2;
+        pdf.line(centerX - 0.35, textY, centerX + 0.35, textY); 
+        textY += 0.15;
 
-        // 4. SUBTITLE - small caps style with letter spacing
+        // Subtitle - smaller, wrapped properly
         if (subtitle) {
-          pdf.setFontSize(7); 
+          pdf.setFontSize(5); 
           pdf.setFont('times', 'italic'); 
-          pdf.setTextColor(130, 130, 130);
-          const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), 4.0);
-          pdf.text(subtitleLines, centerX, textY, { align: 'center', charSpace: 0.04 });
-          textY += (subtitleLines.length * 0.12) + 0.3;
+          pdf.setTextColor(140, 140, 140);
+          const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), 3.0);
+          pdf.text(subtitleLines, centerX, textY, { align: 'center' });
+          textY += (subtitleLines.length * 0.1) + 0.25;
         }
 
-        // 5. LOGO - matching visual preview proportions
-        const ly = textY + 0.2; 
-        const logoSize = 0.35; 
-        const lineSpacing = 0.09;
+        // Logo - 3 vertical lines + 1 horizontal + corner fold
+        const ly = textY + 0.15;
+        const logoH = 0.3;
+        const lineGap = 0.07;
         
         pdf.setDrawColor(0, 0, 0); 
-        pdf.setLineWidth(0.015);
-        
-        // Three vertical lines
-        pdf.line(centerX - lineSpacing, ly, centerX - lineSpacing, ly + logoSize);
-        pdf.line(centerX, ly, centerX, ly + logoSize);
-        pdf.line(centerX + lineSpacing, ly, centerX + lineSpacing, ly + logoSize);
-        
-        // Horizontal line through middle
-        pdf.line(centerX - lineSpacing - 0.06, ly + logoSize / 2, centerX + lineSpacing + 0.06, ly + logoSize / 2);
-        
-        // Corner fold detail (top-right)
         pdf.setLineWidth(0.012);
-        const cornerSize = 0.08;
-        pdf.line(centerX + lineSpacing + 0.02, ly, centerX + lineSpacing + 0.02 + cornerSize, ly);
-        pdf.line(centerX + lineSpacing + 0.02 + cornerSize, ly, centerX + lineSpacing + 0.02 + cornerSize, ly + cornerSize);
-
-        // 6. BRAND
-        pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(8); 
-        pdf.setTextColor(160, 160, 160);
-        pdf.text("Loom & Page", centerX, ly + logoSize + 0.18, { align: 'center' });
         
-        // 7. DISCLAIMER
-        pdf.setFontSize(6); 
+        // 3 vertical lines
+        pdf.line(centerX - lineGap, ly, centerX - lineGap, ly + logoH);
+        pdf.line(centerX, ly, centerX, ly + logoH);
+        pdf.line(centerX + lineGap, ly, centerX + lineGap, ly + logoH);
+        
+        // Horizontal line
+        pdf.line(centerX - lineGap - 0.05, ly + logoH / 2, centerX + lineGap + 0.05, ly + logoH / 2);
+        
+        // Corner fold (top-right)
+        pdf.setLineWidth(0.01);
+        pdf.line(centerX + lineGap + 0.02, ly, centerX + lineGap + 0.08, ly);
+        pdf.line(centerX + lineGap + 0.08, ly, centerX + lineGap + 0.08, ly + 0.06);
+
+        // Brand
+        pdf.setFont('times', 'normal'); 
+        pdf.setFontSize(7); 
+        pdf.setTextColor(160, 160, 160);
+        pdf.text("Loom & Page", centerX, ly + logoH + 0.15, { align: 'center' });
+        
+        // Disclaimer - 2 lines
+        pdf.setFontSize(5); 
         pdf.setFont('times', 'italic');
         pdf.setTextColor(180, 180, 180);
-        pdf.text("AI-generated content for creative inspiration only. Not professional advice.", centerX, ly + logoSize + 0.45, { align: 'center' });
+        pdf.text("AI-generated content for creative inspiration only.", centerX, ly + logoH + 0.35, { align: 'center' });
+        pdf.text("Not professional advice.", centerX, ly + logoH + 0.45, { align: 'center' });
 
         const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_KDP_Cover.pdf`;
         pdf.save(filename);
@@ -706,40 +699,40 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           } : { r: 255, g: 255, b: 255 };
         };
         
-        // === BACK COVER (White with Text - Onyx Style) ===
+        // === BACK COVER (White with Text - Compact Onyx Style) ===
         pdf.setFillColor(255, 255, 255);
         pdf.rect(0, 0, coverWidth, pageHeight, 'F');
         
         const backCenterX = coverWidth / 2;
         
-        // Back Cover Header - smaller, refined
+        // Back Cover Header - compact uppercase
         pdf.setTextColor(0, 0, 0);
         pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(9);
-        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 1.2, { align: 'center', charSpace: 0.03 });
+        pdf.setFontSize(7);
+        pdf.text(backCoverTitle.toUpperCase(), backCenterX, 0.8, { align: 'center' });
         
-        let currentY = 1.8;
+        let currentY = 1.2;
         
         // Dedication
         if (dedicationText) {
           pdf.setFont('times', 'italic');
-          pdf.setFontSize(8);
-          pdf.setTextColor(80, 80, 80);
+          pdf.setFontSize(6);
+          pdf.setTextColor(100, 100, 100);
           pdf.text(dedicationText, backCenterX, currentY, { align: 'center' });
-          currentY += 0.35;
+          currentY += 0.25;
         }
         
-        // Body - refined sizing
+        // Body - smaller font, tighter wrap
         pdf.setFont('times', 'normal');
-        pdf.setFontSize(8);
-        pdf.setTextColor(50, 50, 50);
-        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 1.5);
+        pdf.setFontSize(6);
+        pdf.setTextColor(60, 60, 60);
+        const splitBody = pdf.splitTextToSize(backCoverBody, coverWidth - 0.8);
         pdf.text(splitBody, backCenterX, currentY, { align: 'center' });
         
         // CTA
-        currentY += (splitBody.length * 0.18) + 0.3;
+        currentY += (splitBody.length * 0.12) + 0.2;
         pdf.setFont('times', 'bold');
-        pdf.setFontSize(8);
+        pdf.setFontSize(6);
         pdf.setTextColor(0, 0, 0);
         pdf.text(backCoverCTA, backCenterX, currentY, { align: 'center' });
         
@@ -752,28 +745,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (showSpineText) {
           const textRgb = hexToRgb(spineTextColor);
           pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
-          
-          // Edition Text at TOP of spine
           pdf.setFont('times', 'normal');
           pdf.setFontSize(6);
           pdf.text(editionText, coverWidth + spineWidth / 2, 0.5, { angle: 90, align: 'left' });
-          
-          // Title at BOTTOM of spine
-          pdf.setFont('times', 'normal');
-          pdf.setFontSize(9);
+          pdf.setFontSize(8);
           const spineDisplayText = (spineText || title).slice(0, 35);
           pdf.text(spineDisplayText, coverWidth + spineWidth / 2, pageHeight - 0.5, { angle: 90, align: 'right' });
         }
 
-        // === FRONT COVER (White background with centered elements - matching preview proportions) ===
+        // === FRONT COVER ===
         const frontX = coverWidth + spineWidth; 
         const centerX = frontX + (coverWidth / 2);
         pdf.setFillColor(255, 255, 255); 
         pdf.rect(frontX, 0, coverWidth, pageHeight, 'F');
 
-        // Calculate proportional image size (~52% of cover width, matching preview)
-        const imgSize = coverWidth * 0.52;
-        const imgY = 0.8;
+        // Image - MUCH smaller to match preview (~2.5" square)
+        const imgSize = 2.5;
+        const imgY = 0.6;
         
         if (displayUrl) {
           try {
@@ -782,77 +770,75 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
             img.src = displayUrl;
             await new Promise(r => { img.onload = r; img.onerror = r; });
             
-            // Draw a subtle border around image area
-            pdf.setDrawColor(230, 230, 230);
-            pdf.setLineWidth(0.02);
-            pdf.rect(centerX - (imgSize/2) - 0.02, imgY - 0.02, imgSize + 0.04, imgSize + 0.04);
-            
-            // Add the image
+            // Subtle border
+            pdf.setDrawColor(220, 220, 220);
+            pdf.setLineWidth(0.01);
+            pdf.rect(centerX - (imgSize/2), imgY, imgSize, imgSize);
             pdf.addImage(img, 'JPEG', centerX - (imgSize/2), imgY, imgSize, imgSize);
           } catch (e) {
             console.warn('Could not load front cover image');
           }
         }
 
-        // 2. TITLE - refined typography
-        let textY = imgY + imgSize + 0.5;
+        // Title
+        let textY = imgY + imgSize + 0.4;
         pdf.setTextColor(0, 0, 0); 
         pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(18);
-        const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, 4.0); 
+        pdf.setFontSize(16);
+        const splitTitle = pdf.splitTextToSize(parsedTitle.mainTitle, 3.5); 
         pdf.text(splitTitle, centerX, textY, { align: 'center' });
-        textY += (splitTitle.length * 0.28);
+        textY += (splitTitle.length * 0.25);
 
-        // 3. SEPARATOR - thinner, shorter line
-        textY += 0.15; 
+        // Separator line
+        textY += 0.1; 
         pdf.setDrawColor(200, 200, 200); 
         pdf.setLineWidth(0.005);
-        pdf.line(centerX - 0.4, textY, centerX + 0.4, textY); 
-        textY += 0.2;
+        pdf.line(centerX - 0.35, textY, centerX + 0.35, textY); 
+        textY += 0.15;
 
-        // 4. SUBTITLE - small caps style with letter spacing
+        // Subtitle - smaller, wrapped properly
         if (subtitle) {
-          pdf.setFontSize(7); 
+          pdf.setFontSize(5); 
           pdf.setFont('times', 'italic'); 
-          pdf.setTextColor(130, 130, 130);
-          const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), 4.0);
-          pdf.text(subtitleLines, centerX, textY, { align: 'center', charSpace: 0.04 });
-          textY += (subtitleLines.length * 0.12) + 0.3;
+          pdf.setTextColor(140, 140, 140);
+          const subtitleLines = pdf.splitTextToSize(subtitle.toUpperCase(), 3.0);
+          pdf.text(subtitleLines, centerX, textY, { align: 'center' });
+          textY += (subtitleLines.length * 0.1) + 0.25;
         }
 
-        // 5. LOGO - matching visual preview proportions
-        const ly = textY + 0.2; 
-        const logoSize = 0.35; 
-        const lineSpacing = 0.09;
+        // Logo - 3 vertical lines + 1 horizontal + corner fold
+        const ly = textY + 0.15;
+        const logoH = 0.3;
+        const lineGap = 0.07;
         
         pdf.setDrawColor(0, 0, 0); 
-        pdf.setLineWidth(0.015);
-        
-        // Three vertical lines
-        pdf.line(centerX - lineSpacing, ly, centerX - lineSpacing, ly + logoSize);
-        pdf.line(centerX, ly, centerX, ly + logoSize);
-        pdf.line(centerX + lineSpacing, ly, centerX + lineSpacing, ly + logoSize);
-        
-        // Horizontal line through middle
-        pdf.line(centerX - lineSpacing - 0.06, ly + logoSize / 2, centerX + lineSpacing + 0.06, ly + logoSize / 2);
-        
-        // Corner fold detail (top-right)
         pdf.setLineWidth(0.012);
-        const cornerSize = 0.08;
-        pdf.line(centerX + lineSpacing + 0.02, ly, centerX + lineSpacing + 0.02 + cornerSize, ly);
-        pdf.line(centerX + lineSpacing + 0.02 + cornerSize, ly, centerX + lineSpacing + 0.02 + cornerSize, ly + cornerSize);
-
-        // 6. BRAND
-        pdf.setFont('times', 'normal'); 
-        pdf.setFontSize(8); 
-        pdf.setTextColor(160, 160, 160);
-        pdf.text("Loom & Page", centerX, ly + logoSize + 0.18, { align: 'center' });
         
-        // 7. DISCLAIMER
-        pdf.setFontSize(6); 
+        // 3 vertical lines
+        pdf.line(centerX - lineGap, ly, centerX - lineGap, ly + logoH);
+        pdf.line(centerX, ly, centerX, ly + logoH);
+        pdf.line(centerX + lineGap, ly, centerX + lineGap, ly + logoH);
+        
+        // Horizontal line
+        pdf.line(centerX - lineGap - 0.05, ly + logoH / 2, centerX + lineGap + 0.05, ly + logoH / 2);
+        
+        // Corner fold (top-right)
+        pdf.setLineWidth(0.01);
+        pdf.line(centerX + lineGap + 0.02, ly, centerX + lineGap + 0.08, ly);
+        pdf.line(centerX + lineGap + 0.08, ly, centerX + lineGap + 0.08, ly + 0.06);
+
+        // Brand
+        pdf.setFont('times', 'normal'); 
+        pdf.setFontSize(7); 
+        pdf.setTextColor(160, 160, 160);
+        pdf.text("Loom & Page", centerX, ly + logoH + 0.15, { align: 'center' });
+        
+        // Disclaimer - 2 lines
+        pdf.setFontSize(5); 
         pdf.setFont('times', 'italic');
         pdf.setTextColor(180, 180, 180);
-        pdf.text("AI-generated content for creative inspiration only. Not professional advice.", centerX, ly + logoSize + 0.45, { align: 'center' });
+        pdf.text("AI-generated content for creative inspiration only.", centerX, ly + logoH + 0.35, { align: 'center' });
+        pdf.text("Not professional advice.", centerX, ly + logoH + 0.45, { align: 'center' });
 
         return pdf.output('blob');
       } catch(e) { 
