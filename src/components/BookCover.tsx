@@ -95,6 +95,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
     const [dedicationText, setDedicationText] = useState("");
     
+    // Calculate estimated pages for smart spine logic
+    const calculateEstimatedPages = useCallback(() => {
+      if (!bookData) return 0;
+      let totalWords = 0;
+      if (bookData.tableOfContents) {
+        bookData.tableOfContents.forEach((chapter: any) => {
+          const content = bookData[`chapter${chapter.chapter}Content`] || '';
+          totalWords += content.split(/\s+/).length;
+        });
+      }
+      // Est: 300 words/page + 10 pages front/back matter
+      return Math.ceil(totalWords / 300) + 10;
+    }, [bookData]);
+    
+    const estimatedPages = calculateEstimatedPages();
+    const showSpineText = estimatedPages >= 80;
+    
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
       ? localFrontUrls 
@@ -678,8 +695,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         // === SPINE ===
         pdf.setFillColor(spineColor); pdf.rect(coverWidth, 0, spineWidth, pageHeight, 'F');
-        pdf.setTextColor(0,0,0); pdf.setFontSize(8); 
-        pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
+        
+        // Only draw spine text if page count >= 80
+        if (showSpineText) {
+          pdf.setTextColor(0,0,0); pdf.setFontSize(8); 
+          pdf.text(title, coverWidth+spineWidth/2, 4.6, {angle:90, align:'center'}); 
+        }
 
         // === FRONT COVER ===
         const frontX = coverWidth + spineWidth; const centerX = frontX + (coverWidth / 2);
@@ -1314,32 +1335,47 @@ p { margin-bottom: 1em; }`);
                         className="w-20 h-96 rounded flex flex-col items-center justify-between py-6 px-2 shadow-lg border"
                         style={{ backgroundColor: spineColor }}
                       >
-                        {/* Edition Text at TOP (Left on spine) */}
-                        <span 
-                          className="text-[10px] font-serif whitespace-nowrap"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)',
-                            color: spineTextColor,
-                            opacity: 0.7
-                          }}
-                        >
-                          {editionText}
-                        </span>
-                        {/* Main Title at BOTTOM (Right on spine) */}
-                        <span 
-                          className="text-sm font-serif font-medium whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis"
-                          style={{ 
-                            writingMode: 'vertical-rl',
-                            textOrientation: 'mixed',
-                            transform: 'rotate(180deg)',
-                            color: spineTextColor
-                          }}
-                        >
-                          {spineText || title}
-                        </span>
+                        {showSpineText ? (
+                          <>
+                            {/* Edition Text at TOP (Left on spine) */}
+                            <span 
+                              className="text-[10px] font-serif whitespace-nowrap"
+                              style={{ 
+                                writingMode: 'vertical-rl',
+                                textOrientation: 'mixed',
+                                transform: 'rotate(180deg)',
+                                color: spineTextColor,
+                                opacity: 0.7
+                              }}
+                            >
+                              {editionText}
+                            </span>
+                            {/* Main Title at BOTTOM (Right on spine) */}
+                            <span 
+                              className="text-sm font-serif font-medium whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis"
+                              style={{ 
+                                writingMode: 'vertical-rl',
+                                textOrientation: 'mixed',
+                                transform: 'rotate(180deg)',
+                                color: spineTextColor
+                              }}
+                            >
+                              {spineText || title}
+                            </span>
+                          </>
+                        ) : (
+                          <div className="h-full flex items-center justify-center">
+                            <span className="text-[8px] text-muted-foreground/50 rotate-90 whitespace-nowrap">
+                              No text ({estimatedPages} pgs)
+                            </span>
+                          </div>
+                        )}
                       </div>
+                      {!showSpineText && (
+                        <p className="text-[10px] text-amber-600 mt-2 text-center max-w-[200px] leading-tight bg-amber-50 p-2 rounded border border-amber-200">
+                          *Spine text hidden. Amazon KDP requires 80+ pages (Est: {estimatedPages})
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-4">
