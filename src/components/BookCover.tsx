@@ -475,49 +475,80 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       // Key insight: Preview is scaled down by ~3.5x from actual PDF
       // Preview text-[6px] at 130px width ≈ 10pt at 6" PDF width
       // Preview text-[4px] at 130px width ≈ 6.5pt at 6" PDF width
-      
-      // Body width: max-w-[90%] = 5.4"
-      const bodyWidth = coverWidth * 0.90;
+
+      // Preview body is constrained to max-w-[90%] BUT also wraps to ~5 lines with our default copy.
+      // Because the PDF uses points/inches instead of CSS pixels, the “same” size mapping can still
+      // yield different characters-per-line. We therefore auto-tune width to hit the preview’s 5-line wrap.
+      const maxBodyWidth = coverWidth * 0.90;
+      const minBodyWidth = coverWidth * 0.35;
+      const targetBodyLines = 5;
       
       // === SECTION 1: Header "CREATED WITH LOOM & PAGE" ===
       // Preview: text-[6px] tracking-wide uppercase, centered at top
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
       pdf.setFontSize(FONT_SIZES.backHeader);
-      const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), bodyWidth);
+      const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), maxBodyWidth);
       // Position at ~7% from top (matching preview's top padding)
       pdf.text(splitHeader, backCenterX, 0.65, { 
         align: 'center',
         charSpace: CHAR_SPACING.trackingWide
       });
 
-      // === SECTION 2: Body paragraph ===
-      // Preview: text-[4px] leading-relaxed max-w-[90%]
-      // Starts right after header with small gap
-      pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(FONT_SIZES.backBody);
-      pdf.setTextColor(40, 40, 40);
-      const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
-      const bodyStartY = 0.90; // Closer to header
-      pdf.text(splitBody, backCenterX, bodyStartY, { 
-        align: 'center', 
-        lineHeightFactor: LINE_HEIGHTS.relaxed
-      });
-
-      // Dedication (if present) - between body and CTA
+      // Dedication (if present) - between header and body (matches preview ordering)
       if (dedicationText) {
         pdf.setFont(fontName, 'italic');
         pdf.setFontSize(FONT_SIZES.backDedication);
         pdf.setTextColor(80, 80, 80);
-        const lineHeight = (FONT_SIZES.backBody / 72) * LINE_HEIGHTS.relaxed;
-        const dedicationY = bodyStartY + (splitBody.length * lineHeight) + 0.15;
-        pdf.text(dedicationText, backCenterX, dedicationY, { align: 'center' });
+        pdf.text(dedicationText, backCenterX, 0.82, { align: 'center' });
       }
+
+      // === SECTION 2: Body paragraph ===
+      // Preview: text-[4px] leading-relaxed max-w-[90%]
+      // Auto-tune width to match preview’s ~5-line wrap.
+      pdf.setFont(fontName, 'normal');
+      pdf.setFontSize(FONT_SIZES.backBody);
+      pdf.setTextColor(40, 40, 40);
+
+      let bodyWidth = maxBodyWidth;
+      try {
+        let low = minBodyWidth;
+        let high = maxBodyWidth;
+
+        for (let i = 0; i < 18; i++) {
+          const mid = (low + high) / 2;
+          const lines = pdf.splitTextToSize(backCoverBody, mid).length;
+
+          if (lines === targetBodyLines) {
+            bodyWidth = mid;
+            break;
+          }
+
+          // Too few lines -> too wide -> shrink
+          if (lines < targetBodyLines) high = mid;
+          // Too many lines -> too narrow -> widen
+          else low = mid;
+        }
+
+        const candidates = [low, high, maxBodyWidth, minBodyWidth];
+        bodyWidth = candidates
+          .map((w) => ({ w, diff: Math.abs(pdf.splitTextToSize(backCoverBody, w).length - targetBodyLines) }))
+          .sort((a, b) => a.diff - b.diff)[0].w;
+      } catch {
+        bodyWidth = maxBodyWidth;
+      }
+
+      const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
+      const bodyStartY = dedicationText ? 0.98 : 0.90;
+      pdf.text(splitBody, backCenterX, bodyStartY, {
+        align: 'center',
+        lineHeightFactor: LINE_HEIGHTS.relaxed,
+      });
 
       // === SECTION 3: CTA ===
       // Preview: text-[4px] font-bold, positioned right after body
       const lineHeight = (FONT_SIZES.backBody / 72) * LINE_HEIGHTS.relaxed;
-      const ctaY = bodyStartY + (splitBody.length * lineHeight) + (dedicationText ? 0.30 : 0.15);
+      const ctaY = bodyStartY + splitBody.length * lineHeight + 0.15;
       pdf.setFont(fontName, 'bold');
       pdf.setFontSize(FONT_SIZES.backCTA);
       pdf.setTextColor(0, 0, 0);
