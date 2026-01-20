@@ -87,6 +87,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [isSavingText, setIsSavingText] = useState(false);
     const [isUploadingCover, setIsUploadingCover] = useState(false);
     const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
+    const [showKdpGuides, setShowKdpGuides] = useState(false);
     const coverUploadRef = useRef<HTMLInputElement>(null);
     
     // Back Cover Text State
@@ -1456,16 +1457,73 @@ p { margin-bottom: 1em; }`);
               {/* TAB 4: Full Wrap Preview - With Full Composite Front Cover */}
               <TabsContent value="wrap" className="space-y-4 pt-4">
                 <div className="space-y-6">
-                  <div>
-                    <h3 className="font-medium mb-3 text-center">Full Wrap Preview (Amazon KDP Format)</h3>
-                    <p className="text-sm text-muted-foreground text-center mb-4">
-                      Layout: Back Cover | Spine | Front Cover
-                    </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <div className="text-center">
+                      <h3 className="font-medium mb-1">Full Wrap Preview (Amazon KDP Format)</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Layout: Back Cover | Spine | Front Cover
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-sm border rounded-lg px-3 py-2 bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={showKdpGuides}
+                        onChange={(e) => setShowKdpGuides(e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                      <span>Show KDP Guides</span>
+                    </label>
                   </div>
                   
                   {/* Centered Full Wrap Container */}
                   <div className="flex justify-center items-center">
-                    <div className="flex items-stretch gap-0 border overflow-hidden shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
+                    <div className="relative flex items-stretch gap-0 border overflow-visible shadow-lg" style={{ maxWidth: '100%', transform: 'scale(2.2)', transformOrigin: 'top center', marginBottom: '300px', marginTop: '50px' }}>
+                      
+                      {/* KDP Guide Overlays (preview-only, never exported) */}
+                      {showKdpGuides && (
+                        <>
+                          {/* Bleed area - 0.125" outside trim (red dashed) */}
+                          <div className="absolute pointer-events-none border-2 border-dashed border-red-500/70 z-30" style={{ inset: '-3px' }} />
+                          
+                          {/* Trim line - exact edge of cover (blue solid) */}
+                          <div className="absolute pointer-events-none border-2 border-blue-500/80 z-30" style={{ inset: '0' }} />
+                          
+                          {/* Safe zone - 0.25" inside trim on outer edges (green dashed) */}
+                          {/* Back cover safe zone */}
+                          <div className="absolute pointer-events-none border-2 border-dashed border-green-500/70 z-30" 
+                            style={{ 
+                              left: '4px', 
+                              top: '4px', 
+                              bottom: '4px', 
+                              width: 'calc(100px - 8px - 6px)', // back cover width minus safe margins minus spine margin
+                            }} 
+                          />
+                          {/* Front cover safe zone */}
+                          <div className="absolute pointer-events-none border-2 border-dashed border-green-500/70 z-30" 
+                            style={{ 
+                              right: '4px', 
+                              top: '4px', 
+                              bottom: '4px', 
+                              width: 'calc(100px - 8px - 6px)', // front cover width minus safe margins minus spine margin
+                            }} 
+                          />
+                          
+                          {/* Barcode zone indicator (bottom 1/3 of back cover) */}
+                          <div className="absolute pointer-events-none z-30 flex items-center justify-center"
+                            style={{
+                              left: '4px',
+                              bottom: '4px',
+                              width: 'calc(100px - 8px - 6px)',
+                              height: '40px',
+                              backgroundColor: 'rgba(255, 165, 0, 0.15)',
+                              border: '1px dashed rgba(255, 165, 0, 0.6)',
+                            }}
+                          >
+                            <span className="text-[5px] text-orange-600 font-medium uppercase tracking-wide">Barcode Zone</span>
+                          </div>
+                        </>
+                      )}
+                      
                       {/* Back Cover - Clean White Design */}
                       <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 p-2 flex flex-col items-center text-center">
                         {/* Content Area - Top 2/3 */}
@@ -1572,8 +1630,18 @@ p { margin-bottom: 1em; }`);
                           </div>
                         </div>
                       </div>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Legend for guides */}
+                  {showKdpGuides && (
+                    <div className="flex flex-wrap justify-center gap-4 text-xs">
+                      <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 border border-dashed border-red-500" /> Bleed (0.125")</span>
+                      <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-blue-500" /> Trim Edge</span>
+                      <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 border border-dashed border-green-500" /> Safe Zone (0.25")</span>
+                      <span className="flex items-center gap-1.5"><span className="w-4 h-2 bg-orange-200 border border-dashed border-orange-400" /> Barcode Area</span>
+                    </div>
+                  )}
 
                   <p className="text-xs text-muted-foreground text-center">
                     PDF dimensions: 12.485" × 9.25" (optimized for 6×9" trim with ~200 page spine)
