@@ -438,6 +438,36 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const backSafeTop = 0.375;
       const backInnerW = coverWidth - backSafeLeft * 2;
       
+      // DEBUG: Draw numbered grid on back cover when guides enabled
+      if (includeGuides) {
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.005);
+        pdf.setFontSize(5);
+        pdf.setTextColor(150, 150, 150);
+        
+        // Vertical lines every 0.5" with labels
+        for (let x = 0; x <= coverWidth; x += 0.5) {
+          pdf.line(x, 0, x, pageHeight);
+          pdf.text(x.toFixed(1), x + 0.02, 0.15);
+        }
+        
+        // Horizontal lines every 0.5" with labels
+        for (let y = 0; y <= pageHeight; y += 0.5) {
+          pdf.line(0, y, coverWidth, y);
+          pdf.text(y.toFixed(1), 0.05, y + 0.08);
+        }
+        
+        // Mark safe zone boundaries in blue
+        pdf.setDrawColor(0, 100, 255);
+        pdf.setLineWidth(0.01);
+        pdf.line(backSafeLeft, 0, backSafeLeft, pageHeight); // left safe
+        pdf.line(coverWidth - backSafeLeft, 0, coverWidth - backSafeLeft, pageHeight); // right safe
+        pdf.line(0, backSafeTop, coverWidth, backSafeTop); // top safe
+        
+        // Reset colors
+        pdf.setTextColor(0, 0, 0);
+      }
+      
       // Back cover text widths - calibrated to match preview exactly
       // Preview uses max-w-[90%] for body, header spans almost full width
       const headerMaxW = backInnerW * 0.95;
