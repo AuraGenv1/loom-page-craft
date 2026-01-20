@@ -470,39 +470,36 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       
       // === BACK COVER TEXT - Calibrated to match preview grid coordinates ===
       // Preview: 130px wide × 170px tall → PDF: 6" × 9"
-      // X scale: 6" / 130px = 0.0462"/px
-      // Y scale: 9" / 170px = 0.0529"/px
+      // The key is matching LINE WRAPPING, not just width percentages
       
-      // Section 1: columns 20-110 → width = 90px = 4.15" (69% of 6")
-      const headerWidth = coverWidth * 0.69;
-      // Section 2: columns 15-115 → width = 100px = 4.62" (77% of 6")  
-      const bodyWidth = coverWidth * 0.77;
-      // Section 3: columns 30-110 → width = 80px = 3.7" (62% of 6")
-      const ctaWidth = coverWidth * 0.62;
+      // Section 1: Header - full width for single line
+      const headerWidth = coverWidth * 0.85;
+      // Section 2: Body - NARROW width to force 5-line wrap (currently 3 lines at 77%)
+      // To get 5 lines from 3: need ~60% of current width = 77% * 0.6 = 46%
+      const bodyWidth = coverWidth * 0.45;
+      // Section 3: CTA - moderate width
+      const ctaWidth = coverWidth * 0.60;
 
       // === SECTION 1: Header "CREATED WITH LOOM & PAGE" ===
-      // Preview: row 10-15 → Y = 0.53" to 0.79" (baseline ~0.6")
-      // Preview: text-[6px] in Full Wrap = small, with tracking-wide
       pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(10); // Smaller to match preview proportions
+      pdf.setFontSize(10);
       const splitHeader = pdf.splitTextToSize(backCoverTitle.toUpperCase(), headerWidth);
       pdf.text(splitHeader, backCenterX, 0.60, { 
         align: 'center',
-        charSpace: 0.015 // tracking-wide
+        charSpace: 0.015
       });
 
       // === SECTION 2: Body paragraph ===
-      // Preview: row 20-40 → Y = 1.06" to 2.12" (5 lines)
-      // Preview: text-[4px] in Full Wrap
+      // Must wrap to exactly 5 lines - using narrow width to force wrapping
       pdf.setFont(fontName, 'normal');
-      pdf.setFontSize(8); // Smaller to fit 5 lines in the space
+      pdf.setFontSize(8);
       pdf.setTextColor(40, 40, 40);
       const splitBody = pdf.splitTextToSize(backCoverBody, bodyWidth);
-      // Position at row 20 = 1.06"
+      console.log('PDF body lines:', splitBody.length, 'at width:', bodyWidth);
       pdf.text(splitBody, backCenterX, 1.10, { 
         align: 'center', 
-        lineHeightFactor: 1.5 // Tighter to fit 5 lines
+        lineHeightFactor: 1.5
       });
 
       // Dedication (if present) - placed between header and body
@@ -513,13 +510,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pdf.text(dedicationText, backCenterX, 0.88, { align: 'center' });
       }
 
-      // === SECTION 3: CTA "Create yours at www.LoomandPage.com" ===
-      // Preview: row 50 → Y = 2.65"
-      // Preview: text-[4px] font-bold
+      // === SECTION 3: CTA ===
       pdf.setFont(fontName, 'bold');
       pdf.setFontSize(8);
       pdf.setTextColor(0, 0, 0);
-      pdf.text(backCoverCTA, backCenterX, 2.65, { align: 'center' });
+      pdf.text(backCoverCTA, backCenterX, 2.40, { align: 'center' });
 
       // === SPINE ===
       const spineRgb = hexToRgb(spineColor);
