@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Expanded Layout to Match Preview)
+        // A. BACK COVER (Aligned with Front Image Top)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1249,24 +1249,24 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
-        // 2. LAYOUT CONSTANTS (Aggressively increased to match CSS visual weight)
-        
-        // Push the start point down significantly (15% of page height)
-        let currentY = pageHeightPx * 0.15; 
+        // 2. LAYOUT CONSTANTS
+        // Start Y: Match the Front Cover Image top (approx 7.5% down)
+        // This removes the excess white space at the top.
+        let currentY = pageHeightPx * 0.075; 
 
-        // Side Padding: 12% of width
-        const paddingX = backW_Px * 0.12; 
+        // Side Padding: Standard p-8 equivalent (~10.6%)
+        const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // Vertical Gaps: Increased to push content apart
-        const gapLarge = backW_Px * 0.08;  // Gap after Title
-        const gapMedium = backW_Px * 0.06; // Gap after Dedication
-        const gapSmall = backW_Px * 0.04;  // Gap before CTA
+        // Vertical Gaps: Balanced between "scrunched" and "aggressive"
+        const gapLarge = backW_Px * 0.06;  // Gap after Title
+        const gapMedium = backW_Px * 0.05; // Gap after Dedication
+        const gapSmall = backW_Px * 0.03;  // Gap before CTA
 
-        // 3. FONT SCALING (Increased to match browser rendering)
-        const fontHeader = backW_Px * 0.055;      // Larger Header
-        const fontBody = backW_Px * 0.036;        // Larger Body text
-        const fontDedication = backW_Px * 0.034;  // Larger Dedication
+        // 3. FONT SCALING (Refined)
+        const fontHeader = backW_Px * 0.05;       // ~Header
+        const fontBody = backW_Px * 0.032;        // ~Body (readable but not huge)
+        const fontDedication = backW_Px * 0.032;  // ~Italic
 
         // 4. DRAWING LOOP
         
@@ -1288,13 +1288,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // -- Body Text --
-        // Constrain body width slightly more to force wrapping (90% of content width)
+        // Constrain body to 90% width
         const bodyMaxWidth = contentWidth * 0.90; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
-        // Looser line height (1.8x) to match "leading-relaxed" in CSS
-        const lineHeight = fontBody * 1.8; 
+        // Line height 1.7 (Balanced)
+        const lineHeight = fontBody * 1.7; 
         
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
@@ -1302,7 +1302,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
         // -- CTA --
         ctx.fillStyle = '#000000';
-        ctx.font = `700 ${fontBody}px "Playfair Display", serif`; // Bold, same size as body
+        ctx.font = `700 ${fontBody}px "Playfair Display", serif`; 
         ctx.fillText(backCoverCTA, backCX, currentY);
 
         // Reset text baseline for subsequent drawing
