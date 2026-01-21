@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Width-Based Calibration to match Tab 2)
+        // A. BACK COVER (Width-Based Calibration)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1250,12 +1250,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
         // 2. DIMENSIONS (All based on WIDTH to match Tailwind ratios)
-        // Preview uses "p-8" (32px). On a standard 300px card, 32px is ~10.6% width.
+        // Preview uses "p-8" (32px) on a ~300px card = ~10.6% width.
+        // We apply this to both X and Y padding to maintain the "p-8" square look.
         const paddingX = backW_Px * 0.106; 
+        const paddingTop = backW_Px * 0.106; 
+
+        // Preview uses "gap-4" (16px) = ~5.3% of width.
+        const gap4 = backW_Px * 0.053; 
         
-        // Preview top padding is also "p-8".
-        // For the PDF, we simply start drawing at 10% of page height to be safe.
-        let currentY = pageHeightPx * 0.10;
+        // Preview uses "mt-2" (8px) = ~2.6% of width.
+        const mt2 = backW_Px * 0.026;
 
         // 3. FONTS (Scaled by Width)
         // Header: text-sm (14px/300px = 4.6%)
@@ -1265,14 +1269,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // Dedication: text-[10px] (10px/300px = 3.3%)
         const fontDedication = backW_Px * 0.033;
 
-        // 4. GAPS (Scaled by Width to lock aspect ratio with text)
-        // Preview uses "gap-4" (16px). 16px/300px = 5.3% of WIDTH.
-        const gap4 = backW_Px * 0.053; 
-        
-        // Preview uses "mt-2" (8px). 8px/300px = 2.6% of WIDTH.
-        const mt2 = backW_Px * 0.026;
+        // 4. DRAWING
+        let currentY = paddingTop;
 
-        // 5. DRAWING
         // Header
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
@@ -1298,7 +1297,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         const lineHeight = fontBody * 1.6;
         
-        // Note: Using helper to wrap text
+        // Draw wrapped text
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
         currentY += mt2; // Advance using mt-2 (Small Gap)
