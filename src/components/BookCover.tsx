@@ -1236,66 +1236,75 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Calibrated to Match Tab 2 Styles)
+        // A. BACK COVER (Strict Match to Tab 2 Layout)
         // -------------------------------------------------------
-
         const coverW_In = 6.125;
         const DPI = dpi;
         const pageHeightPx = totalHeight;
 
         const backW_Px = coverW_In * DPI;
         const backCX = backW_Px / 2;
-
+        
         // 1. Background
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
-        // 2. Metrics derived from Tailwind classes in Tab 2
-        // p-8 on 300px = ~10.6% padding
-        const paddingX = backW_Px * 0.106;
-        const contentWidth = backW_Px - (paddingX * 2);
+        // 2. DIMENSIONS (Source of Truth: Tab 2)
+        // Tab 2 uses "p-8". On a 300px card, 32px is ~10.6% width.
+        const paddingX = backW_Px * 0.106; 
+        
+        // Tab 2 uses "p-8" top padding. On a 400px card, 32px is ~8% height.
+        const paddingTop = pageHeightPx * 0.08;
+        
+        // Tab 2 uses "gap-4" (16px) between main items. ~4% height.
+        const gap4 = pageHeightPx * 0.04;
+        
+        // Tab 2 uses "mt-2" (8px) for the CTA. ~2% height.
+        const mt2 = pageHeightPx * 0.02;
 
-        // Start 10% down (approx matches p-8 top padding)
-        let currentY = pageHeightPx * 0.10;
+        // 3. FONTS (Scaled by Width)
+        // Header: text-sm (14px/300px = 4.6%)
+        const fontHeader = backW_Px * 0.046;
+        // Body/CTA: text-[9px] (9px/300px = 3%)
+        const fontBody = backW_Px * 0.03;
+        // Dedication: text-[10px] (10px/300px = 3.3%)
+        const fontDedication = backW_Px * 0.033;
 
-        // gap-4 on 400px height = ~4% gap
-        const gapSize = pageHeightPx * 0.04;
+        // 4. DRAWING
+        let currentY = paddingTop;
 
-        // 3. Fonts (Ratios: 14px/300px header, 9px/300px body)
-        const backTitleSize = backW_Px * 0.046;      // ~14px equivalent
-        const backDedicationSize = backW_Px * 0.033; // ~10px equivalent
-        const backBodySize = backW_Px * 0.03;        // ~9px equivalent
-
-        // 4. Draw Header
+        // Header
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.font = `500 ${backTitleSize}px "Playfair Display", serif`;
+        ctx.font = `500 ${fontHeader}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
+        
+        currentY += fontHeader + gap4; // Advance using gap-4
 
-        currentY += backTitleSize + gapSize;
-
-        // 5. Draw Dedication
+        // Dedication
         if (dedicationText) {
           ctx.fillStyle = '#666666';
-          ctx.font = `italic 400 ${backDedicationSize}px "Playfair Display", serif`;
+          ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += backDedicationSize + gapSize;
+          currentY += fontDedication + gap4; // Advance using gap-4
         }
 
-        // 6. Draw Body (Max width 90% of content area)
-        const bodyMaxWidth = contentWidth * 0.90;
+        // Body Text
+        const contentWidth = backW_Px - (paddingX * 2);
+        const bodyMaxWidth = contentWidth * 0.90; // max-w-[90%]
+        
         ctx.fillStyle = '#333333';
-        ctx.font = `400 ${backBodySize}px "Playfair Display", serif`;
-        const lineHeight = backBodySize * 1.6; // leading-relaxed
-
+        ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
+        const lineHeight = fontBody * 1.6;
+        
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
+        
+        currentY += mt2; // Advance using mt-2 (Small Gap)
 
-        currentY += gapSize;
-
-        // 7. Draw CTA
+        // CTA
         ctx.fillStyle = '#000000';
-        ctx.font = `700 ${backBodySize}px "Playfair Display", serif`;
+        ctx.font = `700 ${fontBody}px "Playfair Display", serif`;
         ctx.fillText(backCoverCTA, backCX, currentY);
 
         // Reset text baseline for subsequent drawing
@@ -2191,64 +2200,43 @@ p { margin-bottom: 1em; }`);
                         </>
                       )}
                       
-                      {/* Back Cover Preview (Fixed: Content stacked at top like Tab 2) */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 flex flex-col items-center text-center p-4 border-r border-gray-200">
+                      {/* Back Cover Preview (Scaled Replica of Tab 2) */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex-shrink-0 border-r border-gray-200">
                         
-                        {/* Content Group - mimicking Tab 2's gap-4 layout but scaled down */}
-                        <div className="flex flex-col items-center gap-1 w-full">
+                        {/* Scaling Container: We render the layout at 300px width (same as Tab 2) and scale it down */}
+                        <div className="origin-top-left scale-[0.33] sm:scale-[0.433] w-[300px] h-[400px]">
                           
-                          {/* Header */}
-                          <h4 style={{ 
-                            fontFamily: "'Playfair Display', Georgia, serif",
-                            fontSize: '6px', 
-                            fontWeight: 500, 
-                            color: 'hsl(0 0% 0%)', 
-                            textTransform: 'uppercase',
-                            margin: 0,
-                            letterSpacing: '0.05em'
-                          }}>
-                            {backCoverTitle}
-                          </h4>
-
-                          {/* Dedication */}
-                          {dedicationText && (
-                            <p style={{ 
-                              fontFamily: "'Playfair Display', Georgia, serif",
-                              fontSize: '4px', 
-                              color: 'hsl(0 0% 40%)', 
-                              fontStyle: 'italic',
-                              margin: 0
-                            }}>
-                              {dedicationText}
-                            </p>
-                          )}
-
-                          {/* Body */}
-                          <p style={{ 
-                            fontFamily: "'Playfair Display', Georgia, serif",
-                            fontSize: '3.5px', 
-                            color: 'hsl(0 0% 20%)', 
-                            lineHeight: 1.6,
-                            maxWidth: '92%',
-                            margin: 0
-                          }}>
-                            {backCoverBody}
-                          </p>
-
-                          {/* CTA - Sits directly below body with small gap */}
-                          <p style={{ 
-                            fontFamily: "'Playfair Display', Georgia, serif",
-                            fontSize: '3.5px', 
-                            fontWeight: 700, 
-                            color: 'hsl(0 0% 0%)',
-                            marginTop: '2px',
-                            marginBottom: 0
-                          }}>
-                            {backCoverCTA}
-                          </p>
+                          {/* --- EXACT COPY OF TAB 2 CODE --- */}
+                          <div className="w-full h-full bg-white p-8 flex flex-col items-center text-center">
+                            
+                            {/* Content Area - Top 2/3 */}
+                            <div className="flex-1 flex flex-col items-center justify-start gap-4">
+                              <h4 className="font-serif text-sm font-medium text-black tracking-wide uppercase">
+                                {backCoverTitle}
+                              </h4>
+                              
+                              {dedicationText && (
+                                <p className="font-serif text-[10px] text-gray-600 italic">
+                                  {dedicationText}
+                                </p>
+                              )}
+                              
+                              <p className="font-serif text-[9px] text-gray-800 leading-relaxed max-w-[90%]">
+                                {backCoverBody}
+                              </p>
+                              
+                              {/* CTA uses mt-2, breaking the gap-4 rhythm intentionally */}
+                              <p className="font-serif text-[9px] font-bold text-black mt-2">
+                                {backCoverCTA}
+                              </p>
+                            </div>
+                            {/* Bottom 1/3 Empty Space (Barcode Zone) */}
+                            <div className="h-[33%] w-full flex-shrink-0" />
+                            
+                          </div>
+                          {/* --- END TAB 2 CODE --- */}
+                          
                         </div>
-
-                        {/* The rest of the height is naturally empty (Barcode Zone) */}
                       </div>
                       {/* Spine - Smaller text */}
                       <div 
