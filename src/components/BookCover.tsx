@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Strict Match to Tab 2 Layout)
+        // A. BACK COVER (Width-Based Calibration)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1249,30 +1249,30 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
-        // 2. DIMENSIONS (Source of Truth: Tab 2)
-        // Tab 2 uses "p-8". On a 300px card, 32px is ~10.6% width.
-        const paddingX = backW_Px * 0.106; 
+        // 2. DIMENSIONS (All based on WIDTH for consistency)
+        // Preview uses "p-8" (32px) on 300px width = 10.6%
+        const paddingX = backW_Px * 0.106;
         
-        // Tab 2 uses "p-8" top padding. On a 400px card, 32px is ~8% height.
-        const paddingTop = pageHeightPx * 0.08;
-        
-        // Tab 2 uses "gap-4" (16px) between main items. ~4% height.
-        const gap4 = pageHeightPx * 0.04;
-        
-        // Tab 2 uses "mt-2" (8px) for the CTA. ~2% height.
-        const mt2 = pageHeightPx * 0.02;
+        // Preview top padding is also "p-8".
+        // In the PDF, we simply start drawing at Y = 10% of PAGE HEIGHT to be safe.
+        let currentY = pageHeightPx * 0.10;
 
         // 3. FONTS (Scaled by Width)
         // Header: text-sm (14px/300px = 4.6%)
         const fontHeader = backW_Px * 0.046;
-        // Body/CTA: text-[9px] (9px/300px = 3%)
-        const fontBody = backW_Px * 0.03;
+        // Body/CTA: text-[9px] (9px/300px = 3.0%)
+        const fontBody = backW_Px * 0.030;
         // Dedication: text-[10px] (10px/300px = 3.3%)
         const fontDedication = backW_Px * 0.033;
 
-        // 4. DRAWING
-        let currentY = paddingTop;
+        // 4. GAPS (Scaled by Width to lock aspect ratio with text)
+        // Preview uses "gap-4" (16px). 16px/300px = 5.3% of WIDTH.
+        const gap4 = backW_Px * 0.053; 
+        
+        // Preview uses "mt-2" (8px). 8px/300px = 2.6% of WIDTH.
+        const mt2 = backW_Px * 0.026;
 
+        // 5. DRAWING
         // Header
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
@@ -1280,14 +1280,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.font = `500 ${fontHeader}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        currentY += fontHeader + gap4; // Advance using gap-4
+        currentY += fontHeader + gap4; // Advance using width-based gap
 
         // Dedication
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += fontDedication + gap4; // Advance using gap-4
+          currentY += fontDedication + gap4; 
         }
 
         // Body Text
@@ -1300,7 +1300,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        currentY += mt2; // Advance using mt-2 (Small Gap)
+        currentY += mt2; // Small width-based gap
 
         // CTA
         ctx.fillStyle = '#000000';
