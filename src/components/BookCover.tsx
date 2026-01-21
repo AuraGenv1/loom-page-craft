@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Width-Based Calibration)
+        // A. BACK COVER (Width-Based Calibration to match Tab 2)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1249,12 +1249,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
-        // 2. DIMENSIONS (All based on WIDTH for consistency)
-        // Preview uses "p-8" (32px) on 300px width = 10.6%
-        const paddingX = backW_Px * 0.106;
+        // 2. DIMENSIONS (All based on WIDTH to match Tailwind ratios)
+        // Preview uses "p-8" (32px). On a standard 300px card, 32px is ~10.6% width.
+        const paddingX = backW_Px * 0.106; 
         
         // Preview top padding is also "p-8".
-        // In the PDF, we simply start drawing at Y = 10% of PAGE HEIGHT to be safe.
+        // For the PDF, we simply start drawing at 10% of page height to be safe.
         let currentY = pageHeightPx * 0.10;
 
         // 3. FONTS (Scaled by Width)
@@ -1298,9 +1298,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         const lineHeight = fontBody * 1.6;
         
+        // Note: Using helper to wrap text
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        currentY += mt2; // Small width-based gap
+        currentY += mt2; // Advance using mt-2 (Small Gap)
 
         // CTA
         ctx.fillStyle = '#000000';
