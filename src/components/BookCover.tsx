@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Canvas-First Layout)
+        // A. BACK COVER (Strict Preview Match)
         // -------------------------------------------------------
         const backW_Px = frontCoverWidth;
         const backCX = backW_Px / 2;
@@ -1245,55 +1245,61 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, totalHeight);
 
-        // 2. Layout Constants (Match Preview Proportions)
-        const contentTopY = totalHeight * 0.10; // Start content 10% down
-        const contentWidth = backW_Px * 0.85;    // Max width 85%
+        // 2. Constants matching the 'Back Cover' Preview Tab
+        // The Preview uses p-8 (approx 12% padding) and a 33% empty bottom.
+        const safeMarginX = backW_Px * 0.12; 
+        const contentWidth = backW_Px - (safeMarginX * 2);
         
-        // Dynamic Font Sizes (Scaled to width)
-        const backTitleSize = backW_Px * 0.05;      // ~Header
-        const backDedicationSize = backW_Px * 0.035; // ~Italic
-        const backBodySize = backW_Px * 0.032;       // ~Body
-        const backCtaSize = backW_Px * 0.032;        // ~CTA
+        // The "Barcode Zone" is the bottom 33%. Content must end before that.
+        const barcodeZoneY = totalHeight * 0.67; 
         
-        let currentY = contentTopY;
+        // Start content 12% down (matching top padding)
+        let currentY = totalHeight * 0.12;
 
-        // 3. Draw Header (Title)
+        // 3. Dynamic Font Sizes (Ratio matches Preview: 14px Header vs 9px Body)
+        const backTitleSize = backW_Px * 0.055;      // ~14px equivalent
+        const backDedicationSize = backW_Px * 0.035; // ~Italic
+        const backBodySize = backW_Px * 0.035;       // ~9px equivalent
+        const gapSize = totalHeight * 0.03;         // ~gap-4 equivalent
+
+        // 4. Draw Header (Title)
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.font = `500 ${backTitleSize}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        currentY += backTitleSize * 1.8; // Gap after title
+        currentY += backTitleSize + gapSize; // Advance Y
 
-        // 4. Draw Dedication (Optional)
+        // 5. Draw Dedication (if exists)
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${backDedicationSize}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += backDedicationSize * 1.8; // Gap after dedication
-        } else {
-          currentY += backTitleSize * 0.5; // Smaller gap if no dedication
+          currentY += backDedicationSize + gapSize; 
         }
 
-        // 5. Draw Body Text
+        // 6. Draw Body Text (Restricted Width)
+        // The preview restricts body to "max-w-[90%]" of the inner container
+        const bodyMaxWidth = contentWidth * 0.95;
+        
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${backBodySize}px "Playfair Display", serif`;
-        // Use helper to wrap text and get the new Y position
         const lineHeight = backBodySize * 1.6;
-        currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, contentWidth, lineHeight);
         
-        currentY += lineHeight * 0.8; // Gap before CTA
+        // Wrap text and update currentY
+        currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
+        
+        currentY += gapSize; // Gap before CTA
 
-        // 6. Draw CTA
+        // 7. Draw CTA (Bold)
         ctx.fillStyle = '#000000';
-        ctx.font = `700 ${backCtaSize}px "Playfair Display", serif`;
+        ctx.font = `700 ${backBodySize}px "Playfair Display", serif`;
         ctx.fillText(backCoverCTA, backCX, currentY);
         
         // Reset text baseline for subsequent drawing
         ctx.textBaseline = 'alphabetic';
 
-        // 7. Barcode Zone Indicator (Bottom 1/3) - Left empty for KDP
 
         // ========== SPINE ==========
         const spineX = frontCoverWidth;
