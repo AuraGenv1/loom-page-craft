@@ -872,6 +872,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const element = document.getElementById('kindle-front-stage');
         if (!element) throw new Error("Kindle stage not found");
 
+        // Ensure web fonts/layout have settled before snapshot (prevents subtle width/spacing drift)
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (document as any).fonts?.ready;
+        } catch {
+          // ignore
+        }
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
         // Capture at Scale 1 (Since the div is already 1600x2560px, we don't need to scale up)
         const canvas = await html2canvas(element, {
           scale: 1,
@@ -950,6 +959,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           console.error('Print container not found');
           throw new Error('Print container not found');
         }
+
+        // Ensure web fonts/layout have settled before snapshot (prevents subtle width/spacing drift)
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (document as any).fonts?.ready;
+        } catch {
+          // ignore
+        }
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         // Capture at high resolution (scale 4 = ~384 DPI)
         const canvas = await html2canvas(element, {
@@ -2207,13 +2225,14 @@ p { margin-bottom: 1em; }`);
                   letterSpacing: '0.02em',
                   maxWidth: '90%',
                   margin: 0,
+                  marginBottom: '12px',
                 }}
               >
                 {parsedTitle.mainTitle}
               </h1>
 
-              {/* Separator Line - thicker and darker */}
-              <div style={{ width: '48px', height: '3px', backgroundColor: '#000000', marginTop: '24px', marginBottom: '24px' }} />
+              {/* Separator Line - match Preview (thin + centered between title/subtitle) */}
+              <div style={{ width: '32px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginBottom: '12px' }} />
 
               {/* Subtitle */}
               {subtitle && (
@@ -2226,6 +2245,8 @@ p { margin-bottom: 1em; }`);
                     color: 'rgba(0,0,0,0.4)',
                     textAlign: 'center',
                     margin: 0,
+                    maxWidth: '90%',
+                    lineHeight: 1.6,
                   }}
                 >
                   {subtitle}
@@ -2238,8 +2259,9 @@ p { margin-bottom: 1em; }`);
               display: 'flex', 
               flexDirection: 'column', 
               alignItems: 'center', 
-              gap: '12px',
-              paddingBottom: '8px',
+              gap: '8px',
+              // Lift slightly to match the in-app Preview and reduce subtitle→logo whitespace
+              marginBottom: '18px',
             }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
@@ -2270,7 +2292,8 @@ p { margin-bottom: 1em; }`);
                   textAlign: 'center',
                   color: 'rgba(0,0,0,0.3)',
                   lineHeight: 1.4,
-                  maxWidth: '220px',
+                  // Match Preview proportions (wider disclaimer block)
+                  maxWidth: '370px',
                   fontStyle: 'italic',
                   margin: 0,
                 }}
@@ -2341,13 +2364,14 @@ p { margin-bottom: 1em; }`);
                 letterSpacing: '0.02em',
                 maxWidth: '85%',
                 margin: 0,
+                marginBottom: '40px',
               }}
             >
               {parsedTitle.mainTitle}
             </h1>
 
-            {/* Separator Line - thicker and darker, scaled up */}
-            <div style={{ width: '144px', height: '5px', backgroundColor: '#000000', marginTop: '60px', marginBottom: '60px' }} />
+            {/* Separator Line - match Preview (thin + centered between title/subtitle) */}
+            <div style={{ width: '144px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginBottom: '40px' }} />
 
             {/* Subtitle */}
             {subtitle && (
@@ -2375,8 +2399,9 @@ p { margin-bottom: 1em; }`);
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center', 
-            gap: '36px',
-            paddingBottom: '24px',
+            gap: '24px',
+            // Lift slightly to match Preview and reduce subtitle→logo whitespace
+            marginBottom: '54px',
           }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
@@ -2410,7 +2435,8 @@ p { margin-bottom: 1em; }`);
                 textAlign: 'center',
                 color: 'rgba(0,0,0,0.3)',
                 lineHeight: 1.5,
-                maxWidth: '600px',
+                // Match Preview proportions (wider disclaimer block)
+                maxWidth: '1020px',
                 fontStyle: 'italic',
                 margin: 0,
               }}
