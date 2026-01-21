@@ -2191,59 +2191,64 @@ p { margin-bottom: 1em; }`);
                         </>
                       )}
                       
-                      {/* Back Cover Preview (Miniature Sizing for 2.2x Zoom) */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 flex flex-col items-center text-center p-3 border-r border-gray-200">
-                        {/* Header */}
-                        <h4 style={{ 
-                          fontFamily: "'Playfair Display', Georgia, serif",
-                          fontSize: '5px',
-                          fontWeight: 500, 
-                          color: 'hsl(0 0% 0%)', 
-                          textTransform: 'uppercase',
-                          marginTop: '8px',
-                          marginBottom: '4px',
-                          letterSpacing: '0.05em'
-                        }}>
-                          {backCoverTitle}
-                        </h4>
+                      {/* Back Cover Preview (Fixed: Content stacked at top like Tab 2) */}
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 flex flex-col items-center text-center p-4 border-r border-gray-200">
+                        
+                        {/* Content Group - mimicking Tab 2's gap-4 layout but scaled down */}
+                        <div className="flex flex-col items-center gap-1 w-full">
+                          
+                          {/* Header */}
+                          <h4 style={{ 
+                            fontFamily: "'Playfair Display', Georgia, serif",
+                            fontSize: '6px', 
+                            fontWeight: 500, 
+                            color: 'hsl(0 0% 0%)', 
+                            textTransform: 'uppercase',
+                            margin: 0,
+                            letterSpacing: '0.05em'
+                          }}>
+                            {backCoverTitle}
+                          </h4>
 
-                        {/* Dedication */}
-                        {dedicationText && (
+                          {/* Dedication */}
+                          {dedicationText && (
+                            <p style={{ 
+                              fontFamily: "'Playfair Display', Georgia, serif",
+                              fontSize: '4px', 
+                              color: 'hsl(0 0% 40%)', 
+                              fontStyle: 'italic',
+                              margin: 0
+                            }}>
+                              {dedicationText}
+                            </p>
+                          )}
+
+                          {/* Body */}
                           <p style={{ 
                             fontFamily: "'Playfair Display', Georgia, serif",
                             fontSize: '3.5px', 
-                            color: 'hsl(0 0% 40%)', 
-                            fontStyle: 'italic',
-                            marginBottom: '6px'
+                            color: 'hsl(0 0% 20%)', 
+                            lineHeight: 1.6,
+                            maxWidth: '92%',
+                            margin: 0
                           }}>
-                            {dedicationText}
+                            {backCoverBody}
                           </p>
-                        )}
 
-                        {/* Body */}
-                        <p style={{ 
-                          fontFamily: "'Playfair Display', Georgia, serif",
-                          fontSize: '3px',
-                          color: 'hsl(0 0% 20%)', 
-                          lineHeight: 1.6,
-                          maxWidth: '92%',
-                          marginBottom: '6px',
-                          overflow: 'hidden'
-                        }}>
-                          {backCoverBody}
-                        </p>
+                          {/* CTA - Sits directly below body with small gap */}
+                          <p style={{ 
+                            fontFamily: "'Playfair Display', Georgia, serif",
+                            fontSize: '3.5px', 
+                            fontWeight: 700, 
+                            color: 'hsl(0 0% 0%)',
+                            marginTop: '2px',
+                            marginBottom: 0
+                          }}>
+                            {backCoverCTA}
+                          </p>
+                        </div>
 
-                        {/* CTA - Pushed to visually match the PDF layout */}
-                        <p style={{ 
-                          fontFamily: "'Playfair Display', Georgia, serif",
-                          fontSize: '3.5px', 
-                          fontWeight: 700, 
-                          color: 'hsl(0 0% 0%)',
-                          marginTop: 'auto', 
-                          marginBottom: '40%'
-                        }}>
-                          {backCoverCTA}
-                        </p>
+                        {/* The rest of the height is naturally empty (Barcode Zone) */}
                       </div>
                       {/* Spine - Smaller text */}
                       <div 
