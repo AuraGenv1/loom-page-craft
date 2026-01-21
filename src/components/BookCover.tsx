@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Refined Airy Layout - Higher CTA)
+        // A. BACK COVER (Symmetric Spacing & Refined Density)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1250,24 +1250,18 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
         // 2. LAYOUT CONSTANTS
-        // Header starts aligned with Front Image Top (7.5%)
+        // Start Header at 7.5% down (Aligned with Front Image Top)
         let currentY = pageHeightPx * 0.075; 
-
-        // CTA Anchor: Moved UP from 50% to 44% (approx 2 lines higher)
-        // This sits comfortably above the middle line now.
-        const ctaFixedY = pageHeightPx * 0.44;
 
         // Margins
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // Vertical Gaps
-        const gapLarge = backW_Px * 0.06;  
+        // UNIFORM GAP: Ensures exact same spacing above and below the body
+        const uniformGap = backW_Px * 0.06;  
 
-        // 3. FONT SCALING 
+        // 3. FONT SCALING
         const fontHeader = backW_Px * 0.05;
-        
-        // Body font: 0.037 (Slightly adjusted for flow)
         const fontBody = backW_Px * 0.037;        
         const fontDedication = backW_Px * 0.034;
 
@@ -1279,14 +1273,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.font = `500 ${fontHeader}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        currentY += fontHeader + gapLarge; 
+        // Advance: Header Height + Uniform Gap
+        currentY += fontHeader + uniformGap; 
 
-        // -- Dedication --
+        // -- Dedication (Optional) --
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += fontDedication + gapLarge; 
+          // Advance: Dedication Height + Uniform Gap
+          currentY += fontDedication + uniformGap; 
         }
 
         // -- Body Text --
@@ -1295,19 +1291,19 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         
-        // Line Height: Reduced from 2.2 to 1.9 to fit the tighter space
-        // This keeps it airy but connects it better to the CTA.
-        const lineHeight = fontBody * 1.9; 
+        // Line Height: Tightened from 1.9 to 1.8 (Just barely tighter)
+        const lineHeight = fontBody * 1.8; 
         
+        // Draw wrapped text and update Y to the bottom of the paragraph
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        // -- CTA (Anchored Higher) --
-        // Use the fixed 44% mark unless text pushes it down
-        const finalCtaY = Math.max(currentY + lineHeight, ctaFixedY);
+        // -- CTA (Symmetric Positioning) --
+        // Apply the exact same gap here as we did after the header
+        currentY += uniformGap;
 
         ctx.fillStyle = '#000000';
         ctx.font = `700 ${fontBody}px "Playfair Display", serif`; // Bold
-        ctx.fillText(backCoverCTA, backCX, finalCtaY);
+        ctx.fillText(backCoverCTA, backCX, currentY);
 
         // Reset text baseline for subsequent drawing
         ctx.textBaseline = 'alphabetic';
