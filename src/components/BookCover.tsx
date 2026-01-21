@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Strict Preview Match)
+        // A. BACK COVER (Calibrated to Match Tab 2 Styles)
         // -------------------------------------------------------
         const backW_Px = frontCoverWidth;
         const backCX = backW_Px / 2;
@@ -1245,33 +1245,32 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, totalHeight);
 
-        // 2. Constants matching the 'Back Cover' Preview Tab
-        // The Preview uses p-8 (approx 12% padding) and a 33% empty bottom.
-        const safeMarginX = backW_Px * 0.12; 
-        const contentWidth = backW_Px - (safeMarginX * 2);
+        // 2. Metrics derived from Tailwind classes in Tab 2
+        // p-8 on 300px = ~10.6% padding
+        const paddingX = backW_Px * 0.106; 
+        const contentWidth = backW_Px - (paddingX * 2);
         
-        // The "Barcode Zone" is the bottom 33%. Content must end before that.
-        const barcodeZoneY = totalHeight * 0.67; 
-        
-        // Start content 12% down (matching top padding)
-        let currentY = totalHeight * 0.12;
+        // Start 10% down (approx matches p-8 top padding)
+        let currentY = totalHeight * 0.10; 
 
-        // 3. Dynamic Font Sizes (Ratio matches Preview: 14px Header vs 9px Body)
-        const backTitleSize = backW_Px * 0.055;      // ~14px equivalent
-        const backDedicationSize = backW_Px * 0.035; // ~Italic
-        const backBodySize = backW_Px * 0.035;       // ~9px equivalent
-        const gapSize = totalHeight * 0.03;         // ~gap-4 equivalent
+        // gap-4 on 400px height = ~4% gap
+        const gapSize = totalHeight * 0.04; 
 
-        // 4. Draw Header (Title)
+        // 3. Fonts (Ratios: 14px/300px header, 9px/300px body)
+        const backTitleSize = backW_Px * 0.046;      // ~14px equivalent
+        const backDedicationSize = backW_Px * 0.033; // ~10px equivalent
+        const backBodySize = backW_Px * 0.03;        // ~9px equivalent
+
+        // 4. Draw Header
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.font = `500 ${backTitleSize}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        currentY += backTitleSize + gapSize; // Advance Y
+        currentY += backTitleSize + gapSize;
 
-        // 5. Draw Dedication (if exists)
+        // 5. Draw Dedication
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${backDedicationSize}px "Playfair Display", serif`;
@@ -1279,20 +1278,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           currentY += backDedicationSize + gapSize; 
         }
 
-        // 6. Draw Body Text (Restricted Width)
-        // The preview restricts body to "max-w-[90%]" of the inner container
-        const bodyMaxWidth = contentWidth * 0.95;
-        
+        // 6. Draw Body (Max width 90% of content area)
+        const bodyMaxWidth = contentWidth * 0.90;
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${backBodySize}px "Playfair Display", serif`;
-        const lineHeight = backBodySize * 1.6;
+        const lineHeight = backBodySize * 1.6; // leading-relaxed
         
-        // Wrap text and update currentY
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        currentY += gapSize; // Gap before CTA
+        currentY += gapSize; 
 
-        // 7. Draw CTA (Bold)
+        // 7. Draw CTA
         ctx.fillStyle = '#000000';
         ctx.font = `700 ${backBodySize}px "Playfair Display", serif`;
         ctx.fillText(backCoverCTA, backCX, currentY);
@@ -2191,28 +2187,65 @@ p { margin-bottom: 1em; }`);
                       )}
                       
                       {/* Back Cover - Clean White Design */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative flex-shrink-0 p-2 flex flex-col items-center text-center">
-                        {/* Content Area - Top 2/3 */}
-                        <div className="flex-1 flex flex-col items-center justify-start gap-1">
-                          <h4 className="font-serif text-[6px] font-medium text-black tracking-wide uppercase">
-                            {backCoverTitle}
-                          </h4>
-                          
-                          {dedicationText && (
-                            <p className="font-serif text-[4px] text-gray-600 italic">
-                              {dedicationText}
-                            </p>
-                          )}
-                          
-                          <p className="font-serif text-[4px] text-gray-800 leading-relaxed max-w-[90%]">
-                            {backCoverBody}
+                      <div style={{
+                        width: `${6.125 * 96}px`,
+                        height: '100%',
+                        backgroundColor: '#ffffff',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        padding: '10.6%',
+                        gap: '4%',
+                        boxSizing: 'border-box'
+                      }}>
+                        {/* Header */}
+                        <h4 style={{ 
+                          fontFamily: "'Playfair Display', Georgia, serif",
+                          fontSize: '14pt',
+                          fontWeight: 500, 
+                          color: '#000000', 
+                          textTransform: 'uppercase',
+                          margin: 0 
+                        }}>
+                          {backCoverTitle}
+                        </h4>
+                        {/* Dedication */}
+                        {dedicationText && (
+                          <p style={{ 
+                            fontFamily: "'Playfair Display', Georgia, serif",
+                            fontSize: '10pt', 
+                            color: '#666666', 
+                            fontStyle: 'italic',
+                            margin: 0
+                          }}>
+                            {dedicationText}
                           </p>
-                          <p className="font-serif text-[4px] font-bold text-black mt-0.5">
-                            {backCoverCTA}
-                          </p>
-                        </div>
-                        {/* Bottom 1/3 Empty Space */}
-                        <div className="h-[33%] w-full flex-shrink-0" />
+                        )}
+                        {/* Body */}
+                        <p style={{ 
+                          fontFamily: "'Playfair Display', Georgia, serif",
+                          fontSize: '9pt', 
+                          color: '#333333', 
+                          lineHeight: 1.6,
+                          maxWidth: '90%',
+                          margin: 0
+                        }}>
+                          {backCoverBody}
+                        </p>
+                        {/* CTA */}
+                        <p style={{ 
+                          fontFamily: "'Playfair Display', Georgia, serif",
+                          fontSize: '9pt', 
+                          fontWeight: 700, 
+                          color: '#000000',
+                          margin: 0
+                        }}>
+                          {backCoverCTA}
+                        </p>
+                        
+                        {/* Spacer to push content to top */}
+                        <div style={{ flexGrow: 1 }} />
                       </div>
                       {/* Spine - Smaller text */}
                       <div 
