@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import JSZip from 'jszip';
-import html2canvas from 'html2canvas';
+// html2canvas removed - using Canvas-First approach for exports
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
@@ -865,38 +865,381 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Kindle Cover JPG as Blob (html2canvas snapshot)
-    // Uses the hidden kindle-front-stage container for 100% visual parity
+    // ========== CANVAS-FIRST DRAWING HELPERS ==========
+    
+    // Helper: Load image for canvas (handles CORS)
+    const loadCanvasImage = async (url: string): Promise<HTMLImageElement | null> => {
+      if (!url) return null;
+      
+      try {
+        // First try to get base64 version to avoid CORS
+        const base64 = await convertImageToBase64(url);
+        if (!base64 || base64 === TRANSPARENT_PIXEL) return null;
+        
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        return new Promise((resolve) => {
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = base64;
+        });
+      } catch {
+        return null;
+      }
+    };
+    
+    // Helper: Draw text with word wrapping on canvas
+    const drawWrappedText = (
+      ctx: CanvasRenderingContext2D, 
+      text: string, 
+      x: number, 
+      y: number, 
+      maxWidth: number, 
+      lineHeight: number,
+      align: 'center' | 'left' | 'right' = 'center'
+    ): number => {
+      const words = text.split(' ');
+      let line = '';
+      let currentY = y;
+      
+      ctx.textAlign = align;
+      
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i] + ' ';
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && i > 0) {
+          ctx.fillText(line.trim(), x, currentY);
+          line = words[i] + ' ';
+          currentY += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line.trim(), x, currentY);
+      return currentY + lineHeight;
+    };
+    
+    // Helper: Draw rounded rect clipping path
+    const roundedRectPath = (
+      ctx: CanvasRenderingContext2D, 
+      x: number, 
+      y: number, 
+      width: number, 
+      height: number, 
+      radius: number
+    ) => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    };
+    
+    // Helper: Draw the Loom & Page logo using vector paths
+    const drawLoomLogo = (
+      ctx: CanvasRenderingContext2D, 
+      centerX: number, 
+      centerY: number, 
+      size: number
+    ) => {
+      const halfSize = size / 2;
+      const lineGap = size * 0.22;
+      const lineWidth = size * 0.06;
+      const inset = size * 0.1;
+      
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      
+      // Three vertical lines
+      ctx.beginPath();
+      ctx.moveTo(centerX - lineGap, centerY - halfSize + inset);
+      ctx.lineTo(centerX - lineGap, centerY + halfSize - inset);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - halfSize + inset);
+      ctx.lineTo(centerX, centerY + halfSize - inset);
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.moveTo(centerX + lineGap, centerY - halfSize + inset);
+      ctx.lineTo(centerX + lineGap, centerY + halfSize - inset);
+      ctx.stroke();
+      
+      // Horizontal crossbar
+      ctx.beginPath();
+      ctx.moveTo(centerX - lineGap - size * 0.08, centerY);
+      ctx.lineTo(centerX + lineGap + size * 0.08, centerY);
+      ctx.stroke();
+      
+      // Corner fold (top-right)
+      ctx.lineWidth = lineWidth * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(centerX + lineGap + size * 0.05, centerY - halfSize + inset);
+      ctx.lineTo(centerX + lineGap + size * 0.15, centerY - halfSize + inset);
+      ctx.lineTo(centerX + lineGap + size * 0.15, centerY - halfSize + inset + size * 0.12);
+      ctx.stroke();
+    };
+    
+    // Core Canvas Drawing Function for Front Cover
+    const drawFrontCoverToCanvas = async (
+      ctx: CanvasRenderingContext2D,
+      width: number,
+      height: number,
+      xOffset: number = 0,
+      yOffset: number = 0
+    ) => {
+      // Background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(xOffset, yOffset, width, height);
+      
+      // Design constants (relative to canvas size)
+      const padding = width * 0.075;
+      const contentWidth = width - padding * 2;
+      const centerX = xOffset + width / 2;
+      
+      // ========== IMAGE ==========
+      const imgWidth = width * 0.52;
+      const imgHeight = imgWidth; // Square
+      const imgX = centerX - imgWidth / 2;
+      const imgY = yOffset + height * 0.07;
+      const imgRadius = width * 0.015;
+      
+      // Draw image with rounded corners
+      if (displayUrl) {
+        const img = await loadCanvasImage(displayUrl);
+        if (img) {
+          ctx.save();
+          roundedRectPath(ctx, imgX, imgY, imgWidth, imgHeight, imgRadius);
+          ctx.clip();
+          
+          // object-fit: cover logic
+          const srcAspect = img.width / img.height;
+          let sx = 0, sy = 0, sw = img.width, sh = img.height;
+          if (srcAspect > 1) {
+            sw = img.height;
+            sx = (img.width - sw) / 2;
+          } else {
+            sh = img.width;
+            sy = (img.height - sh) / 2;
+          }
+          ctx.drawImage(img, sx, sy, sw, sh, imgX, imgY, imgWidth, imgHeight);
+          ctx.restore();
+          
+          // Border
+          ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+          ctx.lineWidth = width * 0.003;
+          roundedRectPath(ctx, imgX, imgY, imgWidth, imgHeight, imgRadius);
+          ctx.stroke();
+        }
+      }
+      
+      // ========== TITLE ==========
+      const titleY = imgY + imgHeight + height * 0.05;
+      const titleFontSize = width * 0.052;
+      ctx.font = `500 ${titleFontSize}px 'Playfair Display', Georgia, serif`;
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      
+      const titleMaxWidth = contentWidth * 0.85;
+      const titleLines = parsedTitle.mainTitle.split(' ');
+      let titleText = parsedTitle.mainTitle;
+      
+      // Measure and potentially wrap title
+      let titleEndY = drawWrappedText(ctx, titleText, centerX, titleY, titleMaxWidth, titleFontSize * 1.2, 'center');
+      
+      // ========== SEPARATOR LINE ==========
+      // Calculate exact center between title bottom and subtitle top
+      const separatorY = titleEndY + height * 0.025;
+      const separatorWidth = width * 0.15;
+      const separatorHeight = width * 0.0025;
+      
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(centerX - separatorWidth / 2, separatorY, separatorWidth, separatorHeight);
+      
+      // ========== SUBTITLE ==========
+      const subtitleY = separatorY + separatorHeight + height * 0.025;
+      if (subtitle) {
+        const subtitleFontSize = width * 0.019;
+        ctx.font = `400 ${subtitleFontSize}px 'Playfair Display', Georgia, serif`;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.letterSpacing = `${subtitleFontSize * 0.3}px`;
+        
+        const subtitleText = subtitle.toUpperCase();
+        const subtitleMaxWidth = contentWidth * 0.85;
+        drawWrappedText(ctx, subtitleText, centerX, subtitleY, subtitleMaxWidth, subtitleFontSize * 1.6, 'center');
+      }
+      
+      // ========== BOTTOM BRANDING (anchored at 92% height) ==========
+      const bottomAnchor = yOffset + height * 0.92;
+      
+      // Logo
+      const logoSize = width * 0.045;
+      const logoY = bottomAnchor - logoSize * 2.5;
+      drawLoomLogo(ctx, centerX, logoY, logoSize);
+      
+      // Brand Name
+      const brandFontSize = width * 0.022;
+      ctx.font = `400 ${brandFontSize}px 'Playfair Display', Georgia, serif`;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.textAlign = 'center';
+      ctx.fillText('Loom & Page', centerX, logoY + logoSize * 0.8);
+      
+      // Disclaimer (force 2-line wrap with 65% max-width)
+      const disclaimerFontSize = width * 0.015;
+      ctx.font = `italic ${disclaimerFontSize}px 'Playfair Display', Georgia, serif`;
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      const disclaimerMaxWidth = width * 0.65;
+      const disclaimerY = logoY + logoSize * 1.3;
+      drawWrappedText(ctx, 'AI-generated content for creative inspiration only. Not professional advice.', centerX, disclaimerY, disclaimerMaxWidth, disclaimerFontSize * 1.4, 'center');
+    };
+    
+    // ========== CANVAS-BASED Kindle JPG Generator ==========
     const generateCoverJPGBlob = async (): Promise<Blob | null> => {
       try {
-        const element = document.getElementById('kindle-front-stage');
-        if (!element) throw new Error("Kindle stage not found");
-
-        // Ensure web fonts/layout have settled before snapshot (prevents subtle width/spacing drift)
+        // Wait for fonts to load
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (document as any).fonts?.ready;
-        } catch {
-          // ignore
-        }
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-        // Capture at Scale 1 (Since the div is already 1600x2560px, we don't need to scale up)
-        const canvas = await html2canvas(element, {
-          scale: 1,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff"
-        });
-
+        } catch { /* ignore */ }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 1600;
+        canvas.height = 2560;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get canvas context');
+        
+        // Draw the front cover
+        await drawFrontCoverToCanvas(ctx, 1600, 2560, 0, 0);
+        
+        // Export as JPG
         return new Promise((resolve) => {
-          canvas.toBlob((blob) => {
-            resolve(blob);
-          }, 'image/jpeg', 0.95); // 95% Quality JPG
+          canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
         });
       } catch (err) {
-        console.error("Kindle JPG Snapshot failed:", err);
-        toast.error("Failed to generate Kindle cover. Please try again.");
+        console.error('Kindle JPG generation failed:', err);
+        toast.error('Failed to generate Kindle cover');
+        return null;
+      }
+    };
+    
+    // ========== CANVAS-BASED Full Wrap PDF Generator ==========
+    const generateCoverPDFBlob = async (): Promise<Blob | null> => {
+      try {
+        // Wait for fonts to load
+        try {
+          await (document as any).fonts?.ready;
+        } catch { /* ignore */ }
+        
+        // Calculate dimensions at 300 DPI
+        const dpi = 300;
+        const frontCoverWidth = 6.125 * dpi; // inches to pixels
+        const spineWidth = spineWidthInches * dpi;
+        const totalWidth = (frontCoverWidth * 2) + spineWidth;
+        const totalHeight = 9.25 * dpi;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = totalWidth;
+        canvas.height = totalHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get canvas context');
+        
+        // ========== BACK COVER ==========
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, frontCoverWidth, totalHeight);
+        
+        const backCenterX = frontCoverWidth / 2;
+        const backPadding = frontCoverWidth * 0.08;
+        
+        // Back Cover Header
+        const headerFontSize = frontCoverWidth * 0.023;
+        ctx.font = `500 ${headerFontSize}px 'Playfair Display', Georgia, serif`;
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.fillText(backCoverTitle.toUpperCase(), backCenterX, totalHeight * 0.08);
+        
+        // Dedication
+        if (dedicationText) {
+          ctx.font = `italic ${headerFontSize * 0.7}px 'Playfair Display', Georgia, serif`;
+          ctx.fillStyle = '#666666';
+          ctx.fillText(dedicationText, backCenterX, totalHeight * 0.11);
+        }
+        
+        // Back Cover Body
+        const bodyFontSize = frontCoverWidth * 0.017;
+        ctx.font = `400 ${bodyFontSize}px 'Playfair Display', Georgia, serif`;
+        ctx.fillStyle = '#333333';
+        const bodyY = dedicationText ? totalHeight * 0.13 : totalHeight * 0.11;
+        const bodyMaxWidth = frontCoverWidth * 0.85;
+        const bodyEndY = drawWrappedText(ctx, backCoverBody, backCenterX, bodyY, bodyMaxWidth, bodyFontSize * 1.6, 'center');
+        
+        // CTA
+        ctx.font = `bold ${bodyFontSize}px 'Playfair Display', Georgia, serif`;
+        ctx.fillStyle = '#000000';
+        ctx.fillText(backCoverCTA, backCenterX, bodyEndY + totalHeight * 0.02);
+        
+        // ========== SPINE ==========
+        const spineX = frontCoverWidth;
+        const hexToRgb = (hex: string) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result
+            ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+            : { r: 255, g: 255, b: 255 };
+        };
+        
+        const spineRgb = hexToRgb(spineColor);
+        ctx.fillStyle = `rgb(${spineRgb.r}, ${spineRgb.g}, ${spineRgb.b})`;
+        ctx.fillRect(spineX, 0, spineWidth, totalHeight);
+        
+        if (showSpineText) {
+          const textRgb = hexToRgb(spineTextColor);
+          ctx.fillStyle = `rgb(${textRgb.r}, ${textRgb.g}, ${textRgb.b})`;
+          
+          // Edition text (rotated, at top)
+          const spineFontSize = spineWidth * 0.35;
+          ctx.save();
+          ctx.translate(spineX + spineWidth / 2, totalHeight * 0.08);
+          ctx.rotate(-Math.PI / 2);
+          ctx.font = `400 ${spineFontSize}px 'Playfair Display', Georgia, serif`;
+          ctx.textAlign = 'left';
+          ctx.globalAlpha = 0.7;
+          ctx.fillText(editionText, 0, spineFontSize * 0.3);
+          ctx.restore();
+          
+          // Title (rotated, at bottom)
+          ctx.save();
+          ctx.translate(spineX + spineWidth / 2, totalHeight * 0.92);
+          ctx.rotate(-Math.PI / 2);
+          ctx.font = `500 ${spineFontSize * 1.2}px 'Playfair Display', Georgia, serif`;
+          ctx.textAlign = 'right';
+          ctx.globalAlpha = 1;
+          ctx.fillText((spineText || title).slice(0, 35), 0, spineFontSize * 0.4);
+          ctx.restore();
+        }
+        
+        // ========== FRONT COVER ==========
+        await drawFrontCoverToCanvas(ctx, frontCoverWidth, totalHeight, spineX + spineWidth, 0);
+        
+        // Convert canvas to PDF
+        const { pdf, pageWidth, pageHeight } = createKdpCoverPdf();
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        
+        return pdf.output('blob');
+      } catch (err) {
+        console.error('Full Wrap PDF generation failed:', err);
+        toast.error('Failed to generate KDP cover PDF');
         return null;
       }
     };
@@ -921,83 +1264,27 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const manuscriptBlob = await generateManuscriptPDFBlob();
         if (manuscriptBlob) zip.file('Manuscript.pdf', manuscriptBlob);
 
-        const epubBlob = await generateGuideEPUB({
-          title,
-          topic: topic || title,
-          bookData: bookData!,
-          coverImageUrl: displayUrl,
-          returnBlob: true
-        });
+        const epubBlob = await generateEPUBBlob();
         if (epubBlob) zip.file('Kindle-eBook.epub', epubBlob);
 
-        // CHANGED: Use the new generator instead of raw URL
-        const kindleCoverBlob = await generateCoverJPGBlob();
-        if (kindleCoverBlob) zip.file('Kindle_Cover.jpg', kindleCoverBlob);
+        const kindleJpgBlob = await generateCoverJPGBlob();
+        if (kindleJpgBlob) zip.file('Kindle_Cover.jpg', kindleJpgBlob);
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${safeTitle}-KDP-Package.zip`;
+        a.download = `${safeTitle}_KDP_Package.zip`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        toast.success('KDP Package downloaded successfully!');
+        toast.success('KDP Package downloaded!');
       } catch (err) {
         console.error('Failed to generate KDP package:', err);
         toast.error('Failed to generate KDP package');
       } finally {
         setIsGeneratingPackage(false);
-      }
-    };
-
-    // Helper: Generate Cover PDF as Blob using html2canvas snapshot
-    const generateCoverPDFBlob = async (): Promise<Blob | null> => {
-      try {
-        const element = document.getElementById('kdp-print-container');
-        if (!element) {
-          console.error('Print container not found');
-          throw new Error('Print container not found');
-        }
-
-        // Ensure web fonts/layout have settled before snapshot (prevents subtle width/spacing drift)
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (document as any).fonts?.ready;
-        } catch {
-          // ignore
-        }
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-        // Capture at high resolution (scale 4 = ~384 DPI)
-        const canvas = await html2canvas(element, {
-          scale: 4,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-        });
-
-        // Calculate final PDF dimensions based on dynamic spine
-        const spineW = getSpineWidth();
-        const totalWidth = 12.25 + spineW; // 6.125 * 2 + spine
-        const totalHeight = 9.25;
-
-        // Create PDF matching those exact dimensions
-        const pdf = new jsPDF({
-          orientation: 'landscape',
-          unit: 'in',
-          format: [totalWidth, totalHeight],
-        });
-
-        // Place image to fill 100% of the PDF
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(imgData, 'JPEG', 0, 0, totalWidth, totalHeight);
-
-        return pdf.output('blob');
-      } catch (e) {
-        console.error('Error generating cover PDF blob:', e);
-        toast.error('Failed to generate cover PDF. Please try again.');
-        return null;
       }
     };
 
@@ -2036,419 +2323,6 @@ p { margin-bottom: 1em; }`);
             </Tabs>
           </DialogContent>
         </Dialog>
-        
-        {/* Hidden Ghost Print Container for html2canvas snapshot */}
-        <div
-          id="kdp-print-container"
-          style={{
-            position: 'fixed',
-            left: '-9999px',
-            top: 0,
-            // Height: 9.25 inches = 888px at 96 DPI
-            height: `${9.25 * 96}px`,
-            // Width: (6.125 * 2) + spineWidth in inches, converted to pixels
-            width: `${(12.25 + spineWidthInches) * 96}px`,
-            display: 'flex',
-            flexDirection: 'row',
-            backgroundColor: '#ffffff',
-            fontFamily: "'Playfair Display', Georgia, serif",
-          }}
-        >
-          {/* BACK COVER */}
-          <div
-            style={{
-              width: `${6.125 * 96}px`,
-              height: '100%',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
-              padding: `${0.5 * 96}px`,
-              boxSizing: 'border-box',
-            }}
-          >
-            {/* Content Area - Top 2/3 */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: '12px', width: '100%' }}>
-              <h4 style={{ 
-                fontFamily: "'Playfair Display', Georgia, serif",
-                fontSize: '14pt', 
-                fontWeight: 500, 
-                color: '#000000', 
-                letterSpacing: '0.1em', 
-                textTransform: 'uppercase',
-                margin: 0,
-              }}>
-                {backCoverTitle}
-              </h4>
-              
-              {dedicationText && (
-                <p style={{ 
-                  fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: '10pt', 
-                  color: '#666666', 
-                  fontStyle: 'italic',
-                  margin: 0,
-                }}>
-                  {dedicationText}
-                </p>
-              )}
-              
-              <p style={{ 
-                fontFamily: "'Playfair Display', Georgia, serif",
-                fontSize: '10pt', 
-                color: '#333333', 
-                lineHeight: 1.6,
-                maxWidth: '85%',
-                margin: 0,
-              }}>
-                {backCoverBody}
-              </p>
-              <p style={{ 
-                fontFamily: "'Playfair Display', Georgia, serif",
-                fontSize: '10pt', 
-                fontWeight: 700, 
-                color: '#000000',
-                margin: 0,
-              }}>
-                {backCoverCTA}
-              </p>
-            </div>
-            {/* Bottom 1/3 Empty Space (Barcode Zone) */}
-            <div style={{ height: '33%', width: '100%', flexShrink: 0 }} />
-          </div>
-
-          {/* SPINE */}
-          <div
-            style={{
-              width: `${spineWidthInches * 96}px`,
-              height: '100%',
-              backgroundColor: spineColor,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: `${0.5 * 96}px 0`,
-              boxSizing: 'border-box',
-            }}
-          >
-            {showSpineText ? (
-              <>
-                {/* Edition Text at TOP */}
-                <span
-                  style={{
-                    writingMode: 'vertical-rl',
-                    textOrientation: 'mixed',
-                    transform: 'rotate(180deg)',
-                    fontFamily: "'Playfair Display', Georgia, serif",
-                    fontSize: '8pt',
-                    color: spineTextColor,
-                    opacity: 0.7,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {editionText}
-                </span>
-                {/* Title at BOTTOM */}
-                <span
-                  style={{
-                    writingMode: 'vertical-rl',
-                    textOrientation: 'mixed',
-                    transform: 'rotate(180deg)',
-                    fontFamily: "'Playfair Display', Georgia, serif",
-                    fontSize: '10pt',
-                    fontWeight: 500,
-                    color: spineTextColor,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxHeight: '80%',
-                  }}
-                >
-                  {(spineText || title).slice(0, 40)}
-                </span>
-              </>
-            ) : null}
-          </div>
-
-          {/* FRONT COVER */}
-          <div
-            style={{
-              width: `${6.125 * 96}px`,
-              height: '100%',
-              backgroundColor: '#ffffff',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-start',
-              alignItems: 'center',
-              padding: `${0.75 * 96}px ${0.5 * 96}px`,
-              boxSizing: 'border-box',
-            }}
-          >
-            {/* TOP GROUP: Image, Title, Separator, Subtitle */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', flexShrink: 0 }}>
-              {/* Cover Image - 52% width, square, fixed aspect ratio */}
-              <div
-                style={{
-                  width: '52%',
-                  aspectRatio: '1/1',
-                  marginBottom: '18px',
-                  overflow: 'hidden',
-                  borderRadius: '8px',
-                  border: '2px solid rgba(0,0,0,0.1)',
-                  backgroundColor: '#f5f5f5',
-                  flexShrink: 0,
-                }}
-              >
-                {displayUrl ? (
-                  <img
-                    src={displayUrl}
-                    alt="Front Cover"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    crossOrigin="anonymous"
-                  />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '12pt' }}>
-                    No Image
-                  </div>
-                )}
-              </div>
-
-              {/* Title */}
-              <h1
-                style={{
-                  fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: '24pt',
-                  fontWeight: 500,
-                  color: '#000000',
-                  lineHeight: 1.2,
-                  textAlign: 'center',
-                  letterSpacing: '0.02em',
-                  maxWidth: '90%',
-                  margin: 0,
-                }}
-              >
-                {parsedTitle.mainTitle}
-              </h1>
-
-              {/* Separator Line - centered between title and subtitle */}
-              <div style={{ width: '15%', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '24px', marginBottom: '24px' }} />
-
-              {/* Subtitle */}
-              {subtitle && (
-                <p
-                  style={{
-                    fontFamily: "'Playfair Display', Georgia, serif",
-                    fontSize: '9pt',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.3em',
-                    color: 'rgba(0,0,0,0.4)',
-                    textAlign: 'center',
-                    margin: 0,
-                    maxWidth: '90%',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {subtitle}
-                </p>
-              )}
-            </div>
-
-            {/* SPACER - pushes branding to bottom */}
-            <div style={{ flexGrow: 1 }} />
-
-            {/* BOTTOM BRANDING */}
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: '8px',
-              paddingBottom: `${0.5 * 96}px`,
-              flexShrink: 0,
-            }}>
-              {/* Logo */}
-              <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
-                <div style={{ position: 'absolute', left: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
-                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
-                <div style={{ position: 'absolute', right: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
-                <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
-                <div style={{ position: 'absolute', right: 0, top: 0, width: '8px', height: '8px', borderRight: '2px solid #000', borderTop: '2px solid #000', borderTopRightRadius: '2px', opacity: 0.6 }} />
-              </div>
-
-              {/* Brand Name */}
-              <span
-                style={{
-                  fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: '12pt',
-                  fontWeight: 400,
-                  letterSpacing: '-0.02em',
-                  color: 'rgba(0,0,0,0.4)',
-                }}
-              >
-                Loom & Page
-              </span>
-
-              {/* Disclaimer - 65% max-width for 2-line wrap */}
-              <p
-                style={{
-                  fontSize: '7pt',
-                  textAlign: 'center',
-                  color: 'rgba(0,0,0,0.3)',
-                  lineHeight: 1.4,
-                  maxWidth: '65%',
-                  fontStyle: 'italic',
-                  margin: 0,
-                }}
-              >
-                AI-generated content for creative inspiration only. Not professional advice.
-              </p>
-            </div>
-          </div>
-          
-        </div>
-
-        {/* Hidden Kindle Front Cover Stage for html2canvas snapshot (1600x2560px) */}
-        <div
-          id="kindle-front-stage"
-          style={{
-            position: 'fixed',
-            left: '-9999px',
-            top: 0,
-            width: '1600px',
-            height: '2560px',
-            backgroundColor: '#ffffff',
-            fontFamily: "'Playfair Display', Georgia, serif",
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            padding: '180px 120px',
-            boxSizing: 'border-box',
-          }}
-        >
-          {/* TOP GROUP: Image, Title, Separator, Subtitle */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', flexShrink: 0 }}>
-            {/* Cover Image - 52% width, square, rounded corners, no stretch */}
-            <div
-              style={{
-                width: '52%',
-                aspectRatio: '1/1',
-                marginBottom: '48px',
-                overflow: 'hidden',
-                borderRadius: '24px',
-                border: '4px solid rgba(0,0,0,0.1)',
-                backgroundColor: '#f5f5f5',
-                flexShrink: 0,
-              }}
-            >
-              {displayUrl ? (
-                <img
-                  src={displayUrl}
-                  alt="Kindle Cover"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  crossOrigin="anonymous"
-                />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '36pt' }}>
-                  No Image
-                </div>
-              )}
-            </div>
-
-            {/* Title */}
-            <h1
-              style={{
-                fontFamily: "'Playfair Display', Georgia, serif",
-                fontSize: '84px',
-                fontWeight: 500,
-                color: '#000000',
-                lineHeight: 1.2,
-                textAlign: 'center',
-                letterSpacing: '0.02em',
-                maxWidth: '85%',
-                margin: 0,
-              }}
-            >
-              {parsedTitle.mainTitle}
-            </h1>
-
-            {/* Separator Line - centered between title and subtitle */}
-            <div style={{ width: '15%', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '40px', marginBottom: '40px' }} />
-
-            {/* Subtitle */}
-            {subtitle && (
-              <p
-                style={{
-                  fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: '30px',
-                  fontWeight: 400,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.3em',
-                  color: 'rgba(0,0,0,0.4)',
-                  textAlign: 'center',
-                  margin: 0,
-                  maxWidth: '80%',
-                  lineHeight: 1.6,
-                }}
-              >
-                {subtitle}
-              </p>
-            )}
-          </div>
-
-          {/* SPACER - pushes branding to bottom */}
-          <div style={{ flexGrow: 1 }} />
-
-          {/* BOTTOM BRANDING */}
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            gap: '16px',
-            paddingBottom: '80px',
-            flexShrink: 0,
-          }}>
-            {/* Logo - 3x scaled from preview's 24px = 72px */}
-            <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
-              {/* Vertical loom lines */}
-              <div style={{ position: 'absolute', left: '8px', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
-              <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
-              <div style={{ position: 'absolute', right: '8px', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
-              {/* Horizontal page fold */}
-              <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
-              {/* Corner fold detail */}
-              <div style={{ position: 'absolute', right: 0, top: 0, width: '18px', height: '18px', borderRight: '4px solid #000', borderTop: '4px solid #000', borderTopRightRadius: '4px', opacity: 0.6 }} />
-            </div>
-
-            {/* Brand Name */}
-            <span
-              style={{
-                fontFamily: "'Playfair Display', Georgia, serif",
-                fontSize: '36px',
-                fontWeight: 400,
-                letterSpacing: '-0.02em',
-                color: 'rgba(0,0,0,0.4)',
-              }}
-            >
-              Loom & Page
-            </span>
-
-            {/* Disclaimer - 65% max-width for 2-line wrap */}
-            <p
-              style={{
-                fontSize: '24px',
-                textAlign: 'center',
-                color: 'rgba(0,0,0,0.3)',
-                lineHeight: 1.5,
-                maxWidth: '65%',
-                fontStyle: 'italic',
-                margin: 0,
-              }}
-            >
-              AI-generated content for creative inspiration only. Not professional advice.
-            </p>
-          </div>
-        </div>
       </>
     );
   }
