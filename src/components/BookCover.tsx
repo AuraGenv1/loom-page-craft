@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Symmetric Spacing & Refined Density)
+        // A. BACK COVER (Symmetric Spacing, Safe Wrap 90%)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1257,12 +1257,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // UNIFORM GAP: Ensures exact same spacing above and below the body
+        // UNIFORM GAP: Symmetric spacing above and below body
         const uniformGap = backW_Px * 0.06;  
 
         // 3. FONT SCALING
         const fontHeader = backW_Px * 0.05;
-        const fontBody = backW_Px * 0.037;        
+        
+        // Font 0.038 (Large enough to match Tab 2's visual weight)
+        const fontBody = backW_Px * 0.038;        
         const fontDedication = backW_Px * 0.034;
 
         // 4. DRAWING LOOP
@@ -1286,19 +1288,21 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // -- Body Text --
-        const bodyMaxWidth = contentWidth * 0.96; 
+        // WIDTH RESTORED TO 90%: Matches Tab 2's 'max-w-[90%]' exactly.
+        // We rely on the font size (0.038) to ensure 'your' wraps to the last line.
+        const bodyMaxWidth = contentWidth * 0.90; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         
-        // Line Height: Tightened from 1.9 to 1.8 (Just barely tighter)
+        // Line Height: 1.8 (Tight & Clean)
         const lineHeight = fontBody * 1.8; 
         
-        // Draw wrapped text and update Y to the bottom of the paragraph
+        // Draw wrapped text
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
         // -- CTA (Symmetric Positioning) --
-        // Apply the exact same gap here as we did after the header
+        // Apply the exact same gap here as we did after the header/dedication
         currentY += uniformGap;
 
         ctx.fillStyle = '#000000';
