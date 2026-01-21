@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Aligned with Front Image Top)
+        // A. BACK COVER (Widow Fix & CTA Alignment)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1250,26 +1250,25 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
         // 2. LAYOUT CONSTANTS
-        // Start Y: Match the Front Cover Image top (approx 7.5% down)
-        // This removes the excess white space at the top.
+        // Start Header at 7.5% down (Aligned with Front Image Top)
         let currentY = pageHeightPx * 0.075; 
 
-        // Side Padding: Standard p-8 equivalent (~10.6%)
+        // Side Padding: p-8 equivalent
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // Vertical Gaps: Balanced between "scrunched" and "aggressive"
-        const gapLarge = backW_Px * 0.06;  // Gap after Title
-        const gapMedium = backW_Px * 0.05; // Gap after Dedication
-        const gapSmall = backW_Px * 0.03;  // Gap before CTA
+        // Vertical Gaps
+        const gapLarge = backW_Px * 0.06;  
+        const gapMedium = backW_Px * 0.05; 
+        const gapSmall = backW_Px * 0.03; 
 
-        // 3. FONT SCALING (Refined)
-        const fontHeader = backW_Px * 0.05;       // ~Header
-        const fontBody = backW_Px * 0.032;        // ~Body (readable but not huge)
-        const fontDedication = backW_Px * 0.032;  // ~Italic
+        // 3. FONT SCALING (Tuned to fix text wrapping)
+        const fontHeader = backW_Px * 0.05;
+        // Reduced slightly from 0.032 to 0.031 to fit more words per line
+        const fontBody = backW_Px * 0.031;        
+        const fontDedication = backW_Px * 0.032;
 
         // 4. DRAWING LOOP
-        
         // -- Header --
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
@@ -1288,22 +1287,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // -- Body Text --
-        // Constrain body to 90% width
-        const bodyMaxWidth = contentWidth * 0.90; 
+        // Increased width to 95% (was 90%) to prevent single-word widows
+        const bodyMaxWidth = contentWidth * 0.95; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
-        // Line height 1.7 (Balanced)
         const lineHeight = fontBody * 1.7; 
         
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        currentY += gapSmall; 
+        // -- CTA (Forced Alignment) --
+        // We ensure the CTA never sits higher than 50% of the page height.
+        // This aligns it roughly with the Separator/Subtitle of the Front Cover.
+        const minCtaY = pageHeightPx * 0.50;
+        
+        // Use the calculated position OR the minimum floor, whichever is lower (visual 'lower' is higher value)
+        let ctaY = Math.max(currentY + gapSmall, minCtaY);
 
-        // -- CTA --
         ctx.fillStyle = '#000000';
-        ctx.font = `700 ${fontBody}px "Playfair Display", serif`; 
-        ctx.fillText(backCoverCTA, backCX, currentY);
+        ctx.font = `700 ${fontBody}px "Playfair Display", serif`; // Bold
+        ctx.fillText(backCoverCTA, backCX, ctaY);
 
         // Reset text baseline for subsequent drawing
         ctx.textBaseline = 'alphabetic';
