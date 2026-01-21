@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Widow Fix & CTA Alignment)
+        // A. BACK COVER (Airy Layout - Matches Tab 2 Visuals)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1250,23 +1250,26 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
         // 2. LAYOUT CONSTANTS
-        // Start Header at 7.5% down (Aligned with Front Image Top)
+        // Header starts aligned with Front Image Top (7.5%)
         let currentY = pageHeightPx * 0.075; 
 
-        // Side Padding: p-8 equivalent
+        // CTA Anchor: Exact middle of page (50%) to align with Front Subtitle
+        const ctaFixedY = pageHeightPx * 0.50;
+
+        // Margins
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
         // Vertical Gaps
         const gapLarge = backW_Px * 0.06;  
-        const gapMedium = backW_Px * 0.05; 
-        const gapSmall = backW_Px * 0.03; 
 
-        // 3. FONT SCALING (Tuned to fix text wrapping)
+        // 3. FONT SCALING (Increased for "Airy" look)
         const fontHeader = backW_Px * 0.05;
-        // Reduced slightly from 0.032 to 0.031 to fit more words per line
-        const fontBody = backW_Px * 0.031;        
-        const fontDedication = backW_Px * 0.032;
+        
+        // SIGNIFICANT CHANGE: Increased font from 0.031 to 0.038
+        // This forces the text to wrap earlier, matching the 7-line format of Tab 2
+        const fontBody = backW_Px * 0.038;        
+        const fontDedication = backW_Px * 0.034;
 
         // 4. DRAWING LOOP
         // -- Header --
@@ -1283,30 +1286,31 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += fontDedication + gapMedium; 
+          currentY += fontDedication + gapLarge; 
         }
 
         // -- Body Text --
-        // Increased width to 95% (was 90%) to prevent single-word widows
-        const bodyMaxWidth = contentWidth * 0.95; 
+        // Width 96% to allow "reality" to fit on the previous line if possible,
+        // or wrap more evenly if not.
+        const bodyMaxWidth = contentWidth * 0.96; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
-        const lineHeight = fontBody * 1.7; 
+        
+        // SIGNIFICANT CHANGE: Line Height 2.2 (Very loose/airy)
+        // This spreads the paragraph out to fill the white space.
+        const lineHeight = fontBody * 2.2; 
         
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        // -- CTA (Forced Alignment) --
-        // We ensure the CTA never sits higher than 50% of the page height.
-        // This aligns it roughly with the Separator/Subtitle of the Front Cover.
-        const minCtaY = pageHeightPx * 0.50;
-        
-        // Use the calculated position OR the minimum floor, whichever is lower (visual 'lower' is higher value)
-        let ctaY = Math.max(currentY + gapSmall, minCtaY);
+        // -- CTA (Anchored) --
+        // We ignore 'currentY' and strictly draw this at the 50% mark
+        // unless the text was so long it pushed past it.
+        const finalCtaY = Math.max(currentY + lineHeight, ctaFixedY);
 
         ctx.fillStyle = '#000000';
         ctx.font = `700 ${fontBody}px "Playfair Display", serif`; // Bold
-        ctx.fillText(backCoverCTA, backCX, ctaY);
+        ctx.fillText(backCoverCTA, backCX, finalCtaY);
 
         // Reset text baseline for subsequent drawing
         ctx.textBaseline = 'alphabetic';
