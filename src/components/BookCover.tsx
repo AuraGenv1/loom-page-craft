@@ -2156,6 +2156,7 @@ p { margin-bottom: 1em; }`);
           {/* FRONT COVER */}
           <div
             style={{
+              position: 'relative',
               width: `${6.125 * 96}px`,
               height: '100%',
               backgroundColor: '#ffffff',
@@ -2234,8 +2235,20 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING - increased gap (mt-32 equivalent = 128px) */}
-            <div style={{ marginTop: '128px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingBottom: '8px' }}>
+            {/* BOTTOM BRANDING - Absolute positioned to bottom */}
+            <div style={{ 
+              position: 'absolute', 
+              bottom: 0, 
+              left: 0, 
+              width: '100%', 
+              paddingBottom: `${0.5 * 96}px`,
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'flex-end',
+              gap: '12px',
+              zIndex: 10,
+            }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
                 <div style={{ position: 'absolute', left: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
@@ -2275,33 +2288,6 @@ p { margin-bottom: 1em; }`);
             </div>
           </div>
           
-          {/* TEMPORARY BLEED GUIDES - Remove after inspection */}
-          <div style={{ position: 'absolute', inset: 0, zIndex: 50, pointerEvents: 'none' }}>
-            {/* 0.125 inch Bleed / Trim Line (Red Dashed) */}
-            <div 
-              style={{ 
-                position: 'absolute', 
-                top: '0.125in', 
-                bottom: '0.125in', 
-                left: '0.125in', 
-                right: '0.125in', 
-                border: '2px dashed red',
-                opacity: 0.5
-              }} 
-            />
-            <div style={{
-              position: 'absolute',
-              top: '8px',
-              left: '8px',
-              color: 'red',
-              fontWeight: 'bold',
-              fontSize: '10px',
-              backgroundColor: 'rgba(255,255,255,0.8)',
-              padding: '4px'
-            }}>
-              TEMPORARY GUIDE: Red Line = Trim Edge (0.125")
-            </div>
-          </div>
         </div>
 
         {/* Hidden Kindle Front Cover Stage for html2canvas snapshot (1600x2560px) */}
@@ -2392,8 +2378,20 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - increased gap (mt-32 equivalent = 384px at 3x scale) */}
-          <div style={{ marginTop: '384px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingBottom: '24px' }}>
+          {/* BOTTOM BRANDING - Absolute positioned to bottom */}
+          <div style={{ 
+            position: 'absolute', 
+            bottom: 0, 
+            left: 0, 
+            width: '100%', 
+            paddingBottom: '120px',
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'flex-end',
+            gap: '36px',
+            zIndex: 10,
+          }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
               {/* Vertical loom lines */}
