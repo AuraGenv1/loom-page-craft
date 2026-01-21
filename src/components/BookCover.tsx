@@ -2234,8 +2234,8 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING - fixed margin instead of mt-auto */}
-            <div style={{ marginTop: '48px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingBottom: '8px' }}>
+            {/* BOTTOM BRANDING - increased gap (mt-32 equivalent = 128px) */}
+            <div style={{ marginTop: '128px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingBottom: '8px' }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
                 <div style={{ position: 'absolute', left: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
@@ -2272,6 +2272,34 @@ p { margin-bottom: 1em; }`);
               >
                 AI-generated content for creative inspiration only. Not professional advice.
               </p>
+            </div>
+          </div>
+          
+          {/* TEMPORARY BLEED GUIDES - Remove after inspection */}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 50, pointerEvents: 'none' }}>
+            {/* 0.125 inch Bleed / Trim Line (Red Dashed) */}
+            <div 
+              style={{ 
+                position: 'absolute', 
+                top: '0.125in', 
+                bottom: '0.125in', 
+                left: '0.125in', 
+                right: '0.125in', 
+                border: '2px dashed red',
+                opacity: 0.5
+              }} 
+            />
+            <div style={{
+              position: 'absolute',
+              top: '8px',
+              left: '8px',
+              color: 'red',
+              fontWeight: 'bold',
+              fontSize: '10px',
+              backgroundColor: 'rgba(255,255,255,0.8)',
+              padding: '4px'
+            }}>
+              TEMPORARY GUIDE: Red Line = Trim Edge (0.125")
             </div>
           </div>
         </div>
@@ -2364,8 +2392,8 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - fixed margin instead of mt-auto */}
-          <div style={{ marginTop: '144px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingBottom: '24px' }}>
+          {/* BOTTOM BRANDING - increased gap (mt-32 equivalent = 384px at 3x scale) */}
+          <div style={{ marginTop: '384px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingBottom: '24px' }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
               {/* Vertical loom lines */}
