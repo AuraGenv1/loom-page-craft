@@ -1080,28 +1080,77 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         drawWrappedText(ctx, subtitleText, centerX, subtitleY, subtitleMaxWidth, subtitleFontSize * 1.6, 'center');
       }
       
-      // ========== BOTTOM BRANDING (anchored at 92% height) ==========
-      const bottomAnchor = yOffset + height * 0.92;
+      // ---------------------------------------------------------
+      // 6. BOTTOM BRANDING (Fixed Spacing & Logo)
+      // ---------------------------------------------------------
       
-      // Logo
-      const logoSize = width * 0.045;
-      const logoY = bottomAnchor - logoSize * 2.5;
-      drawLoomLogo(ctx, centerX, logoY, logoSize);
+      // Calculate scaled sizes based on canvas width (e.g. 1600px)
+      const logoSize = width * 0.045;       // ~72px
+      const brandFontSize = width * 0.022;  // ~36px
+      const discFontSize = width * 0.015;   // ~24px
       
-      // Brand Name
-      const brandFontSize = width * 0.022;
-      ctx.font = `400 ${brandFontSize}px 'Playfair Display', Georgia, serif`;
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.textAlign = 'center';
-      ctx.fillText('Loom & Page', centerX, logoY + logoSize * 0.8);
+      // Vertical Gaps (breathing room)
+      const gapLogoToBrand = height * 0.015; // ~38px
+      const gapBrandToDisc = height * 0.01;  // ~25px
       
-      // Disclaimer (force 2-line wrap with 65% max-width)
-      const disclaimerFontSize = width * 0.015;
-      ctx.font = `italic ${disclaimerFontSize}px 'Playfair Display', Georgia, serif`;
+      // ANCHOR POINT: The baseline of the very last line of text (Disclaimer)
+      // We position this 5% from the bottom edge so it's safe but low.
+      const bottomBaseline = yOffset + height * 0.95;
+      
+      // A. Draw Disclaimer (Bottom Element)
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      const disclaimerMaxWidth = width * 0.65;
-      const disclaimerY = logoY + logoSize * 1.3;
-      drawWrappedText(ctx, 'AI-generated content for creative inspiration only. Not professional advice.', centerX, disclaimerY, disclaimerMaxWidth, disclaimerFontSize * 1.4, 'center');
+      ctx.font = `italic 400 ${discFontSize}px "Playfair Display", serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText("Not professional advice.", centerX, bottomBaseline);
+      ctx.fillText("AI-generated content for creative inspiration only.", centerX, bottomBaseline - (discFontSize * 1.5));
+      
+      // B. Draw Brand Name (Middle Element)
+      // Position: Above disclaimer lines + gap
+      const brandY = bottomBaseline - (discFontSize * 3.0) - gapBrandToDisc;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
+      ctx.fillText("Loom & Page", centerX, brandY);
+      
+      // C. Draw Logo (Top Element)
+      // Position: Above brand name + gap
+      const logoBottomY = brandY - gapLogoToBrand - (brandFontSize * 0.5); // Lift above text ascenders
+      const logoTopY = logoBottomY - logoSize;
+      const logoX = centerX - (logoSize / 2);
+      
+      // Set Logo Styles (Darker, Thicker)
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = width * 0.0025; // Proportional thickness
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      // DRAW LOGO GEOMETRY (Exact Match to Preview CSS)
+      const gap = logoSize * 0.25; // Space between vertical lines
+      
+      ctx.beginPath();
+      // 1. Left Vertical
+      ctx.moveTo(centerX - gap, logoTopY); 
+      ctx.lineTo(centerX - gap, logoBottomY);
+      
+      // 2. Center Vertical
+      ctx.moveTo(centerX, logoTopY); 
+      ctx.lineTo(centerX, logoBottomY);
+      
+      // 3. Right Vertical
+      ctx.moveTo(centerX + gap, logoTopY); 
+      ctx.lineTo(centerX + gap, logoBottomY);
+      
+      // 4. Horizontal Crossbar (Center)
+      const crossY = logoTopY + (logoSize / 2);
+      ctx.moveTo(centerX - gap - (logoSize * 0.1), crossY);
+      ctx.lineTo(centerX + gap + (logoSize * 0.1), crossY);
+      
+      // 5. Corner Fold (Top Right)
+      // Small triangle at top-right of the rightmost line
+      const foldSize = logoSize * 0.15;
+      ctx.moveTo(centerX + gap, logoTopY); // Start at top of right line
+      ctx.lineTo(centerX + gap + foldSize, logoTopY); // Out right
+      ctx.lineTo(centerX + gap + foldSize, logoTopY + foldSize); // Down
+      ctx.stroke();
     };
     
     // ========== CANVAS-BASED Kindle JPG Generator ==========
