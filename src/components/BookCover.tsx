@@ -2177,17 +2177,17 @@ p { margin-bottom: 1em; }`);
               width: `${6.125 * 96}px`,
               height: '100%',
               backgroundColor: '#ffffff',
-            display: 'flex',
+              display: 'flex',
               flexDirection: 'column',
               justifyContent: 'flex-start',
               alignItems: 'center',
-              padding: `${0.5 * 96}px`,
+              padding: `${0.75 * 96}px ${0.5 * 96}px`,
               boxSizing: 'border-box',
             }}
           >
             {/* TOP GROUP: Image, Title, Separator, Subtitle */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-              {/* Cover Image */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', flexShrink: 0 }}>
+              {/* Cover Image - 52% width, square, fixed aspect ratio */}
               <div
                 style={{
                   width: '52%',
@@ -2197,6 +2197,7 @@ p { margin-bottom: 1em; }`);
                   borderRadius: '8px',
                   border: '2px solid rgba(0,0,0,0.1)',
                   backgroundColor: '#f5f5f5',
+                  flexShrink: 0,
                 }}
               >
                 {displayUrl ? (
@@ -2230,8 +2231,8 @@ p { margin-bottom: 1em; }`);
                 {parsedTitle.mainTitle}
               </h1>
 
-              {/* Separator Line - 15% width, 2px height, centered */}
-              <div style={{ width: '15%', height: '2px', backgroundColor: 'rgba(0,0,0,0.15)', margin: '12px auto' }} />
+              {/* Separator Line - centered between title and subtitle */}
+              <div style={{ width: '15%', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '24px', marginBottom: '24px' }} />
 
               {/* Subtitle */}
               {subtitle && (
@@ -2253,14 +2254,17 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING - margin-top: auto pushes to bottom */}
+            {/* SPACER - pushes branding to bottom */}
+            <div style={{ flexGrow: 1 }} />
+
+            {/* BOTTOM BRANDING */}
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
               alignItems: 'center', 
-              gap: '4px',
-              marginTop: 'auto',
+              gap: '8px',
               paddingBottom: `${0.5 * 96}px`,
+              flexShrink: 0,
             }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
@@ -2318,13 +2322,13 @@ p { margin-bottom: 1em; }`);
             flexDirection: 'column',
             justifyContent: 'flex-start',
             alignItems: 'center',
-            padding: '120px',
+            padding: '180px 120px',
             boxSizing: 'border-box',
           }}
         >
           {/* TOP GROUP: Image, Title, Separator, Subtitle */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-            {/* Cover Image - 52% width, square, rounded corners */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', flexShrink: 0 }}>
+            {/* Cover Image - 52% width, square, rounded corners, no stretch */}
             <div
               style={{
                 width: '52%',
@@ -2334,6 +2338,7 @@ p { margin-bottom: 1em; }`);
                 borderRadius: '24px',
                 border: '4px solid rgba(0,0,0,0.1)',
                 backgroundColor: '#f5f5f5',
+                flexShrink: 0,
               }}
             >
               {displayUrl ? (
@@ -2367,8 +2372,8 @@ p { margin-bottom: 1em; }`);
               {parsedTitle.mainTitle}
             </h1>
 
-            {/* Separator Line - 15% width, scaled height, centered */}
-            <div style={{ width: '15%', height: '4px', backgroundColor: 'rgba(0,0,0,0.15)', margin: '40px auto' }} />
+            {/* Separator Line - centered between title and subtitle */}
+            <div style={{ width: '15%', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '40px', marginBottom: '40px' }} />
 
             {/* Subtitle */}
             {subtitle && (
@@ -2391,14 +2396,17 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - margin-top: auto pushes to bottom */}
+          {/* SPACER - pushes branding to bottom */}
+          <div style={{ flexGrow: 1 }} />
+
+          {/* BOTTOM BRANDING */}
           <div style={{ 
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center', 
-            gap: '12px',
-            marginTop: 'auto',
-            paddingBottom: '60px',
+            gap: '16px',
+            paddingBottom: '80px',
+            flexShrink: 0,
           }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
