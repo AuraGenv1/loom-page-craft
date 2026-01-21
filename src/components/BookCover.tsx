@@ -1081,76 +1081,94 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
       
       // ---------------------------------------------------------
-      // 6. BOTTOM BRANDING (Fixed Spacing & Logo)
+      // 6. BOTTOM BRANDING (Corrected Logo & Spacing)
       // ---------------------------------------------------------
       
-      // Calculate scaled sizes based on canvas width (e.g. 1600px)
-      const logoSize = width * 0.045;       // ~72px
-      const brandFontSize = width * 0.022;  // ~36px
-      const discFontSize = width * 0.015;   // ~24px
-      
-      // Vertical Gaps (breathing room)
-      const gapLogoToBrand = height * 0.015; // ~38px
-      const gapBrandToDisc = height * 0.01;  // ~25px
-      
-      // ANCHOR POINT: The baseline of the very last line of text (Disclaimer)
-      // We position this 5% from the bottom edge so it's safe but low.
-      const bottomBaseline = yOffset + height * 0.95;
-      
-      // A. Draw Disclaimer (Bottom Element)
+      // ANCHOR: We work upwards from the bottom of the page
+      const bottomMargin = height * 0.05; // 5% padding from bottom edge
+      const anchorY = yOffset + height - bottomMargin;
+
+      // 1. DISCLAIMER (Bottom-most element)
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      const discFontSize = width * 0.015; // ~24px
       ctx.font = `italic 400 ${discFontSize}px "Playfair Display", serif`;
       ctx.textAlign = 'center';
-      ctx.fillText("Not professional advice.", centerX, bottomBaseline);
-      ctx.fillText("AI-generated content for creative inspiration only.", centerX, bottomBaseline - (discFontSize * 1.5));
       
-      // B. Draw Brand Name (Middle Element)
-      // Position: Above disclaimer lines + gap
-      const brandY = bottomBaseline - (discFontSize * 3.0) - gapBrandToDisc;
+      const disclaimerLine2 = "Not professional advice.";
+      const disclaimerLine1 = "AI-generated content for creative inspiration only.";
+      
+      ctx.fillText(disclaimerLine2, centerX, anchorY);
+      ctx.fillText(disclaimerLine1, centerX, anchorY - (discFontSize * 1.4));
+      
+      // Calculate where the disclaimer ends (top y)
+      const disclaimerTopY = anchorY - (discFontSize * 1.4) - discFontSize;
+
+      // 2. BRAND NAME "Loom & Page"
+      const brandFontSize = width * 0.022; // ~36px
+      const gapBrandToDisc = height * 0.015; // Gap between brand and disclaimer
+      const brandY = disclaimerTopY - gapBrandToDisc;
+      
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
       ctx.fillText("Loom & Page", centerX, brandY);
+
+      // 3. LOGO (Exact Replica of CSS Preview)
+      const logoSize = width * 0.045; // ~72px (Same proportion as preview)
+      const gapLogoToBrand = height * 0.02; // Gap between logo and brand name
       
-      // C. Draw Logo (Top Element)
-      // Position: Above brand name + gap
-      const logoBottomY = brandY - gapLogoToBrand - (brandFontSize * 0.5); // Lift above text ascenders
-      const logoTopY = logoBottomY - logoSize;
-      const logoX = centerX - (logoSize / 2);
-      
-      // Set Logo Styles (Darker, Thicker)
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.lineWidth = width * 0.0025; // Proportional thickness
+      const logoH = logoSize;
+      const logoW = logoSize;
+      const logoX = centerX - (logoW / 2);
+      const logoY = brandY - brandFontSize - gapLogoToBrand - logoH;
+
+      // Set Styles for Logo
+      ctx.strokeStyle = '#000000'; // Pure black like CSS
+      ctx.globalAlpha = 0.6;       // Match CSS opacity-60
+      ctx.lineWidth = logoW * 0.06; // Match CSS 2px on 32px box (2/32 = 6%)
       ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      
-      // DRAW LOGO GEOMETRY (Exact Match to Preview CSS)
-      const gap = logoSize * 0.25; // Space between vertical lines
+
+      // GEOMETRY MAPPING (Based on CSS classes):
+      // left-1 / right-1 on w-8 box = 12.5% inset
+      const insetX = logoW * 0.125; 
+      // top-1 / bottom-1 = 12.5% inset
+      const insetY = logoH * 0.125; 
+
+      // A. Three Vertical Lines
+      ctx.beginPath();
+      // Left Line
+      ctx.moveTo(logoX + insetX, logoY + insetY);
+      ctx.lineTo(logoX + insetX, logoY + logoH - insetY);
+      // Center Line
+      ctx.moveTo(centerX, logoY + insetY);
+      ctx.lineTo(centerX, logoY + logoH - insetY);
+      // Right Line
+      ctx.moveTo(logoX + logoW - insetX, logoY + insetY);
+      ctx.lineTo(logoX + logoW - insetX, logoY + logoH - insetY);
+      ctx.stroke();
+
+      // B. Horizontal Fold (Center)
+      ctx.beginPath();
+      ctx.moveTo(logoX, logoY + (logoH / 2));
+      ctx.lineTo(logoX + logoW, logoY + (logoH / 2));
+      ctx.stroke();
+
+      // C. Corner Fold Detail (Top Right)
+      // CSS: w-2 h-2 on w-8 parent = 25% size
+      const cornerSize = logoW * 0.25;
+      const cornerX = logoX + logoW;       // Right edge
+      const cornerY = logoY;               // Top edge
       
       ctx.beginPath();
-      // 1. Left Vertical
-      ctx.moveTo(centerX - gap, logoTopY); 
-      ctx.lineTo(centerX - gap, logoBottomY);
-      
-      // 2. Center Vertical
-      ctx.moveTo(centerX, logoTopY); 
-      ctx.lineTo(centerX, logoBottomY);
-      
-      // 3. Right Vertical
-      ctx.moveTo(centerX + gap, logoTopY); 
-      ctx.lineTo(centerX + gap, logoBottomY);
-      
-      // 4. Horizontal Crossbar (Center)
-      const crossY = logoTopY + (logoSize / 2);
-      ctx.moveTo(centerX - gap - (logoSize * 0.1), crossY);
-      ctx.lineTo(centerX + gap + (logoSize * 0.1), crossY);
-      
-      // 5. Corner Fold (Top Right)
-      // Small triangle at top-right of the rightmost line
-      const foldSize = logoSize * 0.15;
-      ctx.moveTo(centerX + gap, logoTopY); // Start at top of right line
-      ctx.lineTo(centerX + gap + foldSize, logoTopY); // Out right
-      ctx.lineTo(centerX + gap + foldSize, logoTopY + foldSize); // Down
+      // Draw "L" shape at top right corner
+      // Top line of fold
+      ctx.moveTo(cornerX - cornerSize, cornerY); 
+      ctx.lineTo(cornerX, cornerY); 
+      // Right line of fold
+      ctx.lineTo(cornerX, cornerY + cornerSize);
       ctx.stroke();
+      
+      // Reset Alpha
+      ctx.globalAlpha = 1.0;
     };
     
     // ========== CANVAS-BASED Kindle JPG Generator ==========
