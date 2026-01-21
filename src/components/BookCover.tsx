@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Width-Based Calibration)
+        // A. BACK COVER (Expanded Layout to Match Preview)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1249,66 +1249,60 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, backW_Px, pageHeightPx);
 
-        // 2. DIMENSIONS (All based on WIDTH to match Tailwind ratios)
-        // Preview uses "p-8" (32px) on a ~300px card = ~10.6% width.
-        // We apply this to both X and Y padding to maintain the "p-8" square look.
-        const paddingX = backW_Px * 0.106; 
+        // 2. LAYOUT CONSTANTS (Aggressively increased to match CSS visual weight)
         
-        // CRITICAL FIX: Use Width for top padding too, not Height.
-        // This ensures the top margin matches the side margins exactly (p-8).
-        const paddingTop = backW_Px * 0.106; 
+        // Push the start point down significantly (15% of page height)
+        let currentY = pageHeightPx * 0.15; 
 
-        // Preview uses "gap-4" (16px) = ~5.3% of width.
-        const gap4 = backW_Px * 0.053; 
+        // Side Padding: 12% of width
+        const paddingX = backW_Px * 0.12; 
+        const contentWidth = backW_Px - (paddingX * 2);
+
+        // Vertical Gaps: Increased to push content apart
+        const gapLarge = backW_Px * 0.08;  // Gap after Title
+        const gapMedium = backW_Px * 0.06; // Gap after Dedication
+        const gapSmall = backW_Px * 0.04;  // Gap before CTA
+
+        // 3. FONT SCALING (Increased to match browser rendering)
+        const fontHeader = backW_Px * 0.055;      // Larger Header
+        const fontBody = backW_Px * 0.036;        // Larger Body text
+        const fontDedication = backW_Px * 0.034;  // Larger Dedication
+
+        // 4. DRAWING LOOP
         
-        // Preview uses "mt-2" (8px) = ~2.6% of width.
-        const mt2 = backW_Px * 0.026;
-
-        // 3. FONTS (Scaled by Width)
-        // Header: text-sm (14px/300px = 4.6%)
-        const fontHeader = backW_Px * 0.046;
-        // Body/CTA: text-[9px] (9px/300px = 3.0%)
-        const fontBody = backW_Px * 0.030;
-        // Dedication: text-[10px] (10px/300px = 3.3%)
-        const fontDedication = backW_Px * 0.033;
-
-        // 4. DRAWING
-        // Start drawing at the calculated top padding (width-based) + 5% safety buffer
-        let currentY = paddingTop + (pageHeightPx * 0.05);
-
-        // Header
+        // -- Header --
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.font = `500 ${fontHeader}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        currentY += fontHeader + gap4; // Advance using width-based gap
+        currentY += fontHeader + gapLarge; 
 
-        // Dedication
+        // -- Dedication --
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          currentY += fontDedication + gap4; 
+          currentY += fontDedication + gapMedium; 
         }
 
-        // Body Text
-        const contentWidth = backW_Px - (paddingX * 2);
-        const bodyMaxWidth = contentWidth * 0.90; // max-w-[90%]
+        // -- Body Text --
+        // Constrain body width slightly more to force wrapping (90% of content width)
+        const bodyMaxWidth = contentWidth * 0.90; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
-        const lineHeight = fontBody * 1.6;
+        // Looser line height (1.8x) to match "leading-relaxed" in CSS
+        const lineHeight = fontBody * 1.8; 
         
-        // Draw wrapped text
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        currentY += mt2; // Advance using mt-2 (Small Gap)
+        currentY += gapSmall; 
 
-        // CTA
+        // -- CTA --
         ctx.fillStyle = '#000000';
-        ctx.font = `700 ${fontBody}px "Playfair Display", serif`;
+        ctx.font = `700 ${fontBody}px "Playfair Display", serif`; // Bold, same size as body
         ctx.fillText(backCoverCTA, backCX, currentY);
 
         // Reset text baseline for subsequent drawing
