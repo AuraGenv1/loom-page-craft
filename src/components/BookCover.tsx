@@ -2156,18 +2156,18 @@ p { margin-bottom: 1em; }`);
           {/* FRONT COVER */}
           <div
             style={{
-              position: 'relative',
               width: `${6.125 * 96}px`,
               height: '100%',
               backgroundColor: '#ffffff',
               display: 'flex',
               flexDirection: 'column',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              padding: `${0.5 * 96}px`,
+              padding: `${0.75 * 96}px ${0.5 * 96}px`,
               boxSizing: 'border-box',
             }}
           >
-            {/* TOP GROUP */}
+            {/* TOP GROUP: Image, Title, Separator, Subtitle */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
               {/* Cover Image */}
               <div
@@ -2205,17 +2205,15 @@ p { margin-bottom: 1em; }`);
                   lineHeight: 1.2,
                   textAlign: 'center',
                   letterSpacing: '0.02em',
-                  marginBottom: '12px',
                   maxWidth: '90%',
                   margin: 0,
-                  marginTop: 0,
                 }}
               >
                 {parsedTitle.mainTitle}
               </h1>
 
-              {/* Separator Line - pushed down with larger top margin */}
-              <div style={{ width: '60px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '24px', marginBottom: '16px' }} />
+              {/* Separator Line - thicker and darker */}
+              <div style={{ width: '48px', height: '3px', backgroundColor: '#000000', marginTop: '24px', marginBottom: '24px' }} />
 
               {/* Subtitle */}
               {subtitle && (
@@ -2235,19 +2233,13 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING - Absolute positioned to bottom */}
+            {/* BOTTOM BRANDING - Flexbox pushes to bottom */}
             <div style={{ 
-              position: 'absolute', 
-              bottom: 0, 
-              left: 0, 
-              width: '100%', 
-              paddingBottom: `${0.5 * 96}px`,
               display: 'flex', 
               flexDirection: 'column', 
               alignItems: 'center', 
-              justifyContent: 'flex-end',
               gap: '12px',
-              zIndex: 10,
+              paddingBottom: '8px',
             }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
@@ -2303,12 +2295,13 @@ p { margin-bottom: 1em; }`);
             fontFamily: "'Playfair Display', Georgia, serif",
             display: 'flex',
             flexDirection: 'column',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '120px 100px',
+            padding: '180px 120px',
             boxSizing: 'border-box',
           }}
         >
-          {/* TOP GROUP: Image, Title, Subtitle */}
+          {/* TOP GROUP: Image, Title, Separator, Subtitle */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
             {/* Cover Image - 52% width, square, rounded corners */}
             <div
@@ -2336,7 +2329,7 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* Title - ~3x scaled from preview's text-lg (18px -> 54px, but we go bigger for 2560px) */}
+            {/* Title */}
             <h1
               style={{
                 fontFamily: "'Playfair Display', Georgia, serif",
@@ -2346,7 +2339,6 @@ p { margin-bottom: 1em; }`);
                 lineHeight: 1.2,
                 textAlign: 'center',
                 letterSpacing: '0.02em',
-                marginBottom: '36px',
                 maxWidth: '85%',
                 margin: 0,
               }}
@@ -2354,10 +2346,10 @@ p { margin-bottom: 1em; }`);
               {parsedTitle.mainTitle}
             </h1>
 
-            {/* Separator Line - pushed down with larger top margin */}
-            <div style={{ width: '180px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '72px', marginBottom: '48px' }} />
+            {/* Separator Line - thicker and darker, scaled up */}
+            <div style={{ width: '144px', height: '5px', backgroundColor: '#000000', marginTop: '60px', marginBottom: '60px' }} />
 
-            {/* Subtitle - uppercase, tracking, 2 lines max, NOT italic */}
+            {/* Subtitle */}
             {subtitle && (
               <p
                 style={{
@@ -2378,19 +2370,13 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - Absolute positioned to bottom */}
+          {/* BOTTOM BRANDING - Flexbox pushes to bottom */}
           <div style={{ 
-            position: 'absolute', 
-            bottom: 0, 
-            left: 0, 
-            width: '100%', 
-            paddingBottom: '120px',
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center', 
-            justifyContent: 'flex-end',
             gap: '36px',
-            zIndex: 10,
+            paddingBottom: '24px',
           }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
@@ -2404,7 +2390,7 @@ p { margin-bottom: 1em; }`);
               <div style={{ position: 'absolute', right: 0, top: 0, width: '18px', height: '18px', borderRight: '4px solid #000', borderTop: '4px solid #000', borderTopRightRadius: '4px', opacity: 0.6 }} />
             </div>
 
-            {/* Brand Name - 3x scaled from preview's 10px = 30px */}
+            {/* Brand Name */}
             <span
               style={{
                 fontFamily: "'Playfair Display', Georgia, serif",
@@ -2417,7 +2403,7 @@ p { margin-bottom: 1em; }`);
               Loom & Page
             </span>
 
-            {/* Disclaimer - 3x scaled from preview's 6px = 18px */}
+            {/* Disclaimer */}
             <p
               style={{
                 fontSize: '24px',
