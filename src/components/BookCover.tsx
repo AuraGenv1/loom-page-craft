@@ -1253,6 +1253,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // Preview uses "p-8" (32px) on a ~300px card = ~10.6% width.
         // We apply this to both X and Y padding to maintain the "p-8" square look.
         const paddingX = backW_Px * 0.106; 
+        
+        // CRITICAL FIX: Use Width for top padding too, not Height.
+        // This ensures the top margin matches the side margins exactly (p-8).
         const paddingTop = backW_Px * 0.106; 
 
         // Preview uses "gap-4" (16px) = ~5.3% of width.
@@ -1270,7 +1273,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const fontDedication = backW_Px * 0.033;
 
         // 4. DRAWING
-        let currentY = paddingTop;
+        // Start drawing at the calculated top padding (width-based) + 5% safety buffer
+        let currentY = paddingTop + (pageHeightPx * 0.05);
 
         // Header
         ctx.fillStyle = '#000000';
