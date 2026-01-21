@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Symmetric Spacing, Safe Wrap 90%)
+        // A. BACK COVER (Symmetric, 88% Width Fix)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1257,13 +1257,12 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // UNIFORM GAP: Symmetric spacing above and below body
+        // UNIFORM GAP: Matches the space above and below the paragraph
         const uniformGap = backW_Px * 0.06;  
 
         // 3. FONT SCALING
         const fontHeader = backW_Px * 0.05;
-        
-        // Font 0.038 (Large enough to match Tab 2's visual weight)
+        // Large enough to be airy (0.038)
         const fontBody = backW_Px * 0.038;        
         const fontDedication = backW_Px * 0.034;
 
@@ -1275,34 +1274,32 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         ctx.font = `500 ${fontHeader}px "Playfair Display", serif`;
         ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        // Advance: Header Height + Uniform Gap
+        // Advance
         currentY += fontHeader + uniformGap; 
 
-        // -- Dedication (Optional) --
+        // -- Dedication --
         if (dedicationText) {
           ctx.fillStyle = '#666666';
           ctx.font = `italic 400 ${fontDedication}px "Playfair Display", serif`;
           ctx.fillText(dedicationText, backCX, currentY);
-          // Advance: Dedication Height + Uniform Gap
           currentY += fontDedication + uniformGap; 
         }
 
         // -- Body Text --
-        // WIDTH RESTORED TO 90%: Matches Tab 2's 'max-w-[90%]' exactly.
-        // We rely on the font size (0.038) to ensure 'your' wraps to the last line.
-        const bodyMaxWidth = contentWidth * 0.90; 
+        // CRITICAL FIX: 88% Width.
+        // 90% was too wide, keeping "your" on the previous line.
+        // 88% cuts the line earlier, forcing "your curiosity into reality" onto the last line.
+        const bodyMaxWidth = contentWidth * 0.88; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         
-        // Line Height: 1.8 (Tight & Clean)
+        // Line Height: 1.8 (Tight enough to keep the group cohesive)
         const lineHeight = fontBody * 1.8; 
         
-        // Draw wrapped text
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        // -- CTA (Symmetric Positioning) --
-        // Apply the exact same gap here as we did after the header/dedication
+        // -- CTA (Symmetric Spacing) --
         currentY += uniformGap;
 
         ctx.fillStyle = '#000000';
