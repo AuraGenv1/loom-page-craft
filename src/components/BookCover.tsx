@@ -1081,14 +1081,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
       
       // ---------------------------------------------------------
-      // 6. BOTTOM BRANDING (Corrected Logo & Spacing)
+      // 6. BOTTOM BRANDING (Final Spacing & Size Fix)
       // ---------------------------------------------------------
       
-      // ANCHOR: We work upwards from the bottom of the page
+      // ANCHOR: Work upwards from the bottom
       const bottomMargin = height * 0.05; // 5% padding from bottom edge
       const anchorY = yOffset + height - bottomMargin;
 
-      // 1. DISCLAIMER (Bottom-most element)
+      // 1. DISCLAIMER (Bottom Anchor)
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       const discFontSize = width * 0.015; // ~24px
       ctx.font = `italic 400 ${discFontSize}px "Playfair Display", serif`;
@@ -1100,74 +1100,71 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       ctx.fillText(disclaimerLine2, centerX, anchorY);
       ctx.fillText(disclaimerLine1, centerX, anchorY - (discFontSize * 1.4));
       
-      // Calculate where the disclaimer ends (top y)
+      // Top of the disclaimer block
       const disclaimerTopY = anchorY - (discFontSize * 1.4) - discFontSize;
 
-      // 2. BRAND NAME "Loom & Page"
+      // 2. SPACING GAP (The "Equalizer")
+      // We use the same gap above and below the Brand Name
+      const verticalGap = height * 0.015; 
+
+      // 3. BRAND NAME "Loom & Page"
       const brandFontSize = width * 0.022; // ~36px
-      const gapBrandToDisc = height * 0.015; // Gap between brand and disclaimer
-      const brandY = disclaimerTopY - gapBrandToDisc;
+      const brandY = disclaimerTopY - verticalGap;
       
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
       ctx.fillText("Loom & Page", centerX, brandY);
 
-      // 3. LOGO (Exact Replica of CSS Preview)
-      const logoSize = width * 0.045; // ~72px (Same proportion as preview)
-      const gapLogoToBrand = height * 0.02; // Gap between logo and brand name
+      // 4. LOGO (Bigger & Bold)
+      // INCREASED SIZE: width * 0.085 (was 0.045) -> Matches Preview's w-8 visual weight
+      const logoSize = width * 0.085; 
       
       const logoH = logoSize;
       const logoW = logoSize;
       const logoX = centerX - (logoW / 2);
-      const logoY = brandY - brandFontSize - gapLogoToBrand - logoH;
+      // Position: Above brand name + equal gap
+      const logoY = brandY - brandFontSize - verticalGap - logoH;
 
-      // Set Styles for Logo
-      ctx.strokeStyle = '#000000'; // Pure black like CSS
-      ctx.globalAlpha = 0.6;       // Match CSS opacity-60
-      ctx.lineWidth = logoW * 0.06; // Match CSS 2px on 32px box (2/32 = 6%)
+      // Logo Styles
+      ctx.strokeStyle = '#000000'; 
+      ctx.globalAlpha = 0.6;       
+      ctx.lineWidth = logoW * 0.06; // Keep relative thickness (2px/32px ratio)
       ctx.lineCap = 'round';
 
-      // GEOMETRY MAPPING (Based on CSS classes):
-      // left-1 / right-1 on w-8 box = 12.5% inset
+      // Logo Geometry (Matches CSS: left-1/top-1 on w-8 box = 12.5%)
       const insetX = logoW * 0.125; 
-      // top-1 / bottom-1 = 12.5% inset
       const insetY = logoH * 0.125; 
 
-      // A. Three Vertical Lines
+      // A. Vertical Lines
       ctx.beginPath();
-      // Left Line
+      // Left
       ctx.moveTo(logoX + insetX, logoY + insetY);
       ctx.lineTo(logoX + insetX, logoY + logoH - insetY);
-      // Center Line
+      // Center
       ctx.moveTo(centerX, logoY + insetY);
       ctx.lineTo(centerX, logoY + logoH - insetY);
-      // Right Line
+      // Right
       ctx.moveTo(logoX + logoW - insetX, logoY + insetY);
       ctx.lineTo(logoX + logoW - insetX, logoY + logoH - insetY);
       ctx.stroke();
 
-      // B. Horizontal Fold (Center)
+      // B. Horizontal Fold
       ctx.beginPath();
       ctx.moveTo(logoX, logoY + (logoH / 2));
       ctx.lineTo(logoX + logoW, logoY + (logoH / 2));
       ctx.stroke();
 
-      // C. Corner Fold Detail (Top Right)
-      // CSS: w-2 h-2 on w-8 parent = 25% size
+      // C. Corner Fold (Top Right)
       const cornerSize = logoW * 0.25;
-      const cornerX = logoX + logoW;       // Right edge
-      const cornerY = logoY;               // Top edge
+      const cornerX = logoX + logoW;       
+      const cornerY = logoY;               
       
       ctx.beginPath();
-      // Draw "L" shape at top right corner
-      // Top line of fold
       ctx.moveTo(cornerX - cornerSize, cornerY); 
       ctx.lineTo(cornerX, cornerY); 
-      // Right line of fold
       ctx.lineTo(cornerX, cornerY + cornerSize);
       ctx.stroke();
       
-      // Reset Alpha
       ctx.globalAlpha = 1.0;
     };
     
