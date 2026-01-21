@@ -2213,8 +2213,8 @@ p { margin-bottom: 1em; }`);
                 {parsedTitle.mainTitle}
               </h1>
 
-              {/* Separator Line */}
-              <div style={{ width: '60px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', margin: '12px 0' }} />
+              {/* Separator Line - pushed down with larger top margin */}
+              <div style={{ width: '60px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '24px', marginBottom: '16px' }} />
 
               {/* Subtitle */}
               {subtitle && (
@@ -2234,8 +2234,8 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING */}
-            <div style={{ marginTop: 'auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingTop: '24px', paddingBottom: '8px' }}>
+            {/* BOTTOM BRANDING - fixed margin instead of mt-auto */}
+            <div style={{ marginTop: '48px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingBottom: '8px' }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
                 <div style={{ position: 'absolute', left: '4px', top: '4px', bottom: '4px', width: '2px', backgroundColor: '#000', borderRadius: '2px' }} />
@@ -2340,8 +2340,8 @@ p { margin-bottom: 1em; }`);
               {parsedTitle.mainTitle}
             </h1>
 
-            {/* Separator Line */}
-            <div style={{ width: '180px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', margin: '36px 0' }} />
+            {/* Separator Line - pushed down with larger top margin */}
+            <div style={{ width: '180px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginTop: '72px', marginBottom: '48px' }} />
 
             {/* Subtitle - uppercase, tracking, 2 lines max, NOT italic */}
             {subtitle && (
@@ -2364,8 +2364,8 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - anchored to bottom */}
-          <div style={{ marginTop: 'auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingTop: '72px', paddingBottom: '24px' }}>
+          {/* BOTTOM BRANDING - fixed margin instead of mt-auto */}
+          <div style={{ marginTop: '144px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingBottom: '24px' }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
               {/* Vertical loom lines */}
