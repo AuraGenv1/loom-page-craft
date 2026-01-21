@@ -2177,11 +2177,11 @@ p { margin-bottom: 1em; }`);
               width: `${6.125 * 96}px`,
               height: '100%',
               backgroundColor: '#ffffff',
-              display: 'flex',
+            display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-start',
               alignItems: 'center',
-              padding: `${0.75 * 96}px ${0.5 * 96}px`,
+              padding: `${0.5 * 96}px`,
               boxSizing: 'border-box',
             }}
           >
@@ -2192,7 +2192,7 @@ p { margin-bottom: 1em; }`);
                 style={{
                   width: '52%',
                   aspectRatio: '1/1',
-                  marginBottom: '24px',
+                  marginBottom: '18px',
                   overflow: 'hidden',
                   borderRadius: '8px',
                   border: '2px solid rgba(0,0,0,0.1)',
@@ -2225,14 +2225,13 @@ p { margin-bottom: 1em; }`);
                   letterSpacing: '0.02em',
                   maxWidth: '90%',
                   margin: 0,
-                  marginBottom: '12px',
                 }}
               >
                 {parsedTitle.mainTitle}
               </h1>
 
-              {/* Separator Line - match Preview (thin + centered between title/subtitle) */}
-              <div style={{ width: '32px', height: '1px', backgroundColor: 'rgba(0,0,0,0.2)', marginBottom: '12px' }} />
+              {/* Separator Line - 15% width, 2px height, centered */}
+              <div style={{ width: '15%', height: '2px', backgroundColor: 'rgba(0,0,0,0.15)', margin: '12px auto' }} />
 
               {/* Subtitle */}
               {subtitle && (
@@ -2254,14 +2253,14 @@ p { margin-bottom: 1em; }`);
               )}
             </div>
 
-            {/* BOTTOM BRANDING - Flexbox pushes to bottom */}
+            {/* BOTTOM BRANDING - margin-top: auto pushes to bottom */}
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
               alignItems: 'center', 
-              gap: '8px',
-              // Lift slightly to match the in-app Preview and reduce subtitle→logo whitespace
-              marginBottom: '18px',
+              gap: '4px',
+              marginTop: 'auto',
+              paddingBottom: `${0.5 * 96}px`,
             }}>
               {/* Logo */}
               <div style={{ position: 'relative', width: '36px', height: '36px', opacity: 0.6 }}>
@@ -2285,15 +2284,14 @@ p { margin-bottom: 1em; }`);
                 Loom & Page
               </span>
 
-              {/* Disclaimer */}
+              {/* Disclaimer - 65% max-width for 2-line wrap */}
               <p
                 style={{
                   fontSize: '7pt',
                   textAlign: 'center',
                   color: 'rgba(0,0,0,0.3)',
                   lineHeight: 1.4,
-                  // Match Preview proportions (wider disclaimer block)
-                  maxWidth: '370px',
+                  maxWidth: '65%',
                   fontStyle: 'italic',
                   margin: 0,
                 }}
@@ -2318,9 +2316,9 @@ p { margin-bottom: 1em; }`);
             fontFamily: "'Playfair Display', Georgia, serif",
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-start',
             alignItems: 'center',
-            padding: '180px 120px',
+            padding: '120px',
             boxSizing: 'border-box',
           }}
         >
@@ -2331,7 +2329,7 @@ p { margin-bottom: 1em; }`);
               style={{
                 width: '52%',
                 aspectRatio: '1/1',
-                marginBottom: '72px',
+                marginBottom: '48px',
                 overflow: 'hidden',
                 borderRadius: '24px',
                 border: '4px solid rgba(0,0,0,0.1)',
@@ -2364,14 +2362,13 @@ p { margin-bottom: 1em; }`);
                 letterSpacing: '0.02em',
                 maxWidth: '85%',
                 margin: 0,
-                marginBottom: '40px',
               }}
             >
               {parsedTitle.mainTitle}
             </h1>
 
-            {/* Separator Line - match Preview (thin + centered between title/subtitle) */}
-            <div style={{ width: '144px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', marginBottom: '40px' }} />
+            {/* Separator Line - 15% width, scaled height, centered */}
+            <div style={{ width: '15%', height: '4px', backgroundColor: 'rgba(0,0,0,0.15)', margin: '40px auto' }} />
 
             {/* Subtitle */}
             {subtitle && (
@@ -2394,14 +2391,14 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* BOTTOM BRANDING - Flexbox pushes to bottom */}
+          {/* BOTTOM BRANDING - margin-top: auto pushes to bottom */}
           <div style={{ 
             display: 'flex', 
             flexDirection: 'column', 
             alignItems: 'center', 
-            gap: '24px',
-            // Lift slightly to match Preview and reduce subtitle→logo whitespace
-            marginBottom: '54px',
+            gap: '12px',
+            marginTop: 'auto',
+            paddingBottom: '60px',
           }}>
             {/* Logo - 3x scaled from preview's 24px = 72px */}
             <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
@@ -2428,15 +2425,14 @@ p { margin-bottom: 1em; }`);
               Loom & Page
             </span>
 
-            {/* Disclaimer */}
+            {/* Disclaimer - 65% max-width for 2-line wrap */}
             <p
               style={{
                 fontSize: '24px',
                 textAlign: 'center',
                 color: 'rgba(0,0,0,0.3)',
                 lineHeight: 1.5,
-                // Match Preview proportions (wider disclaimer block)
-                maxWidth: '1020px',
+                maxWidth: '65%',
                 fontStyle: 'italic',
                 margin: 0,
               }}
