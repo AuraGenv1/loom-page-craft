@@ -1081,16 +1081,16 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
       
       // ---------------------------------------------------------
-      // 6. BOTTOM BRANDING (Final Spacing & Size Fix)
+      // 6. BOTTOM BRANDING (Final: Shades, Rounding, Center)
       // ---------------------------------------------------------
       
       // ANCHOR: Work upwards from the bottom
-      const bottomMargin = height * 0.05; // 5% padding from bottom edge
+      const bottomMargin = height * 0.05; // 5% padding from bottom
       const anchorY = yOffset + height - bottomMargin;
 
-      // 1. DISCLAIMER (Bottom Anchor)
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      const discFontSize = width * 0.015; // ~24px
+      // 1. DISCLAIMER
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Text Opacity 0.3
+      const discFontSize = width * 0.015;
       ctx.font = `italic 400 ${discFontSize}px "Playfair Display", serif`;
       ctx.textAlign = 'center';
       
@@ -1100,72 +1100,88 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       ctx.fillText(disclaimerLine2, centerX, anchorY);
       ctx.fillText(disclaimerLine1, centerX, anchorY - (discFontSize * 1.4));
       
-      // Top of the disclaimer block
+      // Calculate Top of Disclaimer Block
       const disclaimerTopY = anchorY - (discFontSize * 1.4) - discFontSize;
 
-      // 2. SPACING GAP (The "Equalizer")
-      // We use the same gap above and below the Brand Name
-      const verticalGap = height * 0.015; 
-
-      // 3. BRAND NAME "Loom & Page"
-      const brandFontSize = width * 0.022; // ~36px
-      const brandY = disclaimerTopY - verticalGap;
-      
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
-      ctx.fillText("Loom & Page", centerX, brandY);
-
-      // 4. LOGO (Bigger & Bold)
-      // INCREASED SIZE: width * 0.085 (was 0.045) -> Matches Preview's w-8 visual weight
+      // 2. LOGO (Positioned high enough to leave room)
+      // We calculate positions first, then draw.
       const logoSize = width * 0.085; 
+      // Total available vertical space for branding area
+      const brandingHeight = height * 0.15; 
       
+      // Top of the Logo (calculated relative to disclaimer top)
       const logoH = logoSize;
       const logoW = logoSize;
       const logoX = centerX - (logoW / 2);
-      // Position: Above brand name + equal gap
-      const logoY = brandY - brandFontSize - verticalGap - logoH;
+      
+      // We place the logo at a fixed distance above the disclaimer to establish the "bracket"
+      const totalGap = height * 0.06; 
+      const logoBottomY = disclaimerTopY - totalGap;
+      const logoTopY = logoBottomY - logoH;
 
-      // Logo Styles
+      // 3. DRAW LOGO (Main Body - Darker)
+      // CSS Preview has parent opacity 0.6, so main lines are 0.6
       ctx.strokeStyle = '#000000'; 
       ctx.globalAlpha = 0.6;       
-      ctx.lineWidth = logoW * 0.06; // Keep relative thickness (2px/32px ratio)
+      ctx.lineWidth = logoSize * 0.06; 
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      // Logo Geometry (Matches CSS: left-1/top-1 on w-8 box = 12.5%)
-      const insetX = logoW * 0.125; 
-      const insetY = logoH * 0.125; 
+      const insetX = logoSize * 0.125; 
+      const insetY = logoSize * 0.125; 
 
       // A. Vertical Lines
       ctx.beginPath();
       // Left
-      ctx.moveTo(logoX + insetX, logoY + insetY);
-      ctx.lineTo(logoX + insetX, logoY + logoH - insetY);
+      ctx.moveTo(logoX + insetX, logoTopY + insetY);
+      ctx.lineTo(logoX + insetX, logoBottomY - insetY);
       // Center
-      ctx.moveTo(centerX, logoY + insetY);
-      ctx.lineTo(centerX, logoY + logoH - insetY);
+      ctx.moveTo(centerX, logoTopY + insetY);
+      ctx.lineTo(centerX, logoBottomY - insetY);
       // Right
-      ctx.moveTo(logoX + logoW - insetX, logoY + insetY);
-      ctx.lineTo(logoX + logoW - insetX, logoY + logoH - insetY);
+      ctx.moveTo(logoX + logoW - insetX, logoTopY + insetY);
+      ctx.lineTo(logoX + logoW - insetX, logoBottomY - insetY);
       ctx.stroke();
 
-      // B. Horizontal Fold
+      // B. Horizontal Crossbar
       ctx.beginPath();
-      ctx.moveTo(logoX, logoY + (logoH / 2));
-      ctx.lineTo(logoX + logoW, logoY + (logoH / 2));
+      ctx.moveTo(logoX, logoTopY + (logoH / 2));
+      ctx.lineTo(logoX + logoW, logoTopY + (logoH / 2));
       ctx.stroke();
 
-      // C. Corner Fold (Top Right)
-      const cornerSize = logoW * 0.25;
+      // 4. DRAW CORNER FOLD (Lighter Shade & Rounded)
+      // CSS Preview has corner opacity 0.6 INSIDE a parent of 0.6 = 0.36 total
+      ctx.globalAlpha = 0.36; 
+      
+      const cornerSize = logoSize * 0.25;
+      const cornerRadius = logoSize * 0.06; // Rounding
       const cornerX = logoX + logoW;       
-      const cornerY = logoY;               
+      const cornerY = logoTopY;               
       
       ctx.beginPath();
+      // Start left of corner
       ctx.moveTo(cornerX - cornerSize, cornerY); 
-      ctx.lineTo(cornerX, cornerY); 
+      // Arc the corner (Top Right)
+      ctx.arcTo(cornerX, cornerY, cornerX, cornerY + cornerSize, cornerRadius);
+      // Line down
       ctx.lineTo(cornerX, cornerY + cornerSize);
       ctx.stroke();
       
+      // Reset Alpha
       ctx.globalAlpha = 1.0;
+
+      // 5. BRAND NAME "Loom & Page" (Perfectly Centered)
+      // Calculate the middle point between Logo Bottom and Disclaimer Top
+      const centerPointY = (logoBottomY + disclaimerTopY) / 2;
+      
+      const brandFontSize = width * 0.022; 
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
+      
+      // Draw text centered at that midpoint (adjusting for baseline)
+      ctx.textBaseline = 'middle';
+      ctx.fillText("Loom & Page", centerX, centerPointY);
+      ctx.textBaseline = 'alphabetic'; // Reset defaults
     };
     
     // ========== CANVAS-BASED Kindle JPG Generator ==========
