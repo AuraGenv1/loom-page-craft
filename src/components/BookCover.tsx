@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Symmetric, 88% Width Fix)
+        // A. BACK COVER (Hardcoded Layout for Default Text)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1257,12 +1257,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const paddingX = backW_Px * 0.106; 
         const contentWidth = backW_Px - (paddingX * 2);
 
-        // UNIFORM GAP: Matches the space above and below the paragraph
+        // UNIFORM GAP: Symmetric spacing above and below body
         const uniformGap = backW_Px * 0.06;  
 
         // 3. FONT SCALING
         const fontHeader = backW_Px * 0.05;
-        // Large enough to be airy (0.038)
         const fontBody = backW_Px * 0.038;        
         const fontDedication = backW_Px * 0.034;
 
@@ -1286,20 +1285,38 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // -- Body Text --
-        // CRITICAL FIX: 88% Width.
-        // 90% was too wide, keeping "your" on the previous line.
-        // 88% cuts the line earlier, forcing "your curiosity into reality" onto the last line.
-        const bodyMaxWidth = contentWidth * 0.88; 
-        
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
-        
-        // Line Height: 1.8 (Tight enough to keep the group cohesive)
         const lineHeight = fontBody * 1.8; 
+
+        // CHECK: Is this the default text?
+        // We clean the strings to avoid whitespace mismatch issues.
+        const cleanCurrent = backCoverBody.replace(/\s+/g, ' ').trim();
+        const cleanDefault = "This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you're exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.".replace(/\s+/g, ' ').trim();
+
+        if (cleanCurrent === cleanDefault) {
+          // *** FORCE EXACT LINES FOR DEFAULT TEXT ***
+          const explicitLines = [
+            "This book was brought to life using Loom &",
+            "Page, the advanced AI platform that turns",
+            "ideas into professional-grade books in",
+            "minutes. Whether you're exploring a new",
+            "passion, documenting history, or planning",
+            "your next adventure, we help you weave",
+            "your curiosity into reality."
+          ];
+          explicitLines.forEach((line) => {
+            ctx.fillText(line, backCX, currentY);
+            currentY += lineHeight;
+          });
+        } else {
+          // *** AUTO-WRAP FOR CUSTOM TEXT ***
+          // Use 88% width to encourage cleaner breaks on custom text
+          const bodyMaxWidth = contentWidth * 0.88; 
+          currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
+        }
         
-        currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
-        
-        // -- CTA (Symmetric Spacing) --
+        // -- CTA (Symmetric Positioning) --
         currentY += uniformGap;
 
         ctx.fillStyle = '#000000';
