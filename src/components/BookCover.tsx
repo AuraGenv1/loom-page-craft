@@ -1236,7 +1236,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         if (!ctx) throw new Error('Failed to get canvas context');
         
         // -------------------------------------------------------
-        // A. BACK COVER (Airy Layout - Matches Tab 2 Visuals)
+        // A. BACK COVER (Refined Airy Layout - Higher CTA)
         // -------------------------------------------------------
         const coverW_In = 6.125;
         const DPI = dpi;
@@ -1253,8 +1253,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // Header starts aligned with Front Image Top (7.5%)
         let currentY = pageHeightPx * 0.075; 
 
-        // CTA Anchor: Exact middle of page (50%) to align with Front Subtitle
-        const ctaFixedY = pageHeightPx * 0.50;
+        // CTA Anchor: Moved UP from 50% to 44% (approx 2 lines higher)
+        // This sits comfortably above the middle line now.
+        const ctaFixedY = pageHeightPx * 0.44;
 
         // Margins
         const paddingX = backW_Px * 0.106; 
@@ -1263,12 +1264,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         // Vertical Gaps
         const gapLarge = backW_Px * 0.06;  
 
-        // 3. FONT SCALING (Increased for "Airy" look)
+        // 3. FONT SCALING 
         const fontHeader = backW_Px * 0.05;
         
-        // SIGNIFICANT CHANGE: Increased font from 0.031 to 0.038
-        // This forces the text to wrap earlier, matching the 7-line format of Tab 2
-        const fontBody = backW_Px * 0.038;        
+        // Body font: 0.037 (Slightly adjusted for flow)
+        const fontBody = backW_Px * 0.037;        
         const fontDedication = backW_Px * 0.034;
 
         // 4. DRAWING LOOP
@@ -1290,22 +1290,19 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
 
         // -- Body Text --
-        // Width 96% to allow "reality" to fit on the previous line if possible,
-        // or wrap more evenly if not.
         const bodyMaxWidth = contentWidth * 0.96; 
         
         ctx.fillStyle = '#333333';
         ctx.font = `400 ${fontBody}px "Playfair Display", serif`;
         
-        // SIGNIFICANT CHANGE: Line Height 2.2 (Very loose/airy)
-        // This spreads the paragraph out to fill the white space.
-        const lineHeight = fontBody * 2.2; 
+        // Line Height: Reduced from 2.2 to 1.9 to fit the tighter space
+        // This keeps it airy but connects it better to the CTA.
+        const lineHeight = fontBody * 1.9; 
         
         currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, bodyMaxWidth, lineHeight);
         
-        // -- CTA (Anchored) --
-        // We ignore 'currentY' and strictly draw this at the 50% mark
-        // unless the text was so long it pushed past it.
+        // -- CTA (Anchored Higher) --
+        // Use the fixed 44% mark unless text pushes it down
         const finalCtaY = Math.max(currentY + lineHeight, ctaFixedY);
 
         ctx.fillStyle = '#000000';
