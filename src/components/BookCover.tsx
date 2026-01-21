@@ -16,6 +16,7 @@ import html2canvas from 'html2canvas';
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
+import { registerPlayfairFont, FONT_SIZES, CHAR_SPACING, LINE_HEIGHTS } from '@/lib/pdfFonts';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -865,58 +866,191 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     };
 
     // Helper: Generate Kindle Cover JPG as Blob (canvas-based)
+    // Matches the Front Cover preview exactly
     const generateCoverJPGBlob = async (): Promise<Blob | null> => {
       const canvas = document.createElement('canvas');
-      canvas.width = 1600; canvas.height = 2560; const ctx = canvas.getContext('2d');
+      canvas.width = 1600; 
+      canvas.height = 2560; 
+      const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
       // Background
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1600, 2560);
+      ctx.fillStyle = '#ffffff'; 
+      ctx.fillRect(0, 0, 1600, 2560);
 
-      // 1. IMAGE (1000px wide = ~60% Width, Centered)
+      // 1. IMAGE - Smaller with rounded corners (matching preview's ~52% width)
+      // Preview: w-[52%] of container, centered with rounded-lg border
+      const imgSize = 750; // ~47% of 1600 width (smaller than before)
+      const imgX = (1600 - imgSize) / 2;
+      const imgY = 200;
+      const cornerRadius = 24; // rounded-lg equivalent
+
       if (displayUrl) {
-        const img = new Image(); img.crossOrigin = "Anonymous"; img.src = displayUrl;
+        const img = new Image(); 
+        img.crossOrigin = "Anonymous"; 
+        img.src = displayUrl;
         await new Promise((r) => { img.onload = r; img.onerror = r; });
-        ctx.drawImage(img, 300, 250, 1000, 1000); 
+        
+        // Draw rounded rectangle clipping path
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(imgX + cornerRadius, imgY);
+        ctx.lineTo(imgX + imgSize - cornerRadius, imgY);
+        ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + cornerRadius);
+        ctx.lineTo(imgX + imgSize, imgY + imgSize - cornerRadius);
+        ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - cornerRadius, imgY + imgSize);
+        ctx.lineTo(imgX + cornerRadius, imgY + imgSize);
+        ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - cornerRadius);
+        ctx.lineTo(imgX, imgY + cornerRadius);
+        ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
+        ctx.closePath();
+        ctx.clip();
+        
+        // Draw image with object-fit cover behavior
+        const srcAspect = img.width / img.height;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        if (srcAspect > 1) {
+          sw = img.height;
+          sx = (img.width - sw) / 2;
+        } else {
+          sh = img.width;
+          sy = (img.height - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, imgX, imgY, imgSize, imgSize);
+        ctx.restore();
+        
+        // Draw border on top
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(imgX + cornerRadius, imgY);
+        ctx.lineTo(imgX + imgSize - cornerRadius, imgY);
+        ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + cornerRadius);
+        ctx.lineTo(imgX + imgSize, imgY + imgSize - cornerRadius);
+        ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - cornerRadius, imgY + imgSize);
+        ctx.lineTo(imgX + cornerRadius, imgY + imgSize);
+        ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - cornerRadius);
+        ctx.lineTo(imgX, imgY + cornerRadius);
+        ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
+        ctx.closePath();
+        ctx.stroke();
       }
 
-      // 2. TITLE
-      ctx.fillStyle = '#000000'; ctx.font = '500 110px serif'; ctx.textAlign = 'center';
-      const words = title.split(' '); let line = ''; let y = 1450;
-      for(let n = 0; n < words.length; n++) {
-        if (ctx.measureText(line + words[n]).width > 1200 && n > 0) { ctx.fillText(line, 800, y); line = words[n] + ' '; y += 130; }
-        else { line += words[n] + ' '; }
+      // 2. TITLE - Positioned below image
+      let y = imgY + imgSize + 120;
+      ctx.fillStyle = '#000000'; 
+      ctx.font = '500 100px "Playfair Display", Georgia, serif'; 
+      ctx.textAlign = 'center';
+      
+      const words = title.split(' '); 
+      let line = ''; 
+      const titleLines: string[] = [];
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        if (ctx.measureText(testLine).width > 1200 && n > 0) { 
+          titleLines.push(line.trim());
+          line = words[n] + ' '; 
+        } else { 
+          line = testLine; 
+        }
       }
-      ctx.fillText(line, 800, y);
+      titleLines.push(line.trim());
+      
+      for (const titleLine of titleLines) {
+        ctx.fillText(titleLine, 800, y);
+        y += 120;
+      }
 
-      // 3. SEPARATOR
-      y += 80; ctx.beginPath(); ctx.moveTo(700, y); ctx.lineTo(900, y);
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4; ctx.stroke();
+      // 3. SEPARATOR - matching preview's thin line
+      y += 30;
+      ctx.beginPath(); 
+      ctx.moveTo(700, y); 
+      ctx.lineTo(900, y);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; 
+      ctx.lineWidth = 2; 
+      ctx.stroke();
 
-      // 4. SUBTITLE
+      // 4. SUBTITLE - NOT italic, uppercase, tracking, 2 lines max
       if (subtitle) {
-         y += 100; ctx.font = 'italic 40px serif'; ctx.fillStyle = '#666666';
-         ctx.fillText(subtitle.toUpperCase(), 800, y);
+        y += 60; 
+        ctx.font = '400 36px "Playfair Display", Georgia, serif'; 
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        
+        // Split subtitle into 2 lines
+        const subtitleText = subtitle.toUpperCase();
+        const subtitleWords = subtitleText.split(' ');
+        const subtitleLines: string[] = [];
+        let subtitleLine = '';
+        
+        for (let n = 0; n < subtitleWords.length; n++) {
+          const testLine = subtitleLine + subtitleWords[n] + ' ';
+          if (ctx.measureText(testLine).width > 1100 && n > 0) {
+            subtitleLines.push(subtitleLine.trim());
+            subtitleLine = subtitleWords[n] + ' ';
+          } else {
+            subtitleLine = testLine;
+          }
+        }
+        subtitleLines.push(subtitleLine.trim());
+        
+        // Draw with letter-spacing simulation (we add spaces between chars manually)
+        for (const subLine of subtitleLines.slice(0, 2)) {
+          // Add spacing between characters
+          const spacedText = subLine.split('').join(' ');
+          ctx.fillText(spacedText, 800, y);
+          y += 55;
+        }
       }
 
-      // 5. LOGO (Large & Clear)
-      y += 200; const lx = 760; 
-      ctx.strokeStyle = '#000000'; ctx.lineWidth = 5; ctx.globalAlpha = 0.5;
+      // 5. BOTTOM BRANDING - positioned from bottom
+      // Logo at y = 2100
+      const logoY = 2050;
+      const logoSize = 80;
+      const logoCenterX = 800;
+      
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.6;
+      
+      // Three vertical lines (loom threads)
+      const lineGap = 18;
       ctx.beginPath();
-      ctx.moveTo(lx+10, y); ctx.lineTo(lx+10, y+100);
-      ctx.moveTo(lx+40, y); ctx.lineTo(lx+40, y+100);
-      ctx.moveTo(lx+70, y); ctx.lineTo(lx+70, y+100);
-      ctx.moveTo(lx, y+50); ctx.lineTo(lx+80, y+50);
-      ctx.stroke(); ctx.globalAlpha = 1.0;
+      ctx.moveTo(logoCenterX - lineGap, logoY);
+      ctx.lineTo(logoCenterX - lineGap, logoY + logoSize);
+      ctx.moveTo(logoCenterX, logoY);
+      ctx.lineTo(logoCenterX, logoY + logoSize);
+      ctx.moveTo(logoCenterX + lineGap, logoY);
+      ctx.lineTo(logoCenterX + lineGap, logoY + logoSize);
+      ctx.stroke();
+      
+      // Horizontal crossbar
+      ctx.beginPath();
+      ctx.moveTo(logoCenterX - lineGap - 15, logoY + logoSize / 2);
+      ctx.lineTo(logoCenterX + lineGap + 15, logoY + logoSize / 2);
+      ctx.stroke();
+      
+      // Corner fold detail (top right)
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(logoCenterX + lineGap + 8, logoY);
+      ctx.lineTo(logoCenterX + lineGap + 25, logoY);
+      ctx.lineTo(logoCenterX + lineGap + 25, logoY + 18);
+      ctx.stroke();
+      
+      ctx.globalAlpha = 1.0;
 
-      // 6. BRAND
-      y += 150; ctx.font = '400 30px serif'; ctx.fillStyle = '#999999';
-      ctx.fillText("Loom & Page", 800, y);
+      // 6. BRAND NAME
+      const brandY = logoY + logoSize + 50;
+      ctx.font = '400 40px "Playfair Display", Georgia, serif'; 
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillText("Loom & Page", 800, brandY);
 
-      // 7. DISCLAIMER
-      y += 80; ctx.font = 'italic 20px sans-serif'; ctx.fillStyle = '#aaaaaa';
-      ctx.fillText("AI-generated content for creative inspiration only.", 800, y);
-      ctx.fillText("Not professional advice.", 800, y + 30);
+      // 7. DISCLAIMER - larger and properly spaced
+      const disclaimerY = brandY + 70;
+      ctx.font = 'italic 30px "Playfair Display", Georgia, serif'; 
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillText("AI-generated content for creative inspiration only.", 800, disclaimerY);
+      ctx.fillText("Not professional advice.", 800, disclaimerY + 45);
 
       return new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
     };
