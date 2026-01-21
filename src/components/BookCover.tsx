@@ -1235,40 +1235,66 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Failed to get canvas context');
         
-        // ========== BACK COVER ==========
+        // -------------------------------------------------------
+        // A. BACK COVER (Canvas-First Layout)
+        // -------------------------------------------------------
+        const backW_Px = frontCoverWidth;
+        const backCX = backW_Px / 2;
+        
+        // 1. Background
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, frontCoverWidth, totalHeight);
+        ctx.fillRect(0, 0, backW_Px, totalHeight);
+
+        // 2. Layout Constants (Match Preview Proportions)
+        const contentTopY = totalHeight * 0.10; // Start content 10% down
+        const contentWidth = backW_Px * 0.85;    // Max width 85%
         
-        const backCenterX = frontCoverWidth / 2;
-        const backPadding = frontCoverWidth * 0.08;
+        // Dynamic Font Sizes (Scaled to width)
+        const backTitleSize = backW_Px * 0.05;      // ~Header
+        const backDedicationSize = backW_Px * 0.035; // ~Italic
+        const backBodySize = backW_Px * 0.032;       // ~Body
+        const backCtaSize = backW_Px * 0.032;        // ~CTA
         
-        // Back Cover Header
-        const headerFontSize = frontCoverWidth * 0.023;
-        ctx.font = `500 ${headerFontSize}px 'Playfair Display', Georgia, serif`;
+        let currentY = contentTopY;
+
+        // 3. Draw Header (Title)
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
-        ctx.fillText(backCoverTitle.toUpperCase(), backCenterX, totalHeight * 0.08);
+        ctx.textBaseline = 'top';
+        ctx.font = `500 ${backTitleSize}px "Playfair Display", serif`;
+        ctx.fillText(backCoverTitle.toUpperCase(), backCX, currentY);
         
-        // Dedication
+        currentY += backTitleSize * 1.8; // Gap after title
+
+        // 4. Draw Dedication (Optional)
         if (dedicationText) {
-          ctx.font = `italic ${headerFontSize * 0.7}px 'Playfair Display', Georgia, serif`;
           ctx.fillStyle = '#666666';
-          ctx.fillText(dedicationText, backCenterX, totalHeight * 0.11);
+          ctx.font = `italic 400 ${backDedicationSize}px "Playfair Display", serif`;
+          ctx.fillText(dedicationText, backCX, currentY);
+          currentY += backDedicationSize * 1.8; // Gap after dedication
+        } else {
+          currentY += backTitleSize * 0.5; // Smaller gap if no dedication
         }
-        
-        // Back Cover Body
-        const bodyFontSize = frontCoverWidth * 0.017;
-        ctx.font = `400 ${bodyFontSize}px 'Playfair Display', Georgia, serif`;
+
+        // 5. Draw Body Text
         ctx.fillStyle = '#333333';
-        const bodyY = dedicationText ? totalHeight * 0.13 : totalHeight * 0.11;
-        const bodyMaxWidth = frontCoverWidth * 0.85;
-        const bodyEndY = drawWrappedText(ctx, backCoverBody, backCenterX, bodyY, bodyMaxWidth, bodyFontSize * 1.6, 'center');
+        ctx.font = `400 ${backBodySize}px "Playfair Display", serif`;
+        // Use helper to wrap text and get the new Y position
+        const lineHeight = backBodySize * 1.6;
+        currentY = drawWrappedText(ctx, backCoverBody, backCX, currentY, contentWidth, lineHeight);
         
-        // CTA
-        ctx.font = `bold ${bodyFontSize}px 'Playfair Display', Georgia, serif`;
+        currentY += lineHeight * 0.8; // Gap before CTA
+
+        // 6. Draw CTA
         ctx.fillStyle = '#000000';
-        ctx.fillText(backCoverCTA, backCenterX, bodyEndY + totalHeight * 0.02);
+        ctx.font = `700 ${backCtaSize}px "Playfair Display", serif`;
+        ctx.fillText(backCoverCTA, backCX, currentY);
         
+        // Reset text baseline for subsequent drawing
+        ctx.textBaseline = 'alphabetic';
+
+        // 7. Barcode Zone Indicator (Bottom 1/3) - Left empty for KDP
+
         // ========== SPINE ==========
         const spineX = frontCoverWidth;
         const hexToRgb = (hex: string) => {
