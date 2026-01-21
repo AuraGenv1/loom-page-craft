@@ -865,194 +865,31 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Kindle Cover JPG as Blob (canvas-based)
-    // Matches the Front Cover preview exactly
+    // Helper: Generate Kindle Cover JPG as Blob (html2canvas snapshot)
+    // Uses the hidden kindle-front-stage container for 100% visual parity
     const generateCoverJPGBlob = async (): Promise<Blob | null> => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1600; 
-      canvas.height = 2560; 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
+      try {
+        const element = document.getElementById('kindle-front-stage');
+        if (!element) throw new Error("Kindle stage not found");
 
-      // Background
-      ctx.fillStyle = '#ffffff'; 
-      ctx.fillRect(0, 0, 1600, 2560);
+        // Capture at Scale 1 (Since the div is already 1600x2560px, we don't need to scale up)
+        const canvas = await html2canvas(element, {
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff"
+        });
 
-      // 1. IMAGE - Smaller with rounded corners (matching preview's ~52% width)
-      // Preview: w-[52%] of container, centered with rounded-lg border
-      const imgSize = 750; // ~47% of 1600 width (smaller than before)
-      const imgX = (1600 - imgSize) / 2;
-      const imgY = 200;
-      const cornerRadius = 24; // rounded-lg equivalent
-
-      if (displayUrl) {
-        const img = new Image(); 
-        img.crossOrigin = "Anonymous"; 
-        img.src = displayUrl;
-        await new Promise((r) => { img.onload = r; img.onerror = r; });
-        
-        // Draw rounded rectangle clipping path
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(imgX + cornerRadius, imgY);
-        ctx.lineTo(imgX + imgSize - cornerRadius, imgY);
-        ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + cornerRadius);
-        ctx.lineTo(imgX + imgSize, imgY + imgSize - cornerRadius);
-        ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - cornerRadius, imgY + imgSize);
-        ctx.lineTo(imgX + cornerRadius, imgY + imgSize);
-        ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - cornerRadius);
-        ctx.lineTo(imgX, imgY + cornerRadius);
-        ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
-        ctx.closePath();
-        ctx.clip();
-        
-        // Draw image with object-fit cover behavior
-        const srcAspect = img.width / img.height;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        if (srcAspect > 1) {
-          sw = img.height;
-          sx = (img.width - sw) / 2;
-        } else {
-          sh = img.width;
-          sy = (img.height - sh) / 2;
-        }
-        ctx.drawImage(img, sx, sy, sw, sh, imgX, imgY, imgSize, imgSize);
-        ctx.restore();
-        
-        // Draw border on top
-        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(imgX + cornerRadius, imgY);
-        ctx.lineTo(imgX + imgSize - cornerRadius, imgY);
-        ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + cornerRadius);
-        ctx.lineTo(imgX + imgSize, imgY + imgSize - cornerRadius);
-        ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - cornerRadius, imgY + imgSize);
-        ctx.lineTo(imgX + cornerRadius, imgY + imgSize);
-        ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - cornerRadius);
-        ctx.lineTo(imgX, imgY + cornerRadius);
-        ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
-        ctx.closePath();
-        ctx.stroke();
+        return new Promise((resolve) => {
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/jpeg', 0.95); // 95% Quality JPG
+        });
+      } catch (err) {
+        console.error("Kindle JPG Snapshot failed:", err);
+        toast.error("Failed to generate Kindle cover. Please try again.");
+        return null;
       }
-
-      // 2. TITLE - Positioned below image
-      let y = imgY + imgSize + 120;
-      ctx.fillStyle = '#000000'; 
-      ctx.font = '500 100px "Playfair Display", Georgia, serif'; 
-      ctx.textAlign = 'center';
-      
-      const words = title.split(' '); 
-      let line = ''; 
-      const titleLines: string[] = [];
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        if (ctx.measureText(testLine).width > 1200 && n > 0) { 
-          titleLines.push(line.trim());
-          line = words[n] + ' '; 
-        } else { 
-          line = testLine; 
-        }
-      }
-      titleLines.push(line.trim());
-      
-      for (const titleLine of titleLines) {
-        ctx.fillText(titleLine, 800, y);
-        y += 120;
-      }
-
-      // 3. SEPARATOR - matching preview's thin line
-      y += 30;
-      ctx.beginPath(); 
-      ctx.moveTo(700, y); 
-      ctx.lineTo(900, y);
-      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; 
-      ctx.lineWidth = 2; 
-      ctx.stroke();
-
-      // 4. SUBTITLE - NOT italic, uppercase, tracking, 2 lines max
-      if (subtitle) {
-        y += 60; 
-        ctx.font = '400 36px "Playfair Display", Georgia, serif'; 
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        
-        // Split subtitle into 2 lines
-        const subtitleText = subtitle.toUpperCase();
-        const subtitleWords = subtitleText.split(' ');
-        const subtitleLines: string[] = [];
-        let subtitleLine = '';
-        
-        for (let n = 0; n < subtitleWords.length; n++) {
-          const testLine = subtitleLine + subtitleWords[n] + ' ';
-          if (ctx.measureText(testLine).width > 1100 && n > 0) {
-            subtitleLines.push(subtitleLine.trim());
-            subtitleLine = subtitleWords[n] + ' ';
-          } else {
-            subtitleLine = testLine;
-          }
-        }
-        subtitleLines.push(subtitleLine.trim());
-        
-        // Draw with letter-spacing simulation (we add spaces between chars manually)
-        for (const subLine of subtitleLines.slice(0, 2)) {
-          // Add spacing between characters
-          const spacedText = subLine.split('').join(' ');
-          ctx.fillText(spacedText, 800, y);
-          y += 55;
-        }
-      }
-
-      // 5. BOTTOM BRANDING - positioned from bottom
-      // Logo at y = 2100
-      const logoY = 2050;
-      const logoSize = 80;
-      const logoCenterX = 800;
-      
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.6;
-      
-      // Three vertical lines (loom threads)
-      const lineGap = 18;
-      ctx.beginPath();
-      ctx.moveTo(logoCenterX - lineGap, logoY);
-      ctx.lineTo(logoCenterX - lineGap, logoY + logoSize);
-      ctx.moveTo(logoCenterX, logoY);
-      ctx.lineTo(logoCenterX, logoY + logoSize);
-      ctx.moveTo(logoCenterX + lineGap, logoY);
-      ctx.lineTo(logoCenterX + lineGap, logoY + logoSize);
-      ctx.stroke();
-      
-      // Horizontal crossbar
-      ctx.beginPath();
-      ctx.moveTo(logoCenterX - lineGap - 15, logoY + logoSize / 2);
-      ctx.lineTo(logoCenterX + lineGap + 15, logoY + logoSize / 2);
-      ctx.stroke();
-      
-      // Corner fold detail (top right)
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(logoCenterX + lineGap + 8, logoY);
-      ctx.lineTo(logoCenterX + lineGap + 25, logoY);
-      ctx.lineTo(logoCenterX + lineGap + 25, logoY + 18);
-      ctx.stroke();
-      
-      ctx.globalAlpha = 1.0;
-
-      // 6. BRAND NAME
-      const brandY = logoY + logoSize + 50;
-      ctx.font = '400 40px "Playfair Display", Georgia, serif'; 
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.fillText("Loom & Page", 800, brandY);
-
-      // 7. DISCLAIMER - larger and properly spaced
-      const disclaimerY = brandY + 70;
-      ctx.font = 'italic 30px "Playfair Display", Georgia, serif'; 
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillText("AI-generated content for creative inspiration only.", 800, disclaimerY);
-      ctx.fillText("Not professional advice.", 800, disclaimerY + 45);
-
-      return new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
     };
 
     // Generate unified KDP Package ZIP
@@ -2436,6 +2273,138 @@ p { margin-bottom: 1em; }`);
                 AI-generated content for creative inspiration only. Not professional advice.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Hidden Kindle Front Cover Stage for html2canvas snapshot (1600x2560px) */}
+        <div
+          id="kindle-front-stage"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: 0,
+            width: '1600px',
+            height: '2560px',
+            backgroundColor: '#ffffff',
+            fontFamily: "'Playfair Display', Georgia, serif",
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            padding: '120px 100px',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* TOP GROUP: Image, Title, Subtitle */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+            {/* Cover Image - 52% width, square, rounded corners */}
+            <div
+              style={{
+                width: '52%',
+                aspectRatio: '1/1',
+                marginBottom: '72px',
+                overflow: 'hidden',
+                borderRadius: '24px',
+                border: '4px solid rgba(0,0,0,0.1)',
+                backgroundColor: '#f5f5f5',
+              }}
+            >
+              {displayUrl ? (
+                <img
+                  src={displayUrl}
+                  alt="Kindle Cover"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  crossOrigin="anonymous"
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '36pt' }}>
+                  No Image
+                </div>
+              )}
+            </div>
+
+            {/* Title - ~3x scaled from preview's text-lg (18px -> 54px, but we go bigger for 2560px) */}
+            <h1
+              style={{
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '84px',
+                fontWeight: 500,
+                color: '#000000',
+                lineHeight: 1.2,
+                textAlign: 'center',
+                letterSpacing: '0.02em',
+                marginBottom: '36px',
+                maxWidth: '85%',
+                margin: 0,
+              }}
+            >
+              {parsedTitle.mainTitle}
+            </h1>
+
+            {/* Separator Line */}
+            <div style={{ width: '180px', height: '3px', backgroundColor: 'rgba(0,0,0,0.2)', margin: '36px 0' }} />
+
+            {/* Subtitle - uppercase, tracking, 2 lines max, NOT italic */}
+            {subtitle && (
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '30px',
+                  fontWeight: 400,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.3em',
+                  color: 'rgba(0,0,0,0.4)',
+                  textAlign: 'center',
+                  margin: 0,
+                  maxWidth: '80%',
+                  lineHeight: 1.6,
+                }}
+              >
+                {subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* BOTTOM BRANDING - anchored to bottom */}
+          <div style={{ marginTop: 'auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', paddingTop: '72px', paddingBottom: '24px' }}>
+            {/* Logo - 3x scaled from preview's 24px = 72px */}
+            <div style={{ position: 'relative', width: '72px', height: '72px', opacity: 0.6 }}>
+              {/* Vertical loom lines */}
+              <div style={{ position: 'absolute', left: '8px', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
+              <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
+              <div style={{ position: 'absolute', right: '8px', top: '8px', bottom: '8px', width: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
+              {/* Horizontal page fold */}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '4px', backgroundColor: '#000', borderRadius: '4px' }} />
+              {/* Corner fold detail */}
+              <div style={{ position: 'absolute', right: 0, top: 0, width: '18px', height: '18px', borderRight: '4px solid #000', borderTop: '4px solid #000', borderTopRightRadius: '4px', opacity: 0.6 }} />
+            </div>
+
+            {/* Brand Name - 3x scaled from preview's 10px = 30px */}
+            <span
+              style={{
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '36px',
+                fontWeight: 400,
+                letterSpacing: '-0.02em',
+                color: 'rgba(0,0,0,0.4)',
+              }}
+            >
+              Loom & Page
+            </span>
+
+            {/* Disclaimer - 3x scaled from preview's 6px = 18px */}
+            <p
+              style={{
+                fontSize: '24px',
+                textAlign: 'center',
+                color: 'rgba(0,0,0,0.3)',
+                lineHeight: 1.5,
+                maxWidth: '600px',
+                fontStyle: 'italic',
+                margin: 0,
+              }}
+            >
+              AI-generated content for creative inspiration only. Not professional advice.
+            </p>
           </div>
         </div>
       </>
