@@ -1,6 +1,6 @@
-import jsPDF from 'jspdf';
 import { BookData } from './bookTypes';
-import { registerPlayfairFont } from './pdfFonts';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 interface GeneratePDFOptions {
   topic: string;
@@ -11,375 +11,310 @@ interface GeneratePDFOptions {
   includeCoverPage?: boolean;
 }
 
-// --- HELPER: VECTOR DRAWING ---
-// Draw a vector "Key" icon for Pro-Tips (Corrected to 1-2 o'clock)
-const drawKeyIcon = (doc: jsPDF, x: number, y: number, size: number = 0.2) => {
-  doc.setDrawColor(0, 0, 0); // Black
-  doc.setLineWidth(0.015);
-  
-  const cx = x + size * 0.4;
-  const cy = y + size * 0.6;
-  const r = size * 0.25; // Smaller head
-
-  // 1. Key Head (Circle)
-  doc.circle(cx, cy, r);
-  
-  // 2. Key Shaft (Line pointing Top-Right / 1:30 position)
-  // Angle: -45 degrees (up/right)
-  const angle = -Math.PI / 4;
-  
-  const startX = cx + (r * Math.cos(angle));
-  const startY = cy + (r * Math.sin(angle));
-  
-  const shaftLen = size * 0.6;
-  const endX = startX + (shaftLen * Math.cos(angle));
-  const endY = startY + (shaftLen * Math.sin(angle));
-  
-  doc.line(startX, startY, endX, endY);
-  
-  // 3. Teeth (Perpendicular to shaft)
-  // Perpendicular angle = angle + 90deg
-  const teethAngle = angle + (Math.PI / 2);
-  const toothLen = size * 0.15;
-  
-  // Tooth 1 (At the end)
-  const t1x = endX + (toothLen * Math.cos(teethAngle));
-  const t1y = endY + (toothLen * Math.sin(teethAngle));
-  doc.line(endX, endY, t1x, t1y);
-
-  // Tooth 2 (Slightly back)
-  const backStep = size * 0.12;
-  const midX = endX - (backStep * Math.cos(angle));
-  const midY = endY - (backStep * Math.sin(angle));
-  
-  const t2x = midX + (toothLen * Math.cos(teethAngle));
-  const t2y = midY + (toothLen * Math.sin(teethAngle));
-  doc.line(midX, midY, t2x, t2y);
+// Helper: Exact Key Icon SVG to match Lucide
+const getKeyIconSvg = () => {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="5.5"/>
+      <path d="m21 2-9.6 9.6"/>
+      <path d="m15.5 7.5 3 3L22 7l-3-3"/>
+    </svg>
+  `;
 };
 
-// --- HELPER: TEXT RENDERING ---
-// "Fake Bold" - Renders text multiple times with slight offset to simulate weight
-const textBold = (doc: jsPDF, text: string | string[], x: number, y: number, options: any = {}) => {
-  // Draw text twice with tiny offset to create faux-bold effect
-  doc.text(text, x, y, options);
-  doc.text(text, x + 0.003, y, options); // Slight horizontal offset
-};
+// Helper: Markdown to HTML parser that matches your Preview styling 1:1
+const parseMarkdownToHtml = (text: string) => {
+  if (!text) return '';
+  
+  let html = text
+    // Header 3
+    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-6 mb-2">$1</h3>')
+    // Header 2
+    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-8 mb-3">$1</h2>')
+    // Header 1
+    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-10 mb-4">$1</h1>')
+    // Bold
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Images
+    .replace(/!\[(.*?)\]\((.*?)\)/gim, (match, alt, url) => {
+      // Force crossorigin for PDF capture
+      return `<div class="my-4 break-inside-avoid"><img src="${url}" alt="${alt}" crossorigin="anonymous" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" /></div>`;
+    })
+    // Bullet Points
+    .replace(/^\s*[-*]\s+(.*)$/gim, '<ul class="list-disc pl-5 my-2"><li>$1</li></ul>');
 
-// Robust Image Loader
-const loadImage = async (url: string): Promise<string | null> => {
-  if (!url) return null;
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.warn("Failed to load PDF image:", url);
-    return null;
-  }
+  // Fix adjacent lists (merge <ul> tags)
+  html = html.replace(/<\/ul>\s*<ul[^>]*>/gim, '');
+
+  // Pro-Tips (The Onyx Box)
+  // Replaces "> Text" with the exact HTML structure from ChapterContent.tsx
+  html = html.replace(/^> (.*$)/gim, (match, content) => {
+    const cleanContent = content.replace(/^PRO-TIP:?\s*/i, '').trim();
+    return `
+      <div class="pro-tip break-inside-avoid my-6" style="border-left: 4px solid #000; background: #fff; padding: 1rem;">
+        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+          <div style="flex-shrink: 0; margin-top: 2px;">
+            ${getKeyIconSvg()}
+          </div>
+          <div>
+            <p style="font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.25rem;">PRO TIP</p>
+            <p style="font-style: italic; color: #333; font-size: 0.9rem; line-height: 1.6;">
+              ${cleanContent}
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  // Paragraphs (wrap remaining text)
+  const lines = html.split('\n');
+  const processedLines = lines.map(line => {
+    if (line.trim() === '') return '<br/>';
+    if (line.startsWith('<')) return line; // Already HTML
+    return `<p style="margin-bottom: 0.75rem; line-height: 1.7; text-align: justify;">${line}</p>`;
+  });
+
+  return processedLines.join('\n');
 };
 
 export const generateCleanPDF = async ({ 
   topic, 
   bookData, 
-  coverImageUrl, 
   isKdpManuscript = false,
   returnBlob = false,
-  includeCoverPage = false
 }: GeneratePDFOptions): Promise<Blob | void> => {
   
-  // 1. Setup Standard KDP 6x9 Format
-  const format = isKdpManuscript ? [6, 9] : 'letter';
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'in', format });
+  // 1. Create a hidden container that mimics the "Print Preview" page exactly
+  const container = document.createElement('div');
+  container.className = 'print-container';
   
-  // Register Font
-  await registerPlayfairFont(doc);
-
-  const title = bookData.displayTitle || topic;
-  const pageWidth = isKdpManuscript ? 6 : 8.5;
-  const pageHeight = isKdpManuscript ? 9 : 11;
-  const margin = 0.75; 
-  const writableWidth = pageWidth - (margin * 2);
-
-  let yPos = margin;
+  // Set dimensions for KDP 6x9
+  // We use specific CSS to force the rendering engine to match print specs
+  container.style.width = '6in'; 
+  container.style.padding = '0.75in'; // Margins
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.backgroundColor = '#fff';
+  container.style.color = '#000';
+  container.style.fontFamily = "'Playfair Display', Georgia, serif";
   
-  // Pagination Check
-  const checkPageBreak = (heightNeeded: number) => {
-    // Less aggressive buffer (0.25") to prevent empty half-pages
-    if (yPos + heightNeeded > pageHeight - 0.5) {
-      doc.addPage();
-      yPos = margin;
-      return true;
+  // Inject Tailwind-like utility classes manually to ensure styles persist without full CSS build
+  const styleBlock = document.createElement('style');
+  styleBlock.innerHTML = `
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+    
+    .print-container { font-family: 'Playfair Display', Georgia, serif; }
+    .font-serif { font-family: 'Playfair Display', Georgia, serif; }
+    .font-bold { font-weight: 700; }
+    .text-center { text-align: center; }
+    .text-justify { text-align: justify; }
+    .uppercase { text-transform: uppercase; }
+    .italic { font-style: italic; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .mb-6 { margin-bottom: 1.5rem; }
+    .mt-6 { margin-top: 1.5rem; }
+    .mt-8 { margin-top: 2rem; }
+    .mt-10 { margin-top: 2.5rem; }
+    .my-2 { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .my-4 { margin-top: 1rem; margin-bottom: 1rem; }
+    .my-6 { margin-top: 1.5rem; margin-bottom: 1.5rem; }
+    .text-xs { font-size: 0.75rem; line-height: 1.5; }
+    .text-sm { font-size: 0.875rem; line-height: 1.5; }
+    .text-lg { font-size: 1.125rem; }
+    .text-xl { font-size: 1.25rem; }
+    .text-2xl { font-size: 1.5rem; }
+    .text-3xl { font-size: 1.875rem; }
+    .text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+    .border-black { border-color: #000; }
+    .border-l-4 { border-left-width: 4px; }
+    .bg-white { background-color: #fff; }
+    .p-4 { padding: 1rem; }
+    .flex { display: flex; }
+    .gap-3 { gap: 0.75rem; }
+    .break-after-always { page-break-after: always; }
+    .break-before-always { page-break-before: always; }
+    .break-inside-avoid { page-break-inside: avoid; }
+    .list-disc { list-style-type: disc; }
+    .pl-5 { padding-left: 1.25rem; }
+    .tracking-widest { letter-spacing: 0.1em; }
+    
+    .title-page {
+      min-height: 7.5in;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
     }
-    return false;
-  };
+    
+    .copyright-page {
+      min-height: 7.5in;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    
+    .toc-page {
+      min-height: 7.5in;
+    }
+    
+    .chapter-page {
+      min-height: 7.5in;
+    }
+    
+    .chapter-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    
+    .divider {
+      width: 2rem;
+      height: 1px;
+      background: #ccc;
+      margin: 1rem auto;
+    }
+    
+    h1, h2, h3 { page-break-after: avoid; }
+    .pro-tip { page-break-inside: avoid; }
+    img { page-break-inside: avoid; max-width: 100%; }
+  `;
+  container.appendChild(styleBlock);
+  document.body.appendChild(container);
 
-  // --- 1. TITLE PAGE ---
-  doc.setFont('PlayfairDisplay', 'bold');
-  doc.setFontSize(24);
-  doc.setTextColor(0, 0, 0);
-  
-  yPos = pageHeight * 0.35;
-  const splitTitle = doc.splitTextToSize(title.toUpperCase(), writableWidth);
-  textBold(doc, splitTitle, pageWidth / 2, yPos, { align: 'center' }); // Fake Bold
-  
-  yPos += (splitTitle.length * 0.4) + 0.2;
-  if (bookData.subtitle) {
-    doc.setFont('PlayfairDisplay', 'italic');
-    doc.setFontSize(14);
-    doc.setTextColor(80, 80, 80);
-    doc.text(doc.splitTextToSize(bookData.subtitle, writableWidth), pageWidth / 2, yPos, { align: 'center' });
-  }
+  // 2. Build HTML Content
+  let htmlContent = '';
+  const displayTitle = bookData.displayTitle || topic;
 
-  doc.setFontSize(10);
-  doc.setFont('PlayfairDisplay', 'normal');
-  doc.setTextColor(150, 150, 150);
-  doc.text("LOOM & PAGE", pageWidth / 2, pageHeight - margin, { align: 'center' });
+  // --- TITLE PAGE ---
+  htmlContent += `
+    <div class="title-page break-after-always">
+      <div>
+        <p class="text-xs uppercase tracking-widest" style="color: #666; margin-bottom: 1rem;">A Complete Guide</p>
+        <h1 class="text-4xl font-bold" style="margin-bottom: 1rem;">${displayTitle}</h1>
+        ${bookData.subtitle ? `<p class="text-lg italic" style="color: #555;">${bookData.subtitle}</p>` : ''}
+      </div>
+      <div style="margin-top: 4rem;">
+        <p class="text-sm" style="color: #999;">LOOM & PAGE</p>
+      </div>
+    </div>
+  `;
 
-  // --- 2. COPYRIGHT PAGE ---
-  doc.addPage();
-  doc.setFont('PlayfairDisplay', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(0, 0, 0);
+  // --- COPYRIGHT PAGE ---
+  htmlContent += `
+    <div class="copyright-page break-after-always">
+      <div class="text-xs" style="color: #333; line-height: 1.8;">
+        <p style="margin-bottom: 0.5rem;">Copyright © ${new Date().getFullYear()}</p>
+        <p style="margin-bottom: 0.5rem;">All rights reserved.</p>
+        <p style="margin-bottom: 1rem;">Published by Loom & Page</p>
+        <p style="margin-bottom: 1rem;">www.LoomandPage.com</p>
+        <p style="margin-bottom: 1rem; font-size: 0.7rem; line-height: 1.6;">
+          No part of this publication may be reproduced, distributed, or transmitted 
+          in any form or by any means, including photocopying, recording, or other 
+          electronic or mechanical methods, without the prior written permission of 
+          the publisher.
+        </p>
+        <p style="margin-bottom: 0.5rem;">Book generated by Loom & Page AI Engine.</p>
+        <p>First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+      </div>
+    </div>
+  `;
 
-  const copyrightText = `Copyright © ${new Date().getFullYear()}
-
-All rights reserved.
-
-Published by Loom & Page
-www.LoomandPage.com
-
-No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher.
-
-Book generated by Loom & Page AI Engine.
-
-First Edition: ${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()}`;
-
-  const splitCopyright = doc.splitTextToSize(copyrightText.trim(), writableWidth);
-  const copyrightHeight = splitCopyright.length * 0.15;
-  doc.text(splitCopyright, margin, pageHeight - margin - copyrightHeight);
-
-  // --- 3. TABLE OF CONTENTS ---
-  doc.addPage();
-  yPos = margin + 0.5;
-  
-  doc.setFont('PlayfairDisplay', 'bold');
-  doc.setFontSize(16);
-  textBold(doc, "Table of Contents", pageWidth / 2, yPos, { align: 'center' });
-  
-  yPos += 0.5;
-  doc.setFont('PlayfairDisplay', 'normal');
-  doc.setFontSize(11.5); // Slightly larger
-  
+  // --- TABLE OF CONTENTS ---
   const chapters = bookData.tableOfContents || [];
-  chapters.forEach((ch: any) => {
-    checkPageBreak(0.35);
-    doc.text(`Chapter ${ch.chapter}: ${ch.title}`, margin, yPos);
-    yPos += 0.35;
-  });
+  htmlContent += `
+    <div class="toc-page break-after-always">
+      <h2 class="text-2xl font-bold text-center" style="margin-bottom: 2rem;">Table of Contents</h2>
+      <div style="line-height: 2;">
+        ${chapters.map(ch => `
+          <p style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600;">Chapter ${ch.chapter}:</span> ${ch.title}
+          </p>
+        `).join('')}
+      </div>
+    </div>
+  `;
 
-  // --- 4. CHAPTER CONTENT LOOP ---
+  // --- CHAPTERS ---
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
   const loopSource = chapters.length > 0 ? chapters : chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
 
-  for (const ch of loopSource) {
-    const chapterNum = ch.chapter;
-    const contentKey = `chapter${chapterNum}Content` as keyof BookData;
+  loopSource.forEach((ch, index) => {
+    const contentKey = `chapter${ch.chapter}Content` as keyof BookData;
     const rawContent = (bookData[contentKey] as string) || "";
     
-    if (!rawContent) continue;
-
-    // Start Chapter on NEW PAGE
-    doc.addPage();
-    yPos = margin + 0.5;
-
-    // Header
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.setFont('PlayfairDisplay', 'normal');
-    doc.text(`CHAPTER ${chapterNum}`, pageWidth / 2, yPos, { align: 'center', charSpace: 0.1 });
+    const isLastChapter = index === loopSource.length - 1;
     
-    yPos += 0.4;
-    
-    // Title
-    doc.setFont('PlayfairDisplay', 'bold');
-    doc.setFontSize(20);
-    doc.setTextColor(0, 0, 0);
-    const chapterTitleLines = doc.splitTextToSize(ch.title, writableWidth);
-    textBold(doc, chapterTitleLines, pageWidth / 2, yPos, { align: 'center' });
-    
-    yPos += (chapterTitleLines.length * 0.35) + 0.3;
-
-    // Divider
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.01);
-    const lineW = 0.5;
-    doc.line((pageWidth - lineW)/2, yPos, (pageWidth + lineW)/2, yPos);
-    
-    yPos += 0.5;
-
-    // Content Processing
-    const lines = rawContent.replace(/\r\n/g, '\n').split('\n');
-    doc.setFont('PlayfairDisplay', 'normal');
-    doc.setFontSize(11.5); // 11.5pt Body
-
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i].trim();
-      if (!line) {
-        yPos += 0.15; // Paragraph spacing
-        continue;
-      }
-
-      // --- A. IMAGES ---
-      const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
-      if (imgMatch && imgMatch[1]) {
-        const imgUrl = imgMatch[1];
-        const imgSpace = 4.5; 
+    htmlContent += `
+      <div class="chapter-page ${isLastChapter ? '' : 'break-after-always'}">
+        <div class="chapter-header">
+          <p class="text-xs uppercase tracking-widest" style="color: #666; margin-bottom: 0.5rem;">Chapter ${ch.chapter}</p>
+          <h2 class="text-2xl font-bold">${ch.title}</h2>
+          <div class="divider"></div>
+        </div>
         
-        // Only break if it REALLY doesn't fit
-        if (yPos + imgSpace > pageHeight - margin) {
-           doc.addPage();
-           yPos = margin;
-        }
-        
-        const imgBase64 = await loadImage(imgUrl);
-        if (imgBase64) {
-          try {
-            const w = Math.min(writableWidth, 4.5);
-            const h = w * 0.66; // approx landscape
-            
-            const imgX = (pageWidth - w) / 2;
-            doc.addImage(imgBase64, 'JPEG', imgX, yPos, w, h);
-            yPos += h + 0.3; 
-          } catch (e) {
-            console.warn("Error drawing image", e);
-          }
-        }
-        continue;
-      }
+        <div class="chapter-content" style="font-size: 11.5pt; line-height: 1.7;">
+          ${parseMarkdownToHtml(rawContent)}
+        </div>
+      </div>
+    `;
+  });
 
-      // --- B. HEADERS ---
-      if (line.startsWith('#')) {
-        const level = line.match(/^#+/)?.[0].length || 1;
-        const text = line.replace(/^#+\s*/, '').replace(/\*\*/g, '');
-        
-        const requiredSpace = 0.5 + (0.22 * 3); 
-        checkPageBreak(requiredSpace);
+  const contentWrapper = document.createElement('div');
+  contentWrapper.innerHTML = htmlContent;
+  container.appendChild(contentWrapper);
 
-        doc.setFont('PlayfairDisplay', 'bold');
-        const fontSize = level === 1 ? 16 : level === 2 ? 14 : 12;
-        doc.setFontSize(fontSize);
-        doc.setTextColor(0, 0, 0);
-        
-        yPos += 0.3; 
-        const split = doc.splitTextToSize(text, writableWidth);
-        textBold(doc, split, margin, yPos); // Fake Bold
-        yPos += (split.length * (fontSize/72) * 1.5) + 0.1;
-        
-        doc.setFont('PlayfairDisplay', 'normal');
-        doc.setFontSize(11.5);
-        continue;
-      }
+  // 3. Wait for images to load
+  const images = Array.from(container.querySelectorAll('img'));
+  await Promise.all(images.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => { 
+      img.onload = resolve; 
+      img.onerror = resolve; 
+    });
+  }));
 
-      // --- C. PRO-TIPS (Corrected Onyx Style) ---
-      if (line.startsWith('>')) {
-        let proTipContent = line.replace(/^>\s*/, '');
-        let lookAheadIndex = i + 1;
-        while(lookAheadIndex < lines.length && lines[lookAheadIndex].trim().startsWith('>')) {
-          proTipContent += ' ' + lines[lookAheadIndex].trim().replace(/^>\s*/, '');
-          i++; 
-          lookAheadIndex++;
-        }
+  // Small delay for fonts to load
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-        const text = proTipContent.replace(/\*\*/g, '').replace(/PRO[- ]?TIP:?/i, '').trim();
-        
-        const boxPadding = 0.2;
-        const indent = boxPadding + 0.1; 
-        const textWidth = writableWidth - indent;
-        
-        doc.setFont('PlayfairDisplay', 'italic'); // Forced Italic
-        doc.setFontSize(11);
-        const split = doc.splitTextToSize(text, textWidth);
-        
-        const headerHeight = 0.35; 
-        const contentHeight = split.length * 0.22; 
-        const totalBoxHeight = headerHeight + contentHeight + (boxPadding * 2);
-
-        checkPageBreak(totalBoxHeight + 0.1);
-
-        // 1. Draw "Onyx" Box (White Background + Black Left Border)
-        doc.setFillColor(255, 255, 255); // Explicit White
-        doc.rect(margin, yPos, writableWidth, totalBoxHeight, 'F');
-        
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.04); 
-        doc.line(margin, yPos, margin, yPos + totalBoxHeight);
-
-        // 2. Draw Vector Key Icon
-        drawKeyIcon(doc, margin + 0.1, yPos + boxPadding, 0.15);
-
-        // 3. "PRO TIP" Label
-        doc.setFont('PlayfairDisplay', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(0, 0, 0);
-        textBold(doc, "PRO TIP", margin + 0.35, yPos + boxPadding + 0.12);
-
-        // 4. Content
-        doc.setFont('PlayfairDisplay', 'italic');
-        doc.setFontSize(11);
-        doc.setTextColor(60, 60, 60); 
-        doc.text(split, margin + 0.35, yPos + boxPadding + headerHeight);
-
-        yPos += totalBoxHeight + 0.3; 
-        
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('PlayfairDisplay', 'normal');
-        doc.setFontSize(11.5);
-        continue;
-      }
-
-      // --- D. BULLET POINTS ---
-      if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-        const cleanLine = line.replace(/^[-*]\s*/, '').replace(/\*\*/g, '');
-        const bulletIndent = 0.25;
-        
-        const splitText = doc.splitTextToSize(cleanLine, writableWidth - bulletIndent);
-        checkPageBreak(splitText.length * 0.22);
-
-        doc.setDrawColor(0,0,0);
-        doc.setFillColor(0,0,0);
-        doc.circle(margin + 0.1, yPos - 0.05, 0.02, 'F');
-        
-        doc.text(splitText, margin + bulletIndent, yPos);
-        yPos += (splitText.length * 0.22) + 0.05;
-        continue;
-      }
-
-      // --- E. STANDARD PARAGRAPH ---
-      const cleanLine = line.replace(/\*\*/g, '').replace(/\*/g, ''); 
-      const splitText = doc.splitTextToSize(cleanLine, writableWidth);
-      const lineHeight = 0.22; // 1.5x spacing
-      
-      // Widow Check
-      if (yPos + (splitText.length * lineHeight) > pageHeight - 0.5) {
-        if (splitText.length < 4) {
-           doc.addPage();
-           yPos = margin;
-        }
-      }
-      
-      checkPageBreak(splitText.length * lineHeight); 
-      
-      doc.text(splitText, margin, yPos);
-      yPos += (splitText.length * lineHeight);
+  // 4. Configure html2pdf
+  // 6x9 inches = 152.4mm x 228.6mm
+  const opt = {
+    margin: [0, 0, 0, 0] as [number, number, number, number], // Padding is handled in container
+    filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: {
+      scale: 2, // High quality scale
+      useCORS: true, 
+      letterRendering: true,
+      logging: false
+    },
+    jsPDF: { 
+      unit: 'in', 
+      format: [6, 9] as [number, number], 
+      orientation: 'portrait' as const
+    },
+    pagebreak: { 
+      mode: ['avoid-all', 'css', 'legacy'],
+      avoid: ['.pro-tip', 'img', 'h2', 'h3', '.break-inside-avoid']
     }
-  }
+  };
 
-  if (returnBlob) return doc.output('blob');
-  doc.save(`${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+  try {
+    if (returnBlob) {
+      const pdf = await html2pdf().set(opt).from(container).outputPdf('blob');
+      document.body.removeChild(container);
+      return pdf;
+    } else {
+      await html2pdf().set(opt).from(container).save();
+      document.body.removeChild(container);
+    }
+  } catch (err) {
+    console.error("PDF Generation Failed:", err);
+    document.body.removeChild(container);
+  }
 };
