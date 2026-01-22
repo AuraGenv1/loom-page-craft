@@ -17,17 +17,57 @@ interface GeneratePDFOptions {
 // 1. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 2. HELPER: Image Fetcher
+// 2. HELPER: Image Fetcher with validation
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
-  if (!url) return TRANSPARENT_PIXEL;
+  // Skip invalid URLs entirely
+  if (!url || typeof url !== 'string') return TRANSPARENT_PIXEL;
+  if (url.startsWith('data:')) return url;
+  
+  // Validate URL format
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      console.warn('[PDF] Invalid URL protocol:', url);
+      return TRANSPARENT_PIXEL;
+    }
+  } catch {
+    console.warn('[PDF] Malformed URL, skipping:', url);
+    return TRANSPARENT_PIXEL;
+  }
+  
+  // Try direct fetch first
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) {
+      console.warn('[PDF] Image URL returned non-OK status:', response.status, url);
+      return TRANSPARENT_PIXEL;
+    }
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) {
+      console.warn('[PDF] URL did not return an image:', blob.type, url);
+      return TRANSPARENT_PIXEL;
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('[PDF] Direct fetch failed, trying proxy:', url);
+  }
+  
+  // Fallback to edge function proxy
   try {
     const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
       body: { url },
     });
     if (!error && data?.dataUrl) return data.dataUrl;
+    if (error) console.warn('[PDF] Edge function error:', url, error);
   } catch (e) {
-    console.warn('Image fetch failed:', e);
+    console.warn('[PDF] Image proxy failed:', url, e);
   }
+  
   return TRANSPARENT_PIXEL;
 };
 
