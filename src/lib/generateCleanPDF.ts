@@ -218,25 +218,39 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-
-  // 1. The Copyright Block (Pinned "Sticker")
-  // Note: We do NOT put pageBreak here because absolute elements ignore it.
+  // ROBUST FIX: Uses a full-page table to reserve Page 2 entirely.
+  // The table spans the full content height (540pt = 648 - 54 - 54 margins).
+  // Content is vertically aligned to the bottom, staying in document flow.
+  const pageContentHeight = 648 - 54 - 54; // 540pt available height
+  
   contentArray.push({
-    stack: [
-      { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
-      { text: 'All rights reserved.', fontSize: 10, color: '#555' },
-      { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 2, 0, 2] },
-      { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 10, 0, 0] },
-      { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777' },
-      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
-    ],
-    // Coordinates: X=63 (Left Gutter), Y=550 (Bottom margin area)
-    absolutePosition: { x: 63, y: 550 }
+    table: {
+      widths: ['*'],
+      heights: [pageContentHeight],
+      body: [[
+        {
+          stack: [
+            { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
+            { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 3, 0, 0] },
+            { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 5, 0, 0] },
+            { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 12, 0, 0] },
+            { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 3, 0, 0] },
+            { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', margin: [0, 3, 0, 0] }
+          ],
+          margin: [0, 0, 0, 0]
+        }
+      ]]
+    },
+    layout: {
+      hLineWidth: () => 0,
+      vLineWidth: () => 0,
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+      paddingTop: () => pageContentHeight - 90, // Push content to bottom (90pt = approx text height)
+      paddingBottom: () => 0
+    },
+    pageBreak: 'after' // Hard stop - TOC starts on Page 3
   });
-
-  // 2. The Page Break Spacer
-  // This invisible element sits in the "flow" of Page 2 and forces the break.
-  contentArray.push({ text: ' ', fontSize: 1, pageBreak: 'after' });
 
   // --- 3. TOC ---
   contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
