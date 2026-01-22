@@ -11,10 +11,37 @@ interface GeneratePDFOptions {
   includeCoverPage?: boolean;
 }
 
-// 1. ASSETS: Inline SVG for the Key Icon
+// 1. ASSETS
+// Vector Key Icon (Inline SVG)
 const KEY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`;
 
-// 2. HTML PARSER
+// 2. IMAGE LOADER (Blob Method)
+const imageUrlToBlob = async (url: string): Promise<string> => {
+  try {
+    const response = await fetch(url, { cache: 'no-cache' });
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('Image load failed, keeping original URL:', url);
+    return url; // Fallback to URL if fetch fails
+  }
+};
+
+const extractImageUrls = (markdown: string) => {
+  const urls: string[] = [];
+  const regex = /!\[[^\]]*\]\(([^)]+)\)/g;
+  let match;
+  while ((match = regex.exec(markdown)) !== null) {
+    urls.push(match[1]);
+  }
+  return urls;
+};
+
+// 3. HTML PARSER
 const parseMarkdownToHtml = (text: string) => {
   if (!text) return '';
   
@@ -26,9 +53,9 @@ const parseMarkdownToHtml = (text: string) => {
     // Formatting
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Images (Standard tag for now to test layout stability)
+    // Images (Placeholder, will be replaced by Blob)
     .replace(/!\[(.*?)\]\((.*?)\)/gim, (_match, alt, url) => {
-      return `<div class="img-wrapper"><img src="${url}" alt="${alt}" crossorigin="anonymous" /></div>`;
+      return `<div class="img-wrapper"><img alt="${alt}" data-original-src="${url}" crossorigin="anonymous" /></div>`;
     })
     // Lists
     .replace(/^\s*[-*]\s+(.*)$/gim, '<ul class="bullet-list"><li>$1</li></ul>')
@@ -48,7 +75,6 @@ const parseMarkdownToHtml = (text: string) => {
     `;
   });
 
-  // Paragraphs
   return html.split('\n').map(line => {
     if (line.trim() === '') return '<div class="spacer"></div>';
     if (line.startsWith('<')) return line;
@@ -62,47 +88,49 @@ export const generateCleanPDF = async ({
   returnBlob = false,
 }: GeneratePDFOptions): Promise<Blob | void> => {
   
-  // Cleanup
-  const existing = document.getElementById('pdf-generator');
-  if (existing) existing.remove();
-
-  // 1. CONTAINER SETUP
-  const container = document.createElement('div');
-  container.id = 'pdf-generator';
-  // Absolute position ensures the container can grow to 10,000px+ height without being clipped by the viewport
-  container.style.position = 'absolute';
-  container.style.left = '0';
-  container.style.top = '0';
-  container.style.width = '816px'; // 8.5in width standard
-  container.style.zIndex = '99999'; // Visible on top
-  container.style.background = 'white';
+  // A. PREPARE IMAGES (Pre-fetch all images as Blobs)
+  console.log('Fetching images...');
+  const allContent = Object.values(bookData).filter(v => typeof v === 'string').join('\n');
+  const urls = extractImageUrls(allContent);
+  const imageMap = new Map<string, string>();
   
-  // 2. CSS STYLING (High-Res Print Settings)
+  await Promise.all(urls.map(async (url) => {
+    const blobData = await imageUrlToBlob(url);
+    imageMap.set(url, blobData);
+  }));
+
+  // B. SETUP CONTAINER (Exclusive Mode)
+  const appRoot = document.getElementById('root') || document.body.firstElementChild;
+  if (appRoot) (appRoot as HTMLElement).style.display = 'none'; // Hide App
+
+  const container = document.createElement('div');
+  container.id = 'print-container';
+  container.style.width = '816px'; // 8.5in
+  container.style.margin = '0 auto';
+  container.style.background = 'white';
+  container.style.color = 'black';
+  document.body.appendChild(container);
+
+  // C. INJECT CSS
   const style = document.createElement('style');
   style.innerHTML = `
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
     
-    #pdf-generator {
+    #print-container {
       font-family: 'Playfair Display', serif;
-      color: #000;
       line-height: 1.6;
-      font-size: 14px; /* Base font size */
+      font-size: 14px;
     }
     
-    /* Page Container */
+    /* Pages */
     .pdf-page {
-      width: 100%;
-      min-height: 1056px; /* 11in height */
-      padding: 60px 80px; /* Safe Margins */
+      padding: 60px 80px; 
+      min-height: 1056px; 
       box-sizing: border-box;
-      page-break-after: always;
       position: relative;
+      page-break-after: always;
     }
-
-    /* Chapter Spacing - Fixes "Hugging Top" */
-    .chapter-start {
-      padding-top: 60px; 
-    }
+    .chapter-start { page-break-before: always; padding-top: 80px; }
     
     /* Typography */
     h1 { font-size: 28pt; font-weight: 700; margin-bottom: 30px; text-align: center; }
@@ -133,9 +161,8 @@ export const generateCleanPDF = async ({
     .copyright-page { display: flex; flex-direction: column; justify-content: flex-end; height: 900px; }
   `;
   container.appendChild(style);
-  document.body.appendChild(container);
 
-  // 3. BUILD CONTENT
+  // D. BUILD CONTENT
   let html = '';
 
   // Title Page
@@ -176,46 +203,63 @@ export const generateCleanPDF = async ({
 
   chapters.forEach((ch) => {
     const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
+    
+    // Inject Blob Images
+    let processedContent = parseMarkdownToHtml(rawContent);
+    
+    // Replace src placeholders with Blobs
+    urls.forEach(url => {
+      if (imageMap.has(url)) {
+        processedContent = processedContent.replace(`data-original-src="${url}"`, `src="${imageMap.get(url)}"`);
+      }
+    });
+    // Cleanup any that failed
+    processedContent = processedContent.replace(/data-original-src=".*?"/g, 'src="" style="display:none"');
+
     html += `
       <div class="pdf-page chapter-start">
         <p style="font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; color: #888; text-align: center;">Chapter ${ch.chapter}</p>
         <h1>${ch.title}</h1>
-        ${parseMarkdownToHtml(rawContent)}
+        ${processedContent}
       </div>
     `;
   });
 
   container.innerHTML += html;
 
-  // 4. GENERATE PDF (High Quality Settings)
-  // Wait a moment for rendering
+  // E. GENERATE PDF
+  // Scroll to top to ensure capture starts at 0
+  window.scrollTo(0, 0);
+  
+  // Wait for layout
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   const opt = {
-    margin: 0, // We handle margins via CSS padding
+    margin: 0,
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { 
-      scale: 4, // 4x Scale = 300 DPI (High Quality)
+      scale: 2, 
       useCORS: true, 
       letterRendering: true,
       scrollY: 0,
     },
     jsPDF: { unit: 'in', format: 'letter' as const, orientation: 'portrait' as const },
-    pagebreak: { mode: ['css', 'legacy'] } // Simplified page breaking
+    pagebreak: { mode: ['css', 'legacy'] }
   };
 
   try {
     if (returnBlob) {
       const pdf = await html2pdf().set(opt).from(container).outputPdf('blob');
-      document.body.removeChild(container);
       return pdf;
     } else {
       await html2pdf().set(opt).from(container).save();
-      document.body.removeChild(container);
     }
   } catch (err) {
-    console.error("PDF Generation Failed:", err);
-    if (document.body.contains(container)) document.body.removeChild(container);
+    console.error("PDF Failed:", err);
+  } finally {
+    // RESTORE APP
+    document.body.removeChild(container);
+    if (appRoot) (appRoot as HTMLElement).style.display = '';
   }
 };
