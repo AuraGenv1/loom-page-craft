@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // Register fonts
 // @ts-ignore
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+pdfMake.vfs = pdfFonts.vfs;
 
 interface GeneratePDFOptions {
   topic: string;
