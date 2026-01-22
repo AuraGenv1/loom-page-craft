@@ -17,8 +17,8 @@ const KEY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height=
 
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// Hard page break element
-const PAGE_BREAK = `<div style="page-break-after: always; height: 0; display: block; clear: both;"></div>`;
+// Avoid inserting explicit “page-break-after” divider elements.
+// With html2pdf/html2canvas these commonly create phantom/blank pages.
 
 // 2. ROBUST IMAGE LOADER
 const convertImageToDataUrl = async (url: string): Promise<string> => {
@@ -27,7 +27,15 @@ const convertImageToDataUrl = async (url: string): Promise<string> => {
   try {
     const response = await fetch(url, { cache: 'no-cache', mode: 'cors' });
     if (response.ok) {
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      // Prevent HTML error pages from being embedded as “images” (this can break layout + add blank pages)
+      if (!contentType.startsWith('image/')) {
+        throw new Error(`Non-image response: ${contentType || 'unknown content-type'}`);
+      }
       const blob = await response.blob();
+      if (!blob.type.toLowerCase().startsWith('image/')) {
+        throw new Error(`Non-image blob: ${blob.type || 'unknown blob type'}`);
+      }
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -61,7 +69,9 @@ const extractImageUrls = (markdown: string) => {
   return urls;
 };
 
-// 3. MARKDOWN PARSER - Fixed to remove hashtags and use proper inline styles
+// 3. MARKDOWN PARSER
+// Fix: remove stray "#" artifacts by supporting headers with OR without space:
+// "##Title" and "## Title" both become proper headings.
 const parseMarkdownToHtml = (text: string) => {
   if (!text) return '';
   
@@ -78,27 +88,21 @@ const parseMarkdownToHtml = (text: string) => {
       continue;
     }
     
-    // Handle headers FIRST (remove # symbols completely)
-    if (line.match(/^###\s+(.*)$/)) {
-      const match = line.match(/^###\s+(.*)$/);
-      if (match) {
-        processedLines.push(`<h3 style="font-family: 'Playfair Display', Georgia, serif; font-size: 13pt; font-weight: 600; margin: 24px 0 12px 0; color: #000; line-height: 1.4;">${match[1]}</h3>`);
-        continue;
-      }
-    }
-    
-    if (line.match(/^##\s+(.*)$/)) {
-      const match = line.match(/^##\s+(.*)$/);
-      if (match) {
-        processedLines.push(`<h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 700; margin: 32px 0 16px 0; color: #000; line-height: 1.3;">${match[1]}</h2>`);
-        continue;
-      }
-    }
-    
-    if (line.match(/^#\s+(.*)$/)) {
-      const match = line.match(/^#\s+(.*)$/);
-      if (match) {
-        processedLines.push(`<h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 700; margin: 32px 0 16px 0; color: #000; line-height: 1.3;">${match[1]}</h2>`);
+    // Headers (support optional whitespace after hashes)
+    const headerMatch = line.match(/^(#{1,6})\s*(.+)$/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const title = headerMatch[2].trim();
+      if (title) {
+        if (level >= 3) {
+          processedLines.push(
+            `<h3 style="font-family: 'Playfair Display', Georgia, serif; font-size: 13pt; font-weight: 600; margin: 24px 0 12px 0; color: #000; line-height: 1.4;">${title}</h3>`
+          );
+        } else {
+          processedLines.push(
+            `<h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 700; margin: 32px 0 16px 0; color: #000; line-height: 1.3;">${title}</h2>`
+          );
+        }
         continue;
       }
     }
@@ -193,30 +197,21 @@ export const generateCleanPDF = async ({
   
   document.body.appendChild(container);
 
-  // KDP 6x9 Trade Paperback Margins (in pixels at 96 DPI):
-  // - Top: 0.5" = 48px
-  // - Bottom: 0.75" = 72px (room for page numbers)  
-  // - Inside (gutter): 0.625" = 60px
-  // - Outside: 0.5" = 48px
-  const PAGE_PADDING = 'padding: 48px 48px 72px 60px;'; // top right bottom left
-  const PAGE_HEIGHT = 'min-height: 864px;'; // 9" at 96dpi
-  
-  // Track page numbers
-  let pageNumber = 1;
+  // IMPORTANT: per-section padding does NOT apply to overflow pages when html2pdf splits content.
+  // To keep text off the very bottom on *every* page (KDP-safe), we use html2pdf margin.
 
   // C. BUILD CONTENT
   let html = '';
 
-  // ============ TITLE PAGE (No page number) ============
+  // ============ TITLE PAGE ============
   html += `
     <div style="
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      ${PAGE_HEIGHT}
+      height: calc(9in - 0.5in - 0.75in);
       text-align: center;
-      ${PAGE_PADDING}
       box-sizing: border-box;
     ">
       <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
@@ -226,17 +221,14 @@ export const generateCleanPDF = async ({
       <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 9pt; letter-spacing: 3px; color: #888; margin-top: auto;">LOOM & PAGE</p>
     </div>
   `;
-  html += PAGE_BREAK;
-  pageNumber++;
 
-  // ============ COPYRIGHT PAGE (Page ii - no visible number) ============
+  // ============ COPYRIGHT PAGE ============
   html += `
-    <div style="
+    <div style="page-break-before: always;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      ${PAGE_HEIGHT}
-      ${PAGE_PADDING}
+      height: calc(9in - 0.5in - 0.75in);
       box-sizing: border-box;
     ">
       <div style="margin-bottom: 48px;">
@@ -249,25 +241,18 @@ export const generateCleanPDF = async ({
       </div>
     </div>
   `;
-  html += PAGE_BREAK;
-  pageNumber++;
 
-  // ============ TABLE OF CONTENTS (Page iii) ============
+  // ============ TABLE OF CONTENTS ============
   html += `
-    <div style="${PAGE_HEIGHT} ${PAGE_PADDING} box-sizing: border-box; position: relative;">
+    <div style="page-break-before: always; box-sizing: border-box;">
       <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 700; text-align: center; margin-bottom: 40px; color: #000;">Table of Contents</h1>
       ${((bookData.tableOfContents || []) as Array<{ chapter: number; title: string }>).map(ch => `
         <p style="font-family: 'Playfair Display', Georgia, serif; margin-bottom: 14px; font-size: 11pt; color: #1a1a1a; display: flex; justify-content: space-between; border-bottom: 1px dotted #ccc; padding-bottom: 8px;">
           <span><strong>Chapter ${ch.chapter}:</strong> ${ch.title}</span>
         </p>
       `).join('')}
-      <div style="position: absolute; bottom: 36px; left: 0; right: 0; text-align: center;">
-        <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #666;">${pageNumber}</span>
-      </div>
     </div>
   `;
-  html += PAGE_BREAK;
-  pageNumber++;
 
   // ============ CHAPTERS ============
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
@@ -286,7 +271,7 @@ export const generateCleanPDF = async ({
     processedContent = processedContent.replace(/data-original-src=".*?"/g, 'src="" style="display:none"');
 
     html += `
-      <div style="${PAGE_HEIGHT} ${PAGE_PADDING} box-sizing: border-box; position: relative;">
+      <div style="page-break-before: always; box-sizing: border-box;">
         <div style="text-align: center; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 1px solid #ddd;">
           <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; text-transform: uppercase; letter-spacing: 2px; color: #888; margin-bottom: 8px;">Chapter ${ch.chapter}</p>
           <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 700; margin: 0; color: #000; line-height: 1.3;">${ch.title}</h1>
@@ -294,16 +279,8 @@ export const generateCleanPDF = async ({
         <div style="font-family: 'Playfair Display', Georgia, serif;">
           ${processedContent}
         </div>
-        <div style="position: absolute; bottom: 36px; left: 0; right: 0; text-align: center;">
-          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #666;">${pageNumber}</span>
-        </div>
       </div>
     `;
-    
-    if (index < chapters.length - 1) {
-      html += PAGE_BREAK;
-    }
-    pageNumber++;
   });
 
   container.innerHTML = html;
@@ -313,7 +290,9 @@ export const generateCleanPDF = async ({
   await new Promise(resolve => setTimeout(resolve, 1500));
 
   const opt = {
-    margin: 0,
+    // KDP-safe margins applied to EVERY page, including pages produced by chapter overflow.
+    // [top, left, bottom, right] in inches
+    margin: [0.5, 0.625, 0.75, 0.5] as [number, number, number, number],
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { 
@@ -328,17 +307,32 @@ export const generateCleanPDF = async ({
       format: [6, 9] as [number, number], // KDP 6x9 Trade Paperback
       orientation: 'portrait' as const 
     },
-    pagebreak: { mode: ['css', 'legacy'], before: [], after: [], avoid: [] }
+    pagebreak: { mode: ['css'] }
   };
 
   try {
     console.log('[PDF] Starting generation...');
-    if (returnBlob) {
-      const pdf = await html2pdf().set(opt).from(container).outputPdf('blob');
-      return pdf;
-    } else {
-      await html2pdf().set(opt).from(container).save();
+
+    // Generate PDF first, then stamp accurate page numbers based on final page count.
+    const worker = html2pdf().set(opt).from(container).toPdf();
+    const pdf = await worker.get('pdf');
+
+    const totalPages: number = pdf.internal.getNumberOfPages();
+    const pageW: number = pdf.internal.pageSize.getWidth();
+    const pageH: number = pdf.internal.pageSize.getHeight();
+
+    pdf.setFontSize(10);
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      // Centered footer number; ~0.45" above bottom.
+      pdf.text(String(p), pageW / 2, pageH - 0.45, { align: 'center' });
     }
+
+    if (returnBlob) {
+      return pdf.output('blob');
+    }
+    pdf.save(opt.filename);
+
     console.log('[PDF] Generation complete.');
   } catch (err) {
     console.error("[PDF] Generation failed:", err);
