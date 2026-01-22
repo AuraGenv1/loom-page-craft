@@ -287,18 +287,14 @@ const Dashboard = () => {
 
       zip.file('Cover-File.pdf', coverPdf.output('blob'));
 
-      // 2. Generate Manuscript PDF
-      toast.loading('Creating manuscript PDF...', { id: 'kdp-gen' });
-      const manuscriptBlob = await generateCleanPDF({
+      // 2. Generate Manuscript PDF (opens print dialog - user saves as PDF)
+      toast.loading('Opening manuscript print view...', { id: 'kdp-gen' });
+      await generateCleanPDF({
         topic: book.topic,
         bookData,
-        coverImageUrl: coverUrl || undefined,
-        isKdpManuscript: true,
-        returnBlob: true
+        coverImageUrl: coverUrl || undefined
       });
-      if (manuscriptBlob) {
-        zip.file('Manuscript.pdf', manuscriptBlob);
-      }
+      toast.info('Please save the print dialog as PDF and add it to your KDP package manually.', { id: 'kdp-gen' });
 
       // 3. Generate EPUB
       toast.loading('Creating Kindle eBook...', { id: 'kdp-gen' });
