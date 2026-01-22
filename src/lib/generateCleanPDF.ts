@@ -218,8 +218,11 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-  // FIXED: Absolute positioning pins this block to the bottom of Page 2.
-  // It ignores document flow, so it cannot split across pages.
+
+  // A. Create Page 2 (Invisible spacer required to establish the page)
+  contentArray.push({ text: ' ', fontSize: 1 });
+
+  // B. The Copyright Block (Pinned "Sticker")
   contentArray.push({
     stack: [
       { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
@@ -229,12 +232,10 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777' },
       { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
     ],
+    // Coordinates: X=63 (Left Gutter), Y=550 (Bottom margin area)
     absolutePosition: { x: 63, y: 550 },
     pageBreak: 'after'
   });
-
-  // Dummy spacer to create Page 2 so the absolute element has a place to live
-  contentArray.push({ text: ' ', fontSize: 1 });
 
   // --- 3. TOC ---
   contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
