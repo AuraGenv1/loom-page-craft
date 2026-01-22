@@ -219,10 +219,8 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
 
   // --- 2. COPYRIGHT PAGE ---
 
-  // A. Create Page 2 (Invisible spacer required to establish the page)
-  contentArray.push({ text: ' ', fontSize: 1 });
-
-  // B. The Copyright Block (Pinned "Sticker")
+  // 1. The Copyright Block (Pinned "Sticker")
+  // Note: We do NOT put pageBreak here because absolute elements ignore it.
   contentArray.push({
     stack: [
       { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
@@ -233,9 +231,12 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
     ],
     // Coordinates: X=63 (Left Gutter), Y=550 (Bottom margin area)
-    absolutePosition: { x: 63, y: 550 },
-    pageBreak: 'after'
+    absolutePosition: { x: 63, y: 550 }
   });
+
+  // 2. The Page Break Spacer
+  // This invisible element sits in the "flow" of Page 2 and forces the break.
+  contentArray.push({ text: ' ', fontSize: 1, pageBreak: 'after' });
 
   // --- 3. TOC ---
   contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
