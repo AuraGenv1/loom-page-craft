@@ -28,39 +28,37 @@ const parseMarkdownToHtml = (text: string) => {
   
   let html = text
     // Header 3
-    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold mt-6 mb-2">$1</h3>')
+    .replace(/^### (.*$)/gim, '<h3 class="chapter-h3">$1</h3>')
     // Header 2
-    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mt-8 mb-3">$1</h2>')
+    .replace(/^## (.*$)/gim, '<h2 class="chapter-h2">$1</h2>')
     // Header 1
-    .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-10 mb-4">$1</h1>')
+    .replace(/^# (.*$)/gim, '<h1 class="chapter-h2">$1</h1>')
     // Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // Italic
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     // Images
     .replace(/!\[(.*?)\]\((.*?)\)/gim, (match, alt, url) => {
-      // Force crossorigin for PDF capture
-      return `<div class="my-4 break-inside-avoid"><img src="${url}" alt="${alt}" crossorigin="anonymous" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" /></div>`;
+      return `<div class="image-container break-inside-avoid"><img src="${url}" alt="${alt}" crossorigin="anonymous" /></div>`;
     })
     // Bullet Points
-    .replace(/^\s*[-*]\s+(.*)$/gim, '<ul class="list-disc pl-5 my-2"><li>$1</li></ul>');
+    .replace(/^\s*[-*]\s+(.*)$/gim, '<ul class="bullet-list"><li>$1</li></ul>');
 
   // Fix adjacent lists (merge <ul> tags)
   html = html.replace(/<\/ul>\s*<ul[^>]*>/gim, '');
 
   // Pro-Tips (The Onyx Box)
-  // Replaces "> Text" with the exact HTML structure from ChapterContent.tsx
   html = html.replace(/^> (.*$)/gim, (match, content) => {
     const cleanContent = content.replace(/^PRO-TIP:?\s*/i, '').trim();
     return `
-      <div class="pro-tip-box break-inside-avoid my-6" style="border-left: 4px solid #000; background: #fff; padding: 1rem;">
-        <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-          <div style="flex-shrink: 0; margin-top: 2px;">
+      <div class="pro-tip-box break-inside-avoid">
+        <div class="pro-tip-flex">
+          <div class="pro-tip-icon">
             ${getKeyIconSvg()}
           </div>
           <div>
-            <p style="font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.25rem;">PRO TIP</p>
-            <p style="font-style: italic; color: #333; font-size: 0.9rem; line-height: 1.6;">
+            <p class="pro-tip-label">PRO TIP</p>
+            <p class="pro-tip-content">
               ${cleanContent}
             </p>
           </div>
@@ -72,9 +70,9 @@ const parseMarkdownToHtml = (text: string) => {
   // Paragraphs (wrap remaining text)
   const lines = html.split('\n');
   const processedLines = lines.map(line => {
-    if (line.trim() === '') return '<br/>';
+    if (line.trim() === '') return '<div class="spacer"></div>';
     if (line.startsWith('<')) return line; // Already HTML
-    return `<p style="margin-bottom: 0.75rem; line-height: 1.7; text-align: justify;">${line}</p>`;
+    return `<p class="body-text">${line}</p>`;
   });
 
   return processedLines.join('\n');
@@ -87,177 +85,273 @@ export const generateCleanPDF = async ({
   returnBlob = false,
 }: GeneratePDFOptions): Promise<Blob | void> => {
   
-  // 1. Create a hidden container that mimics the "Print Preview" page exactly
+  // 1. Create the container
+  // FIX: Use 'absolute' + 'z-index: 99999' to ensure it sits ON TOP of the app and is rendered.
+  // Using 'fixed' or negative z-index causes blank pages in many browsers.
   const container = document.createElement('div');
-  container.className = 'print-container';
-  
-  // Set dimensions for KDP 6x9
+  container.id = 'pdf-generation-container';
   container.style.width = '6in'; 
   container.style.padding = '0.75in'; // Margins
-  container.style.position = 'fixed';
-  container.style.left = '0';
+  container.style.position = 'absolute';
   container.style.top = '0';
-  container.style.zIndex = '-1000'; // Hide behind content
-  container.style.backgroundColor = '#fff';
-  container.style.color = '#000';
-  container.style.fontFamily = "'Playfair Display', Georgia, serif";
+  container.style.left = '0';
+  container.style.zIndex = '99999'; // Visible on top
+  container.style.background = 'white';
+  container.style.color = 'black';
   
-  // Inject Tailwind-like utility classes manually to ensure styles persist without full CSS build
+  // 2. Inject Comprehensive CSS
   const styleBlock = document.createElement('style');
   styleBlock.innerHTML = `
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
     
-    .print-container { font-family: 'Playfair Display', Georgia, serif; }
-    .font-serif { font-family: 'Playfair Display', Georgia, serif; }
-    .font-bold { font-weight: 700; }
-    .text-center { text-align: center; }
-    .text-justify { text-align: justify; }
-    .uppercase { text-transform: uppercase; }
-    .italic { font-style: italic; }
-    .mb-2 { margin-bottom: 0.5rem; }
-    .mb-4 { margin-bottom: 1rem; }
-    .mb-6 { margin-bottom: 1.5rem; }
-    .mt-6 { margin-top: 1.5rem; }
-    .mt-8 { margin-top: 2rem; }
-    .mt-10 { margin-top: 2.5rem; }
-    .my-2 { margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .my-4 { margin-top: 1rem; margin-bottom: 1rem; }
-    .my-6 { margin-top: 1.5rem; margin-bottom: 1.5rem; }
-    .text-xs { font-size: 0.75rem; line-height: 1.5; }
-    .text-sm { font-size: 0.875rem; line-height: 1.5; }
-    .text-lg { font-size: 1.125rem; }
-    .text-xl { font-size: 1.25rem; }
-    .text-2xl { font-size: 1.5rem; }
-    .text-3xl { font-size: 1.875rem; }
-    .text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
-    .border-black { border-color: #000; }
-    .border-l-4 { border-left-width: 4px; }
-    .bg-white { background-color: #fff; }
-    .p-4 { padding: 1rem; }
-    .flex { display: flex; }
-    .gap-3 { gap: 0.75rem; }
+    #pdf-generation-container {
+      font-family: 'Playfair Display', Georgia, serif;
+      box-sizing: border-box;
+    }
+    
+    #pdf-generation-container * {
+      box-sizing: border-box;
+    }
+    
     .break-after-always { page-break-after: always; }
     .break-before-always { page-break-before: always; }
     .break-inside-avoid { page-break-inside: avoid; }
-    .list-disc { list-style-type: disc; }
-    .pl-5 { padding-left: 1.25rem; }
-    .tracking-widest { letter-spacing: 0.1em; }
     
+    /* Typography */
+    .text-center { text-align: center; }
+    .uppercase { text-transform: uppercase; }
+    .italic { font-style: italic; }
+    .font-bold { font-weight: 700; }
+    
+    /* Title Page */
     .title-page {
-      min-height: 7.5in;
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
+      min-height: 8.5in; 
       text-align: center;
     }
-    
+    .main-title {
+      font-size: 32pt;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .subtitle {
+      font-size: 14pt;
+      font-style: italic;
+      color: #555;
+      margin-bottom: 2rem;
+    }
+    .branding {
+      font-size: 10pt;
+      letter-spacing: 0.2em;
+      color: #999;
+      margin-top: auto;
+    }
+
+    /* Copyright Page */
     .copyright-page {
-      min-height: 7.5in;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
+      min-height: 8.5in;
+      text-align: left;
+      font-size: 9pt;
+      color: #666;
+      line-height: 1.6;
     }
-    
-    .toc-page {
-      min-height: 7.5in;
+
+    /* Table of Contents */
+    .toc-title {
+      font-size: 18pt;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 2rem;
     }
-    
-    .chapter-page {
-      min-height: 7.5in;
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      font-size: 11pt;
     }
-    
+
+    /* Chapters */
     .chapter-header {
       text-align: center;
       margin-bottom: 2rem;
     }
-    
+    .chapter-label {
+      font-size: 10pt;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+    .chapter-title {
+      font-size: 24pt;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
     .divider {
-      width: 2rem;
-      height: 1px;
-      background: #ccc;
-      margin: 1rem auto;
+      width: 50px;
+      height: 2px;
+      background-color: #ddd;
+      margin: 0 auto 2rem auto;
+    }
+
+    /* Content Styling */
+    .body-text {
+      font-size: 11.5pt;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+      text-align: justify;
+      color: #1a1a1a;
+    }
+    .chapter-h2 {
+      font-size: 16pt;
+      font-weight: 700;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      color: #000;
+    }
+    .chapter-h3 {
+      font-size: 13pt;
+      font-weight: 600;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: #333;
     }
     
-    h1, h2, h3 { page-break-after: avoid; }
-    .pro-tip-box { page-break-inside: avoid; }
-    img { page-break-inside: avoid; max-width: 100%; }
+    /* Bullet Points */
+    .bullet-list {
+      list-style-type: disc;
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .bullet-list li {
+      font-size: 11.5pt;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Images */
+    .image-container {
+      margin: 1.5rem 0;
+      display: flex;
+      justify-content: center;
+    }
+    .image-container img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      border: 1px solid #eee;
+    }
+
+    /* Onyx Pro-Tip Box */
+    .pro-tip-box {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background-color: white;
+      border-left: 4px solid black;
+    }
+    .pro-tip-flex {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+    .pro-tip-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .pro-tip-label {
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+      color: black;
+    }
+    .pro-tip-content {
+      font-size: 11pt;
+      font-style: italic;
+      color: #444;
+      line-height: 1.5;
+    }
+    .spacer { height: 1rem; }
   `;
   container.appendChild(styleBlock);
   document.body.appendChild(container);
 
-  // 2. Build HTML Content
+  // 3. Build Content
   let htmlContent = '';
-  const displayTitle = bookData.displayTitle || topic;
 
-  // --- TITLE PAGE ---
+  // Title Page
   htmlContent += `
     <div class="title-page break-after-always">
       <div>
-        <p class="text-xs uppercase tracking-widest" style="color: #666; margin-bottom: 1rem;">A Complete Guide</p>
-        <h1 class="text-4xl font-bold" style="margin-bottom: 1rem;">${displayTitle}</h1>
-        ${bookData.subtitle ? `<p class="text-lg italic" style="color: #555;">${bookData.subtitle}</p>` : ''}
+        <h1 class="main-title">${bookData.displayTitle || topic}</h1>
+        ${bookData.subtitle ? `<p class="subtitle">${bookData.subtitle}</p>` : ''}
       </div>
-      <div style="margin-top: 4rem;">
-        <p class="text-sm" style="color: #999;">LOOM & PAGE</p>
+      <div>
+        <p class="branding">LOOM & PAGE</p>
       </div>
     </div>
   `;
 
-  // --- COPYRIGHT PAGE ---
+  // Copyright Page
   htmlContent += `
     <div class="copyright-page break-after-always">
-      <div class="text-xs" style="color: #333; line-height: 1.8;">
-        <p style="margin-bottom: 0.5rem;">Copyright © ${new Date().getFullYear()}</p>
-        <p style="margin-bottom: 0.5rem;">All rights reserved.</p>
-        <p style="margin-bottom: 1rem;">Published by Loom & Page</p>
-        <p style="margin-bottom: 1rem;">www.LoomandPage.com</p>
-        <p style="margin-bottom: 1rem; font-size: 0.7rem; line-height: 1.6;">
-          No part of this publication may be reproduced, distributed, or transmitted 
-          in any form or by any means, including photocopying, recording, or other 
-          electronic or mechanical methods, without the prior written permission of 
-          the publisher.
-        </p>
-        <p style="margin-bottom: 0.5rem;">Book generated by Loom & Page AI Engine.</p>
+      <div>
+        <p>Copyright © ${new Date().getFullYear()}</p>
+        <p>All rights reserved.</p>
+        <p>Published by Loom & Page</p>
+        <p>www.LoomandPage.com</p>
+        <p style="margin-top: 1rem;">Book generated by Loom & Page AI Engine.</p>
         <p>First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
       </div>
     </div>
   `;
 
-  // --- TABLE OF CONTENTS ---
-  const chapters = bookData.tableOfContents || [];
+  // TOC
   htmlContent += `
-    <div class="toc-page break-after-always">
-      <h2 class="text-2xl font-bold text-center" style="margin-bottom: 2rem;">Table of Contents</h2>
-      <div style="line-height: 2;">
-        ${chapters.map(ch => `
-          <p style="margin-bottom: 0.5rem;">
-            <span style="font-weight: 600;">Chapter ${ch.chapter}:</span> ${ch.title}
-          </p>
+    <div class="break-after-always">
+      <h2 class="toc-title">Table of Contents</h2>
+      <div>
+        ${(bookData.tableOfContents || []).map(ch => `
+          <div class="toc-item">
+            <span>Chapter ${ch.chapter}: ${ch.title}</span>
+          </div>
         `).join('')}
       </div>
     </div>
   `;
 
-  // --- CHAPTERS ---
+  // Chapters
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
-  const loopSource = chapters.length > 0 ? chapters : chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
+  const chapters = bookData.tableOfContents || chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
 
-  loopSource.forEach((ch, index) => {
+  chapters.forEach((ch, index) => {
     const contentKey = `chapter${ch.chapter}Content` as keyof BookData;
     const rawContent = (bookData[contentKey] as string) || "";
-    
-    const isLastChapter = index === loopSource.length - 1;
+    const isLastChapter = index === chapters.length - 1;
     
     htmlContent += `
-      <div class="chapter-page ${isLastChapter ? '' : 'break-after-always'}">
+      <div class="${isLastChapter ? '' : 'break-after-always'}">
         <div class="chapter-header">
-          <p class="text-xs uppercase tracking-widest" style="color: #666; margin-bottom: 0.5rem;">Chapter ${ch.chapter}</p>
-          <h2 class="text-2xl font-bold">${ch.title}</h2>
+          <p class="chapter-label">Chapter ${ch.chapter}</p>
+          <h2 class="chapter-title">${ch.title}</h2>
           <div class="divider"></div>
         </div>
         
-        <div class="chapter-content" style="font-size: 11.5pt; line-height: 1.7;">
+        <div>
           ${parseMarkdownToHtml(rawContent)}
         </div>
       </div>
@@ -268,32 +362,33 @@ export const generateCleanPDF = async ({
   contentWrapper.innerHTML = htmlContent;
   container.appendChild(contentWrapper);
 
-  // 3. Wait for images to load
+  // 4. Wait for images to load
   const images = Array.from(container.querySelectorAll('img'));
-  await Promise.all(images.map(img => {
-    if (img.complete) return Promise.resolve();
-    return new Promise(resolve => { 
-      img.onload = resolve; 
-      img.onerror = resolve; 
-    });
-  }));
+  if (images.length > 0) {
+    await Promise.all(images.map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => { 
+        img.onload = resolve; 
+        img.onerror = resolve; 
+      });
+    }));
+  }
 
-  // Small delay for fonts to load
+  // FORCE A LAYOUT REFLOW - wait for fonts and layout stability
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  // 4. Configure html2pdf
-  // 6x9 inches = 152.4mm x 228.6mm
+  // 5. Configure html2pdf
   const opt = {
-    margin: [0, 0, 0, 0] as [number, number, number, number], // Padding is handled in container
+    margin: [0.75, 0.6, 0.75, 0.6] as [number, number, number, number], 
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: {
-      scale: 2, // High quality scale
+    html2canvas: { 
+      scale: 2, 
       useCORS: true, 
       letterRendering: true,
-      logging: false,
       scrollY: 0,
-      windowWidth: 800
+      windowWidth: 800,
+      logging: false
     },
     jsPDF: { 
       unit: 'in', 
@@ -302,7 +397,7 @@ export const generateCleanPDF = async ({
     },
     pagebreak: { 
       mode: ['avoid-all', 'css', 'legacy'],
-      avoid: ['.pro-tip-box', 'img', 'h2', 'h3', '.break-inside-avoid']
+      avoid: ['.pro-tip-box', 'img', 'h2', 'h3', '.break-inside-avoid'] 
     }
   };
 
@@ -317,6 +412,9 @@ export const generateCleanPDF = async ({
     }
   } catch (err) {
     console.error("PDF Generation Failed:", err);
-    document.body.removeChild(container);
+    // Cleanup if fail
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
   }
 };
