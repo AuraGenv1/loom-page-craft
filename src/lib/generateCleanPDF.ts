@@ -96,13 +96,11 @@ export const generateCleanPDF = async ({
   container.id = 'pdf-generation-container';
   container.style.width = '6in'; 
   container.style.padding = '0.75in'; // Margins
-  container.style.position = 'absolute';
-  // IMPORTANT: Position it within the *current viewport* so html2canvas doesn't capture an offscreen/empty area.
-  // (When the user is scrolled down, top=0 can end up above the viewport and produce a blank PDF in some setups.)
-  const scrollX = window.scrollX || window.pageXOffset || 0;
-  const scrollY = window.scrollY || window.pageYOffset || 0;
-  container.style.top = `${scrollY}px`;
-  container.style.left = `${scrollX}px`;
+  // Keep it visibly rendered at the viewport origin during capture.
+  // This avoids browser “offscreen paint” optimizations that can yield a blank first page.
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
   container.style.zIndex = '99999'; // Visible on top
   container.style.background = 'white';
   container.style.color = 'black';
@@ -388,10 +386,9 @@ export const generateCleanPDF = async ({
   // FORCE A LAYOUT REFLOW - wait for fonts and layout stability
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  // Measure after layout settles (use px values for html2canvas window sizing)
-  const rect = container.getBoundingClientRect();
-  const windowWidthPx = Math.max(1, Math.ceil(rect.width));
-  const windowHeightPx = Math.max(1, Math.ceil(rect.height));
+  // Measure after layout settles (use element scroll size for reliable capture)
+  const captureWidthPx = Math.max(1, Math.ceil(container.scrollWidth));
+  const captureHeightPx = Math.max(1, Math.ceil(container.scrollHeight));
 
   // 5. Configure html2pdf
   const opt = {
@@ -402,11 +399,12 @@ export const generateCleanPDF = async ({
       scale: 2, 
       useCORS: true, 
       letterRendering: true,
-      // Crucial for non-zero scroll pages: capture coordinates relative to the visible viewport.
-      scrollX: -scrollX,
-      scrollY: -scrollY,
-      windowWidth: windowWidthPx,
-      windowHeight: windowHeightPx,
+      scrollX: 0,
+      scrollY: 0,
+      width: captureWidthPx,
+      height: captureHeightPx,
+      windowWidth: captureWidthPx,
+      windowHeight: captureHeightPx,
       backgroundColor: '#ffffff',
       logging: false
     },
