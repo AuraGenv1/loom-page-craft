@@ -1,11 +1,11 @@
 import { BookData } from './bookTypes';
-import * as pdfMake from "pdfmake/build/pdfmake";
-import * as pdfFonts from "pdfmake/build/vfs_fonts";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
 // Register fonts
 // @ts-ignore
-pdfMake.vfs = pdfFonts.vfs;
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any);
 
 interface GeneratePDFOptions {
   topic: string;
