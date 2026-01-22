@@ -711,8 +711,7 @@ const Index = () => {
       // Use clean PDF generator that strips all UI elements
       await generateCleanPDF({
         topic,
-        bookData,
-        coverImageUrl: coverImageUrls[0] || null,
+        bookData
       });
       
       toast.success('PDF downloaded!', { 

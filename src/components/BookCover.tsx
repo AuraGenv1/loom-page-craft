@@ -798,8 +798,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         await generateCleanPDF({
           topic: topic || title,
-          bookData,
-          coverImageUrl: validCoverUrl
+          bookData
         });
         toast.success('Manuscript PDF downloaded!');
       } catch (err) {
@@ -1447,8 +1446,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         await generateCleanPDF({
           topic: topic || title,
-          bookData: bookData!,
-          coverImageUrl: validCoverUrl
+          bookData: bookData!
         });
         
         return null; // Print dialog handles the file
