@@ -181,8 +181,23 @@ export const generateCleanPDF = async ({
     .spacer { height: 15px; }
     
     /* Special Pages */
-    .title-page { text-align: center; height: 900px; display: flex; flex-direction: column; justify-content: center; }
-    .copyright-page { height: 900px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .title-page { 
+      text-align: center; 
+      height: 1056px; /* 11in */
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; /* PERFECT CENTERING */
+      justify-content: center; 
+      padding: 0 !important; /* Remove PDF margins from title page */
+    }
+    
+    .copyright-page { 
+      height: 1056px; 
+      display: flex; 
+      flex-direction: column; 
+      justify-content: flex-end; 
+      padding-bottom: 100px;
+    }
   `;
   container.appendChild(style);
 
@@ -192,8 +207,10 @@ export const generateCleanPDF = async ({
   // Title Page
   html += `
     <div class="title-page">
-      <h1>${bookData.displayTitle || topic}</h1>
-      ${bookData.subtitle ? `<p style="font-size: 14pt; font-style: italic; color: #555;">${bookData.subtitle}</p>` : ''}
+      <div>
+        <h1>${bookData.displayTitle || topic}</h1>
+        ${bookData.subtitle ? `<p style="font-size: 14pt; font-style: italic; color: #555;">${bookData.subtitle}</p>` : ''}
+      </div>
       <p style="margin-top: auto; font-size: 10pt; letter-spacing: 3px; color: #888;">LOOM & PAGE</p>
     </div>
     <div class="page-break"></div>
@@ -256,7 +273,7 @@ export const generateCleanPDF = async ({
     }
   });
 
-  container.innerHTML += html;
+  container.innerHTML = html;
 
   // E. GENERATE PDF
   window.scrollTo(0, 0);
