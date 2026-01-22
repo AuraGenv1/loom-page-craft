@@ -2,9 +2,8 @@ import { BookData } from './bookTypes';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
-// 1. SETUP VFS
+// 1. SETUP VFS (Virtual File System for default fonts)
 // @ts-ignore
 const pdfMakeInstance = pdfMake.default || pdfMake;
 // @ts-ignore
@@ -12,48 +11,67 @@ const pdfFontsInstance = pdfFonts.default || pdfFonts;
 // @ts-ignore
 pdfMakeInstance.vfs = pdfFontsInstance.pdfMake?.vfs || pdfFontsInstance.vfs;
 
+// 2. CONFIGURE STANDARD FONTS
+// We map "Times" to the Standard 14 Fonts built into PDF readers.
+// This bypasses the need to download font files, preventing crashes.
+const fonts = {
+  Times: {
+    normal: 'Times-Roman',
+    bold: 'Times-Bold',
+    italics: 'Times-Italic',
+    bolditalics: 'Times-BoldItalic'
+  },
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf'
+  }
+};
+
 interface GeneratePDFOptions {
   topic: string;
   bookData: BookData;
 }
 
-// 2. ASSETS
+// 3. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 3. HELPERS: Font & Image Loaders
-const fetchAsBase64 = async (url: string): Promise<string> => {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.warn('Fetch failed:', url);
-    return '';
-  }
-};
-
-// Fetch Image with Proxy Fallback
-const fetchImageForPdf = async (url: string): Promise<string> => {
+// 4. IMAGE FETCHER (With Timeout to prevent hanging)
+const fetchImageAsBase64 = async (url: string): Promise<string> => {
   if (!url || url.startsWith('data:')) return url || TRANSPARENT_PIXEL;
-  // Try direct
-  let b64 = await fetchAsBase64(url);
-  if (b64 && b64 !== 'data:') return b64;
   
-  // Try Proxy
+  const fetchWithTimeout = (url: string, options: any, timeout = 5000) => {
+    return Promise.race([
+      fetch(url, options),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
+    ]);
+  };
+
   try {
-    const { data } = await supabase.functions.invoke('fetch-image-data-url', { body: { url } });
-    if (data?.dataUrl) return data.dataUrl;
-  } catch (e) { /* ignore */ }
-  
+    const response = await fetchWithTimeout(url, { mode: 'cors' }) as Response;
+    if (response.ok) {
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch (e) {
+    // Fallback to proxy
+    try {
+      const { data } = await supabase.functions.invoke('fetch-image-data-url', { body: { url } });
+      if (data?.dataUrl) return data.dataUrl;
+    } catch (err) {
+      console.warn('Image fetch completely failed:', url);
+    }
+  }
   return TRANSPARENT_PIXEL;
 };
 
-// 4. MARKDOWN PARSER
+// 5. MARKDOWN PARSER
 const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): any[] => {
   const content: any[] = [];
   const lines = text.split('\n');
@@ -78,12 +96,14 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
     const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
     if (imgMatch && imgMatch[1]) {
       const base64 = imageMap.get(imgMatch[1]) || TRANSPARENT_PIXEL;
-      content.push({
-        image: base64,
-        width: 350,
-        alignment: 'center',
-        margin: [0, 15, 0, 15]
-      });
+      if (base64 !== TRANSPARENT_PIXEL) {
+        content.push({
+          image: base64,
+          width: 300, // Safe width for 6x9 margins
+          alignment: 'center',
+          margin: [0, 15, 0, 15]
+        });
+      }
       return;
     }
 
@@ -101,13 +121,12 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
       content.push({
         table: {
-          widths: [25, '*'],
+          widths: [20, '*'],
           body: [[
             {
-              // The Key Icon SVG Path
               svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 2L11.4 11.6" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 7.5L18.5 10.5L22 7L19 4L15.5 7.5Z" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="5.5" stroke="black" stroke-width="2"/></svg>',
               width: 14,
-              margin: [5, 3, 0, 0]
+              margin: [3, 4, 0, 0]
             },
             {
               stack: [
@@ -145,49 +164,9 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 };
 
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
-  const toastId = 'pdf-generation';
-  
-  try {
-    // Step 1: Load Fonts
-    toast.loading('Loading book fonts...', { id: toastId, description: 'Downloading Crimson Text typeface' });
-    console.log('[PDF] 1. Loading Fonts...');
-    
-    const fontRegular = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Regular.ttf');
-    const fontBold = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Bold.ttf');
-    const fontItalic = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Italic.ttf');
+  console.log('[PDF] 1. Starting Generation...');
 
-    const fontsLoaded = fontRegular && fontBold && fontItalic;
-    if (fontsLoaded) {
-      toast.loading('Fonts loaded', { id: toastId, description: 'Preparing document layout...' });
-    } else {
-      toast.loading('Using fallback fonts', { id: toastId, description: 'Preparing document layout...' });
-    }
-
-    // Register Custom Font
-    const fontConfig = {
-      Crimson: {
-        normal: 'Crimson-Regular.ttf',
-        bold: 'Crimson-Bold.ttf',
-        italics: 'Crimson-Italic.ttf',
-        bolditalics: 'Crimson-Bold.ttf' // Fallback
-      },
-      Roboto: {
-        normal: 'Roboto-Regular.ttf',
-        bold: 'Roboto-Medium.ttf',
-      italics: 'Roboto-Italic.ttf',
-      bolditalics: 'Roboto-MediumItalic.ttf'
-    }
-  };
-
-  // Inject into VFS
-  if (fontRegular) {
-    pdfMakeInstance.vfs['Crimson-Regular.ttf'] = fontRegular.split(',')[1]; // Remove data: prefix
-    pdfMakeInstance.vfs['Crimson-Bold.ttf'] = fontBold.split(',')[1];
-    pdfMakeInstance.vfs['Crimson-Italic.ttf'] = fontItalic.split(',')[1];
-  }
-
-  // B. Pre-load Images
-  console.log('[PDF] 2. Loading Images...');
+  // 1. Prepare Content
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
   const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
     chapterKeys.map((_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
@@ -198,42 +177,31 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   let match;
   while ((match = regex.exec(allContent)) !== null) if (match[1]) urls.push(match[1]);
 
-  if (urls.length > 0) {
-    toast.loading(`Loading ${urls.length} images...`, { id: toastId, description: 'Embedding graphics into PDF' });
-  }
-
+  console.log(`[PDF] 2. Pre-loading ${urls.length} images...`);
   const imageMap = new Map<string, string>();
-  let loadedCount = 0;
   await Promise.all(urls.map(async (url) => {
-    imageMap.set(url, await fetchImageForPdf(url));
-    loadedCount++;
-    if (urls.length > 3 && loadedCount % Math.ceil(urls.length / 3) === 0) {
-      toast.loading(`Loading images (${loadedCount}/${urls.length})...`, { id: toastId, description: 'Embedding graphics into PDF' });
-    }
+    imageMap.set(url, await fetchImageAsBase64(url));
   }));
 
-  // Step 3: Building document
-  toast.loading('Building manuscript...', { id: toastId, description: `Formatting ${chapters.length} chapters` });
-
-  // C. Styles
+  // 2. Define Styles (KDP Standard)
   const styles: any = {
-    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10], font: 'Crimson' },
-    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10], font: 'Crimson' },
-    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5], font: 'Crimson' },
-    body: { fontSize: 12, lineHeight: 1.4, margin: [0, 0, 0, 10], font: 'Crimson', alignment: 'left' },
+    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10], font: 'Times' },
+    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10], font: 'Times' },
+    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5], font: 'Times' },
+    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], font: 'Times', alignment: 'left' },
     
-    tpTitle: { fontSize: 34, bold: true, alignment: 'center', font: 'Crimson' },
-    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center', font: 'Crimson' },
-    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666', font: 'Roboto' },
+    tpTitle: { fontSize: 32, bold: true, alignment: 'center', font: 'Times' },
+    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center', font: 'Times' },
+    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666', font: 'Times' },
     
-    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], font: 'Roboto', characterSpacing: 1 },
-    proTipBody: { fontSize: 11, italics: true, color: '#333', font: 'Crimson' },
-    copyright: { fontSize: 9, color: '#666', font: 'Roboto' }
+    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], font: 'Times', characterSpacing: 1 },
+    proTipBody: { fontSize: 10, italics: true, color: '#333', font: 'Times' },
+    copyright: { fontSize: 9, color: '#666', font: 'Times' }
   };
 
   const content: any[] = [];
 
-  // --- 1. TITLE PAGE ---
+  // --- PAGE 1: TITLE PAGE ---
   content.push({
     stack: [
       { text: (bookData.displayTitle || topic).toUpperCase(), style: 'tpTitle', margin: [0, 150, 0, 20] },
@@ -244,28 +212,31 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     alignment: 'center'
   });
 
-  // --- 2. COPYRIGHT PAGE ---
-  // Vertical align bottom using spacing
+  // --- PAGE 2: COPYRIGHT (Pinned Bottom) ---
+  const copyrightBlock = {
+    stack: [
+      { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
+      { text: 'All rights reserved.', style: 'copyright' },
+      { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
+      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
+    ],
+    absolutePosition: { x: 63, y: 550 }, // x=63 (gutter), y=550 (bottom)
+    pageBreak: 'after'
+  };
+  
+  // Dummy content to force Page 2 creation
   content.push(
-    { text: ' ', margin: [0, 480, 0, 0] }, // Spacer for ~80% page height
-    {
-      stack: [
-        { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
-        { text: 'All rights reserved.', style: 'copyright' },
-        { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
-        { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
-      ]
-    },
-    { text: '', pageBreak: 'after' }
+    { text: ' ', fontSize: 1 }, 
+    copyrightBlock
   );
 
-  // --- 3. TOC ---
+  // --- PAGE 3: TOC ---
   content.push({ text: 'Table of Contents', style: 'h1', margin: [0, 0, 0, 30] });
   chapters.forEach(ch => {
     content.push({
       columns: [
-        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 12, font: 'Roboto' },
-        { text: ch.title, width: '*', fontSize: 12, bold: true, font: 'Crimson' }
+        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11, font: 'Times' },
+        { text: ch.title, width: '*', fontSize: 11, bold: true, font: 'Times' }
       ],
       margin: [0, 5, 0, 5]
     });
@@ -275,7 +246,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   // --- 4. CHAPTERS ---
   chapters.forEach((ch, index) => {
     content.push(
-      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', font: 'Roboto', characterSpacing: 2 },
+      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', font: 'Times', characterSpacing: 2 },
       { text: ch.title, style: 'h1' },
       { canvas: [{ type: 'line', x1: 200, y1: 0, x2: 260, y2: 0, lineWidth: 1, lineColor: '#ccc' }], alignment: 'center', margin: [0, 10, 0, 30] }
     );
@@ -288,33 +259,28 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     }
   });
 
-  // Generate
+  // 3. GENERATE
   const docDefinition: any = {
     info: { title: topic, author: 'Loom & Page' },
     pageSize: { width: 432, height: 648 }, // 6x9 inches
-    // Margins: [Left, Top, Right, Bottom]
-    // 0.875" inside gutter (63pt), 0.625" outer (45pt)
+    // Margins: [Left/Gutter, Top, Right, Bottom]
+    // 0.875" = 63pts, 0.75" = 54pts, 0.625" = 45pts
     pageMargins: [63, 54, 45, 54], 
     content: content,
     styles: styles,
-    defaultStyle: { font: fontRegular ? 'Crimson' : 'Roboto' }, 
+    defaultStyle: { font: 'Times' }, // Enforce Times
     footer: (currentPage: number) => {
       if (currentPage <= 2) return null;
       return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0] };
     }
   };
 
-  // Step 4: Generate and download
-  toast.loading('Generating PDF...', { id: toastId, description: 'Rendering final document' });
-
-  // @ts-ignore
-  pdfMakeInstance.createPdf(docDefinition, null, fontConfig).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
-  
-  toast.success('PDF downloaded!', { id: toastId, description: 'Your manuscript is ready' });
-  
-  } catch (e: any) {
-    console.error('[PDF] Generation failed:', e);
-    toast.error('PDF generation failed', { id: 'pdf-generation', description: e.message || 'Please try again' });
-    throw e;
+  try {
+    console.log('[PDF] creating PDF...');
+    // @ts-ignore
+    pdfMakeInstance.createPdf(docDefinition, null, fonts).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  } catch (err: any) {
+    console.error("PDF Failed:", err);
+    alert('PDF Generation Failed: ' + err.message);
   }
 };
