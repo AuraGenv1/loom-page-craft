@@ -196,7 +196,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     h1: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
     h2: { fontSize: 16, bold: true, margin: [0, 15, 0, 8] },
     h3: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
-    body: { fontSize: 11, lineHeight: 1.5, margin: [0, 0, 0, 8], alignment: 'justify' },
+    body: { fontSize: 11, lineHeight: 1.5, margin: [0, 0, 0, 8], alignment: 'left' },
     titlePageTitle: { fontSize: 28, bold: true, alignment: 'center' },
     titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', color: '#555' },
     branding: { fontSize: 9, alignment: 'center', color: '#888' },
@@ -217,9 +217,9 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     { text: 'LOOM & PAGE', style: 'branding', pageBreak: 'after' }
   );
 
-  // --- 2. COPYRIGHT PAGE ---
+  // --- 2. COPYRIGHT PAGE (starts on new page) ---
   contentArray.push(
-    { text: '', margin: [0, 450, 0, 0] },
+    { text: '', pageBreak: 'before', margin: [0, 450, 0, 0] },
     { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
     { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
     { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 0, 0, 10] },
@@ -275,6 +275,11 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     },
     pageSize: { width: 432, height: 648 }, // 6x9 inches in points (72 per inch)
     pageMargins: [54, 54, 54, 54], // 0.75 inch margins
+    
+    // Default to Roboto (built-in) - Times would require custom font registration
+    defaultStyle: {
+      font: 'Roboto'
+    },
     
     footer: (currentPage: number, pageCount: number) => {
       if (currentPage <= 2) return null; // Skip title & copyright
