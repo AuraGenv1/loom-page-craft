@@ -1,4 +1,10 @@
 import { BookData } from './bookTypes';
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+import { supabase } from '@/integrations/supabase/client';
+
+// Register fonts
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || pdfFonts;
 
 interface GeneratePDFOptions {
   topic: string;
@@ -8,296 +14,261 @@ interface GeneratePDFOptions {
 }
 
 // 1. ASSETS
-const KEY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;
+const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 2. HTML PARSER
-const parseMarkdownToHtml = (text: string): string => {
-  if (!text) return '';
+// 2. HELPER: Image Fetcher
+const fetchImageAsBase64 = async (url: string): Promise<string> => {
+  if (!url) return TRANSPARENT_PIXEL;
+  if (url.startsWith('data:')) return url;
   
-  const lines = text.split('\n');
-  let html = '';
-  let inList = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    
-    // Skip empty lines
-    if (!trimmed) {
-      if (inList) {
-        html += '</ul>';
-        inList = false;
+  // Try direct fetch first
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (response.ok) {
+      const blob = await response.blob();
+      if (blob.type.startsWith('image/')) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+          reader.readAsDataURL(blob);
+        });
       }
-      continue;
     }
-
-    // Headers - strip ALL # characters
-    const headerMatch = trimmed.match(/^(#{1,6})\s*(.+)$/);
-    if (headerMatch) {
-      if (inList) { html += '</ul>'; inList = false; }
-      const level = headerMatch[1].length;
-      const content = headerMatch[2].replace(/^#+\s*/, '').trim();
-      html += `<h${level}>${content}</h${level}>`;
-      continue;
-    }
-
-    // Pro-Tips
-    if (trimmed.startsWith('>')) {
-      if (inList) { html += '</ul>'; inList = false; }
-      const content = trimmed.slice(1).replace(/^PRO-TIP:?\s*/i, '').trim();
-      html += `
-        <div class="pro-tip-box">
-          <div class="pro-tip-header">${KEY_ICON_SVG} PRO TIP</div>
-          <div class="pro-tip-body">${content}</div>
-        </div>
-      `;
-      continue;
-    }
-
-    // List items
-    if (trimmed.match(/^[-*]\s+/)) {
-      if (!inList) {
-        html += '<ul class="bullet-list">';
-        inList = true;
-      }
-      const content = trimmed.replace(/^[-*]\s+/, '');
-      html += `<li>${content}</li>`;
-      continue;
-    }
-
-    // Close list if we hit a non-list item
-    if (inList) {
-      html += '</ul>';
-      inList = false;
-    }
-
-    // Images
-    const imgMatch = trimmed.match(/!\[(.*?)\]\((.*?)\)/);
-    if (imgMatch) {
-      html += `<div class="img-wrapper"><img src="${imgMatch[2]}" alt="${imgMatch[1]}" /></div>`;
-      continue;
-    }
-
-    // Regular paragraph - apply inline formatting
-    let para = trimmed
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
-    html += `<p>${para}</p>`;
+  } catch (e) {
+    console.warn('Direct fetch failed, trying proxy:', url);
   }
-
-  if (inList) html += '</ul>';
   
-  return html;
+  // Fallback to edge function proxy
+  try {
+    const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
+      body: { url },
+    });
+    if (!error && data?.dataUrl) return data.dataUrl;
+  } catch (e) {
+    console.warn('Image fetch failed:', e);
+  }
+  return TRANSPARENT_PIXEL;
 };
 
-export const generateCleanPDF = async ({ 
-  topic, 
-  bookData,
-}: GeneratePDFOptions): Promise<void> => {
-  
-  console.log('Generating Print View...');
+// 3. HELPER: Markdown Parser -> PDFMake Object Stack
+const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): any[] => {
+  const content: any[] = [];
+  const lines = text.split('\n');
 
-  // 1. OPEN PRINT WINDOW
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    alert('Please allow popups to export the PDF');
-    return;
-  }
+  lines.forEach(line => {
+    line = line.trim();
+    if (!line) return;
 
-  // 2. GENERATE CONTENT
-  let htmlBody = '';
+    // --- Headers (handle with or without space after #) ---
+    const headerMatch = line.match(/^(#{1,6})\s*(.+)$/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const headerText = headerMatch[2].trim();
+      const style = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
+      content.push({ text: headerText, style });
+      return;
+    }
 
-  // Title Page
-  htmlBody += `
-    <div class="page-container">
-      <div class="title-page">
-        <div class="title-content">
-          <h1>${bookData.displayTitle || topic}</h1>
-          ${bookData.subtitle ? `<p class="subtitle">${bookData.subtitle}</p>` : ''}
-        </div>
-        <p class="branding">LOOM & PAGE</p>
-      </div>
-    </div>
-  `;
+    // --- Images ---
+    const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
+    if (imgMatch && imgMatch[1]) {
+      const url = imgMatch[1];
+      const base64 = imageMap.get(url) || TRANSPARENT_PIXEL;
+      if (base64 !== TRANSPARENT_PIXEL) {
+        content.push({
+          image: base64,
+          width: 350,
+          alignment: 'center',
+          margin: [0, 15, 0, 15]
+        });
+      }
+      return;
+    }
 
-  // Copyright Page
-  htmlBody += `
-    <div class="page-container">
-      <div class="copyright-page">
-        <div class="copyright-content">
-          <p><strong>Copyright © ${new Date().getFullYear()}</strong></p>
-          <p>All rights reserved.</p>
-          <p>Published by Loom & Page</p>
-          <p>www.LoomandPage.com</p>
-          <p style="margin-top: 1rem;">Book generated by Loom & Page AI Engine.</p>
-          <p>First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-        </div>
-      </div>
-    </div>
-  `;
+    // --- Bullets ---
+    if (line.match(/^[-*]\s+/)) {
+      const cleanLine = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '');
+      content.push({
+        ul: [cleanLine],
+        margin: [0, 2, 0, 2]
+      });
+      return;
+    }
 
-  // TOC
-  htmlBody += `
-    <div class="page-container">
-      <div class="toc-page">
-        <h2>Table of Contents</h2>
-        <div class="toc-list">
-          ${(bookData.tableOfContents || []).map((ch: any) => `
-            <div class="toc-item">
-              <span>Chapter ${ch.chapter}</span>
-              <span>${ch.title}</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    </div>
-  `;
+    // --- Pro-Tips (Blockquotes) ---
+    if (line.startsWith('>')) {
+      const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
+      content.push({
+        table: {
+          widths: ['*'],
+          body: [[
+            {
+              stack: [
+                { text: '🔑 PRO TIP', fontSize: 9, bold: true, margin: [0, 0, 0, 5] },
+                { text: cleanText, fontSize: 10, italics: true, color: '#333' }
+              ],
+              fillColor: '#f5f5f5',
+              margin: [10, 10, 10, 10]
+            }
+          ]]
+        },
+        layout: {
+          hLineWidth: () => 0,
+          vLineWidth: (i: number) => i === 0 ? 3 : 0,
+          vLineColor: () => '#000000',
+          paddingLeft: () => 10,
+          paddingRight: () => 10,
+          paddingTop: () => 8,
+          paddingBottom: () => 8
+        },
+        margin: [0, 10, 0, 10]
+      });
+      return;
+    }
 
-  // Chapters
-  const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
-  const chapters = bookData.tableOfContents || chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
-
-  chapters.forEach((ch: any) => {
-    const rawContent = (bookData[`chapter${ch.chapter}Content`] as string) || '';
-    const processedContent = parseMarkdownToHtml(rawContent);
-
-    htmlBody += `
-      <div class="page-container">
-        <div class="chapter-start">
-          <div class="chapter-header">
-            <p class="chapter-num">Chapter ${ch.chapter}</p>
-            <h1>${ch.title}</h1>
-            <div class="divider"></div>
-          </div>
-          <div class="chapter-body">
-            ${processedContent}
-          </div>
-        </div>
-      </div>
-    `;
+    // --- Standard Paragraphs with inline formatting ---
+    const parts = line.split('**');
+    if (parts.length > 1) {
+      const richText = parts.map((part, i) => {
+        return i % 2 === 0 ? { text: part } : { text: part, bold: true };
+      });
+      content.push({ text: richText, style: 'body' });
+    } else {
+      content.push({ text: line, style: 'body' });
+    }
   });
 
-  // 3. WRITE DOCUMENT
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
-      <style>
-        /* GLOBAL PRINT SETTINGS */
-        @page {
-          size: 6in 9in; /* KDP STANDARD SIZE */
-          margin: 0; /* CRITICAL: Setting 0 hides browser header/footer clutter */
-        }
-        
-        * {
-          box-sizing: border-box;
-        }
-        
-        body {
-          margin: 0;
-          /* We enforce physical margins inside the body content */
-          padding: 0.75in 0.6in 0.75in 0.75in; 
-          font-family: 'Playfair Display', Georgia, serif;
-          font-size: 11pt;
-          line-height: 1.6;
-          color: #000;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
+  return content;
+};
 
-        /* PAGE CONTAINERS */
-        .page-container {
-          width: 100%;
-          break-after: page;
-          page-break-after: always;
-          position: relative;
-        }
+export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
+  console.log('[PDF] Starting pdfmake generation...');
 
-        /* TITLE PAGE */
-        .title-page {
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          text-align: center;
-          height: 7.5in; /* 9in total - 1.5in vertical margins */
-          padding-top: 2in;
-        }
-        .title-content h1 { font-size: 32pt; line-height: 1.1; margin-bottom: 0.5rem; text-transform: uppercase; }
-        .subtitle { font-size: 14pt; font-style: italic; color: #555; }
-        .branding { font-size: 9pt; letter-spacing: 2px; color: #888; text-transform: uppercase; margin-bottom: 0.5in; }
-
-        /* COPYRIGHT PAGE */
-        .copyright-page {
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-end;
-          height: 7.5in;
-        }
-        .copyright-content p { margin: 0.2rem 0; font-size: 9pt; color: #444; }
-
-        /* TOC */
-        .toc-page h2 { text-align: center; margin-bottom: 2rem; font-size: 18pt; }
-        .toc-list { margin-top: 1rem; }
-        .toc-item { display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding: 0.3rem 0; margin-bottom: 0.5rem; }
-
-        /* CHAPTERS */
-        .chapter-start { 
-          margin-top: 1in; /* Visual space at top of page */
-        }
-        .chapter-header { text-align: center; margin-bottom: 2rem; }
-        .chapter-num { font-size: 9pt; text-transform: uppercase; letter-spacing: 2px; color: #666; margin-bottom: 0.5rem; }
-        .chapter-header h1 { font-size: 24pt; margin: 0; line-height: 1.2; }
-        .divider { width: 40px; height: 1px; background: #ccc; margin: 1.5rem auto; }
-
-        /* CONTENT STYLING */
-        p { margin-bottom: 1rem; text-align: justify; widows: 2; orphans: 2; }
-        h2 { font-size: 16pt; margin-top: 1.5rem; margin-bottom: 0.8rem; }
-        h3 { font-size: 13pt; margin-top: 1.2rem; margin-bottom: 0.5rem; }
-        
-        /* IMAGES */
-        .img-wrapper { text-align: center; margin: 1.5rem 0; break-inside: avoid; page-break-inside: avoid; }
-        img { max-width: 100%; height: auto; border: 1px solid #eee; }
-
-        /* PRO-TIP BOX */
-        .pro-tip-box {
-          background: #f9f9f9 !important;
-          border-left: 4px solid #000 !important;
-          padding: 1rem;
-          margin: 1.5rem 0;
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-        .pro-tip-header { font-size: 9pt; font-weight: bold; letter-spacing: 1px; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
-        .pro-tip-body { font-style: italic; font-size: 10.5pt; color: #333; }
-
-        /* BULLETS */
-        .bullet-list { padding-left: 1.5rem; margin-bottom: 1rem; }
-        .bullet-list li { margin-bottom: 0.3rem; }
-        
-        /* Prevent page breaks inside elements */
-        h1, h2, h3 {
-          break-after: avoid;
-          page-break-after: avoid;
-        }
-      </style>
-    </head>
-    <body>
-      ${htmlBody}
-      <script>
-        // Wait for fonts and images to load before printing
-        window.onload = function() {
-          document.fonts.ready.then(function() {
-            setTimeout(function() {
-              window.print();
-            }, 1500);
-          });
-        };
-      </script>
-    </body>
-    </html>
-  `);
+  // A. Pre-fetch Images
+  const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
+  const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
+    chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
   
-  printWindow.document.close();
+  const allContent = chapters.map((ch) => (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '').join('\n');
+  
+  // Extract URLs
+  const urls: string[] = [];
+  const regex = /!\[[^\]]*\]\(([^)]+)\)/g;
+  let match;
+  while ((match = regex.exec(allContent)) !== null) {
+    if (match[1]) urls.push(match[1]);
+  }
+
+  console.log(`[PDF] Pre-fetching ${urls.length} images...`);
+  const imageMap = new Map<string, string>();
+  await Promise.all(urls.map(async (url) => {
+    const b64 = await fetchImageAsBase64(url);
+    imageMap.set(url, b64);
+  }));
+
+  // B. Define styles
+  const styles: Record<string, any> = {
+    h1: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
+    h2: { fontSize: 16, bold: true, margin: [0, 15, 0, 8] },
+    h3: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
+    body: { fontSize: 11, lineHeight: 1.5, margin: [0, 0, 0, 8], alignment: 'justify' },
+    titlePageTitle: { fontSize: 28, bold: true, alignment: 'center' },
+    titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', color: '#555' },
+    branding: { fontSize: 9, alignment: 'center', color: '#888' },
+    chapterNum: { fontSize: 10, alignment: 'center', color: '#666' },
+    chapterTitle: { fontSize: 20, bold: true, alignment: 'center' }
+  };
+
+  // C. Build content array
+  const contentArray: any[] = [];
+
+  // --- 1. TITLE PAGE ---
+  contentArray.push(
+    { text: '', margin: [0, 120, 0, 0] },
+    { text: (bookData.displayTitle || topic).toUpperCase(), style: 'titlePageTitle' },
+    { text: '', margin: [0, 15, 0, 0] },
+    { text: bookData.subtitle || '', style: 'titlePageSubtitle' },
+    { text: '', margin: [0, 200, 0, 0] },
+    { text: 'LOOM & PAGE', style: 'branding', pageBreak: 'after' }
+  );
+
+  // --- 2. COPYRIGHT PAGE ---
+  contentArray.push(
+    { text: '', margin: [0, 450, 0, 0] },
+    { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
+    { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
+    { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 0, 0, 10] },
+    { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
+    { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 0, 0, 5] },
+    { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', pageBreak: 'after' }
+  );
+
+  // --- 3. TOC ---
+  contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
+  
+  chapters.forEach((ch) => {
+    contentArray.push({
+      columns: [
+        { text: `Chapter ${ch.chapter}:`, width: 80, fontSize: 11 },
+        { text: ch.title, width: '*', fontSize: 11, bold: true }
+      ],
+      margin: [0, 5, 0, 5]
+    });
+  });
+  
+  contentArray.push({ text: '', pageBreak: 'after' });
+
+  // --- 4. CHAPTERS ---
+  chapters.forEach((ch, index) => {
+    // Chapter header
+    contentArray.push(
+      { text: '', margin: [0, 40, 0, 0] },
+      { text: `Chapter ${ch.chapter}`, style: 'chapterNum', margin: [0, 0, 0, 10] },
+      { text: ch.title, style: 'chapterTitle', margin: [0, 0, 0, 5] },
+      { 
+        canvas: [{ type: 'line', x1: 180, y1: 0, x2: 252, y2: 0, lineWidth: 1, lineColor: '#ccc' }],
+        margin: [0, 10, 0, 25]
+      }
+    );
+
+    const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
+    const parsedContent = parseMarkdownToPdfMake(rawContent, imageMap);
+    
+    contentArray.push(...parsedContent);
+    
+    // Page break after chapter (except last)
+    if (index < chapters.length - 1) {
+      contentArray.push({ text: '', pageBreak: 'after' });
+    }
+  });
+
+  // D. Build document definition
+  const docDefinition: any = {
+    info: {
+      title: bookData.displayTitle || topic,
+      author: 'Loom & Page',
+    },
+    pageSize: { width: 432, height: 648 }, // 6x9 inches in points (72 per inch)
+    pageMargins: [54, 54, 54, 54], // 0.75 inch margins
+    
+    footer: (currentPage: number, pageCount: number) => {
+      if (currentPage <= 2) return null; // Skip title & copyright
+      return { 
+        text: `${currentPage}`, 
+        alignment: 'center', 
+        fontSize: 9, 
+        color: '#888',
+        margin: [0, 15, 0, 0] 
+      };
+    },
+
+    content: contentArray,
+    styles
+  };
+
+  // E. Generate and download
+  console.log('[PDF] Creating document...');
+  pdfMake.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  console.log('[PDF] Download initiated.');
 };
