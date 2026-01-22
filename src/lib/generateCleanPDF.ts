@@ -3,33 +3,13 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
-// 1. CONFIGURE STANDARD FONTS (Fixes "Roboto" look)
+// 1. CONFIGURE DEFAULT FONTS (Robust Setup)
 // @ts-ignore
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || (pdfFonts as any);
-
-// Define font mapping for Standard 14 PDF Fonts (Times, Helvetica)
-// This avoids the need to embed custom font files while giving the "Book" look.
-const fonts = {
-  Times: {
-    normal: 'Times-Roman',
-    bold: 'Times-Bold',
-    italics: 'Times-Italic',
-    bolditalics: 'Times-BoldItalic'
-  },
-  Helvetica: {
-    normal: 'Helvetica',
-    bold: 'Helvetica-Bold',
-    italics: 'Helvetica-Oblique',
-    bolditalics: 'Helvetica-BoldOblique'
-  },
-  // Fallback
-  Roboto: {
-    normal: 'Roboto-Regular.ttf',
-    bold: 'Roboto-Medium.ttf',
-    italics: 'Roboto-Italic.ttf',
-    bolditalics: 'Roboto-MediumItalic.ttf'
-  }
-};
+const pdfMakeInstance = pdfMake.default || pdfMake;
+// @ts-ignore
+const pdfFontsInstance = pdfFonts.default || pdfFonts;
+// @ts-ignore
+pdfMakeInstance.vfs = pdfFontsInstance.pdfMake?.vfs || pdfFontsInstance.vfs;
 
 interface GeneratePDFOptions {
   topic: string;
@@ -56,7 +36,6 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       });
     }
   } catch (e) {
-    // Fallback to proxy
     const { data } = await supabase.functions.invoke('fetch-image-data-url', { body: { url } });
     if (data?.dataUrl) return data.dataUrl;
   }
@@ -113,7 +92,7 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
         table: {
           widths: [25, '*'],
           body: [[
-            // Vector Key Icon (Lucide Path)
+            // Vector Key Icon
             {
               svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
               width: 14,
@@ -157,7 +136,6 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
   console.log('[PDF] Preparing assets...');
 
-  // Pre-load Images
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
   const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
     chapterKeys.map((_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
@@ -173,20 +151,19 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     imageMap.set(url, await fetchImageAsBase64(url));
   }));
 
-  // Define Styles
   const styles: any = {
-    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10], font: 'Times' },
-    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10], font: 'Times' },
-    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5], font: 'Times' },
-    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], font: 'Times', alignment: 'left' },
+    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
+    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10] },
+    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5] },
+    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], alignment: 'left' },
     
-    tpTitle: { fontSize: 34, bold: true, alignment: 'center', font: 'Times' },
-    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center', font: 'Times' },
-    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666', font: 'Helvetica' },
+    tpTitle: { fontSize: 34, bold: true, alignment: 'center' },
+    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center' },
+    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666' },
     
-    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], font: 'Helvetica', characterSpacing: 1 },
-    proTipBody: { fontSize: 10, italics: true, color: '#333', font: 'Times' },
-    copyright: { fontSize: 9, color: '#666', font: 'Helvetica' }
+    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], characterSpacing: 1 },
+    proTipBody: { fontSize: 10, italics: true, color: '#333' },
+    copyright: { fontSize: 9, color: '#666' }
   };
 
   const content: any[] = [];
@@ -203,8 +180,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   });
 
   // 2. COPYRIGHT PAGE (ABSOLUTE POSITIONING)
-  // We use absolutePosition to pin this block to the bottom of the page.
-  // This guarantees it will NEVER split across pages.
+  // This pins the block to the bottom of the page (y: 680)
   const copyrightBlock = {
     stack: [
       { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
@@ -212,13 +188,13 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
       { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
     ],
-    absolutePosition: { x: 54, y: 550 }, // Bottom of page (648 - margins)
+    absolutePosition: { x: 54, y: 680 },
     pageBreak: 'after'
   };
   
-  // Create a blank page 2, and add the floating copyright block to it
+  // Dummy content to create Page 2, then attach absolute block
   content.push(
-    { text: ' ', fontSize: 1 }, // invisible spacer for Page 2
+    { text: ' ', fontSize: 1 }, 
     copyrightBlock
   );
 
@@ -227,8 +203,8 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   chapters.forEach(ch => {
     content.push({
       columns: [
-        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11, font: 'Helvetica' },
-        { text: ch.title, width: '*', fontSize: 11, bold: true, font: 'Times' }
+        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11 },
+        { text: ch.title, width: '*', fontSize: 11, bold: true }
       ],
       margin: [0, 5, 0, 5]
     });
@@ -238,7 +214,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   // 4. CHAPTERS
   chapters.forEach((ch, index) => {
     content.push(
-      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', font: 'Helvetica' },
+      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888' },
       { text: ch.title, style: 'h1' },
       { canvas: [{ type: 'line', x1: 200, y1: 0, x2: 260, y2: 0, lineWidth: 1, lineColor: '#ccc' }], alignment: 'center', margin: [0, 10, 0, 30] }
     );
@@ -251,21 +227,17 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     }
   });
 
-  // Generate
   const docDefinition = {
     info: { title: topic, author: 'Loom & Page' },
     pageSize: { width: 432, height: 648 }, // 6x9 inches
     pageMargins: [54, 54, 54, 54], // 0.75in margins
     content: content,
     styles: styles,
-    // Inject the font configuration here
-    defaultStyle: { font: 'Times' }, 
     footer: (currentPage: number) => {
       if (currentPage <= 2) return null;
-      return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0], font: 'Helvetica' };
+      return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0] };
     }
   };
 
-  // @ts-ignore - Pass the fonts object
-  pdfMake.createPdf(docDefinition, null, fonts).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  pdfMakeInstance.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
 };
