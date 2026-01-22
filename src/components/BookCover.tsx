@@ -787,8 +787,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         await generateCleanPDF({
           topic: topic || title,
           bookData,
-          coverImageUrl: validCoverUrl,
-          isKdpManuscript: true
+          coverImageUrl: validCoverUrl
         });
         toast.success('Manuscript PDF downloaded!');
       } catch (err) {
@@ -1428,20 +1427,21 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
     // Helper: Generate Manuscript PDF as Blob
     const generateManuscriptPDFBlob = async (): Promise<Blob | null> => {
+      // NOTE: Browser print method opens a dialog - cannot return blob
+      // User must print to PDF manually for KDP package
+      toast.info('Please use "Save as PDF" in the print dialog to create your manuscript file.');
       try {
         const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
         
-        const blob = await generateCleanPDF({
+        await generateCleanPDF({
           topic: topic || title,
           bookData: bookData!,
-          coverImageUrl: validCoverUrl,
-          isKdpManuscript: true, // Forces 6x9 size
-          returnBlob: true // Returns blob instead of saving
+          coverImageUrl: validCoverUrl
         });
         
-        return (blob as Blob) || null;
+        return null; // Print dialog handles the file
       } catch (err) {
-        console.error('Error generating manuscript PDF:', err);
+        console.error('Error generating manuscript:', err);
         return null;
       }
     };
