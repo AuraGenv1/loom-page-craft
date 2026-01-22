@@ -2,6 +2,7 @@ import { BookData } from './bookTypes';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // 1. SETUP VFS
 // @ts-ignore
@@ -144,25 +145,35 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 };
 
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
-  console.log('[PDF] 1. Loading Fonts...');
+  const toastId = 'pdf-generation';
   
-  // A. Load "Crimson Text" (Google Font) for a real book look
-  // We fetch the base64 string at runtime to avoid bloated file sizes
-  const fontRegular = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Regular.ttf');
-  const fontBold = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Bold.ttf');
-  const fontItalic = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Italic.ttf');
+  try {
+    // Step 1: Load Fonts
+    toast.loading('Loading book fonts...', { id: toastId, description: 'Downloading Crimson Text typeface' });
+    console.log('[PDF] 1. Loading Fonts...');
+    
+    const fontRegular = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Regular.ttf');
+    const fontBold = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Bold.ttf');
+    const fontItalic = await fetchAsBase64('https://cdn.jsdelivr.net/npm/@canvas-fonts/crimson-text@1.0.4/CrimsonText-Italic.ttf');
 
-  // Register Custom Font
-  const fontConfig = {
-    Crimson: {
-      normal: 'Crimson-Regular.ttf',
-      bold: 'Crimson-Bold.ttf',
-      italics: 'Crimson-Italic.ttf',
-      bolditalics: 'Crimson-Bold.ttf' // Fallback
-    },
-    Roboto: {
-      normal: 'Roboto-Regular.ttf',
-      bold: 'Roboto-Medium.ttf',
+    const fontsLoaded = fontRegular && fontBold && fontItalic;
+    if (fontsLoaded) {
+      toast.loading('Fonts loaded', { id: toastId, description: 'Preparing document layout...' });
+    } else {
+      toast.loading('Using fallback fonts', { id: toastId, description: 'Preparing document layout...' });
+    }
+
+    // Register Custom Font
+    const fontConfig = {
+      Crimson: {
+        normal: 'Crimson-Regular.ttf',
+        bold: 'Crimson-Bold.ttf',
+        italics: 'Crimson-Italic.ttf',
+        bolditalics: 'Crimson-Bold.ttf' // Fallback
+      },
+      Roboto: {
+        normal: 'Roboto-Regular.ttf',
+        bold: 'Roboto-Medium.ttf',
       italics: 'Roboto-Italic.ttf',
       bolditalics: 'Roboto-MediumItalic.ttf'
     }
@@ -187,10 +198,22 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   let match;
   while ((match = regex.exec(allContent)) !== null) if (match[1]) urls.push(match[1]);
 
+  if (urls.length > 0) {
+    toast.loading(`Loading ${urls.length} images...`, { id: toastId, description: 'Embedding graphics into PDF' });
+  }
+
   const imageMap = new Map<string, string>();
+  let loadedCount = 0;
   await Promise.all(urls.map(async (url) => {
     imageMap.set(url, await fetchImageForPdf(url));
+    loadedCount++;
+    if (urls.length > 3 && loadedCount % Math.ceil(urls.length / 3) === 0) {
+      toast.loading(`Loading images (${loadedCount}/${urls.length})...`, { id: toastId, description: 'Embedding graphics into PDF' });
+    }
   }));
+
+  // Step 3: Building document
+  toast.loading('Building manuscript...', { id: toastId, description: `Formatting ${chapters.length} chapters` });
 
   // C. Styles
   const styles: any = {
@@ -281,10 +304,17 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     }
   };
 
-  try {
-    // @ts-ignore
-    pdfMakeInstance.createPdf(docDefinition, null, fontConfig).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  // Step 4: Generate and download
+  toast.loading('Generating PDF...', { id: toastId, description: 'Rendering final document' });
+
+  // @ts-ignore
+  pdfMakeInstance.createPdf(docDefinition, null, fontConfig).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  
+  toast.success('PDF downloaded!', { id: toastId, description: 'Your manuscript is ready' });
+  
   } catch (e: any) {
-    alert('PDF Generation Failed: ' + e.message);
+    console.error('[PDF] Generation failed:', e);
+    toast.error('PDF generation failed', { id: 'pdf-generation', description: e.message || 'Please try again' });
+    throw e;
   }
 };
