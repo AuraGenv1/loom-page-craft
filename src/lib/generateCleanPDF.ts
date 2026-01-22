@@ -218,35 +218,37 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-  // ROBUST FIX: Uses a full-page table to reserve Page 2 entirely.
-  // The table spans the full content height (540pt = 648 - 54 - 54 margins).
-  // Content is vertically aligned to the bottom, staying in document flow.
-  const pageContentHeight = 648 - 54 - 54; // 540pt available height
-  
+  // Robust: reserve all of Page 2 with a fixed-height row, and pin content to the bottom
+  // using `valign: 'bottom'` (no spacer nodes or fragile margins).
+  const pageContentHeight = 648 - 54 - 54; // 540pt available height within margins
+
   contentArray.push({
+    unbreakable: true,
     table: {
       widths: ['*'],
       heights: [pageContentHeight],
-      body: [[
-        {
-          stack: [
-            { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
-            { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 3, 0, 0] },
-            { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 5, 0, 0] },
-            { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 12, 0, 0] },
-            { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 3, 0, 0] },
-            { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', margin: [0, 3, 0, 0] }
-          ],
-          margin: [0, 0, 0, 0]
-        }
-      ]]
+      body: [
+        [
+          {
+            valign: 'bottom',
+            stack: [
+              { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
+              { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 3, 0, 0] },
+              { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 5, 0, 0] },
+              { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 12, 0, 0] },
+              { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 3, 0, 0] },
+              { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', margin: [0, 3, 0, 0] }
+            ]
+          }
+        ]
+      ]
     },
     layout: {
       hLineWidth: () => 0,
       vLineWidth: () => 0,
       paddingLeft: () => 0,
       paddingRight: () => 0,
-      paddingTop: () => pageContentHeight - 90, // Push content to bottom (90pt = approx text height)
+      paddingTop: () => 0,
       paddingBottom: () => 0
     },
     pageBreak: 'after' // Hard stop - TOC starts on Page 3
