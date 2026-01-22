@@ -1,6 +1,7 @@
 import { BookData } from './bookTypes';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface GeneratePDFOptions {
   topic: string;
@@ -10,6 +11,9 @@ interface GeneratePDFOptions {
   returnBlob?: boolean;
   includeCoverPage?: boolean;
 }
+
+const TRANSPARENT_PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 // Helper: Exact Key Icon SVG to match Lucide
 const getKeyIconSvg = () => {
@@ -78,6 +82,49 @@ const parseMarkdownToHtml = (text: string) => {
   return processedLines.join('\n');
 };
 
+// Robust Image Converter (Fixes CORS/Taint issues that cause blank images in html2canvas)
+const convertImageToDataUrl = async (url: string): Promise<string> => {
+  if (!url) return TRANSPARENT_PIXEL;
+  if (url.startsWith('data:')) return url;
+
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (response.ok) {
+      const blob = await response.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch {
+    // ignore; fall back to proxy
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
+      body: { url },
+    });
+    if (!error && data?.dataUrl) return data.dataUrl as string;
+  } catch {
+    // ignore
+  }
+
+  return TRANSPARENT_PIXEL;
+};
+
+const extractMarkdownImageUrls = (markdown: string): string[] => {
+  const urls: string[] = [];
+  if (!markdown) return urls;
+  const re = /!\[[^\]]*\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown))) {
+    if (m[1]) urls.push(m[1].trim());
+  }
+  return urls;
+};
+
 export const generateCleanPDF = async ({ 
   topic, 
   bookData, 
@@ -95,7 +142,8 @@ export const generateCleanPDF = async ({
   const container = document.createElement('div');
   container.id = 'pdf-generation-container';
   container.style.width = '6in'; 
-  container.style.padding = '0.75in'; // Margins
+  // KDP interior margins (default right page): top, right, bottom, left (gutter)
+  container.style.padding = '0.75in 0.5in 0.75in 0.75in';
   // Keep it visibly rendered at the viewport origin during capture.
   // This avoids browser “offscreen paint” optimizations that can yield a blank first page.
   container.style.position = 'fixed';
@@ -138,7 +186,8 @@ export const generateCleanPDF = async ({
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 8.5in; 
+      /* 9in page height - (0.75in top + 0.75in bottom) = 7.5in usable */
+      min-height: 7.5in;
       text-align: center;
     }
     .main-title {
@@ -167,7 +216,7 @@ export const generateCleanPDF = async ({
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      min-height: 8.5in;
+      min-height: 7.5in;
       text-align: left;
       font-size: 9pt;
       color: #666;
@@ -184,8 +233,6 @@ export const generateCleanPDF = async ({
     .toc-item {
       display: flex;
       justify-content: space-between;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 4px;
       margin-bottom: 8px;
       font-size: 11pt;
     }
@@ -295,6 +342,11 @@ export const generateCleanPDF = async ({
       line-height: 1.5;
     }
     .spacer { height: 1rem; }
+
+    /* More reliable page break behavior for html2pdf */
+    .break-after-always { page-break-after: always; break-after: page; }
+    .break-before-always { page-break-before: always; break-before: page; }
+    .break-inside-avoid { page-break-inside: avoid; break-inside: avoid; }
   `;
   container.appendChild(styleBlock);
   document.body.appendChild(container);
@@ -347,9 +399,26 @@ export const generateCleanPDF = async ({
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
   const chapters = bookData.tableOfContents || chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
 
+  // Preprocess ALL markdown images into embedded data URLs (prevents blank images in PDF)
+  const allMarkdown = chapters
+    .map((ch: any) => (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '')
+    .join('\n');
+  const uniqueUrls = Array.from(new Set(extractMarkdownImageUrls(allMarkdown)));
+  const urlToDataUrl = new Map<string, string>();
+  await Promise.all(
+    uniqueUrls.map(async (u) => {
+      const dataUrl = await convertImageToDataUrl(u);
+      urlToDataUrl.set(u, dataUrl);
+    })
+  );
+
   chapters.forEach((ch, index) => {
     const contentKey = `chapter${ch.chapter}Content` as keyof BookData;
-    const rawContent = (bookData[contentKey] as string) || "";
+    const rawContentOriginal = (bookData[contentKey] as string) || "";
+    const rawContent = rawContentOriginal.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, url) => {
+      const mapped = urlToDataUrl.get(String(url).trim());
+      return `![${alt}](${mapped || url})`;
+    });
     const isLastChapter = index === chapters.length - 1;
     
     htmlContent += `
@@ -392,7 +461,9 @@ export const generateCleanPDF = async ({
 
   // 5. Configure html2pdf
   const opt = {
-    margin: [0.75, 0.6, 0.75, 0.6] as [number, number, number, number], 
+    // IMPORTANT: container padding already encodes KDP margins.
+    // Setting html2pdf margins too will double-margins and can clip bottom text.
+    margin: [0, 0, 0, 0] as [number, number, number, number],
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { 
