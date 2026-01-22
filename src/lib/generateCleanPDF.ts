@@ -37,17 +37,25 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
   // Try direct fetch first
   try {
     const response = await fetch(url, { mode: 'cors' });
-    if (response.ok) {
-      const blob = await response.blob();
-      if (blob.type.startsWith('image/')) {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = () => resolve(TRANSPARENT_PIXEL);
-          reader.readAsDataURL(blob);
-        });
-      }
+    // If we got an actual HTTP response (even a 404), don't fall back to the proxy.
+    // The proxy will return a 400 for non-OK upstream responses, which creates noisy errors.
+    if (!response.ok) {
+      console.warn('[PDF] Image URL returned non-OK status, skipping:', response.status, url);
+      return TRANSPARENT_PIXEL;
     }
+
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) {
+      console.warn('[PDF] URL did not return an image blob, skipping:', blob.type, url);
+      return TRANSPARENT_PIXEL;
+    }
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+      reader.readAsDataURL(blob);
+    });
   } catch (e) {
     console.warn('[PDF] Direct fetch failed, trying proxy:', url);
   }

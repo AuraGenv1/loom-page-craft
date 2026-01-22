@@ -354,17 +354,29 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (!url) return TRANSPARENT_PIXEL;
       if (url.startsWith('data:')) return url;
 
+      // Skip malformed/non-http(s) values (e.g. "placeholder") to avoid 400 "Invalid url"
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return TRANSPARENT_PIXEL;
+      } catch {
+        return TRANSPARENT_PIXEL;
+      }
+
       try {
         const response = await fetch(url, { mode: 'cors' });
-        if (response.ok) {
-          const blob = await response.blob();
-          return await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(TRANSPARENT_PIXEL);
-            reader.readAsDataURL(blob);
-          });
-        }
+        // If we received a real HTTP response (e.g. 404), don't fall back to the proxy.
+        // The proxy will return a 400 for upstream 404s, which creates noisy errors.
+        if (!response.ok) return TRANSPARENT_PIXEL;
+
+        const blob = await response.blob();
+        if (!blob.type.toLowerCase().startsWith('image/')) return TRANSPARENT_PIXEL;
+
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(TRANSPARENT_PIXEL);
+          reader.readAsDataURL(blob);
+        });
       } catch {
         // ignore, fallback below
       }
