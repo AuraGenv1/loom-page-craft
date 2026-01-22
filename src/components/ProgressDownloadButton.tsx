@@ -129,9 +129,7 @@ const ProgressDownloadButton = ({
       // NEW: Pass includeCoverPage: true
       await generateCleanPDF({
         topic,
-        bookData: processedBookData,
-        coverImageUrl: base64CoverUrl !== TRANSPARENT_PIXEL ? base64CoverUrl : undefined,
-        includeCoverPage: true
+        bookData: processedBookData
       });
 
       toast.success('Downloaded!', { id: 'pdf-gen' });
