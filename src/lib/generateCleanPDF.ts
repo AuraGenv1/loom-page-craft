@@ -265,8 +265,23 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
 
   try {
     console.log('[PDF] 3. Creating PDF...');
+    const fileName = `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`;
+    
     // @ts-ignore
-    pdfMakeInstance.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+    const pdfDoc = pdfMakeInstance.createPdf(docDefinition);
+    
+    // Use getBlob for more reliable download in sandbox environments
+    pdfDoc.getBlob((blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      console.log('[PDF] 4. Download triggered:', fileName);
+    });
   } catch (err: any) {
     console.error("PDF Failed:", err);
     alert('PDF Generation Failed: ' + err.message);
