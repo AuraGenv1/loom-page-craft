@@ -1,10 +1,11 @@
 import { BookData } from './bookTypes';
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+import * as pdfMake from "pdfmake/build/pdfmake";
+import * as pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
 // Register fonts
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || pdfFonts;
+// @ts-ignore
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 interface GeneratePDFOptions {
   topic: string;
@@ -16,67 +17,47 @@ interface GeneratePDFOptions {
 // 1. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 2. HELPER: Image Fetcher (with robust error handling)
+// 2. HELPER: Image Fetcher
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
-  // Skip invalid URLs entirely
-  if (!url || typeof url !== 'string') return TRANSPARENT_PIXEL;
-  if (url.startsWith('data:')) return url;
-  
-  // Validate URL format
-  try {
-    const parsed = new URL(url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      console.warn('[PDF] Invalid URL protocol:', url);
-      return TRANSPARENT_PIXEL;
-    }
-  } catch {
-    console.warn('[PDF] Malformed URL, skipping:', url);
-    return TRANSPARENT_PIXEL;
-  }
-  
-  // Try direct fetch first
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    // If we got an actual HTTP response (even a 404), don't fall back to the proxy.
-    // The proxy will return a 400 for non-OK upstream responses, which creates noisy errors.
-    if (!response.ok) {
-      console.warn('[PDF] Image URL returned non-OK status, skipping:', response.status, url);
-      return TRANSPARENT_PIXEL;
-    }
-
-    const blob = await response.blob();
-    if (!blob.type.startsWith('image/')) {
-      console.warn('[PDF] URL did not return an image blob, skipping:', blob.type, url);
-      return TRANSPARENT_PIXEL;
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(TRANSPARENT_PIXEL);
-      reader.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.warn('[PDF] Direct fetch failed, trying proxy:', url);
-  }
-  
-  // Fallback to edge function proxy
+  if (!url) return TRANSPARENT_PIXEL;
   try {
     const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
       body: { url },
     });
     if (!error && data?.dataUrl) return data.dataUrl;
-    // Log but don't throw - just use transparent pixel
-    if (error) console.warn('[PDF] Edge function error for:', url, error);
   } catch (e) {
-    console.warn('[PDF] Image proxy failed:', url, e);
+    console.warn('Image fetch failed:', e);
   }
-  
   return TRANSPARENT_PIXEL;
 };
 
-// 3. HELPER: Markdown Parser -> PDFMake Object Stack
-const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): any[] => {
+// 3. HELPER: Robust Markdown Parser
+// Parses **bold** and *italics* properly without leaving artifacts
+const parseParagraphText = (text: string): any[] => {
+  // Regex to capture **bold** and *italics*
+  // Group 1: **bold**
+  // Group 2: *italics*
+  // Group 3: Normal text
+  const parts = [];
+  const regex = /(\*\*(.*?)\*\*)|(\*(.*?)\*)|([^*]+)/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match[1]) {
+      // Bold match (**text**)
+      parts.push({ text: match[2], bold: true });
+    } else if (match[3]) {
+      // Italic match (*text*)
+      parts.push({ text: match[4], italics: true });
+    } else if (match[0]) {
+      // Normal text
+      parts.push({ text: match[0] });
+    }
+  }
+  return parts.length > 0 ? parts : [{ text: text }];
+};
+
+const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>) => {
   const content: any[] = [];
   const lines = text.split('\n');
 
@@ -84,82 +65,53 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
     line = line.trim();
     if (!line) return;
 
-    // --- Headers (handle with or without space after #) ---
-    const headerMatch = line.match(/^(#{1,6})\s*(.+)$/);
-    if (headerMatch) {
-      const level = headerMatch[1].length;
-      const headerText = headerMatch[2].trim();
-      const style = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
-      content.push({ text: headerText, style });
-      return;
-    }
-
+    // --- Headers ---
+    if (line.startsWith('### ')) {
+      content.push({ text: line.replace('### ', ''), style: 'h3' });
+    } else if (line.startsWith('## ')) {
+      content.push({ text: line.replace('## ', ''), style: 'h2' });
+    } else if (line.startsWith('# ')) {
+      content.push({ text: line.replace('# ', ''), style: 'h1' });
+    } 
     // --- Images ---
-    const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
-    if (imgMatch && imgMatch[1]) {
-      const url = imgMatch[1];
-      const base64 = imageMap.get(url) || TRANSPARENT_PIXEL;
-      if (base64 !== TRANSPARENT_PIXEL) {
+    else if (line.match(/!\[.*?\]\((.*?)\)/)) {
+      const match = line.match(/!\[.*?\]\((.*?)\)/);
+      if (match && match[1]) {
+        const url = match[1];
+        const base64 = imageMap.get(url) || TRANSPARENT_PIXEL;
         content.push({
           image: base64,
-          width: 350,
+          width: 300, // Constrain width
           alignment: 'center',
-          margin: [0, 15, 0, 15]
+          style: 'imageWrapper'
         });
       }
-      return;
     }
-
     // --- Bullets ---
-    if (line.match(/^[-*]\s+/)) {
-      const cleanLine = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '');
+    else if (line.startsWith('- ') || line.startsWith('* ')) {
+      const cleanLine = line.replace(/^[-*] /, '').replace(/\*\*/g, '');
       content.push({
         ul: [cleanLine],
-        margin: [0, 2, 0, 2]
+        style: 'bullet'
       });
-      return;
     }
-
-    // --- Pro-Tips (Blockquotes) ---
-    if (line.startsWith('>')) {
-      const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
+    // --- Pro-Tips ---
+    else if (line.startsWith('>')) {
+      const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?/i, '').replace(/\*\*/g, '').trim();
       content.push({
-        table: {
-          widths: ['*'],
-          body: [[
-            {
-              stack: [
-                { text: '🔑 PRO TIP', fontSize: 9, bold: true, margin: [0, 0, 0, 5] },
-                { text: cleanText, fontSize: 10, italics: true, color: '#333' }
-              ],
-              fillColor: '#f5f5f5',
-              margin: [10, 10, 10, 10]
-            }
-          ]]
-        },
-        layout: {
-          hLineWidth: () => 0,
-          vLineWidth: (i: number) => i === 0 ? 3 : 0,
-          vLineColor: () => '#000000',
-          paddingLeft: () => 10,
-          paddingRight: () => 10,
-          paddingTop: () => 8,
-          paddingBottom: () => 8
-        },
-        margin: [0, 10, 0, 10]
+        stack: [
+          { text: 'PRO TIP', style: 'proTipLabel' },
+          { text: cleanText, style: 'proTipBody' }
+        ],
+        style: 'proTipBox'
       });
-      return;
     }
-
-    // --- Standard Paragraphs with inline formatting ---
-    const parts = line.split('**');
-    if (parts.length > 1) {
-      const richText = parts.map((part, i) => {
-        return i % 2 === 0 ? { text: part } : { text: part, bold: true };
+    // --- Paragraphs ---
+    else {
+      content.push({ 
+        text: parseParagraphText(line), 
+        style: 'body' 
       });
-      content.push({ text: richText, style: 'body' });
-    } else {
-      content.push({ text: line, style: 'body' });
     }
   });
 
@@ -167,16 +119,13 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 };
 
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
-  console.log('[PDF] Starting pdfmake generation...');
+  console.log('Starting PDF Generation...');
 
   // A. Pre-fetch Images
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
-  const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
-    chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
+  const chapters = bookData.tableOfContents || chapterKeys.map((k, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
   
-  const allContent = chapters.map((ch) => (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '').join('\n');
-  
-  // Extract URLs
+  const allContent = chapters.map((ch: any) => bookData[`chapter${ch.chapter}Content`] || '').join('\n');
   const urls: string[] = [];
   const regex = /!\[[^\]]*\]\(([^)]+)\)/g;
   let match;
@@ -184,120 +133,116 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     if (match[1]) urls.push(match[1]);
   }
 
-  console.log(`[PDF] Pre-fetching ${urls.length} images...`);
   const imageMap = new Map<string, string>();
   await Promise.all(urls.map(async (url) => {
     const b64 = await fetchImageAsBase64(url);
     imageMap.set(url, b64);
   }));
 
-  // B. Define styles
-  const styles: Record<string, any> = {
-    h1: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
-    h2: { fontSize: 16, bold: true, margin: [0, 15, 0, 8] },
-    h3: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
-    body: { fontSize: 11, lineHeight: 1.5, margin: [0, 0, 0, 8], alignment: 'left' },
-    titlePageTitle: { fontSize: 28, bold: true, alignment: 'center' },
-    titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', color: '#555' },
-    branding: { fontSize: 9, alignment: 'center', color: '#888' },
-    chapterNum: { fontSize: 10, alignment: 'center', color: '#666' },
-    chapterTitle: { fontSize: 20, bold: true, alignment: 'center' }
-  };
-
-  // C. Build content array
-  const contentArray: any[] = [];
-
-  // --- 1. TITLE PAGE ---
-  contentArray.push(
-    { text: '', margin: [0, 120, 0, 0] },
-    { text: (bookData.displayTitle || topic).toUpperCase(), style: 'titlePageTitle' },
-    { text: '', margin: [0, 15, 0, 0] },
-    { text: bookData.subtitle || '', style: 'titlePageSubtitle' },
-    { text: '', margin: [0, 200, 0, 0] },
-    { text: 'LOOM & PAGE', style: 'branding', pageBreak: 'after' }
-  );
-
-  // --- 2. COPYRIGHT PAGE (starts on new page) ---
-  contentArray.push(
-    { text: '', pageBreak: 'before', margin: [0, 450, 0, 0] },
-    { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 0, 0, 10] },
-    { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 0, 0, 5] },
-    { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', pageBreak: 'after' }
-  );
-
-  // --- 3. TOC ---
-  contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
-  
-  chapters.forEach((ch) => {
-    contentArray.push({
-      columns: [
-        { text: `Chapter ${ch.chapter}:`, width: 80, fontSize: 11 },
-        { text: ch.title, width: '*', fontSize: 11, bold: true }
-      ],
-      margin: [0, 5, 0, 5]
-    });
-  });
-  
-  contentArray.push({ text: '', pageBreak: 'after' });
-
-  // --- 4. CHAPTERS ---
-  chapters.forEach((ch, index) => {
-    // Chapter header
-    contentArray.push(
-      { text: '', margin: [0, 40, 0, 0] },
-      { text: `Chapter ${ch.chapter}`, style: 'chapterNum', margin: [0, 0, 0, 10] },
-      { text: ch.title, style: 'chapterTitle', margin: [0, 0, 0, 5] },
-      { 
-        canvas: [{ type: 'line', x1: 180, y1: 0, x2: 252, y2: 0, lineWidth: 1, lineColor: '#ccc' }],
-        margin: [0, 10, 0, 25]
-      }
-    );
-
-    const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
-    const parsedContent = parseMarkdownToPdfMake(rawContent, imageMap);
-    
-    contentArray.push(...parsedContent);
-    
-    // Page break after chapter (except last)
-    if (index < chapters.length - 1) {
-      contentArray.push({ text: '', pageBreak: 'after' });
-    }
-  });
-
-  // D. Build document definition
+  // B. Build Document Definition
   const docDefinition: any = {
     info: {
       title: bookData.displayTitle || topic,
       author: 'Loom & Page',
     },
-    pageSize: { width: 432, height: 648 }, // 6x9 inches in points (72 per inch)
-    pageMargins: [54, 54, 54, 54], // 0.75 inch margins
     
-    // Default to Roboto (built-in) - Times would require custom font registration
+    // 6x9 Inches = 432x648 points
+    pageSize: { width: 432, height: 648 }, 
+    pageMargins: [54, 54, 54, 54], // 0.75in margins
+    
     defaultStyle: {
-      font: 'Roboto'
+      fontSize: 11,
+      font: 'Roboto' // Safe default, styled to look serify if possible via italics
     },
-    
-    footer: (currentPage: number, pageCount: number) => {
-      if (currentPage <= 2) return null; // Skip title & copyright
+
+    footer: function(currentPage: number, pageCount: number) {
+      if (currentPage <= 2) return null; // Skip Title (1) and Copyright (2)
       return { 
         text: `${currentPage}`, 
         alignment: 'center', 
-        fontSize: 9, 
-        color: '#888',
-        margin: [0, 15, 0, 0] 
+        fontSize: 10, 
+        color: '#666',
+        margin: [0, 10, 0, 0] 
       };
     },
 
-    content: contentArray,
-    styles
+    content: [],
+
+    styles: {
+      h1: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 20, 0, 10], fontFeatures: ['smcp'] }, // Small caps effect
+      h2: { fontSize: 16, bold: true, margin: [0, 15, 0, 8] },
+      h3: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
+      // FIX: Left alignment prevents 'rivers' of white space
+      body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 8], alignment: 'left' },
+      bullet: { fontSize: 11, margin: [0, 2, 0, 2] },
+      imageWrapper: { margin: [0, 15, 0, 15] },
+      
+      titlePageTitle: { fontSize: 28, bold: true, alignment: 'center', margin: [0, 100, 0, 20] },
+      titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', margin: [0, 0, 0, 60] },
+      branding: { fontSize: 9, letterSpacing: 2, alignment: 'center', color: '#888' },
+      
+      proTipBox: {
+        fillColor: '#f5f5f5',
+        margin: [0, 15, 0, 15],
+        padding: 8
+      },
+      proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [5, 5, 0, 2] },
+      proTipBody: { fontSize: 10, italics: true, color: '#444', margin: [5, 0, 5, 5] },
+      
+      copyrightText: { fontSize: 9, color: '#666', margin: [0, 2, 0, 2] }
+    }
   };
 
-  // E. Generate and download
-  console.log('[PDF] Creating document...');
+  // --- 1. TITLE PAGE ---
+  docDefinition.content.push(
+    { text: (bookData.displayTitle || topic).toUpperCase(), style: 'titlePageTitle' },
+    { text: bookData.subtitle || '', style: 'titlePageSubtitle' },
+    { text: 'LOOM & PAGE', style: 'branding', pageBreak: 'after' }
+  );
+
+  // --- 2. COPYRIGHT PAGE ---
+  // FIX: Using absolutePosition to pin text to bottom-left of Page 2
+  // This guarantees it never splits across pages.
+  // 648 (height) - 54 (margin) - 150 (content height estimate) = ~450 y-position
+  docDefinition.content.push({
+    stack: [
+      { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyrightText' },
+      { text: 'All rights reserved.', style: 'copyrightText' },
+      { text: 'No part of this publication may be reproduced without permission.', style: 'copyrightText' },
+      { text: 'Published by Loom & Page', style: 'copyrightText' },
+      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyrightText' }
+    ],
+    absolutePosition: { x: 54, y: 500 }, // Pinned to bottom of page 2
+    pageBreak: 'after' // Ensure next content starts on Page 3
+  });
+
+  // --- 3. TOC ---
+  docDefinition.content.push({ text: 'Table of Contents', style: 'h1', margin: [0, 0, 0, 20] });
+  bookData.tableOfContents?.forEach((ch: any) => {
+    docDefinition.content.push({
+      columns: [
+        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11 },
+        { text: ch.title, width: '*', fontSize: 11, bold: true }
+      ],
+      margin: [0, 5, 0, 5]
+    });
+  });
+  docDefinition.content.push({ text: '', pageBreak: 'after' });
+
+  // --- 4. CHAPTERS ---
+  chapters.forEach((ch: any) => {
+    docDefinition.content.push(
+      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', margin: [0, 40, 0, 10] },
+      { text: ch.title, style: 'h1', margin: [0, 0, 0, 30] }
+    );
+
+    const rawContent = (bookData[`chapter${ch.chapter}Content`] as string) || '';
+    const parsedContent = parseMarkdownToPdfMake(rawContent, imageMap);
+    
+    docDefinition.content.push(...parsedContent);
+    docDefinition.content.push({ text: '', pageBreak: 'after' });
+  });
+
+  // Generate
   pdfMake.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
-  console.log('[PDF] Download initiated.');
 };
