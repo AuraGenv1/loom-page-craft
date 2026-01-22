@@ -3,7 +3,7 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
-// 1. SETUP VFS (Virtual File System for default fonts)
+// 1. SETUP VFS & FONTS
 // @ts-ignore
 const pdfMakeInstance = pdfMake.default || pdfMake;
 // @ts-ignore
@@ -11,9 +11,9 @@ const pdfFontsInstance = pdfFonts.default || pdfFonts;
 // @ts-ignore
 pdfMakeInstance.vfs = pdfFontsInstance.pdfMake?.vfs || pdfFontsInstance.vfs;
 
-// 2. CONFIGURE STANDARD FONTS
-// We map "Times" to the Standard 14 Fonts built into PDF readers.
-// This bypasses the need to download font files, preventing crashes.
+// Standard 14 Fonts Mapping (Times New Roman)
+// This maps 'Times' to the built-in PDF font 'Times-Roman'. 
+// It guarantees vector text without needing external downloads.
 const fonts = {
   Times: {
     normal: 'Times-Roman',
@@ -34,22 +34,23 @@ interface GeneratePDFOptions {
   bookData: BookData;
 }
 
-// 3. ASSETS
+// 2. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 4. IMAGE FETCHER (With Timeout to prevent hanging)
+// 3. IMAGE FETCHER
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
   if (!url || url.startsWith('data:')) return url || TRANSPARENT_PIXEL;
   
-  const fetchWithTimeout = (url: string, options: any, timeout = 5000) => {
+  // Timeout wrapper to prevent hanging
+  const fetchWithTimeout = (url: string, timeout = 8000) => {
     return Promise.race([
-      fetch(url, options),
+      fetch(url, { mode: 'cors' }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout))
     ]);
   };
 
   try {
-    const response = await fetchWithTimeout(url, { mode: 'cors' }) as Response;
+    const response = await fetchWithTimeout(url) as Response;
     if (response.ok) {
       const blob = await response.blob();
       return new Promise((resolve) => {
@@ -71,7 +72,7 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
   return TRANSPARENT_PIXEL;
 };
 
-// 5. MARKDOWN PARSER
+// 4. MARKDOWN PARSER
 const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): any[] => {
   const content: any[] = [];
   const lines = text.split('\n');
@@ -99,7 +100,7 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       if (base64 !== TRANSPARENT_PIXEL) {
         content.push({
           image: base64,
-          width: 300, // Safe width for 6x9 margins
+          width: 300,
           alignment: 'center',
           margin: [0, 15, 0, 15]
         });
@@ -124,6 +125,7 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
           widths: [20, '*'],
           body: [[
             {
+              // The Key Icon SVG Path
               svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 2L11.4 11.6" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 7.5L18.5 10.5L22 7L19 4L15.5 7.5Z" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="5.5" stroke="black" stroke-width="2"/></svg>',
               width: 14,
               margin: [3, 4, 0, 0]
@@ -164,9 +166,9 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 };
 
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
-  console.log('[PDF] 1. Starting Generation...');
+  console.log('[PDF] 1. Preparing assets...');
 
-  // 1. Prepare Content
+  // Prepare Content
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
   const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
     chapterKeys.map((_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
@@ -177,17 +179,18 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   let match;
   while ((match = regex.exec(allContent)) !== null) if (match[1]) urls.push(match[1]);
 
-  console.log(`[PDF] 2. Pre-loading ${urls.length} images...`);
+  console.log(`[PDF] 2. Loading ${urls.length} images...`);
   const imageMap = new Map<string, string>();
   await Promise.all(urls.map(async (url) => {
     imageMap.set(url, await fetchImageAsBase64(url));
   }));
 
-  // 2. Define Styles (KDP Standard)
+  // Define Styles (KDP Standard)
   const styles: any = {
     h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10], font: 'Times' },
     h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10], font: 'Times' },
     h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5], font: 'Times' },
+    // Use 'Times' for body text. Left alignment prevents ugly gaps.
     body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], font: 'Times', alignment: 'left' },
     
     tpTitle: { fontSize: 32, bold: true, alignment: 'center', font: 'Times' },
@@ -220,11 +223,12 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
       { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
     ],
-    absolutePosition: { x: 63, y: 550 }, // x=63 (gutter), y=550 (bottom)
+    // x=63 matches the left gutter margin
+    absolutePosition: { x: 63, y: 550 },
     pageBreak: 'after'
   };
   
-  // Dummy content to force Page 2 creation
+  // Add spacer to create page 2, then the pinned copyright
   content.push(
     { text: ' ', fontSize: 1 }, 
     copyrightBlock
@@ -263,22 +267,23 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   const docDefinition: any = {
     info: { title: topic, author: 'Loom & Page' },
     pageSize: { width: 432, height: 648 }, // 6x9 inches
-    // Margins: [Left/Gutter, Top, Right, Bottom]
-    // 0.875" = 63pts, 0.75" = 54pts, 0.625" = 45pts
+    // Margins: [Left, Top, Right, Bottom]
+    // Left=63 (0.875") for gutter binding. Others 0.75" or 0.625".
     pageMargins: [63, 54, 45, 54], 
     content: content,
     styles: styles,
-    defaultStyle: { font: 'Times' }, // Enforce Times
+    defaultStyle: { font: 'Times' }, 
     footer: (currentPage: number) => {
       if (currentPage <= 2) return null;
-      return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0] };
+      return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0], font: 'Times' };
     }
   };
 
   try {
-    console.log('[PDF] creating PDF...');
+    console.log('[PDF] 3. Creating PDF...');
+    // The Fix: Pass {} as the second argument (layout options), NOT null.
     // @ts-ignore
-    pdfMakeInstance.createPdf(docDefinition, null, fonts).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+    pdfMakeInstance.createPdf(docDefinition, {}, fonts).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
   } catch (err: any) {
     console.error("PDF Failed:", err);
     alert('PDF Generation Failed: ' + err.message);
