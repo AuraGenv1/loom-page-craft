@@ -13,18 +13,17 @@ interface GeneratePDFOptions {
 }
 
 // 1. ASSETS
-const KEY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`;
+const KEY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`;
 
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 // Hard page break element
 const PAGE_BREAK = `<div style="page-break-after: always; height: 0; display: block; clear: both;"></div>`;
 
-// 2. ROBUST IMAGE LOADER (Fetch -> Proxy -> Placeholder)
+// 2. ROBUST IMAGE LOADER
 const convertImageToDataUrl = async (url: string): Promise<string> => {
   if (!url) return TRANSPARENT_PIXEL;
   
-  // Try 1: Direct Fetch
   try {
     const response = await fetch(url, { cache: 'no-cache', mode: 'cors' });
     if (response.ok) {
@@ -40,7 +39,6 @@ const convertImageToDataUrl = async (url: string): Promise<string> => {
     console.warn('Direct image fetch failed, attempting proxy:', url);
   }
 
-  // Try 2: Supabase Edge Function Proxy (Bypasses CORS)
   try {
     const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
       body: { url },
@@ -63,45 +61,97 @@ const extractImageUrls = (markdown: string) => {
   return urls;
 };
 
-// 3. HTML PARSER - ALL INLINE STYLES
+// 3. MARKDOWN PARSER - Fixed to remove hashtags and use proper inline styles
 const parseMarkdownToHtml = (text: string) => {
   if (!text) return '';
   
-  let html = text
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3 style="font-size: 14pt; font-weight: 700; margin-top: 20px; margin-bottom: 10px; color: #000;">$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2 style="font-size: 18pt; font-weight: 700; margin-top: 30px; margin-bottom: 15px; color: #000;">$1</h2>')
-    .replace(/^# (.*$)/gim, '<h2 style="font-size: 18pt; font-weight: 700; margin-top: 30px; margin-bottom: 15px; color: #000;">$1</h2>')
-    // Formatting
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Images - INLINE STYLES
-    .replace(/!\[(.*?)\]\((.*?)\)/gim, (_match, alt, url) => {
-      return `<div style="text-align: center; margin: 20px 0;"><img alt="${alt}" data-original-src="${url}" style="max-width: 100%; height: auto; border: 1px solid #ddd;" /></div>`;
-    })
-    // Lists
-    .replace(/^\s*[-*]\s+(.*)$/gim, '<ul style="padding-left: 25px; list-style: disc; margin-bottom: 15px;"><li style="margin-bottom: 5px;">$1</li></ul>')
-    .replace(/<\/ul>\s*<ul[^>]*>/gim, '');
-
-  // Pro-Tips - ALL INLINE
-  html = html.replace(/^> (.*$)/gim, (_match, content) => {
-    const cleanContent = content.replace(/^PRO-TIP:?\s*/i, '').trim();
-    return `
-      <div style="background: #fff; border-left: 4px solid #000; padding: 15px; margin: 25px 0; display: flex; gap: 15px;">
-        <div>${KEY_ICON_SVG}</div>
-        <div>
-          <span style="font-size: 10pt; font-weight: 700; letter-spacing: 2px; display: block; margin-bottom: 5px; text-transform: uppercase;">PRO TIP</span>
-          <p style="font-style: italic; font-size: 11pt; color: #444; margin: 0;">${cleanContent}</p>
+  // Process line by line to properly handle headers
+  const lines = text.split('\n');
+  const processedLines: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    
+    // Skip empty lines - add spacer
+    if (line.trim() === '') {
+      processedLines.push('<div style="height: 12px;"></div>');
+      continue;
+    }
+    
+    // Handle headers FIRST (remove # symbols completely)
+    if (line.match(/^###\s+(.*)$/)) {
+      const match = line.match(/^###\s+(.*)$/);
+      if (match) {
+        processedLines.push(`<h3 style="font-family: 'Playfair Display', Georgia, serif; font-size: 13pt; font-weight: 600; margin: 24px 0 12px 0; color: #000; line-height: 1.4;">${match[1]}</h3>`);
+        continue;
+      }
+    }
+    
+    if (line.match(/^##\s+(.*)$/)) {
+      const match = line.match(/^##\s+(.*)$/);
+      if (match) {
+        processedLines.push(`<h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 700; margin: 32px 0 16px 0; color: #000; line-height: 1.3;">${match[1]}</h2>`);
+        continue;
+      }
+    }
+    
+    if (line.match(/^#\s+(.*)$/)) {
+      const match = line.match(/^#\s+(.*)$/);
+      if (match) {
+        processedLines.push(`<h2 style="font-family: 'Playfair Display', Georgia, serif; font-size: 16pt; font-weight: 700; margin: 32px 0 16px 0; color: #000; line-height: 1.3;">${match[1]}</h2>`);
+        continue;
+      }
+    }
+    
+    // Handle Pro-Tips (blockquotes)
+    if (line.startsWith('>')) {
+      const content = line.replace(/^>\s*/, '').replace(/^PRO-TIP:?\s*/i, '').trim();
+      processedLines.push(`
+        <div style="background: #fafafa; border-left: 3px solid #000; padding: 16px 20px; margin: 20px 0; display: flex; gap: 12px; align-items: flex-start;">
+          <div style="flex-shrink: 0; margin-top: 2px;">${KEY_ICON_SVG}</div>
+          <div>
+            <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 9pt; font-weight: 700; letter-spacing: 1.5px; display: block; margin-bottom: 6px; text-transform: uppercase; color: #000;">PRO TIP</span>
+            <p style="font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 11pt; color: #333; margin: 0; line-height: 1.5;">${content}</p>
+          </div>
         </div>
-      </div>
-    `;
+      `);
+      continue;
+    }
+    
+    // Handle bullet lists
+    if (line.match(/^\s*[-*]\s+(.*)$/)) {
+      const match = line.match(/^\s*[-*]\s+(.*)$/);
+      if (match) {
+        processedLines.push(`<li style="font-family: 'Playfair Display', Georgia, serif; font-size: 11pt; margin-bottom: 6px; line-height: 1.6; color: #1a1a1a;">${match[1]}</li>`);
+        continue;
+      }
+    }
+    
+    // Handle images
+    if (line.match(/!\[(.*?)\]\((.*?)\)/)) {
+      line = line.replace(/!\[(.*?)\]\((.*?)\)/g, (_match, alt, url) => {
+        return `<div style="text-align: center; margin: 24px 0;"><img alt="${alt}" data-original-src="${url}" style="max-width: 90%; height: auto; border: 1px solid #e0e0e0; border-radius: 2px;" /></div>`;
+      });
+      processedLines.push(line);
+      continue;
+    }
+    
+    // Apply inline formatting
+    line = line
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
+    // Regular paragraph
+    processedLines.push(`<p style="font-family: 'Playfair Display', Georgia, serif; font-size: 11pt; margin-bottom: 14px; text-align: justify; line-height: 1.7; color: #1a1a1a;">${line}</p>`);
+  }
+  
+  // Wrap consecutive list items in ul
+  let result = processedLines.join('\n');
+  result = result.replace(/(<li[^>]*>.*?<\/li>\s*)+/g, (match) => {
+    return `<ul style="padding-left: 24px; list-style: disc; margin: 16px 0;">${match}</ul>`;
   });
-
-  return html.split('\n').map(line => {
-    if (line.trim() === '') return '<div style="height: 15px;"></div>';
-    if (line.startsWith('<')) return line;
-    return `<p style="font-size: 12pt; margin-bottom: 12px; text-align: justify; line-height: 1.6;">${line}</p>`;
-  }).join('\n');
+  
+  return result;
 };
 
 export const generateCleanPDF = async ({ 
@@ -127,78 +177,97 @@ export const generateCleanPDF = async ({
 
   const container = document.createElement('div');
   container.id = 'print-container';
-  // Container base styles - INLINE
   container.style.cssText = `
-    width: 816px;
+    width: 576px;
     margin: 0 auto;
     background: white;
     color: #000;
     font-family: 'Playfair Display', Georgia, serif;
-    font-size: 14px;
-    line-height: 1.6;
   `;
   
   // Inject Google Font
   const fontLink = document.createElement('link');
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap';
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap';
   fontLink.rel = 'stylesheet';
   document.head.appendChild(fontLink);
   
   document.body.appendChild(container);
 
-  // C. BUILD CONTENT - ALL INLINE STYLES
+  // KDP 6x9 Trade Paperback Margins (in pixels at 96 DPI):
+  // - Top: 0.5" = 48px
+  // - Bottom: 0.75" = 72px (room for page numbers)  
+  // - Inside (gutter): 0.625" = 60px
+  // - Outside: 0.5" = 48px
+  const PAGE_PADDING = 'padding: 48px 48px 72px 60px;'; // top right bottom left
+  const PAGE_HEIGHT = 'min-height: 864px;'; // 9" at 96dpi
+  
+  // Track page numbers
+  let pageNumber = 1;
+
+  // C. BUILD CONTENT
   let html = '';
 
-  // ============ TITLE PAGE ============
+  // ============ TITLE PAGE (No page number) ============
   html += `
     <div style="
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 900px;
+      ${PAGE_HEIGHT}
       text-align: center;
-      padding: 60px 80px;
+      ${PAGE_PADDING}
       box-sizing: border-box;
     ">
-      <div>
-        <h1 style="font-size: 28pt; font-weight: 700; margin-bottom: 20px; line-height: 1.2;">${bookData.displayTitle || topic}</h1>
-        ${bookData.subtitle ? `<p style="font-size: 14pt; font-style: italic; color: #555; margin-bottom: 20px;">${bookData.subtitle}</p>` : ''}
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 26pt; font-weight: 700; margin-bottom: 16px; line-height: 1.2; color: #000;">${bookData.displayTitle || topic}</h1>
+        ${bookData.subtitle ? `<p style="font-family: 'Playfair Display', Georgia, serif; font-size: 13pt; font-style: italic; color: #555; margin: 0;">${bookData.subtitle}</p>` : ''}
       </div>
-      <p style="margin-top: auto; font-size: 10pt; letter-spacing: 3px; color: #888;">LOOM & PAGE</p>
+      <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 9pt; letter-spacing: 3px; color: #888; margin-top: auto;">LOOM & PAGE</p>
     </div>
   `;
   html += PAGE_BREAK;
+  pageNumber++;
 
-  // ============ COPYRIGHT PAGE ============
+  // ============ COPYRIGHT PAGE (Page ii - no visible number) ============
   html += `
     <div style="
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      height: 900px;
-      padding: 60px 80px;
+      ${PAGE_HEIGHT}
+      ${PAGE_PADDING}
       box-sizing: border-box;
     ">
-      <p style="font-size: 10pt; color: #666; margin-bottom: 8px;">Copyright © ${new Date().getFullYear()}</p>
-      <p style="font-size: 10pt; color: #666; margin-bottom: 8px;">All rights reserved.</p>
-      <p style="font-size: 10pt; color: #666; margin-bottom: 8px;">Generated by Loom & Page</p>
+      <div style="margin-bottom: 48px;">
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #555; margin-bottom: 8px;">Copyright © ${new Date().getFullYear()} ${bookData.displayTitle || topic}</p>
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #555; margin-bottom: 8px;">All rights reserved.</p>
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #555; margin-bottom: 16px;">No part of this publication may be reproduced, distributed, or transmitted in any form without prior written permission.</p>
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #555; margin-bottom: 8px;">Published by Loom & Page</p>
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 9pt; color: #777; margin-bottom: 8px; font-style: italic;">This book was generated with AI assistance.</p>
+        <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 9pt; color: #777;">First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+      </div>
     </div>
   `;
   html += PAGE_BREAK;
+  pageNumber++;
 
-  // ============ TABLE OF CONTENTS ============
+  // ============ TABLE OF CONTENTS (Page iii) ============
   html += `
-    <div style="padding: 60px 80px; box-sizing: border-box;">
-      <h1 style="font-size: 24pt; font-weight: 700; text-align: center; margin-bottom: 40px;">Table of Contents</h1>
+    <div style="${PAGE_HEIGHT} ${PAGE_PADDING} box-sizing: border-box; position: relative;">
+      <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 700; text-align: center; margin-bottom: 40px; color: #000;">Table of Contents</h1>
       ${((bookData.tableOfContents || []) as Array<{ chapter: number; title: string }>).map(ch => `
-        <p style="margin-bottom: 12px; font-size: 12pt;">
-          <strong>Chapter ${ch.chapter}</strong> — ${ch.title}
+        <p style="font-family: 'Playfair Display', Georgia, serif; margin-bottom: 14px; font-size: 11pt; color: #1a1a1a; display: flex; justify-content: space-between; border-bottom: 1px dotted #ccc; padding-bottom: 8px;">
+          <span><strong>Chapter ${ch.chapter}:</strong> ${ch.title}</span>
         </p>
       `).join('')}
+      <div style="position: absolute; bottom: 36px; left: 0; right: 0; text-align: center;">
+        <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #666;">${pageNumber}</span>
+      </div>
     </div>
   `;
   html += PAGE_BREAK;
+  pageNumber++;
 
   // ============ CHAPTERS ============
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
@@ -207,42 +276,44 @@ export const generateCleanPDF = async ({
   chapters.forEach((ch, index) => {
     const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
     
-    // Inject Images
+    // Process content
     let processedContent = parseMarkdownToHtml(rawContent);
     urls.forEach(url => {
       if (imageMap.has(url)) {
         processedContent = processedContent.replace(`data-original-src="${url}"`, `src="${imageMap.get(url)}"`);
       }
     });
-    // Clean broken images
     processedContent = processedContent.replace(/data-original-src=".*?"/g, 'src="" style="display:none"');
 
     html += `
-      <div style="padding: 60px 80px; box-sizing: border-box;">
-        <div style="text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #eee;">
-          <p style="font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; color: #888; margin-bottom: 10px;">Chapter ${ch.chapter}</p>
-          <h1 style="font-size: 24pt; font-weight: 700; margin: 0;">${ch.title}</h1>
+      <div style="${PAGE_HEIGHT} ${PAGE_PADDING} box-sizing: border-box; position: relative;">
+        <div style="text-align: center; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 1px solid #ddd;">
+          <p style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; text-transform: uppercase; letter-spacing: 2px; color: #888; margin-bottom: 8px;">Chapter ${ch.chapter}</p>
+          <h1 style="font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; font-weight: 700; margin: 0; color: #000; line-height: 1.3;">${ch.title}</h1>
         </div>
-        ${processedContent}
+        <div style="font-family: 'Playfair Display', Georgia, serif;">
+          ${processedContent}
+        </div>
+        <div style="position: absolute; bottom: 36px; left: 0; right: 0; text-align: center;">
+          <span style="font-family: 'Playfair Display', Georgia, serif; font-size: 10pt; color: #666;">${pageNumber}</span>
+        </div>
       </div>
     `;
     
-    // Add page break after every chapter EXCEPT the last one
     if (index < chapters.length - 1) {
       html += PAGE_BREAK;
     }
+    pageNumber++;
   });
 
   container.innerHTML = html;
 
   // D. GENERATE PDF
   window.scrollTo(0, 0);
-  
-  // Wait for fonts and layout to settle
   await new Promise(resolve => setTimeout(resolve, 1500));
 
   const opt = {
-    margin: 0, // We handle margins via inline padding
+    margin: 0,
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { 
@@ -252,7 +323,11 @@ export const generateCleanPDF = async ({
       scrollY: 0,
       backgroundColor: '#ffffff',
     },
-    jsPDF: { unit: 'in', format: 'letter' as const, orientation: 'portrait' as const },
+    jsPDF: { 
+      unit: 'in', 
+      format: [6, 9] as [number, number], // KDP 6x9 Trade Paperback
+      orientation: 'portrait' as const 
+    },
     pagebreak: { mode: ['css', 'legacy'], before: [], after: [], avoid: [] }
   };
 
@@ -268,7 +343,6 @@ export const generateCleanPDF = async ({
   } catch (err) {
     console.error("[PDF] Generation failed:", err);
   } finally {
-    // Cleanup
     document.body.removeChild(container);
     document.head.removeChild(fontLink);
     if (appRoot) (appRoot as HTMLElement).style.display = '';
