@@ -158,23 +158,23 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     imageMap.set(url, await fetchImageAsBase64(url));
   }));
 
-  // 2. DEFINE STYLES (Book Standard)
+  // 2. DEFINE STYLES (Book Standard - using Roboto which is bundled with pdfmake)
   const styles: any = {
-    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10], font: 'Times' },
-    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10], font: 'Times' },
-    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5], font: 'Times' },
+    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
+    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10] },
+    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5] },
     // Left alignment fixes "rivers" of white space
-    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], font: 'Times', alignment: 'left' },
+    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], alignment: 'left' },
     
     // Title Page
-    tpTitle: { fontSize: 34, bold: true, alignment: 'center', font: 'Times' },
-    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center', font: 'Times' },
-    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666', font: 'Helvetica' },
+    tpTitle: { fontSize: 34, bold: true, alignment: 'center' },
+    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center' },
+    branding: { fontSize: 10, alignment: 'center', color: '#666' },
     
     // Pro-Tip Specifics
-    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], font: 'Helvetica', characterSpacing: 1 },
-    proTipBody: { fontSize: 10, italics: true, color: '#333', font: 'Times' },
-    copyright: { fontSize: 9, color: '#666', font: 'Helvetica' }
+    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2] },
+    proTipBody: { fontSize: 10, italics: true, color: '#333' },
+    copyright: { fontSize: 9, color: '#666' }
   };
 
   const content: any[] = [];
@@ -216,8 +216,8 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   chapters.forEach(ch => {
     content.push({
       columns: [
-        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11, font: 'Helvetica' },
-        { text: ch.title, width: '*', fontSize: 11, bold: true, font: 'Times' }
+        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11 },
+        { text: ch.title, width: '*', fontSize: 11, bold: true }
       ],
       margin: [0, 5, 0, 5]
     });
@@ -228,7 +228,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   chapters.forEach((ch, index) => {
     // Chapter Title
     content.push(
-      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', font: 'Helvetica' },
+      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888' },
       { text: ch.title, style: 'h1' },
       { canvas: [{ type: 'line', x1: 200, y1: 0, x2: 260, y2: 0, lineWidth: 1, lineColor: '#ccc' }], alignment: 'center', margin: [0, 10, 0, 30] }
     );
