@@ -3,7 +3,7 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
-// 1. CONFIGURE DEFAULT FONTS (Robust Setup)
+// 1. ROBUST INITIALIZATION
 // @ts-ignore
 const pdfMakeInstance = pdfMake.default || pdfMake;
 // @ts-ignore
@@ -14,7 +14,8 @@ pdfMakeInstance.vfs = pdfFontsInstance.pdfMake?.vfs || pdfFontsInstance.vfs;
 interface GeneratePDFOptions {
   topic: string;
   bookData: BookData;
-  coverImageUrl?: string;
+  // kept for compatibility with existing call sites
+  coverImageUrl?: string | null;
   includeCoverPage?: boolean;
 }
 
@@ -159,9 +160,9 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     
     tpTitle: { fontSize: 34, bold: true, alignment: 'center' },
     tpSubtitle: { fontSize: 16, italics: true, alignment: 'center' },
-    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666' },
+    branding: { fontSize: 10, alignment: 'center', color: '#666' },
     
-    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], characterSpacing: 1 },
+    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2] },
     proTipBody: { fontSize: 10, italics: true, color: '#333' },
     copyright: { fontSize: 9, color: '#666' }
   };
@@ -180,7 +181,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   });
 
   // 2. COPYRIGHT PAGE (ABSOLUTE POSITIONING)
-  // This pins the block to the bottom of the page (y: 680)
+  // This pins the block to the bottom of Page 2 so it cannot split.
   const copyrightBlock = {
     stack: [
       { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
@@ -188,7 +189,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
       { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
     ],
-    absolutePosition: { x: 54, y: 680 },
+    absolutePosition: { x: 54, y: 550 }, // Bottom of page (648 - margins)
     pageBreak: 'after'
   };
   
@@ -239,5 +240,11 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     }
   };
 
-  pdfMakeInstance.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  try {
+    pdfMakeInstance.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  } catch (err: any) {
+    console.error('PDF Generation Failed:', err);
+    const msg = err?.message ? String(err.message) : String(err);
+    alert(`Failed to generate PDF: ${msg}`);
+  }
 };
