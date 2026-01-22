@@ -3,15 +3,14 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { supabase } from '@/integrations/supabase/client';
 
-// 1. SETUP VFS & FONTS
+// 1. SETUP DEFAULT FONTS (ROBUST)
+// This ensures we use the built-in Roboto font which is fully embedded and KDP safe.
 // @ts-ignore
 const pdfMakeInstance = pdfMake.default || pdfMake;
 // @ts-ignore
 const pdfFontsInstance = pdfFonts.default || pdfFonts;
 // @ts-ignore
 pdfMakeInstance.vfs = pdfFontsInstance.pdfMake?.vfs || pdfFontsInstance.vfs;
-
-// Use bundled Roboto font (included in pdfmake vfs_fonts)
 
 interface GeneratePDFOptions {
   topic: string;
@@ -23,7 +22,7 @@ interface GeneratePDFOptions {
 // 2. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 3. IMAGE FETCHER (Robust)
+// 3. IMAGE FETCHER (With Timeout & Error Handling)
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
   if (!url || url.startsWith('data:')) return url || TRANSPARENT_PIXEL;
   
@@ -46,7 +45,6 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       });
     }
   } catch (e) {
-    // Proxy Fallback
     try {
       const { data } = await supabase.functions.invoke('fetch-image-data-url', { body: { url } });
       if (data?.dataUrl) return data.dataUrl;
@@ -102,7 +100,7 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       return;
     }
 
-    // Pro-Tips (Vector Onyx Box)
+    // Pro-Tips (Vector Onyx Box - KDP Safe)
     if (line.startsWith('>')) {
       const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
       content.push({
@@ -110,8 +108,8 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
           widths: [20, '*'],
           body: [[
             {
-              // LUCIDE KEY ICON (SVG PATH)
-              svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 2L11.4 11.6" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 7.5L18.5 10.5L22 7L19 4L15.5 7.5Z" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="5.5" stroke="black" stroke-width="2"/></svg>',
+              // EXACT SVG PATH for the Key Icon
+              svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
               width: 14,
               margin: [3, 4, 0, 0]
             },
@@ -151,137 +149,125 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
 };
 
 export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
-  console.log('[PDF] 1. Starting Generation...');
-
-  // Prepare Content
-  const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
-  const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
-    chapterKeys.map((_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
-  
-  const allContent = chapters.map(ch => (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '').join('\n');
-  const urls: string[] = [];
-  const regex = /!\[[^\]]*\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(allContent)) !== null) if (match[1]) urls.push(match[1]);
-
-  console.log(`[PDF] 2. Pre-loading ${urls.length} images...`);
-  const imageMap = new Map<string, string>();
-  await Promise.all(urls.map(async (url) => {
-    imageMap.set(url, await fetchImageAsBase64(url));
-  }));
-
-  // Define Styles (KDP Standard)
-  const styles: any = {
-    h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
-    h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10] },
-    h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5] },
-    body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], alignment: 'left' },
-    
-    tpTitle: { fontSize: 32, bold: true, alignment: 'center' },
-    tpSubtitle: { fontSize: 16, italics: true, alignment: 'center' },
-    branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666' },
-    
-    proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], characterSpacing: 1 },
-    proTipBody: { fontSize: 10, italics: true, color: '#333' },
-    copyright: { fontSize: 9, color: '#666' }
-  };
-
-  const content: any[] = [];
-
-  // --- PAGE 1: TITLE PAGE ---
-  content.push({
-    stack: [
-      { text: (bookData.displayTitle || topic).toUpperCase(), style: 'tpTitle', margin: [0, 150, 0, 20] },
-      { text: bookData.subtitle || '', style: 'tpSubtitle' },
-      { text: 'LOOM & PAGE', style: 'branding', margin: [0, 250, 0, 0] }
-    ],
-    pageBreak: 'after',
-    alignment: 'center'
-  });
-
-  // --- PAGE 2: COPYRIGHT (Pinned Bottom) ---
-  const copyrightBlock = {
-    stack: [
-      { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
-      { text: 'All rights reserved.', style: 'copyright' },
-      { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
-      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
-    ],
-    // PINNED: This ensures it never splits.
-    // X=63 (Left Gutter), Y=550 (Bottom of readable area)
-    absolutePosition: { x: 63, y: 550 }, 
-    pageBreak: 'after'
-  };
-  
-  // Dummy content to force Page 2 creation
-  content.push(
-    { text: ' ', fontSize: 1 }, 
-    copyrightBlock
-  );
-
-  // --- PAGE 3: TOC ---
-  content.push({ text: 'Table of Contents', style: 'h1', margin: [0, 0, 0, 30] });
-  chapters.forEach(ch => {
-    content.push({
-      columns: [
-        { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11 },
-        { text: ch.title, width: '*', fontSize: 11, bold: true }
-      ],
-      margin: [0, 5, 0, 5]
-    });
-  });
-  content.push({ text: '', pageBreak: 'after' });
-
-  // --- 4. CHAPTERS ---
-  chapters.forEach((ch, index) => {
-    content.push(
-      { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', characterSpacing: 2 },
-      { text: ch.title, style: 'h1' },
-      { canvas: [{ type: 'line', x1: 200, y1: 0, x2: 260, y2: 0, lineWidth: 1, lineColor: '#ccc' }], alignment: 'center', margin: [0, 10, 0, 30] }
-    );
-
-    const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
-    content.push(...parseMarkdownToPdfMake(rawContent, imageMap));
-
-    if (index < chapters.length - 1) {
-      content.push({ text: '', pageBreak: 'after' });
-    }
-  });
-
-  // 3. GENERATE
-  const docDefinition: any = {
-    info: { title: topic, author: 'Loom & Page' },
-    pageSize: { width: 432, height: 648 }, // 6x9 inches
-    // Margins: [Left/Gutter, Top, Right, Bottom]
-    // 63pts = 0.875" (Standard KDP Gutter)
-    pageMargins: [63, 54, 45, 54], 
-    content: content,
-    styles: styles,
-    footer: (currentPage: number) => {
-      if (currentPage <= 2) return null;
-      return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0] };
-    }
-  };
+  console.log('[PDF] 1. Preparing assets...');
 
   try {
-    console.log('[PDF] 3. Creating PDF...');
-    const fileName = `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`;
+    // PREPARE CONTENT
+    const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
+    const chapters = (bookData.tableOfContents as Array<{chapter: number; title: string}>) || 
+      chapterKeys.map((_, i) => ({ chapter: i + 1, title: `Chapter ${i + 1}` }));
     
-    // @ts-ignore
-    const pdfDoc = pdfMakeInstance.createPdf(docDefinition);
-    
-    // Use getBlob for more reliable download in sandbox environments
-    pdfDoc.getBlob((blob: Blob) => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      console.log('[PDF] 4. Download triggered:', fileName);
+    const allContent = chapters.map(ch => (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '').join('\n');
+    const urls: string[] = [];
+    const regex = /!\[[^\]]*\]\(([^)]+)\)/g;
+    let match;
+    while ((match = regex.exec(allContent)) !== null) if (match[1]) urls.push(match[1]);
+
+    console.log(`[PDF] 2. Pre-loading ${urls.length} images...`);
+    const imageMap = new Map<string, string>();
+    await Promise.all(urls.map(async (url) => {
+      imageMap.set(url, await fetchImageAsBase64(url));
+    }));
+
+    // DEFINE STYLES
+    // NOTE: Removed all "font: 'Times'" references. Uses default Roboto to prevent crashes.
+    const styles: any = {
+      h1: { fontSize: 24, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
+      h2: { fontSize: 18, bold: true, margin: [0, 15, 0, 10] },
+      h3: { fontSize: 14, bold: true, margin: [0, 10, 0, 5] },
+      // Left alignment looks professional and avoids gaps
+      body: { fontSize: 11, lineHeight: 1.4, margin: [0, 0, 0, 10], alignment: 'left' },
+      
+      tpTitle: { fontSize: 32, bold: true, alignment: 'center' },
+      tpSubtitle: { fontSize: 16, italics: true, alignment: 'center' },
+      branding: { fontSize: 10, letterSpacing: 2, alignment: 'center', color: '#666' },
+      
+      proTipLabel: { fontSize: 9, bold: true, color: '#000', margin: [0, 0, 0, 2], characterSpacing: 1 },
+      proTipBody: { fontSize: 10, italics: true, color: '#333' },
+      copyright: { fontSize: 9, color: '#666' }
+    };
+
+    const content: any[] = [];
+
+    // PAGE 1: TITLE PAGE
+    content.push({
+      stack: [
+        { text: (bookData.displayTitle || topic).toUpperCase(), style: 'tpTitle', margin: [0, 150, 0, 20] },
+        { text: bookData.subtitle || '', style: 'tpSubtitle' },
+        { text: 'LOOM & PAGE', style: 'branding', margin: [0, 250, 0, 0] }
+      ],
+      pageBreak: 'after',
+      alignment: 'center'
     });
+
+    // PAGE 2: COPYRIGHT (Pinned Bottom)
+    // Absolute position X=63 (matches left gutter margin)
+    const copyrightBlock = {
+      stack: [
+        { text: `Copyright © ${new Date().getFullYear()}`, style: 'copyright' },
+        { text: 'All rights reserved.', style: 'copyright' },
+        { text: 'Published by Loom & Page', style: 'copyright', margin: [0, 10, 0, 0] },
+        { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, style: 'copyright' }
+      ],
+      absolutePosition: { x: 63, y: 550 }, 
+      pageBreak: 'after'
+    };
+    
+    // Add spacer + block
+    content.push(
+      { text: ' ', fontSize: 1 }, 
+      copyrightBlock
+    );
+
+    // PAGE 3: TOC
+    content.push({ text: 'Table of Contents', style: 'h1', margin: [0, 0, 0, 30] });
+    chapters.forEach(ch => {
+      content.push({
+        columns: [
+          { text: `Chapter ${ch.chapter}`, width: 80, fontSize: 11 },
+          { text: ch.title, width: '*', fontSize: 11, bold: true }
+        ],
+        margin: [0, 5, 0, 5]
+      });
+    });
+    content.push({ text: '', pageBreak: 'after' });
+
+    // CHAPTERS
+    chapters.forEach((ch, index) => {
+      content.push(
+        { text: `Chapter ${ch.chapter}`, fontSize: 10, alignment: 'center', color: '#888', characterSpacing: 2 },
+        { text: ch.title, style: 'h1' },
+        { canvas: [{ type: 'line', x1: 200, y1: 0, x2: 260, y2: 0, lineWidth: 1, lineColor: '#ccc' }], alignment: 'center', margin: [0, 10, 0, 30] }
+      );
+
+      const rawContent = (bookData[`chapter${ch.chapter}Content` as keyof BookData] as string) || '';
+      content.push(...parseMarkdownToPdfMake(rawContent, imageMap));
+
+      if (index < chapters.length - 1) {
+        content.push({ text: '', pageBreak: 'after' });
+      }
+    });
+
+    // GENERATE
+    const docDefinition: any = {
+      info: { title: topic, author: 'Loom & Page' },
+      pageSize: { width: 432, height: 648 }, // 6x9 inches
+      // KDP MARGINS: [Left=0.875", Top=0.75", Right=0.625", Bottom=0.75"]
+      // 63pts is critical for the binding gutter
+      pageMargins: [63, 54, 45, 54], 
+      content: content,
+      styles: styles,
+      footer: (currentPage: number) => {
+        if (currentPage <= 2) return null;
+        return { text: currentPage.toString(), alignment: 'center', fontSize: 9, color: '#888', margin: [0, 20, 0, 0] };
+      }
+    };
+
+    console.log('[PDF] 3. Creating PDF...');
+    // We pass NO fonts argument, allowing it to use the default vfs (Roboto).
+    // This prevents the "Font not defined" crash.
+    pdfMakeInstance.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+
   } catch (err: any) {
     console.error("PDF Failed:", err);
     alert('PDF Generation Failed: ' + err.message);
