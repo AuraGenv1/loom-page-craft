@@ -291,7 +291,8 @@ const Dashboard = () => {
       toast.loading('Opening manuscript print view...', { id: 'kdp-gen' });
       await generateCleanPDF({
         topic: book.topic,
-        bookData
+        bookData,
+        coverImageUrl: coverUrl || undefined
       });
       toast.info('Please save the print dialog as PDF and add it to your KDP package manually.', { id: 'kdp-gen' });
 
