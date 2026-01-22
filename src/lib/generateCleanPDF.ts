@@ -85,6 +85,10 @@ export const generateCleanPDF = async ({
   returnBlob = false,
 }: GeneratePDFOptions): Promise<Blob | void> => {
   
+  // Clean up any previous (stuck) container to avoid capturing an empty/old node
+  const existing = document.getElementById('pdf-generation-container');
+  if (existing?.parentElement) existing.parentElement.removeChild(existing);
+
   // 1. Create the container
   // FIX: Use 'absolute' + 'z-index: 99999' to ensure it sits ON TOP of the app and is rendered.
   // Using 'fixed' or negative z-index causes blank pages in many browsers.
@@ -93,11 +97,18 @@ export const generateCleanPDF = async ({
   container.style.width = '6in'; 
   container.style.padding = '0.75in'; // Margins
   container.style.position = 'absolute';
-  container.style.top = '0';
-  container.style.left = '0';
+  // IMPORTANT: Position it within the *current viewport* so html2canvas doesn't capture an offscreen/empty area.
+  // (When the user is scrolled down, top=0 can end up above the viewport and produce a blank PDF in some setups.)
+  const scrollX = window.scrollX || window.pageXOffset || 0;
+  const scrollY = window.scrollY || window.pageYOffset || 0;
+  container.style.top = `${scrollY}px`;
+  container.style.left = `${scrollX}px`;
   container.style.zIndex = '99999'; // Visible on top
   container.style.background = 'white';
   container.style.color = 'black';
+  container.style.visibility = 'visible';
+  container.style.opacity = '1';
+  container.style.pointerEvents = 'none';
   
   // 2. Inject Comprehensive CSS
   const styleBlock = document.createElement('style');
@@ -377,6 +388,11 @@ export const generateCleanPDF = async ({
   // FORCE A LAYOUT REFLOW - wait for fonts and layout stability
   await new Promise(resolve => setTimeout(resolve, 500));
 
+  // Measure after layout settles (use px values for html2canvas window sizing)
+  const rect = container.getBoundingClientRect();
+  const windowWidthPx = Math.max(1, Math.ceil(rect.width));
+  const windowHeightPx = Math.max(1, Math.ceil(rect.height));
+
   // 5. Configure html2pdf
   const opt = {
     margin: [0.75, 0.6, 0.75, 0.6] as [number, number, number, number], 
@@ -386,8 +402,12 @@ export const generateCleanPDF = async ({
       scale: 2, 
       useCORS: true, 
       letterRendering: true,
-      scrollY: 0,
-      windowWidth: 800,
+      // Crucial for non-zero scroll pages: capture coordinates relative to the visible viewport.
+      scrollX: -scrollX,
+      scrollY: -scrollY,
+      windowWidth: windowWidthPx,
+      windowHeight: windowHeightPx,
+      backgroundColor: '#ffffff',
       logging: false
     },
     jsPDF: { 
