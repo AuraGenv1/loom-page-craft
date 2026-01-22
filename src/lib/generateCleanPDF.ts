@@ -218,15 +218,23 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-  contentArray.push(
-    { text: '', margin: [0, 450, 0, 0] },
-    { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 0, 0, 10] },
-    { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 0, 0, 5] },
-    { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 0, 0, 5] },
-    { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', pageBreak: 'after' }
-  );
+  // FIXED: Absolute positioning pins this block to the bottom of Page 2.
+  // It ignores document flow, so it cannot split across pages.
+  contentArray.push({
+    stack: [
+      { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
+      { text: 'All rights reserved.', fontSize: 10, color: '#555' },
+      { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 2, 0, 2] },
+      { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 10, 0, 0] },
+      { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777' },
+      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
+    ],
+    absolutePosition: { x: 63, y: 550 },
+    pageBreak: 'after'
+  });
+
+  // Dummy spacer to create Page 2 so the absolute element has a place to live
+  contentArray.push({ text: ' ', fontSize: 1 });
 
   // --- 3. TOC ---
   contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
