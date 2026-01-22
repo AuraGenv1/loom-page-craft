@@ -16,10 +16,23 @@ interface GeneratePDFOptions {
 // 1. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-// 2. HELPER: Image Fetcher
+// 2. HELPER: Image Fetcher (with robust error handling)
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
-  if (!url) return TRANSPARENT_PIXEL;
+  // Skip invalid URLs entirely
+  if (!url || typeof url !== 'string') return TRANSPARENT_PIXEL;
   if (url.startsWith('data:')) return url;
+  
+  // Validate URL format
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      console.warn('[PDF] Invalid URL protocol:', url);
+      return TRANSPARENT_PIXEL;
+    }
+  } catch {
+    console.warn('[PDF] Malformed URL, skipping:', url);
+    return TRANSPARENT_PIXEL;
+  }
   
   // Try direct fetch first
   try {
@@ -36,7 +49,7 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       }
     }
   } catch (e) {
-    console.warn('Direct fetch failed, trying proxy:', url);
+    console.warn('[PDF] Direct fetch failed, trying proxy:', url);
   }
   
   // Fallback to edge function proxy
@@ -45,9 +58,12 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       body: { url },
     });
     if (!error && data?.dataUrl) return data.dataUrl;
+    // Log but don't throw - just use transparent pixel
+    if (error) console.warn('[PDF] Edge function error for:', url, error);
   } catch (e) {
-    console.warn('Image fetch failed:', e);
+    console.warn('[PDF] Image proxy failed:', url, e);
   }
+  
   return TRANSPARENT_PIXEL;
 };
 
