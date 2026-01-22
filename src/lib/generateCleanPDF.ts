@@ -2,6 +2,18 @@ import { BookData } from './bookTypes';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
+// html2canvas (used internally by html2pdf) can render a *single* giant canvas and then slice it into pages.
+// If the canvas height gets too large, browsers can return a blank/white canvas → 1 blank PDF page.
+// We defensively cap the effective canvas size by auto-reducing scale for long books.
+const MAX_CANVAS_HEIGHT_PX = 30000;
+
+const getSafeCanvasScale = (desiredScale: number, element: HTMLElement) => {
+  const h = element.scrollHeight || element.offsetHeight || 1;
+  const safe = Math.min(desiredScale, MAX_CANVAS_HEIGHT_PX / h);
+  // Avoid NaN/0 which can also yield blank output.
+  return Number.isFinite(safe) && safe > 0 ? safe : 1;
+};
+
 interface GeneratePDFOptions {
   topic: string;
   bookData: BookData;
@@ -253,17 +265,32 @@ export const generateCleanPDF = async ({
   // Give layout time to reflow after images load
   await new Promise(resolve => setTimeout(resolve, 800));
 
+  // 4.5 Compute a safe scale to avoid the "single giant canvas" blank-page failure mode
+  const desiredScale = 2;
+  const safeScale = getSafeCanvasScale(desiredScale, container);
+  if (safeScale !== desiredScale) {
+    console.info('[generateCleanPDF] Reducing html2canvas scale to avoid blank PDF', {
+      desiredScale,
+      safeScale,
+      scrollHeight: container.scrollHeight,
+    });
+  }
+
   // 5. Generate PDF
   const opt = {
     margin: [0.75, 0.6, 0.75, 0.6] as [number, number, number, number],
     filename: `${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`,
     image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { 
-      scale: 2, 
+      scale: safeScale,
       useCORS: true, 
+      allowTaint: false,
       letterRendering: true,
+      backgroundColor: '#ffffff',
       scrollY: 0,
       windowWidth: 800, // Consistent width
+      windowHeight: container.scrollHeight,
+      imageTimeout: 20000,
       logging: false
     },
     jsPDF: { 
