@@ -53,7 +53,7 @@ const parseMarkdownToHtml = (text: string) => {
   html = html.replace(/^> (.*$)/gim, (match, content) => {
     const cleanContent = content.replace(/^PRO-TIP:?\s*/i, '').trim();
     return `
-      <div class="pro-tip break-inside-avoid my-6" style="border-left: 4px solid #000; background: #fff; padding: 1rem;">
+      <div class="pro-tip-box break-inside-avoid my-6" style="border-left: 4px solid #000; background: #fff; padding: 1rem;">
         <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
           <div style="flex-shrink: 0; margin-top: 2px;">
             ${getKeyIconSvg()}
@@ -92,12 +92,12 @@ export const generateCleanPDF = async ({
   container.className = 'print-container';
   
   // Set dimensions for KDP 6x9
-  // We use specific CSS to force the rendering engine to match print specs
   container.style.width = '6in'; 
   container.style.padding = '0.75in'; // Margins
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
+  container.style.position = 'fixed';
+  container.style.left = '0';
   container.style.top = '0';
+  container.style.zIndex = '-1000'; // Hide behind content
   container.style.backgroundColor = '#fff';
   container.style.color = '#000';
   container.style.fontFamily = "'Playfair Display', Georgia, serif";
@@ -180,7 +180,7 @@ export const generateCleanPDF = async ({
     }
     
     h1, h2, h3 { page-break-after: avoid; }
-    .pro-tip { page-break-inside: avoid; }
+    .pro-tip-box { page-break-inside: avoid; }
     img { page-break-inside: avoid; max-width: 100%; }
   `;
   container.appendChild(styleBlock);
@@ -291,7 +291,9 @@ export const generateCleanPDF = async ({
       scale: 2, // High quality scale
       useCORS: true, 
       letterRendering: true,
-      logging: false
+      logging: false,
+      scrollY: 0,
+      windowWidth: 800
     },
     jsPDF: { 
       unit: 'in', 
@@ -300,7 +302,7 @@ export const generateCleanPDF = async ({
     },
     pagebreak: { 
       mode: ['avoid-all', 'css', 'legacy'],
-      avoid: ['.pro-tip', 'img', 'h2', 'h3', '.break-inside-avoid']
+      avoid: ['.pro-tip-box', 'img', 'h2', 'h3', '.break-inside-avoid']
     }
   };
 
