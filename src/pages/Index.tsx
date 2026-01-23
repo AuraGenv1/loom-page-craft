@@ -787,27 +787,35 @@ const Index = () => {
             
             {/* Book Cover */}
             <section className="mb-20">
-              <BookCover 
-                title={displayTitle} 
-                subtitle={subtitle} 
-                topic={topic} 
-                coverImageUrls={coverImageUrls} 
-                isLoadingImage={isLoadingCoverImage}
-                isAdmin={isAdmin}
-                bookId={bookId || undefined}
-                bookData={bookData || undefined}
-                isGenerationComplete={isGenerationComplete}
-                onCoverUpdate={(updates) => {
-                  // Update local state immediately when Cover Studio makes changes
-                  if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
-                  
-                  // Merge other updates (spine, back cover) into bookData
-                  setBookData(prev => {
-                    if (!prev) return prev;
-                    return { ...prev, ...updates };
-                  });
-                }}
-              />
+              {(() => {
+                // Calculate real page count from actual blocks (not chapter count)
+                const realPageCount = Object.values(chapterBlocks).reduce((sum, blocks) => sum + blocks.length, 0);
+                
+                return (
+                  <BookCover 
+                    title={displayTitle} 
+                    subtitle={subtitle} 
+                    topic={topic} 
+                    coverImageUrls={coverImageUrls} 
+                    isLoadingImage={isLoadingCoverImage}
+                    isAdmin={isAdmin}
+                    bookId={bookId || undefined}
+                    bookData={bookData || undefined}
+                    isGenerationComplete={isGenerationComplete}
+                    estimatedPageCount={realPageCount}
+                    onCoverUpdate={(updates) => {
+                      // Update local state immediately when Cover Studio makes changes
+                      if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
+                      
+                      // Merge other updates (spine, back cover) into bookData
+                      setBookData(prev => {
+                        if (!prev) return prev;
+                        return { ...prev, ...updates };
+                      });
+                    }}
+                  />
+                );
+              })()}
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
@@ -823,6 +831,7 @@ const Index = () => {
                       topic={topic}
                       coverImageUrls={coverImageUrls}
                       isAdmin={isAdmin}
+                      totalPageCount={Object.values(chapterBlocks).reduce((sum, blocks) => sum + blocks.length, 0)}
                     />
                   ) : (
                     <>

@@ -16,6 +16,8 @@ interface ProgressDownloadButtonProps {
   topic?: string;
   coverImageUrls?: string[];
   isAdmin?: boolean;
+  /** Actual total page count from blocks (for UI display) */
+  totalPageCount?: number;
 }
 
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -91,6 +93,7 @@ const ProgressDownloadButton = ({
   topic = 'guide',
   coverImageUrls = [],
   isAdmin = false,
+  totalPageCount,
 }: ProgressDownloadButtonProps) => {
   const [isConverting, setIsConverting] = useState(false);
   
@@ -147,7 +150,13 @@ const ProgressDownloadButton = ({
   const getLabel = () => {
     if (isAdmin) return "Export KDP Package";
     if (isCompiling) return "Generating PDF...";
-    if (isPurchased && !isComplete) return `Weaving... ${completedChapters}/${totalChapters}`;
+    if (isPurchased && !isComplete) {
+      // Show page count if available, otherwise chapter count
+      if (totalPageCount && totalPageCount > 0) {
+        return `Weaving... ${totalPageCount} pages`;
+      }
+      return `Weaving... ${completedChapters}/${totalChapters}`;
+    }
     return "Download Full Guide (PDF)";
   };
 

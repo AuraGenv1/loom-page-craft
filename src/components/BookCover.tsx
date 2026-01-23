@@ -33,6 +33,8 @@ interface BookCoverProps {
   bookData?: BookData;
   /** True if all 10 chapters are generated - enables cover editing */
   isGenerationComplete?: boolean;
+  /** Actual page count from blocks (overrides word-based estimation) */
+  estimatedPageCount?: number;
   onCoverUpdate?: (updates: { coverImageUrls?: string[]; backCoverUrl?: string; spineText?: string }) => void;
 }
 
@@ -50,6 +52,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     spineText: initialSpineText,
     bookData,
     isGenerationComplete = false,
+    estimatedPageCount: propEstimatedPageCount,
     onCoverUpdate
   }, ref) => {
     const TopicIcon = getTopicIcon(topic || propTitle);
@@ -99,7 +102,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [dedicationText, setDedicationText] = useState("");
     
     // Calculate estimated pages for smart spine logic
+    // PREFER: propEstimatedPageCount (actual block count from parent)
+    // FALLBACK: word-based estimation
     const calculateEstimatedPages = useCallback(() => {
+      // If parent passed real page count, use it
+      if (propEstimatedPageCount && propEstimatedPageCount > 0) {
+        return propEstimatedPageCount;
+      }
+      // Fallback to word-based estimation
       if (!bookData) return 0;
       let totalWords = 0;
       if (bookData.tableOfContents) {
@@ -110,7 +120,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
       // Est: 300 words/page + 10 pages front/back matter
       return Math.ceil(totalWords / 300) + 10;
-    }, [bookData]);
+    }, [bookData, propEstimatedPageCount]);
     
     const estimatedPages = calculateEstimatedPages();
     const showSpineText = estimatedPages >= 80;
