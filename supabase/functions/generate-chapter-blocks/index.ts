@@ -78,8 +78,9 @@ RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
 - Append to ALL queries: "no people no faces atmospheric"
 
-RULE 4: EDITORIAL WHITE SPACE
-- Each "text" block: STRICTLY 250 words MAXIMUM.
+RULE 4: FULL PAGE TEXT DENSITY
+- Each "text" block: TARGET 300-350 words for a full, legible page.
+- Ensure each text page feels "full" but readable. Do NOT leave pages half-empty.
 - Write with precision. Every word must earn its place.
 
 RULE 5: CHAPTER BREAKER (Professional Offset)
@@ -91,7 +92,7 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 
 Block types:
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS included
-- "text": { "text": "~250 words max" }
+- "text": { "text": "300-350 words for a full page" }
 - "image_full": { "query": "search term + no people no faces", "caption": "Evocative caption" }
 - "image_half": { "query": "search term + no people no faces", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice" }
@@ -103,7 +104,7 @@ Block types:
 REQUIREMENTS:
 - First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
 - Include at least 1 "pro_tip" block
-- Each "text" block: exactly ~250 words
+- Each "text" block: 300-350 words for a full, dense page
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
 
