@@ -8,6 +8,8 @@ interface PageViewerProps {
   bookId: string;
   initialChapter?: number;
   onPageChange?: (chapter: number, page: number) => void;
+  /** Pre-loaded blocks from parent state - used for instant display before DB sync */
+  preloadedBlocks?: Record<number, PageBlock[]>;
 }
 
 // Individual block renderers
@@ -230,7 +232,8 @@ const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: st
 export const PageViewer: React.FC<PageViewerProps> = ({ 
   bookId, 
   initialChapter = 1,
-  onPageChange 
+  onPageChange,
+  preloadedBlocks
 }) => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -241,11 +244,21 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   useEffect(() => {
     if (initialChapter !== currentChapter) {
       setCurrentChapter(initialChapter);
+      setCurrentIndex(0);
     }
   }, [initialChapter]);
 
-  // Fetch blocks for a chapter
+  // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
+    // First, check if we have preloaded blocks from parent state
+    if (preloadedBlocks && preloadedBlocks[chapter] && preloadedBlocks[chapter].length > 0) {
+      console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloadedBlocks[chapter].length);
+      setBlocks(preloadedBlocks[chapter]);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: fetch from database
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -277,11 +290,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [bookId]);
+  }, [bookId, preloadedBlocks]);
 
+  // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
   useEffect(() => {
     fetchBlocks(currentChapter);
-  }, [currentChapter, fetchBlocks]);
+  }, [currentChapter, fetchBlocks, preloadedBlocks]);
 
   // Keyboard navigation
   useEffect(() => {
