@@ -120,12 +120,14 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       return;
     }
 
-    // --- Pro-Tips (Vector Onyx Box) ---
+    // --- Pro-Tips (Non-Splitting Onyx Box) ---
     if (line.startsWith('>')) {
       const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
       content.push({
         table: {
           widths: [20, '*'],
+          // CRITICAL FIX: This prevents the box from splitting across pages
+          dontBreakRows: true,
           body: [[
             {
               // EXACT SVG PATH for the Key Icon
