@@ -237,6 +237,13 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
 
+  // Sync with external chapter changes (from TOC clicks)
+  useEffect(() => {
+    if (initialChapter !== currentChapter) {
+      setCurrentChapter(initialChapter);
+    }
+  }, [initialChapter]);
+
   // Fetch blocks for a chapter
   const fetchBlocks = useCallback(async (chapter: number) => {
     setLoading(true);
