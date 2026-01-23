@@ -271,13 +271,13 @@ const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' }
   </div>
 );
 
-// "Continue to Next Chapter" overlay
+// "Continue to Next Chapter" overlay - NO gradient fade, just bottom-aligned button
 const NextChapterOverlay: React.FC<{ 
   nextChapterNumber: number; 
   onContinue: () => void;
   isNextChapterReady: boolean;
 }> = ({ nextChapterNumber, onContinue, isNextChapterReady }) => (
-  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/95 to-transparent flex flex-col items-center justify-end pb-16">
+  <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pb-16 pt-8 bg-card">
     <div className="text-center">
       <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
         End of Chapter
@@ -548,12 +548,33 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   };
 
+  const goToPrevChapter = useCallback(() => {
+    if (currentChapter > 1) {
+      const prevChapter = currentChapter - 1;
+      setCurrentChapter(prevChapter);
+      // Go to the last page of the previous chapter
+      const prevChapterBlocks = preloadedBlocks?.[prevChapter];
+      if (prevChapterBlocks && prevChapterBlocks.length > 0) {
+        setCurrentIndex(prevChapterBlocks.length - 1);
+      } else {
+        setCurrentIndex(0);
+      }
+      onChapterChange?.(prevChapter);
+    }
+  }, [currentChapter, preloadedBlocks, onChapterChange]);
+
   const goPrev = () => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       onPageChange?.(currentChapter, currentIndex - 1);
+    } else if (currentChapter > 1) {
+      // Navigate to previous chapter
+      goToPrevChapter();
     }
   };
+
+  // Can go back if not at index 0, OR if there's a previous chapter
+  const canGoPrev = currentIndex > 0 || currentChapter > 1;
 
   if (loading) {
     return (
@@ -600,7 +621,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         {/* Navigation Overlays */}
         <button
           onClick={goPrev}
-          disabled={currentIndex === 0}
+          disabled={!canGoPrev}
           className="absolute left-0 top-0 bottom-0 w-1/4 bg-transparent hover:bg-black/5 transition-colors disabled:opacity-0 disabled:cursor-default"
           aria-label="Previous page"
         />
@@ -618,7 +639,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           variant="outline"
           size="sm"
           onClick={goPrev}
-          disabled={currentIndex === 0}
+          disabled={!canGoPrev}
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           Prev

@@ -86,6 +86,12 @@ RULE 4: FULL PAGE TEXT DENSITY
 RULE 5: CHAPTER BREAKER (Professional Offset)
 - If this is NOT chapter 1 and the previous chapter may end on odd page, start with a "quote" block before "chapter_title".
 
+RULE 6: MANDATORY STRUCTURE (No Wall-of-Text!)
+- You MUST include at least 2 "heading" blocks per chapter to break up the content into logical sections.
+- You MUST include at least 1 "list" block per chapter with bullet points or numbered items.
+- NEVER write 3 consecutive "text" blocks in a row. Always interleave with headings, lists, images, or pro_tips.
+- Structure the content for optimal readability and visual variety.
+
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
@@ -93,27 +99,34 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 Block types:
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS included
 - "text": { "text": "300-350 words for a full page" }
-- "image_full": { "query": "search term + no people no faces", "caption": "Evocative caption" }
-- "image_half": { "query": "search term + no people no faces", "caption": "Caption" }
+- "image_full": { "query": "search term no people", "caption": "Evocative caption" }
+- "image_half": { "query": "search term no people", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice" }
-- "heading": { "level": 2, "text": "Section heading" }
-- "list": { "items": ["item 1", "item 2", "item 3"] }
+- "heading": { "level": 2, "text": "Section heading" } - REQUIRED: at least 2 per chapter
+- "list": { "items": ["item 1", "item 2", "item 3"] } - REQUIRED: at least 1 per chapter
 - "quote": { "text": "Inspirational quote", "attribution": "Author" }
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
 - First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
 - Include at least 1 "pro_tip" block
+- Include at least 2 "heading" blocks (mandatory for structure)
+- Include at least 1 "list" block (mandatory for variety)
 - Each "text" block: 300-350 words for a full, dense page
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
+- NEVER have 3 consecutive "text" blocks
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "atmospheric scene no people", "caption": "Hero image"}},
-  {"block_type": "text", "content": {"text": "Rich content (~250 words)..."}},
-  {"block_type": "text", "content": {"text": "More content (~250 words)..."}},
+  {"block_type": "image_full", "content": {"query": "atmospheric scene", "caption": "Hero image"}},
+  {"block_type": "heading", "content": {"level": 2, "text": "Section Title"}},
+  {"block_type": "text", "content": {"text": "Rich content (~300 words)..."}},
+  {"block_type": "list", "content": {"items": ["Key point 1", "Key point 2", "Key point 3"]}},
+  {"block_type": "text", "content": {"text": "More content (~300 words)..."}},
+  {"block_type": "heading", "content": {"level": 2, "text": "Another Section"}},
+  {"block_type": "text", "content": {"text": "Additional insights (~300 words)..."}},
   {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
   ...
 ]
