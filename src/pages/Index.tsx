@@ -101,6 +101,7 @@ const Index = () => {
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
+  const [isOfficial, setIsOfficial] = useState(false);
   
   // Block-based architecture state
   const [chapterBlocks, setChapterBlocks] = useState<Record<number, PageBlock[]>>({});
@@ -213,6 +214,7 @@ const Index = () => {
           setBookId(data.id);
           setCoverImageUrls(Array.isArray(data.cover_image_url) ? data.cover_image_url : data.cover_image_url ? [data.cover_image_url] : []);
           setIsPurchased(data.is_purchased || false);
+          setIsOfficial((data as any).is_official || false);
           setIsSavedToLibrary(true);
           setViewState('book');
           return;
@@ -785,6 +787,20 @@ const Index = () => {
               </div>
             )}
             
+            {/* Official Badge */}
+            {isOfficial && (
+              <div className="mb-6 flex items-center justify-center">
+                <div className="flex items-center gap-2 py-2 px-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-400 dark:border-amber-600 rounded-full shadow-sm">
+                  <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300 tracking-wide">
+                    Loom & Page Original
+                  </span>
+                </div>
+              </div>
+            )}
+            
             {/* Book Cover */}
             <section className="mb-20">
               {(() => {
@@ -803,6 +819,7 @@ const Index = () => {
                     bookData={bookData || undefined}
                     isGenerationComplete={isGenerationComplete}
                     estimatedPageCount={realPageCount}
+                    isOfficial={isOfficial}
                     onCoverUpdate={(updates) => {
                       // Update local state immediately when Cover Studio makes changes
                       if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
@@ -947,6 +964,8 @@ const Index = () => {
                     preloadedBlocks={chapterBlocks}
                     totalPageCount={totalPageCount > 0 ? totalPageCount : undefined}
                     isAdmin={isAdmin}
+                    canEditImages={isAdmin || isPurchased}
+                    isOfficial={isOfficial}
                   />
                 </section>
               ) : bookId && (

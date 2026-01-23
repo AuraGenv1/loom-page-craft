@@ -76,6 +76,7 @@ This chapter MUST follow this rhythm:
 RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
+- VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot to avoid visual repetition.
 - Append to ALL queries: "no people no faces atmospheric"
 
 RULE 4: FULL PAGE TEXT DENSITY
@@ -90,7 +91,9 @@ RULE 6: MANDATORY STRUCTURE (No Wall-of-Text!)
 - You MUST include at least 2 "heading" blocks per chapter to break up the content into logical sections.
 - You MUST include at least 1 "list" block per chapter with bullet points or numbered items.
 - NEVER write 3 consecutive "text" blocks in a row. Always interleave with headings, lists, images, or pro_tips.
+- Use H2/H3 markdown headers within text blocks for additional structure.
 - Structure the content for optimal readability and visual variety.
+- CRITICAL: Format for maximum readability. No giant walls of text!
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
