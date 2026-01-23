@@ -427,9 +427,55 @@ const Index = () => {
     return count;
   }, [totalChapters, chapterBlocks]);
 
-  // Daisy-chain: Generate missing chapter blocks (2-10)
+  // Daisy-chain: Fetch existing blocks OR generate missing chapter blocks
   useEffect(() => {
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
+
+    // FIX #2: If chapterBlocks is empty but bookData exists, fetch existing blocks first
+    const hasAnyBlocks = Object.keys(chapterBlocks).length > 0;
+    if (!hasAnyBlocks) {
+      // Fetch all existing blocks for this book from the database
+      const fetchExistingBlocks = async () => {
+        console.log('[Block] chapterBlocks empty, fetching existing blocks for book', bookId);
+        const { data, error } = await supabase
+          .from('book_pages')
+          .select('*')
+          .eq('book_id', bookId)
+          .order('chapter_number', { ascending: true })
+          .order('page_order', { ascending: true });
+
+        if (error) {
+          console.error('[Block] Failed to fetch existing blocks:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          console.log('[Block] Found', data.length, 'existing blocks, hydrating state');
+          const blocksByChapter: Record<number, PageBlock[]> = {};
+          for (const row of data) {
+            if (!blocksByChapter[row.chapter_number]) {
+              blocksByChapter[row.chapter_number] = [];
+            }
+            blocksByChapter[row.chapter_number].push({
+              id: row.id,
+              book_id: row.book_id,
+              chapter_number: row.chapter_number,
+              page_order: row.page_order,
+              block_type: row.block_type as PageBlock['block_type'],
+              content: row.content as any,
+              image_url: row.image_url || undefined,
+            });
+          }
+          setChapterBlocks(blocksByChapter);
+        } else {
+          console.log('[Block] No existing blocks found in database');
+        }
+      };
+      fetchExistingBlocks();
+      return;
+    }
+
+    // No missing chapters left to generate
     if (!nextMissingChapter) return;
     
     // STOP if we are already generating (The Lock)
@@ -489,7 +535,7 @@ const Index = () => {
     return () => {
       // Clean-up
     };
-  }, [isPaid, bookId, viewState, nextMissingChapter, topic, language, isVisualTopic, targetPagesPerChapter]);
+  }, [isPaid, bookId, viewState, nextMissingChapter, chapterBlocks, topic, language, isVisualTopic, targetPagesPerChapter]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
@@ -569,9 +615,9 @@ const Index = () => {
       setBookData(generatedBook);
       setBookId(newBookId);
 
-      // Persist URL so refresh keeps the book loaded
+      // Persist URL silently (no router remount) to avoid wiping local state
       if (newBookId) {
-        navigate(`/book/${newBookId}`, { replace: true });
+        window.history.pushState(null, '', `/book/${newBookId}`);
       }
       
       // Save to saved_projects if user is logged in
@@ -991,11 +1037,21 @@ const Index = () => {
             {/* Kindle-Style PageViewer - Block-Based Architecture */}
             {bookId && (
               <section className="max-w-2xl mx-auto">
-                <PageViewer 
-                  bookId={bookId}
-                  initialChapter={activeChapter}
-                  onPageChange={(chapter) => setActiveChapter(chapter)}
-                />
+                {/* FIX #3: Show loading state while Chapter 1 blocks are being fetched/generated */}
+                {!chapterBlocks[1] || chapterBlocks[1].length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-4">
+                    <LoadingAnimation />
+                    <p className="text-sm text-muted-foreground animate-pulse">
+                      Weaving Chapter 1...
+                    </p>
+                  </div>
+                ) : (
+                  <PageViewer 
+                    bookId={bookId}
+                    initialChapter={activeChapter}
+                    onPageChange={(chapter) => setActiveChapter(chapter)}
+                  />
+                )}
               </section>
             )}
             
