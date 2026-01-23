@@ -5,8 +5,7 @@ import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
 import BookCover from '@/components/BookCover';
 import TableOfContents from '@/components/TableOfContents';
-import ChapterContent from '@/components/ChapterContent';
-import AllChaptersContent, { AllChaptersContentHandle } from '@/components/AllChaptersContent';
+import PageViewer from '@/components/PageViewer';
 import PaywallOverlay from '@/components/PaywallOverlay';
 import Footer from '@/components/Footer';
 import SaveToCloudBanner from '@/components/SaveToCloudBanner';
@@ -25,10 +24,10 @@ import { toast } from 'sonner';
 import { FunctionsHttpError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
+import { PageBlock } from '@/lib/pageBlockTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { generateCleanPDF } from '@/lib/generateCleanPDF';
-import PrintPreview from '@/components/PrintPreview';
+import { generateBlockBasedPDF } from '@/lib/generateBlockPDF';
 import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
 import ProgressDownloadButton from '@/components/ProgressDownloadButton';
 
@@ -92,8 +91,6 @@ const Index = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [coverImageUrls, setCoverImageUrls] = useState<string[]>([]);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
-  const [diagramImages, setDiagramImages] = useState<Record<string, string>>({});
-  const [isGeneratingDiagrams, setIsGeneratingDiagrams] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
   const { language, t } = useLanguage();
   const navigate = useNavigate();
@@ -104,8 +101,11 @@ const Index = () => {
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
-  const allChaptersRef = useRef<AllChaptersContentHandle>(null);
-  const chapter1Ref = useRef<HTMLElement>(null);
+  
+  // Block-based architecture state
+  const [chapterBlocks, setChapterBlocks] = useState<Record<number, PageBlock[]>>({});
+  const [isVisualTopic, setIsVisualTopic] = useState(false);
+  const [targetPagesPerChapter, setTargetPagesPerChapter] = useState(8);
 
   // Check if user is admin via database role - run immediately when user changes
   useEffect(() => {
@@ -149,40 +149,10 @@ const Index = () => {
   // Content is unlocked for admins, paid users, or if book is purchased
   const isPaid = true;
 
-  // Handle chapter click from TOC - smooth scroll
+  // Handle chapter click from TOC - navigate to chapter in PageViewer
   const handleChapterClick = useCallback((chapterNumber: number) => {
-    if (isPaid && allChaptersRef.current) {
-      allChaptersRef.current.scrollToChapter(chapterNumber);
-    } else if (chapterNumber === 1 && chapter1Ref.current) {
-      chapter1Ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [isPaid]);
-
-  // Track active chapter on scroll for full view
-  useEffect(() => {
-    if (!isPaid || viewState !== 'book') return;
-
-    const handleScroll = () => {
-      const refs = allChaptersRef.current?.getChapterRefs();
-      if (!refs) return;
-
-      const scrollTop = window.scrollY + 150; // Offset for header
-      let current = 1;
-
-      refs.forEach((el, idx) => {
-        if (el && el.offsetTop <= scrollTop) {
-          current = idx + 1;
-        }
-      });
-
-      setActiveChapter(current);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // Initial check
-
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isPaid, viewState]);
+    setActiveChapter(chapterNumber);
+  }, []);
 
   const handleOpenAuthModal = () => {
     setAuthModalOpen(true);
@@ -268,50 +238,35 @@ const Index = () => {
     loadBook();
   }, [user, authLoading, searchParams]);
 
-  // Generate chapter diagrams in background (never show blank boxes)
+  // Fetch blocks when viewing a chapter (block-based architecture)
   useEffect(() => {
-    if (viewState !== 'book' || !bookData?.title || !topic) return;
+    if (!bookId || viewState !== 'book') return;
 
-    let cancelled = false;
+    const fetchChapterBlocks = async (chapterNum: number) => {
+      const { data, error } = await supabase
+        .from('book_pages')
+        .select('*')
+        .eq('book_id', bookId)
+        .eq('chapter_number', chapterNum)
+        .order('page_order', { ascending: true });
 
-    const run = async () => {
-      setIsGeneratingDiagrams(true);
-
-      const sessionId = getSessionId();
-      const plates = [
-        { plateNumber: '1.1', caption: `Core concepts of ${topic} visualized` },
-        { plateNumber: '1.2', caption: `Essential tools and materials for ${topic}` },
-      ];
-
-      await Promise.all(
-        plates.map(async ({ plateNumber, caption }) => {
-          const { data, error } = await supabase.functions.invoke('generate-cover-image', {
-            body: {
-              title: bookData.title,
-              topic,
-              caption,
-              plateNumber,
-              variant: 'diagram',
-              sessionId,
-            },
-          });
-
-          if (cancelled) return;
-          if (!error && data?.imageUrl) {
-            setDiagramImages((prev) => ({ ...prev, [plateNumber]: data.imageUrl }));
-          }
-        })
-      );
-
-      if (!cancelled) setIsGeneratingDiagrams(false);
+      if (!error && data && data.length > 0) {
+        const blocks: PageBlock[] = data.map(row => ({
+          id: row.id,
+          book_id: row.book_id,
+          chapter_number: row.chapter_number,
+          page_order: row.page_order,
+          block_type: row.block_type as PageBlock['block_type'],
+          content: row.content as any,
+          image_url: row.image_url || undefined,
+        }));
+        setChapterBlocks(prev => ({ ...prev, [chapterNum]: blocks }));
+      }
     };
 
-    run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [viewState, bookData?.title, topic]);
+    // Fetch blocks for active chapter
+    fetchChapterBlocks(activeChapter);
+  }, [bookId, viewState, activeChapter]);
 
   // Real-time subscription for chapter updates
   useEffect(() => {
@@ -373,29 +328,18 @@ const Index = () => {
     };
   }, [bookId, viewState]);
 
-  // Daisy-chain missing chapters (2-10): one request at a time; next starts only after state updates
+  // Calculate which chapters have blocks (block-based architecture)
   const nextMissingChapter = useMemo(() => {
     if (!bookData?.tableOfContents?.length) return null;
 
     for (let i = 2; i <= 10; i++) {
-      const key = `chapter${i}Content` as keyof BookData;
-      if (!bookData[key]) return i;
+      // Check if we have blocks for this chapter
+      if (!chapterBlocks[i] || chapterBlocks[i].length === 0) return i;
     }
     return null;
-  }, [
-    bookData?.tableOfContents,
-    bookData?.chapter2Content,
-    bookData?.chapter3Content,
-    bookData?.chapter4Content,
-    bookData?.chapter5Content,
-    bookData?.chapter6Content,
-    bookData?.chapter7Content,
-    bookData?.chapter8Content,
-    bookData?.chapter9Content,
-    bookData?.chapter10Content,
-  ]);
+  }, [bookData?.tableOfContents, chapterBlocks]);
 
-  // Fixed Effect: Uses Ref to prevent self-cancellation during re-renders
+  // Daisy-chain: Generate missing chapter blocks (2-10)
   useEffect(() => {
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
     if (!nextMissingChapter) return;
@@ -409,46 +353,42 @@ const Index = () => {
 
     const run = async () => {
       try {
-        console.log('STARTING GENERATION for Chapter', nextMissingChapter);
+        console.log('[Block] STARTING GENERATION for Chapter', nextMissingChapter);
         
-        // 1. Call the AI
         const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
         if (!tocEntry) throw new Error('No TOC entry found');
         
-        const { data, error } = await supabase.functions.invoke('generate-chapter', {
+        // Call the NEW block-based chapter generator
+        const { data, error } = await supabase.functions.invoke('generate-chapter-blocks', {
           body: {
             bookId,
             chapterNumber: nextMissingChapter,
             chapterTitle: tocEntry.title,
             topic,
             tableOfContents: bookData.tableOfContents,
+            isVisualTopic,
+            targetPagesPerChapter,
             language,
           },
         });
         
         if (error) throw error;
-        if (!data?.content) throw new Error('No content returned');
+        if (!data?.blocks) throw new Error('No blocks returned');
         
-        // 2. SUCCESS: Update UI FIRST (Optimistic)
-        console.log('AI Finished. Updating UI...');
+        console.log('[Block] AI Finished. Got', data.blocks.length, 'blocks');
+        
+        // Update local blocks state
+        setChapterBlocks(prev => ({ ...prev, [nextMissingChapter]: data.blocks }));
+        
+        // Also update bookData for backward compatibility with chapter count checks
         setBookData((prev) => {
           if (!prev) return prev;
           const key = `chapter${nextMissingChapter}Content` as keyof BookData;
-          return { ...prev, [key]: data.content };
+          return { ...prev, [key]: `[${data.blocks.length} blocks generated]` };
         });
-        
-        // 3. Save to DB (Fire & Forget - don't let it block the UI)
-        const columnName = `chapter${nextMissingChapter}_content`;
-        supabase
-          .from('books')
-          .update({ [columnName]: data.content })
-          .eq('id', bookId)
-          .then(({ error: saveError }) => {
-            if (saveError) console.warn('Background save warning:', saveError);
-          });
           
       } catch (err) {
-        console.error(`Failed to generate chapter ${nextMissingChapter}:`, err);
+        console.error(`[Block] Failed to generate chapter ${nextMissingChapter}:`, err);
       } finally {
         // RELEASE THE LOCK
         isGeneratingRef.current = false;
@@ -458,25 +398,24 @@ const Index = () => {
 
     run();
 
-    // Clean-up: If the user leaves the page entirely, unlock.
     return () => {
-      // We DO NOT set cancelled=true here anymore, to prevent the self-cancellation bug.
+      // Clean-up
     };
-  }, [isPaid, bookId, viewState, nextMissingChapter, topic, language]); // REMOVED 'bookData' and 'loadingChapter' from dependencies
+  }, [isPaid, bookId, viewState, nextMissingChapter, topic, language, isVisualTopic, targetPagesPerChapter]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');
     setCoverImageUrls([]);
-    setDiagramImages({});
-    setIsGeneratingDiagrams(false);
-    setIsSavedToLibrary(false); // Reset for new book
+    setChapterBlocks({});
+    setIsSavedToLibrary(false);
     setLoadingChapter(null);
-
 
     try {
       const currentSessionId = getSessionId();
-      const { data, error } = await supabase.functions.invoke('generate-book-v2', {
+      
+      // Use the NEW block-based book generator
+      const { data, error } = await supabase.functions.invoke('generate-book-blocks', {
         body: { topic: query, sessionId: currentSessionId, language }
       });
 
@@ -507,171 +446,80 @@ const Index = () => {
         return;
       }
 
-      const generatedBook = data as BookData;
-      setBookData(generatedBook);
+      // Extract block-based response
+      const { 
+        bookId: newBookId, 
+        title, 
+        displayTitle, 
+        subtitle, 
+        tableOfContents, 
+        chapter1Blocks,
+        isVisualTopic: isVisual,
+        targetPagesPerChapter: targetPages
+      } = data;
 
-      // Save to database (user_id is null for guests)
-      const sessionId = getSessionId();
-
-      let savedBookId: string | null = null;
-
-      if (user) {
-        // Authenticated users can insert + return row normally
-        const { data: savedBook, error: saveError } = await supabase
-          .from('books')
-          .insert([
-            {
-              topic: query,
-              title: generatedBook.title,
-              table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
-              chapter1_content: generatedBook.chapter1Content,
-              chapter2_content: generatedBook.chapter2Content || null,
-              chapter3_content: generatedBook.chapter3Content || null,
-              chapter4_content: generatedBook.chapter4Content || null,
-              chapter5_content: generatedBook.chapter5Content || null,
-              chapter6_content: generatedBook.chapter6Content || null,
-              chapter7_content: generatedBook.chapter7Content || null,
-              chapter8_content: generatedBook.chapter8Content || null,
-              chapter9_content: generatedBook.chapter9Content || null,
-              chapter10_content: generatedBook.chapter10Content || null,
-              local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
-              has_disclaimer: generatedBook.hasDisclaimer || false,
-              cover_image_url: generatedBook.coverImageUrl ? (Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl]) : null,
-              is_purchased: false,
-              session_id: sessionId,
-              user_id: user.id,
-            },
-          ])
-          .select()
-          .single();
-
-        if (saveError) {
-          console.error('Error saving book:', saveError);
-          toast.error('Failed to save your guide. Please try again.');
-          setViewState('landing');
-          return;
-        }
-
-        savedBookId = savedBook.id;
-      } else {
-        // Guests cannot SELECT directly due to RLS, so insert without returning rows...
-        const { error: saveError } = await supabase.from('books').insert([
-          {
-            topic: query,
-            title: generatedBook.title,
-            table_of_contents: JSON.parse(JSON.stringify(generatedBook.tableOfContents)),
-            chapter1_content: generatedBook.chapter1Content,
-            chapter2_content: generatedBook.chapter2Content || null,
-            chapter3_content: generatedBook.chapter3Content || null,
-            chapter4_content: generatedBook.chapter4Content || null,
-            chapter5_content: generatedBook.chapter5Content || null,
-            chapter6_content: generatedBook.chapter6Content || null,
-            chapter7_content: generatedBook.chapter7Content || null,
-            chapter8_content: generatedBook.chapter8Content || null,
-            chapter9_content: generatedBook.chapter9Content || null,
-            chapter10_content: generatedBook.chapter10Content || null,
-            local_resources: JSON.parse(JSON.stringify(generatedBook.localResources || [])),
-            has_disclaimer: generatedBook.hasDisclaimer || false,
-            cover_image_url: generatedBook.coverImageUrl ? (Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl]) : null,
-            is_purchased: false,
-            session_id: sessionId,
-            user_id: null,
-          },
-        ]);
-
-        if (saveError) {
-          console.error('Error saving book (guest):', saveError);
-          toast.error('Failed to save your guide. Please try again.');
-          setViewState('landing');
-          return;
-        }
-
-        // ...then fetch the latest book for this session via the security definer RPC.
-        const { data: sessionBooks, error: fetchError } = await supabase.rpc('get_book_by_session', {
-          p_session_id: sessionId,
-        });
-
-        const first = (sessionBooks as any[] | null)?.[0];
-        if (fetchError || !first?.id) {
-          console.error('Error fetching session book:', fetchError);
-          toast.error('Guide saved, but we could not load it. Please refresh.');
-          setViewState('landing');
-          return;
-        }
-
-        savedBookId = first.id as string;
+      // Store chapter 1 blocks
+      if (chapter1Blocks && chapter1Blocks.length > 0) {
+        setChapterBlocks({ 1: chapter1Blocks });
       }
 
-      setBookId(savedBookId);
+      // Store visual/pages settings for chapter generation
+      setIsVisualTopic(isVisual || false);
+      setTargetPagesPerChapter(targetPages || 8);
+
+      // Create BookData for backward compatibility
+      const generatedBook: BookData = {
+        title,
+        displayTitle,
+        subtitle,
+        tableOfContents,
+        chapter1Content: `[${chapter1Blocks?.length || 0} blocks generated]`,
+        localResources: [],
+        hasDisclaimer: false,
+      };
       
-      // Only save to saved_projects if user is logged in
-      if (user && savedBookId) {
-        const { error: saveProjectError } = await supabase
+      setBookData(generatedBook);
+      setBookId(newBookId);
+      
+      // Save to saved_projects if user is logged in
+      if (user && newBookId) {
+        supabase
           .from('saved_projects')
-          .insert([
-            {
-              user_id: user.id,
-              book_id: savedBookId,
-            },
-          ]);
-
-        if (saveProjectError) {
-          console.error('Error saving to projects:', saveProjectError);
-        }
-      }
-
-      // Enter book view IMMEDIATELY - chapters will stream in via realtime
-      setViewState('book');
-
-      // Use cover image from generate-book response if available
-      if (generatedBook.coverImageUrl) {
-        const urls = Array.isArray(generatedBook.coverImageUrl) ? generatedBook.coverImageUrl : [generatedBook.coverImageUrl];
-        setCoverImageUrls(urls);
-        setIsLoadingCoverImage(false);
-        
-        // Update cover_image_url in database if not already set
-        if (savedBookId) {
-          supabase
-            .from('books')
-            .update({ cover_image_url: urls })
-            .eq('id', savedBookId)
-            .then(({ error }) => {
-              if (error) console.error('Failed to save cover URL:', error);
-            });
-        }
-      } else {
-        // Fallback to separate cover image generation
-        setIsLoadingCoverImage(true);
-        const coverSessionId = getSessionId();
-        supabase.functions
-          .invoke('generate-cover-image', {
-            body: { title: generatedBook.title, topic: query, sessionId: coverSessionId, variant: 'cover' },
-          })
-          .then(({ data: imageData, error: imageError }) => {
-            setIsLoadingCoverImage(false);
-            if (!imageError && (imageData?.imageUrls || imageData?.imageUrl)) {
-              // Prefer imageUrls array, fallback to single imageUrl
-              const urls = imageData.imageUrls || (imageData.imageUrl ? [imageData.imageUrl] : []);
-              setCoverImageUrls(urls);
-              // Save to database
-              if (savedBookId) {
-                supabase
-                  .from('books')
-                  .update({ cover_image_url: urls })
-                  .eq('id', savedBookId)
-                  .then(({ error }) => {
-                    if (error) console.error('Failed to save cover URL:', error);
-                  });
-              }
-            } else {
-              console.log('Cover image generation skipped or failed:', imageError);
-            }
+          .insert([{ user_id: user.id, book_id: newBookId }])
+          .then(({ error: saveProjectError }) => {
+            if (saveProjectError) console.error('Error saving to projects:', saveProjectError);
           });
       }
-      
-      // Background chapters will be generated by the existing useEffect that
-      // watches for missing chapters (isPaid check). No need for a second call
-      // to generate-book which was causing duplicate rate limit issues.
+
+      // Enter book view
+      setViewState('book');
+
+      // Generate cover image in background
+      setIsLoadingCoverImage(true);
+      const coverSessionId = getSessionId();
+      supabase.functions
+        .invoke('generate-cover-image', {
+          body: { title, topic: query, sessionId: coverSessionId, variant: 'cover' },
+        })
+        .then(({ data: imageData, error: imageError }) => {
+          setIsLoadingCoverImage(false);
+          if (!imageError && (imageData?.imageUrls || imageData?.imageUrl)) {
+            const urls = imageData.imageUrls || (imageData.imageUrl ? [imageData.imageUrl] : []);
+            setCoverImageUrls(urls);
+            // Save to database
+            if (newBookId) {
+              supabase
+                .from('books')
+                .update({ cover_image_url: urls })
+                .eq('id', newBookId)
+                .then(({ error }) => {
+                  if (error) console.error('Failed to save cover URL:', error);
+                });
+            }
+          } else {
+            console.log('Cover image generation skipped or failed:', imageError);
+          }
+        });
 
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -700,19 +548,21 @@ const Index = () => {
   };
 
   const handleDownloadPDF = async () => {
-    if (!bookData) return;
+    if (!bookData || !bookId) return;
     
     try {
       toast.info('Generating PDF...', { 
         id: 'pdf-download',
-        description: 'Creating your clean, content-only guide.' 
+        description: 'Creating your luxury 6x9 manuscript.' 
       });
       
-      // Use clean PDF generator that strips all UI elements
-      await generateCleanPDF({
-        topic,
-        bookData,
-        coverImageUrl: coverImageUrls[0] || null,
+      // Use NEW block-based PDF generator
+      await generateBlockBasedPDF({
+        title: bookData.title,
+        displayTitle: bookData.displayTitle || bookData.title,
+        subtitle: bookData.subtitle || `A Comprehensive Guide to ${topic}`,
+        tableOfContents: bookData.tableOfContents || [],
+        bookId,
       });
       
       toast.success('PDF downloaded!', { 
@@ -734,6 +584,8 @@ const Index = () => {
     setIsLoadingCoverImage(false);
     setIsSavedToLibrary(false);
     setIsPurchased(false);
+    setChapterBlocks({});
+    setActiveChapter(1);
     // Clear URL params when starting over
     navigate('/', { replace: true });
   };
@@ -1096,54 +948,20 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Full Chapters (for paid/admin) or Chapter 1 Only (for free) */}
-            {isPaid ? (
-              <section>
-                <AllChaptersContent
-                  ref={allChaptersRef}
-                  topic={topic}
-                  loadingChapter={loadingChapter}
-                  isFullAccess={isPaid}
-                  sessionId={getSessionId()}
-                  bookId={bookId || undefined}
-                  onBookDataUpdate={(newData) => setBookData(prev => prev ? { ...prev, ...newData } : newData)}
-                  bookData={{
-                    chapter1Content: bookData?.chapter1Content,
-                    chapter2Content: bookData?.chapter2Content,
-                    chapter3Content: bookData?.chapter3Content,
-                    chapter4Content: bookData?.chapter4Content,
-                    chapter5Content: bookData?.chapter5Content,
-                    chapter6Content: bookData?.chapter6Content,
-                    chapter7Content: bookData?.chapter7Content,
-                    chapter8Content: bookData?.chapter8Content,
-                    chapter9Content: bookData?.chapter9Content,
-                    chapter10Content: bookData?.chapter10Content,
-                    localResources: bookData?.localResources,
-                    hasDisclaimer: bookData?.hasDisclaimer,
-                    tableOfContents: bookData?.tableOfContents,
-                  }}
+            {/* Kindle-Style PageViewer - Block-Based Architecture */}
+            {bookId && (
+              <section className="max-w-2xl mx-auto">
+                <PageViewer 
+                  bookId={bookId}
+                  initialChapter={activeChapter}
+                  onPageChange={(chapter) => setActiveChapter(chapter)}
                 />
               </section>
-            ) : (
-              <>
-                <section>
-                  <ChapterContent 
-                    ref={chapter1Ref}
-                    topic={topic} 
-                    content={bookData?.chapter1Content}
-                    localResources={bookData?.localResources}
-                    hasDisclaimer={bookData?.hasDisclaimer}
-                    materials={extractMaterials(bookData?.chapter1Content)}
-                    isGenerating={isGeneratingDiagrams}
-                    diagramImages={diagramImages}
-                    tableOfContents={bookData?.tableOfContents}
-                    sessionId={getSessionId()}
-                  />
-                </section>
-
-                {/* Paywall - only show if not paid */}
-                <PaywallOverlay onPurchase={handlePurchase} onDownload={handleDownloadPDF} />
-              </>
+            )}
+            
+            {/* Paywall - only show if not paid */}
+            {!isPaid && (
+              <PaywallOverlay onPurchase={handlePurchase} onDownload={handleDownloadPDF} />
             )}
           </div>
         )}
