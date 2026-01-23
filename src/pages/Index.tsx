@@ -427,6 +427,72 @@ const Index = () => {
     };
   }, [isPaid, bookId, viewState, nextMissingChapter, topic, language, isVisualTopic, targetPagesPerChapter]);
 
+  // AUTO-GENERATE IMAGES: When new blocks arrive, trigger image generation for image blocks
+  useEffect(() => {
+    if (!bookId) return;
+
+    // Track which blocks we've already started generating
+    const generateImageForBlock = async (block: PageBlock) => {
+      if (!['image_full', 'image_half'].includes(block.block_type)) return;
+      if (block.image_url) return; // Already has image
+
+      const content = block.content as { query: string; caption: string };
+      if (!content.query) return;
+
+      console.log('[AutoImage] Generating image for block:', block.id, content.query);
+
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+          body: { 
+            prompt: content.query,
+            style: 'photorealistic'
+          }
+        });
+
+        if (error) {
+          console.error('[AutoImage] Failed:', error);
+          return;
+        }
+
+        if (data?.imageUrl) {
+          // Update block in database
+          await supabase
+            .from('book_pages')
+            .update({ image_url: data.imageUrl })
+            .eq('id', block.id);
+
+          // Update local state
+          setChapterBlocks(prev => {
+            const updated = { ...prev };
+            const chapterNum = block.chapter_number;
+            if (updated[chapterNum]) {
+              updated[chapterNum] = updated[chapterNum].map(b => 
+                b.id === block.id ? { ...b, image_url: data.imageUrl } : b
+              );
+            }
+            return updated;
+          });
+
+          console.log('[AutoImage] Success for block:', block.id);
+        }
+      } catch (err) {
+        console.error('[AutoImage] Error:', err);
+      }
+    };
+
+    // Find all image blocks without URLs and generate them
+    const allBlocks = Object.values(chapterBlocks).flat();
+    const imageBlocksNeedingGeneration = allBlocks.filter(
+      block => ['image_full', 'image_half'].includes(block.block_type) && !block.image_url
+    );
+
+    // Generate images one at a time to avoid rate limits
+    if (imageBlocksNeedingGeneration.length > 0) {
+      // Just generate the first one, the effect will re-run when state updates
+      generateImageForBlock(imageBlocksNeedingGeneration[0]);
+    }
+  }, [chapterBlocks, bookId]);
+
   const handleSearch = async (query: string) => {
     setTopic(query);
     setViewState('loading');

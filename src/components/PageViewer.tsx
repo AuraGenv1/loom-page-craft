@@ -25,13 +25,59 @@ const ChapterTitlePage: React.FC<{ content: { chapter_number: number; title: str
   </div>
 );
 
-const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => (
-  <div className="h-full overflow-y-auto px-6 py-8">
-    <p className="font-serif text-lg leading-relaxed text-foreground whitespace-pre-wrap">
-      {content.text}
-    </p>
-  </div>
-);
+const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
+  // Parse text for headers (lines starting with ## or ###)
+  const parseTextWithHeaders = (text: string) => {
+    const lines = text.split('\n');
+    const elements: JSX.Element[] = [];
+    let currentParagraph: string[] = [];
+    
+    const flushParagraph = () => {
+      if (currentParagraph.length > 0) {
+        elements.push(
+          <p key={elements.length} className="font-serif text-base leading-relaxed text-foreground mb-4">
+            {currentParagraph.join('\n')}
+          </p>
+        );
+        currentParagraph = [];
+      }
+    };
+    
+    lines.forEach((line, i) => {
+      if (line.startsWith('### ')) {
+        flushParagraph();
+        elements.push(
+          <h3 key={`h3-${i}`} className="font-serif text-lg font-semibold text-foreground mt-6 mb-3">
+            {line.replace('### ', '')}
+          </h3>
+        );
+      } else if (line.startsWith('## ')) {
+        flushParagraph();
+        elements.push(
+          <h2 key={`h2-${i}`} className="font-serif text-xl font-bold text-foreground mt-8 mb-4">
+            {line.replace('## ', '')}
+          </h2>
+        );
+      } else {
+        currentParagraph.push(line);
+      }
+    });
+    
+    flushParagraph();
+    return elements;
+  };
+
+  return (
+    <div className="h-full overflow-y-auto" style={{ 
+      paddingLeft: '72px',  // Inner gutter: 0.75in
+      paddingRight: '48px', // Outer edge: 0.5in
+      paddingTop: '48px',   // Top: 0.5in
+      paddingBottom: '48px' // Bottom: 0.5in
+    }}>
+      {parseTextWithHeaders(content.text)}
+    </div>
+  );
+};
 
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
@@ -94,7 +140,10 @@ const ImageHalfPage: React.FC<{
 );
 
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
-  <div className="h-full flex items-center justify-center px-8">
+  <div className="h-full flex items-start justify-center pt-12" style={{
+    paddingLeft: '72px',
+    paddingRight: '48px'
+  }}>
     <div className="bg-card border-l-4 border-foreground p-8 max-w-md">
       <div className="flex items-start gap-4">
         <Key className="w-5 h-5 text-foreground flex-shrink-0 mt-1" />
@@ -413,11 +462,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         </Button>
 
         <div className="text-center">
-          <p className="text-sm text-muted-foreground">
-            Page {currentIndex + 1} of {blocks.length}
+          {/* Page number like a real book */}
+          <p className="font-serif text-lg text-foreground">
+            {currentBlock?.page_order || currentIndex + 1}
           </p>
-          <p className="text-xs text-muted-foreground/60">
-            Chapter {currentChapter}
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
           </p>
         </div>
 
