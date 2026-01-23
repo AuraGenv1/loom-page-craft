@@ -8,7 +8,9 @@ export type PageBlockType =
   | 'image_half'
   | 'pro_tip'
   | 'heading'
-  | 'list';
+  | 'list'
+  | 'quote'
+  | 'divider';
 
 // Base block with common fields
 interface BaseBlock {
@@ -85,6 +87,23 @@ export interface ListBlock extends BaseBlock {
   };
 }
 
+// Quote block (for chapter breakers and inspiration)
+export interface QuoteBlock extends BaseBlock {
+  block_type: 'quote';
+  content: {
+    text: string;
+    attribution?: string;
+  };
+}
+
+// Divider block (minimal visual break)
+export interface DividerBlock extends BaseBlock {
+  block_type: 'divider';
+  content: {
+    style?: 'minimal' | 'ornate' | 'line';
+  };
+}
+
 // Union type for all blocks
 export type PageBlock = 
   | ChapterTitleBlock
@@ -93,7 +112,9 @@ export type PageBlock =
   | ImageHalfBlock
   | ProTipBlock
   | HeadingBlock
-  | ListBlock;
+  | ListBlock
+  | QuoteBlock
+  | DividerBlock;
 
 // Helper to determine if topic is visual (travel, cooking, etc.)
 export const isVisualTopic = (topic: string): boolean => {
@@ -112,9 +133,14 @@ export const isVisualTopic = (topic: string): boolean => {
   return visualKeywords.some(keyword => lowerTopic.includes(keyword));
 };
 
+// Luxury Architect targets
+export const LUXURY_TARGET_PAGES = 85; // Minimum for spine compliance (79+)
+export const LUXURY_MIN_CHAPTERS = 10;
+export const LUXURY_MAX_IMAGE_RATIO = 0.30; // Max 30% images
+
 // Calculate target page count based on topic type
 export const getTargetPageCount = (topic: string, chapterCount: number): number => {
-  const pagesPerChapter = isVisualTopic(topic) ? 12 : 6;
+  const pagesPerChapter = isVisualTopic(topic) ? 12 : 8;
   const frontMatter = 4; // Title, Copyright, TOC
   return frontMatter + (chapterCount * pagesPerChapter);
 };

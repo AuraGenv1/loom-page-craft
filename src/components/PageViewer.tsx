@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Key, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -147,6 +147,40 @@ const ListPage: React.FC<{ content: { items: string[]; ordered?: boolean } }> = 
   </div>
 );
 
+// Quote page for chapter breakers
+const QuotePage: React.FC<{ content: { text: string; attribution?: string } }> = ({ content }) => (
+  <div className="h-full flex items-center justify-center px-8">
+    <div className="text-center max-w-md">
+      <Quote className="w-10 h-10 text-muted-foreground/40 mx-auto mb-6 rotate-180" />
+      <p className="font-serif text-xl md:text-2xl italic text-foreground leading-relaxed mb-6">
+        "{content.text}"
+      </p>
+      {content.attribution && (
+        <p className="text-sm tracking-[0.15em] uppercase text-muted-foreground">
+          — {content.attribution}
+        </p>
+      )}
+    </div>
+  </div>
+);
+
+// Divider page for visual breaks
+const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' } }> = ({ content }) => (
+  <div className="h-full flex items-center justify-center">
+    {content.style === 'ornate' ? (
+      <div className="text-4xl text-muted-foreground/30">❧</div>
+    ) : content.style === 'line' ? (
+      <div className="w-32 h-px bg-border" />
+    ) : (
+      <div className="flex gap-2">
+        <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+        <div className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+        <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+      </div>
+    )}
+  </div>
+);
+
 // Block renderer dispatcher
 const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: string) => void }> = ({ 
   block, 
@@ -178,12 +212,18 @@ const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: st
       return <HeadingPage content={block.content as { level: 2 | 3; text: string }} />;
     case 'list':
       return <ListPage content={block.content as { items: string[]; ordered?: boolean }} />;
-    default:
+    case 'quote':
+      return <QuotePage content={block.content as { text: string; attribution?: string }} />;
+    case 'divider':
+      return <DividerPage content={block.content as { style?: 'minimal' | 'ornate' | 'line' }} />;
+    default: {
+      const _exhaustiveCheck: never = block;
       return (
         <div className="h-full flex items-center justify-center">
-          <p className="text-muted-foreground">Unknown block type</p>
+          <p className="text-muted-foreground">Unknown block type: {(block as any).block_type}</p>
         </div>
       );
+    }
   }
 };
 

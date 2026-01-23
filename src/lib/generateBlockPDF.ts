@@ -196,6 +196,44 @@ const blockToPdfContent = async (
       }
       break;
     }
+    
+    case 'quote': {
+      const c = block.content as { text: string; attribution?: string };
+      content.push(
+        { text: '', margin: [0, 100, 0, 0] },
+        { 
+          text: `"${c.text}"`, 
+          fontSize: 16, 
+          italics: true, 
+          alignment: 'center',
+          margin: [30, 0, 30, 15]
+        }
+      );
+      if (c.attribution) {
+        content.push({
+          text: `— ${c.attribution}`,
+          fontSize: 10,
+          alignment: 'center',
+          color: '#666666',
+          margin: [0, 0, 0, 0]
+        });
+      }
+      break;
+    }
+    
+    case 'divider': {
+      const c = block.content as { style?: 'minimal' | 'ornate' | 'line' };
+      content.push(
+        { text: '', margin: [0, 200, 0, 0] },
+        { 
+          text: c.style === 'ornate' ? '❧' : '• • •', 
+          fontSize: c.style === 'ornate' ? 24 : 14, 
+          alignment: 'center',
+          color: '#aaaaaa'
+        }
+      );
+      break;
+    }
   }
   
   return content;
