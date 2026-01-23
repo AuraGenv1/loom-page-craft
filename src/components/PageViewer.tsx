@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
+
+// Track which blocks are currently being fetched to prevent duplicates
+const fetchingImages = new Set<string>();
 
 interface PageViewerProps {
   bookId: string;
@@ -82,10 +85,19 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
-  onGenerateImage?: () => void;
-}> = ({ content, imageUrl, onGenerateImage }) => (
+  attribution?: string;
+  isLoading?: boolean;
+}> = ({ content, imageUrl, attribution, isLoading }) => (
   <div className="flex flex-col h-full">
-    {imageUrl ? (
+    {isLoading ? (
+      <div className="flex-1 bg-muted flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
+          <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
+        </div>
+      </div>
+    ) : imageUrl ? (
       <div className="flex-1 relative">
         <img 
           src={imageUrl} 
@@ -94,14 +106,10 @@ const ImageFullPage: React.FC<{
         />
       </div>
     ) : (
-      <div 
-        className="flex-1 bg-muted flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
-        onClick={onGenerateImage}
-      >
+      <div className="flex-1 bg-muted flex items-center justify-center">
         <div className="text-center">
-          <ImageIcon className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">Click to generate image</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
+          <ImageIcon className="w-12 h-12 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground/60">No image found</p>
         </div>
       </div>
     )}
@@ -109,6 +117,11 @@ const ImageFullPage: React.FC<{
       <p className="text-sm italic text-muted-foreground text-center">
         {content.caption}
       </p>
+      {attribution && (
+        <p className="text-[9px] text-muted-foreground/50 text-center mt-1">
+          {attribution}
+        </p>
+      )}
     </div>
   </div>
 );
@@ -116,10 +129,19 @@ const ImageFullPage: React.FC<{
 const ImageHalfPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
-}> = ({ content, imageUrl }) => (
+  attribution?: string;
+  isLoading?: boolean;
+}> = ({ content, imageUrl, attribution, isLoading }) => (
   <div className="h-full flex flex-col">
     <div className="h-1/2 relative">
-      {imageUrl ? (
+      {isLoading ? (
+        <div className="absolute inset-0 bg-muted flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+            <p className="text-xs text-muted-foreground">Searching...</p>
+          </div>
+        </div>
+      ) : imageUrl ? (
         <img 
           src={imageUrl} 
           alt={content.caption}
@@ -127,14 +149,21 @@ const ImageHalfPage: React.FC<{
         />
       ) : (
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
-          <ImageIcon className="w-8 h-8 text-muted-foreground" />
+          <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
         </div>
       )}
     </div>
     <div className="h-1/2 p-6 flex items-center justify-center">
-      <p className="text-center italic text-muted-foreground">
-        {content.caption}
-      </p>
+      <div className="text-center">
+        <p className="italic text-muted-foreground">
+          {content.caption}
+        </p>
+        {attribution && (
+          <p className="text-[9px] text-muted-foreground/50 mt-2">
+            {attribution}
+          </p>
+        )}
+      </div>
     </div>
   </div>
 );
@@ -232,11 +261,15 @@ const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' }
   </div>
 );
 
-// Block renderer dispatcher
-const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: string) => void }> = ({ 
-  block, 
-  onGenerateImage 
-}) => {
+// Block renderer dispatcher with auto-fetch support
+const BlockRenderer: React.FC<{ 
+  block: PageBlock; 
+  loadingImages: Set<string>;
+  imageAttributions: Map<string, string>;
+}> = ({ block, loadingImages, imageAttributions }) => {
+  const isLoading = loadingImages.has(block.id);
+  const attribution = imageAttributions.get(block.id);
+
   switch (block.block_type) {
     case 'chapter_title':
       return <ChapterTitlePage content={block.content as { chapter_number: number; title: string }} />;
@@ -247,7 +280,8 @@ const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: st
         <ImageFullPage 
           content={block.content as { query: string; caption: string }} 
           imageUrl={block.image_url}
-          onGenerateImage={() => onGenerateImage?.(block.id)}
+          attribution={attribution}
+          isLoading={isLoading}
         />
       );
     case 'image_half':
@@ -255,6 +289,8 @@ const BlockRenderer: React.FC<{ block: PageBlock; onGenerateImage?: (blockId: st
         <ImageHalfPage 
           content={block.content as { query: string; caption: string }} 
           imageUrl={block.image_url}
+          attribution={attribution}
+          isLoading={isLoading}
         />
       );
     case 'pro_tip':
@@ -288,6 +324,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [imageAttributions, setImageAttributions] = useState<Map<string, string>>(new Map());
 
   // Sync with external chapter changes (from TOC clicks)
   useEffect(() => {
@@ -296,6 +334,57 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setCurrentIndex(0);
     }
   }, [initialChapter]);
+
+  // Auto-fetch images for blocks without URLs
+  const fetchImageForBlock = useCallback(async (block: PageBlock) => {
+    if (fetchingImages.has(block.id)) return;
+    fetchingImages.add(block.id);
+    
+    setLoadingImages(prev => new Set(prev).add(block.id));
+
+    const content = block.content as { query: string; caption: string };
+    console.log('[PageViewer] Auto-fetching image for:', content.query);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-book-images', {
+        body: { 
+          query: content.query,
+          orientation: block.block_type === 'image_full' ? 'landscape' : 'portrait'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.imageUrl) {
+        // Update database with image URL
+        await supabase
+          .from('book_pages')
+          .update({ image_url: data.imageUrl })
+          .eq('id', block.id);
+
+        // Store attribution if present (from Wikimedia)
+        if (data.attribution) {
+          setImageAttributions(prev => new Map(prev).set(block.id, data.attribution));
+        }
+
+        // Update local state
+        setBlocks(prevBlocks => 
+          prevBlocks.map(b => 
+            b.id === block.id ? { ...b, image_url: data.imageUrl } : b
+          )
+        );
+      }
+    } catch (err) {
+      console.error('[PageViewer] Failed to fetch image:', err);
+    } finally {
+      fetchingImages.delete(block.id);
+      setLoadingImages(prev => {
+        const next = new Set(prev);
+        next.delete(block.id);
+        return next;
+      });
+    }
+  }, []);
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
@@ -341,6 +430,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [bookId, preloadedBlocks]);
 
+  // Auto-trigger image fetch for blocks without images
+  useEffect(() => {
+    blocks.forEach(block => {
+      if (['image_full', 'image_half'].includes(block.block_type) && !block.image_url) {
+        fetchImageForBlock(block);
+      }
+    });
+  }, [blocks, fetchImageForBlock]);
+
   // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
   useEffect(() => {
     fetchBlocks(currentChapter);
@@ -375,35 +473,6 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   };
 
-  const handleGenerateImage = async (blockId: string) => {
-    const block = blocks.find(b => b.id === blockId);
-    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
-
-    const content = block.content as { query: string; caption: string };
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-cover-image', {
-        body: { 
-          prompt: content.query,
-          style: 'photorealistic'
-        }
-      });
-
-      if (error) throw error;
-
-      // Update block with image URL
-      await supabase
-        .from('book_pages')
-        .update({ image_url: data.imageUrl })
-        .eq('id', blockId);
-
-      // Refresh blocks
-      fetchBlocks(currentChapter);
-    } catch (err) {
-      console.error('Error generating image:', err);
-    }
-  };
-
   if (loading) {
     return (
       <div className="w-full h-[600px] bg-card rounded-lg border flex items-center justify-center">
@@ -429,9 +498,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     <div className="w-full">
       {/* Page Container - Kindle-style aspect ratio */}
       <div className="relative bg-card rounded-lg border shadow-lg overflow-hidden" style={{ aspectRatio: '3/4' }}>
-        {/* Page Content */}
         <div className="absolute inset-0">
-          <BlockRenderer block={currentBlock} onGenerateImage={handleGenerateImage} />
+          <BlockRenderer 
+            block={currentBlock} 
+            loadingImages={loadingImages}
+            imageAttributions={imageAttributions}
+          />
         </div>
 
         {/* Navigation Overlays */}
