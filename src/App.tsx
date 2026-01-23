@@ -47,7 +47,6 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
-      <Route path="/book/:bookId" element={<Index />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/my-projects" element={<MyProjects />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />

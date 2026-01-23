@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
@@ -84,7 +84,6 @@ const extractMaterials = (content?: string): string[] => {
 
 const Index = () => {
   const [searchParams] = useSearchParams();
-  const { bookId: routeBookId } = useParams<{ bookId?: string }>();
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
@@ -169,85 +168,11 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Load an existing book when landing directly on /book/:bookId (supports hard refresh)
-  // Also supports Dashboard navigation via query params.
+  // Check for existing book on mount or load from URL params (Dashboard navigation)
   useEffect(() => {
     if (authLoading) return;
     
     const loadBook = async () => {
-      // 1) Route param has highest priority and should work for guests + logged-in users.
-      if (routeBookId) {
-        // Avoid re-loading if we already have this book hydrated.
-        if (routeBookId === bookId && viewState === 'book' && bookData) return;
-
-        setBookId(routeBookId);
-        setViewState('book');
-        setActiveChapter(1);
-
-        // Try to load metadata from books (may fail for guest books due to RLS).
-        let bookRow: any | null = null;
-        try {
-          const { data, error } = await supabase
-            .from('books')
-            .select('*')
-            .eq('id', routeBookId)
-            .maybeSingle();
-          if (!error && data) bookRow = data;
-        } catch {
-          // Ignore; we can still display the book from book_pages.
-        }
-
-        // Always derive TOC from chapter_title pages so the viewer can render even without books access.
-        const { data: tocRows, error: tocError } = await supabase
-          .from('book_pages')
-          .select('chapter_number, content')
-          .eq('book_id', routeBookId)
-          .eq('block_type', 'chapter_title')
-          .order('chapter_number', { ascending: true });
-
-        if (tocError) {
-          console.error('[Route load] Failed to load table of contents from book_pages:', tocError);
-        }
-
-        const derivedToc = (tocRows || []).map((row) => {
-          const content = row.content as any;
-          return {
-            chapter: row.chapter_number,
-            title: content?.title || `Chapter ${row.chapter_number}`,
-          };
-        });
-
-        if (bookRow?.topic) setTopic(bookRow.topic);
-        if (bookRow?.cover_image_url) {
-          const urls = Array.isArray(bookRow.cover_image_url)
-            ? bookRow.cover_image_url
-            : bookRow.cover_image_url
-              ? [bookRow.cover_image_url]
-              : [];
-          setCoverImageUrls(urls);
-        }
-        setIsPurchased(Boolean(bookRow?.is_purchased));
-
-        // Hydrate minimal BookData so the rest of the page renders.
-        setBookData({
-          title: bookRow?.title || 'Your Guide',
-          displayTitle: bookRow?.title || 'Your Guide',
-          subtitle: bookRow?.topic
-            ? `A Comprehensive Guide to ${bookRow.topic}`
-            : 'A luxury guide designed for reading',
-          tableOfContents:
-            (bookRow?.table_of_contents as unknown as BookData['tableOfContents']) || derivedToc,
-          chapter1Content: '[loaded from pages]',
-          localResources: (bookRow?.local_resources as unknown as BookData['localResources']) || [],
-          hasDisclaimer: bookRow?.has_disclaimer ?? false,
-          coverImageUrl: Array.isArray(bookRow?.cover_image_url)
-            ? bookRow.cover_image_url?.[0]
-            : bookRow?.cover_image_url || undefined,
-        });
-
-        return;
-      }
-
       // Check if navigating from Dashboard with specific book
       const bookIdParam = searchParams.get('bookId');
       const viewMode = searchParams.get('view');
@@ -294,13 +219,24 @@ const Index = () => {
         }
       }
       
+      // Guest users should always see the landing page on fresh load
+      // Clear any stale session data to prevent "Groundhog Day" effect
+      if (!user) {
+        setViewState('landing');
+        setBookData(null);
+        setBookId(null);
+        setCoverImageUrls([]);
+        setIsPurchased(false);
+        return;
+      }
+
       // No specific book requested - show landing for fresh start
       // Remove auto-loading last book to avoid confusion
       setViewState('landing');
     };
 
     loadBook();
-  }, [user, authLoading, searchParams, routeBookId, bookId, viewState, bookData]);
+  }, [user, authLoading, searchParams]);
 
   // Fetch blocks when viewing a chapter (block-based architecture)
   useEffect(() => {
@@ -427,55 +363,9 @@ const Index = () => {
     return count;
   }, [totalChapters, chapterBlocks]);
 
-  // Daisy-chain: Fetch existing blocks OR generate missing chapter blocks
+  // Daisy-chain: Generate missing chapter blocks (2-10)
   useEffect(() => {
     if (!isPaid || !bookId || !bookData || viewState !== 'book') return;
-
-    // FIX #2: If chapterBlocks is empty but bookData exists, fetch existing blocks first
-    const hasAnyBlocks = Object.keys(chapterBlocks).length > 0;
-    if (!hasAnyBlocks) {
-      // Fetch all existing blocks for this book from the database
-      const fetchExistingBlocks = async () => {
-        console.log('[Block] chapterBlocks empty, fetching existing blocks for book', bookId);
-        const { data, error } = await supabase
-          .from('book_pages')
-          .select('*')
-          .eq('book_id', bookId)
-          .order('chapter_number', { ascending: true })
-          .order('page_order', { ascending: true });
-
-        if (error) {
-          console.error('[Block] Failed to fetch existing blocks:', error);
-          return;
-        }
-
-        if (data && data.length > 0) {
-          console.log('[Block] Found', data.length, 'existing blocks, hydrating state');
-          const blocksByChapter: Record<number, PageBlock[]> = {};
-          for (const row of data) {
-            if (!blocksByChapter[row.chapter_number]) {
-              blocksByChapter[row.chapter_number] = [];
-            }
-            blocksByChapter[row.chapter_number].push({
-              id: row.id,
-              book_id: row.book_id,
-              chapter_number: row.chapter_number,
-              page_order: row.page_order,
-              block_type: row.block_type as PageBlock['block_type'],
-              content: row.content as any,
-              image_url: row.image_url || undefined,
-            });
-          }
-          setChapterBlocks(blocksByChapter);
-        } else {
-          console.log('[Block] No existing blocks found in database');
-        }
-      };
-      fetchExistingBlocks();
-      return;
-    }
-
-    // No missing chapters left to generate
     if (!nextMissingChapter) return;
     
     // STOP if we are already generating (The Lock)
@@ -535,7 +425,7 @@ const Index = () => {
     return () => {
       // Clean-up
     };
-  }, [isPaid, bookId, viewState, nextMissingChapter, chapterBlocks, topic, language, isVisualTopic, targetPagesPerChapter]);
+  }, [isPaid, bookId, viewState, nextMissingChapter, topic, language, isVisualTopic, targetPagesPerChapter]);
 
   const handleSearch = async (query: string) => {
     setTopic(query);
@@ -595,12 +485,6 @@ const Index = () => {
       // Store chapter 1 blocks
       if (chapter1Blocks && chapter1Blocks.length > 0) {
         setChapterBlocks({ 1: chapter1Blocks });
-        
-        // FIX #2: Manually kickstart Chapter 2 generation immediately
-        // This triggers the daisy-chain without waiting for a re-render cycle
-        if (targetPages > 0 && tableOfContents && tableOfContents.length > 1) {
-          setLoadingChapter(2);
-        }
       }
 
       // Store visual/pages settings for chapter generation
@@ -620,11 +504,6 @@ const Index = () => {
       
       setBookData(generatedBook);
       setBookId(newBookId);
-
-      // Persist URL silently (no router remount) to avoid wiping local state
-      if (newBookId) {
-        window.history.pushState(null, '', `/book/${newBookId}`);
-      }
       
       // Save to saved_projects if user is logged in
       if (user && newBookId) {
@@ -1043,33 +922,11 @@ const Index = () => {
             {/* Kindle-Style PageViewer - Block-Based Architecture */}
             {bookId && (
               <section className="max-w-2xl mx-auto">
-                {/* FIX #3: Show "Weaving" until Chapter 1 is fully ready */}
-                {!chapterBlocks[1] || chapterBlocks[1].length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-4">
-                    <LoadingAnimation />
-                    <p className="text-sm text-muted-foreground animate-pulse">
-                      Weaving Chapter 1...
-                    </p>
-                  </div>
-                ) : !isGenerationComplete ? (
-                  <div className="space-y-6">
-                    <PageViewer 
-                      bookId={bookId}
-                      initialChapter={activeChapter}
-                      onPageChange={(chapter) => setActiveChapter(chapter)}
-                    />
-                    <div className="flex items-center justify-center gap-3 py-4 text-sm text-muted-foreground">
-                      <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span>Weaving Chapter {loadingChapter || nextMissingChapter || '...'}...</span>
-                    </div>
-                  </div>
-                ) : (
-                  <PageViewer 
-                    bookId={bookId}
-                    initialChapter={activeChapter}
-                    onPageChange={(chapter) => setActiveChapter(chapter)}
-                  />
-                )}
+                <PageViewer 
+                  bookId={bookId}
+                  initialChapter={activeChapter}
+                  onPageChange={(chapter) => setActiveChapter(chapter)}
+                />
               </section>
             )}
             
