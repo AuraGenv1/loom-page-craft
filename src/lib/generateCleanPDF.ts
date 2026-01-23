@@ -218,11 +218,17 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
+  // IMPORTANT: pdfmake uses `valign` for vertical cell alignment (not `verticalAlignment`).
+  // Also, to truly hit the bottom of Page 2 with our margins, we must reserve the full
+  // usable page height (648 - 54 - 54 = 540pt). A 450pt table cannot reach the bottom.
+  const page2ContentHeight = 648 - 54 - 54; // 540pt within margins
+
   contentArray.push({
+    unbreakable: true,
     table: {
       widths: ['*'],
-      // 450pt height consumes the empty space, pushing text to the bottom
-      heights: [450],
+      heights: [page2ContentHeight],
+      dontBreakRows: true,
       body: [[
         {
           stack: [
@@ -234,11 +240,18 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
             { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 5, 0, 0] },
             { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
           ],
-          // This creates the "Bottom Alignment" effect
-          verticalAlignment: 'bottom',
-          border: [false, false, false, false] // Invisible borders
+          valign: 'bottom',
+          border: [false, false, false, false]
         }
       ]]
+    },
+    layout: {
+      hLineWidth: () => 0,
+      vLineWidth: () => 0,
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+      paddingTop: () => 0,
+      paddingBottom: () => 0,
     },
     pageBreak: 'after'
   });
