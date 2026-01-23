@@ -120,33 +120,38 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       return;
     }
 
-    // --- Pro-Tips (Blockquotes) ---
+    // --- Pro-Tips (Vector Onyx Box) ---
     if (line.startsWith('>')) {
       const cleanText = line.replace(/^>\s*/, '').replace(/PRO-TIP:?\s*/i, '').replace(/\*\*/g, '').trim();
       content.push({
         table: {
-          widths: ['*'],
+          widths: [20, '*'],
           body: [[
             {
+              // EXACT SVG PATH for the Key Icon
+              svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>',
+              width: 14,
+              margin: [3, 4, 0, 0]
+            },
+            {
               stack: [
-                { text: '🔑 PRO TIP', fontSize: 9, bold: true, margin: [0, 0, 0, 5] },
-                { text: cleanText, fontSize: 10, italics: true, color: '#333' }
-              ],
-              fillColor: '#f5f5f5',
-              margin: [10, 10, 10, 10]
+                { text: 'PRO TIP', style: 'proTipLabel' },
+                { text: cleanText, style: 'proTipBody' }
+              ]
             }
           ]]
         },
         layout: {
+          // Thick Left Border (4px), No other borders
+          vLineWidth: (i: number) => i === 0 ? 4 : 0,
           hLineWidth: () => 0,
-          vLineWidth: (i: number) => i === 0 ? 3 : 0,
           vLineColor: () => '#000000',
           paddingLeft: () => 10,
-          paddingRight: () => 10,
           paddingTop: () => 8,
           paddingBottom: () => 8
         },
-        margin: [0, 10, 0, 10]
+        fillColor: '#f9f9f9',
+        margin: [0, 15, 0, 15]
       });
       return;
     }
@@ -201,7 +206,9 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', color: '#555' },
     branding: { fontSize: 9, alignment: 'center', color: '#888' },
     chapterNum: { fontSize: 10, alignment: 'center', color: '#666' },
-    chapterTitle: { fontSize: 20, bold: true, alignment: 'center' }
+    chapterTitle: { fontSize: 20, bold: true, alignment: 'center' },
+    proTipLabel: { fontSize: 9, bold: true, characterSpacing: 1.5, margin: [0, 0, 0, 4] },
+    proTipBody: { fontSize: 10, italics: true, color: '#333', lineHeight: 1.4 }
   };
 
   // C. Build content array
