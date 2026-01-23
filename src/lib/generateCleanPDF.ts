@@ -94,17 +94,21 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       return;
     }
 
-    // --- Images ---
+    // --- Images (Luxury Full-Width) ---
     const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
     if (imgMatch && imgMatch[1]) {
       const url = imgMatch[1];
+      // Check our image map for the base64 data
       const base64 = imageMap.get(url) || TRANSPARENT_PIXEL;
+      
       if (base64 !== TRANSPARENT_PIXEL) {
         content.push({
           image: base64,
-          width: 350,
+          // Calculate: 432 (Page Width) - 63 (Left) - 45 (Right) = 324 width
+          // This forces the image to fill the text column exactly.
+          width: 324, 
           alignment: 'center',
-          margin: [0, 15, 0, 15]
+          margin: [0, 20, 0, 20]
         });
       }
       return;
