@@ -60,40 +60,42 @@ serve(async (req) => {
 
 === LUXURY ARCHITECT RULES ===
 
-RULE 1: STRUCTURAL DEPTH (No Filler)
+RULE 1: EXTREME TEXT DENSITY (Fill The Page!)
+- CRITICAL: Each "text" block MUST contain **400-600 words**. No short paragraphs. Fill the entire page.
 - Achieve page count through NEW insights, angles, and rich details.
 - NEVER repeat facts, paragraphs, or filler content from other chapters.
-- Each text block should provide unique, valuable information.
 
-RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
+RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
+- Every "text" block MUST use inline markdown formatting:
+  - Use "## Section Header" within text blocks to create section breaks
+  - Use "### Subheader" for subsections within the text
+  - Use "> Blockquote" for key takeaways or memorable quotes
+  - Use "* Bullet point" or "- Bullet point" for lists
+- NEVER write 3+ consecutive plain paragraphs without headers, blockquotes, or bullets
+- Do NOT create separate "heading" or "list" blocks - embed them IN the text blocks!
+
+RULE 3: VISUAL BREATHING ROOM (Luxury Rhythm)
 This chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first block)
   1-2x Full-Page "Hero" Images (image_full blocks)
-  4-6x Text Pages (text blocks, ~250 words each)
+  4-6x Text Pages (text blocks, ~500 words each with inline markdown)
   1x Pro Tip or Quote Page
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
+RULE 4: NO FACES & VARIED CAMERA ANGLES (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
 - VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot to avoid visual repetition.
 - Append to ALL queries: "no people no faces atmospheric"
 
-RULE 4: FULL PAGE TEXT DENSITY
-- Each "text" block: TARGET 300-350 words for a full, legible page.
-- Ensure each text page feels "full" but readable. Do NOT leave pages half-empty.
-- Write with precision. Every word must earn its place.
-
 RULE 5: CHAPTER BREAKER (Professional Offset)
 - If this is NOT chapter 1 and the previous chapter may end on odd page, start with a "quote" block before "chapter_title".
 
-RULE 6: MANDATORY STRUCTURE (No Wall-of-Text!)
-- You MUST include at least 2 "heading" blocks per chapter to break up the content into logical sections.
-- You MUST include at least 1 "list" block per chapter with bullet points or numbered items.
-- NEVER write 3 consecutive "text" blocks in a row. Always interleave with headings, lists, images, or pro_tips.
-- Use H2/H3 markdown headers within text blocks for additional structure.
-- Structure the content for optimal readability and visual variety.
-- CRITICAL: Format for maximum readability. No giant walls of text!
+RULE 6: END WITH VISUAL VARIETY
+- Always end a text block with either:
+  - A "> Blockquote" summarizing the key insight
+  - A "* Bullet list" of 3-5 takeaways
+  - A "### Summary" subheader with closing thoughts
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
@@ -101,35 +103,27 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 
 Block types:
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS included
-- "text": { "text": "300-350 words for a full page" }
-- "image_full": { "query": "search term no people", "caption": "Evocative caption" }
+- "text": { "text": "400-600 words WITH inline ## headers, ### subheaders, > blockquotes, * bullets" }
+- "image_full": { "query": "search term no people varied angle", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice" }
-- "heading": { "level": 2, "text": "Section heading" } - REQUIRED: at least 2 per chapter
-- "list": { "items": ["item 1", "item 2", "item 3"] } - REQUIRED: at least 1 per chapter
 - "quote": { "text": "Inspirational quote", "attribution": "Author" }
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
 - First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
 - Include at least 1 "pro_tip" block
-- Include at least 2 "heading" blocks (mandatory for structure)
-- Include at least 1 "list" block (mandatory for variety)
-- Each "text" block: 300-350 words for a full, dense page
+- Each "text" block: 400-600 words with inline markdown (## headers, > quotes, * lists)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NEVER have 3 consecutive "text" blocks
+- NO separate "heading" or "list" blocks - embed formatting in text blocks!
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "atmospheric scene", "caption": "Hero image"}},
-  {"block_type": "heading", "content": {"level": 2, "text": "Section Title"}},
-  {"block_type": "text", "content": {"text": "Rich content (~300 words)..."}},
-  {"block_type": "list", "content": {"items": ["Key point 1", "Key point 2", "Key point 3"]}},
-  {"block_type": "text", "content": {"text": "More content (~300 words)..."}},
-  {"block_type": "heading", "content": {"level": 2, "text": "Another Section"}},
-  {"block_type": "text", "content": {"text": "Additional insights (~300 words)..."}},
+  {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene", "caption": "Hero image"}},
+  {"block_type": "text", "content": {"text": "## Section Header\\n\\nRich content paragraph...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
+  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore rich content (~500 words)...\\n\\n> Summary quote at the end"}},
   {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
   ...
 ]
