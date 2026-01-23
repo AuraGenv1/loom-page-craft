@@ -946,6 +946,7 @@ const Index = () => {
                     onChapterChange={(chapter) => setActiveChapter(chapter)}
                     preloadedBlocks={chapterBlocks}
                     totalPageCount={totalPageCount > 0 ? totalPageCount : undefined}
+                    isAdmin={isAdmin}
                   />
                 </section>
               ) : bookId && (
