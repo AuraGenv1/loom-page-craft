@@ -595,6 +595,12 @@ const Index = () => {
       // Store chapter 1 blocks
       if (chapter1Blocks && chapter1Blocks.length > 0) {
         setChapterBlocks({ 1: chapter1Blocks });
+        
+        // FIX #2: Manually kickstart Chapter 2 generation immediately
+        // This triggers the daisy-chain without waiting for a re-render cycle
+        if (targetPages > 0 && tableOfContents && tableOfContents.length > 1) {
+          setLoadingChapter(2);
+        }
       }
 
       // Store visual/pages settings for chapter generation
@@ -1037,13 +1043,25 @@ const Index = () => {
             {/* Kindle-Style PageViewer - Block-Based Architecture */}
             {bookId && (
               <section className="max-w-2xl mx-auto">
-                {/* FIX #3: Show loading state while Chapter 1 blocks are being fetched/generated */}
+                {/* FIX #3: Show "Weaving" until Chapter 1 is fully ready */}
                 {!chapterBlocks[1] || chapterBlocks[1].length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 gap-4">
                     <LoadingAnimation />
                     <p className="text-sm text-muted-foreground animate-pulse">
                       Weaving Chapter 1...
                     </p>
+                  </div>
+                ) : !isGenerationComplete ? (
+                  <div className="space-y-6">
+                    <PageViewer 
+                      bookId={bookId}
+                      initialChapter={activeChapter}
+                      onPageChange={(chapter) => setActiveChapter(chapter)}
+                    />
+                    <div className="flex items-center justify-center gap-3 py-4 text-sm text-muted-foreground">
+                      <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span>Weaving Chapter {loadingChapter || nextMissingChapter || '...'}...</span>
+                    </div>
                   </div>
                 ) : (
                   <PageViewer 
