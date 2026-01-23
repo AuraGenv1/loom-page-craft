@@ -75,6 +75,7 @@ export type Database = {
           edition_year: number | null
           has_disclaimer: boolean
           id: string
+          is_official: boolean
           is_purchased: boolean
           local_resources: Json
           location_lat: number | null
@@ -101,6 +102,7 @@ export type Database = {
           edition_year?: number | null
           has_disclaimer?: boolean
           id?: string
+          is_official?: boolean
           is_purchased?: boolean
           local_resources?: Json
           location_lat?: number | null
@@ -127,6 +129,7 @@ export type Database = {
           edition_year?: number | null
           has_disclaimer?: boolean
           id?: string
+          is_official?: boolean
           is_purchased?: boolean
           local_resources?: Json
           location_lat?: number | null
@@ -357,6 +360,7 @@ export type Database = {
           edition_year: number | null
           has_disclaimer: boolean
           id: string
+          is_official: boolean
           is_purchased: boolean
           local_resources: Json
           location_lat: number | null

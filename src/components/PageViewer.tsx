@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 // Track which blocks are currently being fetched to prevent duplicates
 const fetchingImages = new Set<string>();
@@ -20,6 +23,10 @@ interface PageViewerProps {
   totalPageCount?: number;
   /** Enable admin controls for image editing */
   isAdmin?: boolean;
+  /** User can edit images (Admin OR Paid Owner) */
+  canEditImages?: boolean;
+  /** Is this an official Loom & Page book? */
+  isOfficial?: boolean;
 }
 
 // Individual block renderers
@@ -89,8 +96,8 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
   );
 };
 
-// Admin Toolbar for Image Blocks
-interface AdminImageToolbarProps {
+// Author Toolbar for Image Blocks (Available to Admin or Paid Owner)
+interface AuthorImageToolbarProps {
   blockId: string;
   currentQuery: string;
   currentCaption: string;
@@ -98,18 +105,20 @@ interface AdminImageToolbarProps {
   onEditCaption: (newCaption: string) => void;
   onReroll: () => void;
   onRemove: () => void;
+  onUpload: () => void;
 }
 
-const AdminImageToolbar: React.FC<AdminImageToolbarProps> = ({
+const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
   currentQuery,
   currentCaption,
   onEditQuery,
   onEditCaption,
   onReroll,
-  onRemove
+  onRemove,
+  onUpload
 }) => {
   const handleEditQuery = () => {
-    const newQuery = window.prompt('Enter new search term:', currentQuery);
+    const newQuery = window.prompt('Enter new search term (e.g., "1960s red convertible"):', currentQuery);
     if (newQuery && newQuery.trim() !== currentQuery) {
       onEditQuery(newQuery.trim());
     }
@@ -129,9 +138,18 @@ const AdminImageToolbar: React.FC<AdminImageToolbarProps> = ({
         size="icon"
         className="h-8 w-8"
         onClick={handleEditQuery}
-        title="Edit Search Query"
+        title="Manual Search"
       >
         <Pencil className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={onUpload}
+        title="Upload Own Photo"
+      >
+        <Upload className="w-4 h-4" />
       </Button>
       <Button
         variant="ghost"
@@ -164,8 +182,8 @@ const AdminImageToolbar: React.FC<AdminImageToolbarProps> = ({
   );
 };
 
-// Admin "Search Image" button for empty blocks
-const AdminSearchImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
+// "Search Image" button for empty blocks
+const SearchImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
   <Button
     variant="outline"
     size="sm"
@@ -177,19 +195,139 @@ const AdminSearchImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }
   </Button>
 );
 
+// Image Upload Modal with Liability Checkbox
+interface ImageUploadModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpload: (file: File) => Promise<void>;
+  isUploading: boolean;
+}
+
+const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onOpenChange, onUpload, isUploading }) => {
+  const [hasRights, setHasRights] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !hasRights) return;
+    await onUpload(selectedFile);
+    setSelectedFile(null);
+    setHasRights(false);
+    onOpenChange(false);
+  };
+
+  const handleClose = () => {
+    setSelectedFile(null);
+    setHasRights(false);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Upload Your Own Photo
+          </DialogTitle>
+          <DialogDescription>
+            Upload a custom image to replace the AI-generated photo.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* File Selection */}
+          <div className="flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              {selectedFile ? selectedFile.name : 'Choose Image File'}
+            </Button>
+            {selectedFile && (
+              <p className="text-xs text-muted-foreground text-center">
+                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+              </p>
+            )}
+          </div>
+
+          {/* Liability Checkbox */}
+          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <Checkbox
+              id="rights-checkbox"
+              checked={hasRights}
+              onCheckedChange={(checked) => setHasRights(checked === true)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <Label htmlFor="rights-checkbox" className="text-sm font-medium cursor-pointer">
+                <AlertTriangle className="w-4 h-4 inline-block mr-1 text-amber-600" />
+                I certify I have the rights to use this image.
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Loom & Page is not liable for copyright infringement or misuse of uploaded content.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpload}
+            disabled={!selectedFile || !hasRights || isUploading}
+            className="gap-2"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                Upload Photo
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
   attribution?: string;
   isLoading?: boolean;
-  isAdmin?: boolean;
+  canEditImages?: boolean;
   blockId?: string;
   onEditQuery?: (newQuery: string) => void;
   onEditCaption?: (newCaption: string) => void;
   onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, isAdmin, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => (
+  onUpload?: () => void;
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
   <div className="flex flex-col h-full group">
     {isLoading ? (
       <div className="flex-1 bg-muted flex items-center justify-center">
@@ -201,8 +339,8 @@ const ImageFullPage: React.FC<{
       </div>
     ) : imageUrl ? (
       <div className="flex-1 relative">
-        {isAdmin && blockId && onEditQuery && onEditCaption && onReroll && onRemove && (
-          <AdminImageToolbar
+        {canEditImages && blockId && onEditQuery && onEditCaption && onReroll && onRemove && onUpload && (
+          <AuthorImageToolbar
             blockId={blockId}
             currentQuery={content.query}
             currentCaption={content.caption}
@@ -210,6 +348,7 @@ const ImageFullPage: React.FC<{
             onEditCaption={onEditCaption}
             onReroll={onReroll}
             onRemove={onRemove}
+            onUpload={onUpload}
           />
         )}
         <img 
@@ -225,8 +364,8 @@ const ImageFullPage: React.FC<{
           <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
           <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
           <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
-          {isAdmin && onManualSearch && (
-            <AdminSearchImageButton onSearch={onManualSearch} />
+          {canEditImages && onManualSearch && (
+            <SearchImageButton onSearch={onManualSearch} />
           )}
         </div>
       </div>
@@ -249,14 +388,15 @@ const ImageHalfPage: React.FC<{
   imageUrl?: string;
   attribution?: string;
   isLoading?: boolean;
-  isAdmin?: boolean;
+  canEditImages?: boolean;
   blockId?: string;
   onEditQuery?: (newQuery: string) => void;
   onEditCaption?: (newCaption: string) => void;
   onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, isAdmin, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => (
+  onUpload?: () => void;
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
   <div className="h-full flex flex-col group">
     <div className="h-1/2 relative">
       {isLoading ? (
@@ -268,8 +408,8 @@ const ImageHalfPage: React.FC<{
         </div>
       ) : imageUrl ? (
         <>
-          {isAdmin && blockId && onEditQuery && onEditCaption && onReroll && onRemove && (
-            <AdminImageToolbar
+          {canEditImages && blockId && onEditQuery && onEditCaption && onReroll && onRemove && onUpload && (
+            <AuthorImageToolbar
               blockId={blockId}
               currentQuery={content.query}
               currentCaption={content.caption}
@@ -277,6 +417,7 @@ const ImageHalfPage: React.FC<{
               onEditCaption={onEditCaption}
               onReroll={onReroll}
               onRemove={onRemove}
+              onUpload={onUpload}
             />
           )}
           <img 
@@ -291,8 +432,8 @@ const ImageHalfPage: React.FC<{
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
             <p className="text-xs text-muted-foreground">Searching...</p>
-            {isAdmin && onManualSearch && (
-              <AdminSearchImageButton onSearch={onManualSearch} />
+            {canEditImages && onManualSearch && (
+              <SearchImageButton onSearch={onManualSearch} />
             )}
           </div>
         </div>
@@ -441,13 +582,14 @@ const BlockRenderer: React.FC<{
   block: PageBlock; 
   loadingImages: Set<string>;
   imageAttributions: Map<string, string>;
-  isAdmin?: boolean;
+  canEditImages?: boolean;
   onEditQuery?: (blockId: string, newQuery: string) => void;
   onEditCaption?: (blockId: string, newCaption: string) => void;
   onReroll?: (blockId: string) => void;
   onRemove?: (blockId: string) => void;
   onManualSearch?: (blockId: string) => void;
-}> = ({ block, loadingImages, imageAttributions, isAdmin, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => {
+  onUpload?: (blockId: string) => void;
+}> = ({ block, loadingImages, imageAttributions, canEditImages, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
   const isLoading = loadingImages.has(block.id);
   const attribution = imageAttributions.get(block.id);
 
@@ -463,13 +605,14 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
-          isAdmin={isAdmin}
+          canEditImages={canEditImages}
           blockId={block.id}
           onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
           onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
+          onUpload={onUpload ? () => onUpload(block.id) : undefined}
         />
       );
     case 'image_half':
@@ -479,13 +622,14 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
-          isAdmin={isAdmin}
+          canEditImages={canEditImages}
           blockId={block.id}
           onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
           onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
+          onUpload={onUpload ? () => onUpload(block.id) : undefined}
         />
       );
     case 'pro_tip':
@@ -517,7 +661,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   onChapterChange,
   preloadedBlocks,
   totalPageCount,
-  isAdmin = false
+  isAdmin = false,
+  canEditImages = false,
+  isOfficial = false
 }) => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -525,6 +671,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [imageAttributions, setImageAttributions] = useState<Map<string, string>>(new Map());
+  
+  // Image upload modal state
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Sync with external chapter changes (from TOC clicks)
   useEffect(() => {
@@ -773,6 +924,60 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     fetchImageForBlock(updatedBlock);
   }, [blocks, fetchImageForBlock]);
 
+  // Handle opening upload modal
+  const handleOpenUploadModal = useCallback((blockId: string) => {
+    setUploadingBlockId(blockId);
+    setUploadModalOpen(true);
+  }, []);
+
+  // Handle image upload from modal
+  const handleImageUpload = useCallback(async (file: File) => {
+    if (!uploadingBlockId) return;
+
+    setIsUploading(true);
+    try {
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uploadingBlockId}-${Date.now()}.${fileExt}`;
+      const filePath = `user-uploads/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('book-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('book-images')
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update database with new image URL
+      const { error: updateError } = await supabase
+        .from('book_pages')
+        .update({ image_url: publicUrl })
+        .eq('id', uploadingBlockId);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      setBlocks(prev => prev.map(b => {
+        if (b.id !== uploadingBlockId) return b;
+        return { ...b, image_url: publicUrl } as PageBlock;
+      }));
+
+      toast.success('Image uploaded successfully!');
+    } catch (err) {
+      console.error('[PageViewer] Upload error:', err);
+      toast.error('Failed to upload image');
+    } finally {
+      setIsUploading(false);
+      setUploadingBlockId(null);
+    }
+  }, [uploadingBlockId]);
+
   // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
   useEffect(() => {
     fetchBlocks(currentChapter);
@@ -881,6 +1086,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   return (
     <div className="w-full">
+      {/* Image Upload Modal */}
+      <ImageUploadModal
+        open={uploadModalOpen}
+        onOpenChange={setUploadModalOpen}
+        onUpload={handleImageUpload}
+        isUploading={isUploading}
+      />
+      
       {/* Page Container - Kindle-style aspect ratio */}
       <div className="relative bg-card rounded-lg border shadow-lg overflow-hidden" style={{ aspectRatio: '3/4' }}>
         <div className="absolute inset-0">
@@ -888,12 +1101,13 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             block={currentBlock} 
             loadingImages={loadingImages}
             imageAttributions={imageAttributions}
-            isAdmin={isAdmin}
+            canEditImages={canEditImages || isAdmin}
             onEditQuery={handleEditQuery}
             onEditCaption={handleEditCaption}
             onReroll={handleReroll}
             onRemove={handleRemoveImage}
             onManualSearch={handleManualSearch}
+            onUpload={handleOpenUploadModal}
           />
         </div>
 
@@ -964,6 +1178,18 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           style={{ width: totalPageCount ? `${(cumulativePageNumber / totalPageCount) * 100}%` : `${((currentIndex + 1) / blocks.length) * 100}%` }}
         />
       </div>
+      
+      {/* Independent Author Disclaimer for non-official books */}
+      {!isOfficial && isLastPageOfChapter && !hasNextChapter && (
+        <div className="mt-6 text-center py-4 border-t border-border">
+          <p className="text-xs text-muted-foreground/60 italic">
+            Created by an independent author using Loom & Page.
+          </p>
+          <p className="text-[10px] text-muted-foreground/40 mt-1">
+            Content is AI-generated for creative inspiration. Not professional advice.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
