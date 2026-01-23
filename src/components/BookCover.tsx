@@ -146,6 +146,68 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // Lock in the first valid URL to prevent flicker
     const [lockedUrls, setLockedUrls] = useState<string[]>([]);
 
+    // Track if we've already triggered an auto-fetch to prevent loops
+    const hasFetchedFallbackRef = useRef(false);
+    
+    // Known placeholder/bad image patterns to detect
+    const PLACEHOLDER_PATTERNS = [
+      'pexels.com', // Generic Pexels (often "Apple Lady")
+      'placeholder',
+      'default-image',
+      'no-image',
+    ];
+    
+    // Check if a URL is a known placeholder
+    const isPlaceholderUrl = useCallback((url: string | null | undefined): boolean => {
+      if (!url) return true;
+      const lowerUrl = url.toLowerCase();
+      return PLACEHOLDER_PATTERNS.some(pattern => lowerUrl.includes(pattern));
+    }, []);
+    
+    // Auto-fetch cover image if empty or placeholder detected
+    useEffect(() => {
+      // Only run once per mount/book
+      if (hasFetchedFallbackRef.current) return;
+      
+      // Check if we need to fetch a new cover
+      const needsFetch = allUrls.length === 0 || allUrls.every(url => isPlaceholderUrl(url));
+      
+      if (needsFetch && title) {
+        hasFetchedFallbackRef.current = true;
+        console.log('[BookCover] No valid cover image detected, fetching from Unsplash...');
+        
+        const fetchCoverImage = async () => {
+          try {
+            const query = `${title} minimalist wallpaper`;
+            const { data, error } = await supabase.functions.invoke('fetch-book-images', {
+              body: { query, orientation: 'portrait' }
+            });
+            
+            if (error) throw error;
+            if (data?.imageUrl) {
+              console.log('[BookCover] Auto-fetched cover:', data.imageUrl);
+              const newUrls = [data.imageUrl];
+              setLocalFrontUrls(newUrls);
+              setLockedUrls(newUrls);
+              setCurrentUrlIndex(0);
+              setImageLoaded(false);
+              
+              // Save to database if bookId exists
+              if (bookId) {
+                await supabase.from('books').update({ cover_image_url: newUrls }).eq('id', bookId);
+              }
+              
+              onCoverUpdate?.({ coverImageUrls: newUrls });
+            }
+          } catch (err) {
+            console.error('[BookCover] Failed to auto-fetch cover:', err);
+          }
+        };
+        
+        fetchCoverImage();
+      }
+    }, [allUrls, title, bookId, isPlaceholderUrl, onCoverUpdate]);
+    
     // Update locked URLs when we get new ones
     useEffect(() => {
       if (allUrls.length > 0 && lockedUrls.length === 0) {
@@ -180,7 +242,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     // Current display URL with fallback cycling
     const displayUrl = lockedUrls[currentUrlIndex] || null;
     
-    // Handle image load error - cycle to next URL
+    // Handle image load error - cycle to next URL or trigger auto-fetch
     const handleImageError = useCallback(() => {
       console.warn(`Cover image failed to load (index ${currentUrlIndex}):`, displayUrl);
       
@@ -190,8 +252,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         setCurrentUrlIndex(prev => prev + 1);
         setImageLoaded(false);
       } else {
-        // All URLs exhausted, show fallback
-        console.warn('All cover URLs failed, showing fallback');
+        // All URLs exhausted - trigger auto-fetch if we haven't already
+        console.warn('All cover URLs failed, triggering auto-fetch...');
+        hasFetchedFallbackRef.current = false; // Reset to allow fetch
+        setLockedUrls([]); // Clear to trigger the auto-fetch effect
         setImageLoaded(true); // Mark as loaded to stop skeleton
       }
     }, [currentUrlIndex, displayUrl, lockedUrls.length]);

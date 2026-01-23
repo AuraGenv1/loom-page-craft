@@ -28,7 +28,7 @@ import { PageBlock } from '@/lib/pageBlockTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { generateBlockBasedPDF } from '@/lib/generateBlockPDF';
-import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
+import { Download, Sparkles, FlaskConical, BookmarkPlus, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import ProgressDownloadButton from '@/components/ProgressDownloadButton';
 
 type ViewState = 'landing' | 'loading' | 'book';
@@ -798,6 +798,97 @@ const Index = () => {
                     Loom & Page Original
                   </span>
                 </div>
+              </div>
+            )}
+            
+            {/* Admin Control Bar - Only visible to admins */}
+            {isAdmin && bookId && (
+              <div className="mb-6 flex items-center justify-center gap-3 py-3 px-6 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-300 dark:border-red-700 rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  <span className="text-sm font-semibold">Admin Controls</span>
+                </div>
+                <div className="h-4 w-px bg-red-300 dark:bg-red-600" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/50 gap-1.5"
+                  onClick={() => {
+                    const newTitle = prompt('Edit Book Title:', bookData?.title || '');
+                    if (newTitle && bookId) {
+                      supabase.from('books').update({ title: newTitle }).eq('id', bookId)
+                        .then(() => {
+                          setBookData(prev => prev ? { ...prev, title: newTitle } : prev);
+                          toast.success('Book title updated');
+                        });
+                    }
+                  }}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit Details
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/50 gap-1.5"
+                  onClick={async () => {
+                    if (!bookId || !bookData) return;
+                    const confirm = window.confirm('Regenerate Chapter 1? This will replace the existing content.');
+                    if (!confirm) return;
+                    
+                    toast.info('Regenerating Chapter 1...');
+                    try {
+                      const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === 1);
+                      const { data, error } = await supabase.functions.invoke('generate-chapter-blocks', {
+                        body: {
+                          bookId,
+                          chapterNumber: 1,
+                          chapterTitle: tocEntry?.title || 'Introduction',
+                          topic,
+                          tableOfContents: bookData.tableOfContents,
+                          isVisualTopic,
+                          targetPagesPerChapter,
+                          language,
+                        },
+                      });
+                      if (error) throw error;
+                      setChapterBlocks(prev => ({ ...prev, 1: data.blocks }));
+                      toast.success('Chapter 1 regenerated!');
+                    } catch (err) {
+                      console.error('Failed to regenerate:', err);
+                      toast.error('Failed to regenerate chapter');
+                    }
+                  }}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Regenerate Ch.1
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/50 gap-1.5"
+                  onClick={async () => {
+                    const confirm = window.confirm('DELETE this book permanently? This cannot be undone.');
+                    if (!confirm || !bookId) return;
+                    
+                    try {
+                      await supabase.from('book_pages').delete().eq('book_id', bookId);
+                      await supabase.from('books').delete().eq('id', bookId);
+                      toast.success('Book deleted');
+                      setViewState('landing');
+                      setBookData(null);
+                      setBookId(null);
+                    } catch (err) {
+                      console.error('Delete failed:', err);
+                      toast.error('Failed to delete book');
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Book
+                </Button>
               </div>
             )}
             
