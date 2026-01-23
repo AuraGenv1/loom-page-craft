@@ -56,38 +56,64 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
-    const prompt = `You are an expert book architect. Generate structured page blocks for Chapter ${chapterNumber}: "${chapterTitle}" of the book "${topic}".
+    const prompt = `You are an elite "Luxury Book Architect." Generate structured page blocks for Chapter ${chapterNumber}: "${chapterTitle}" of the book "${topic}".
 
-TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Cooking/Art)' : 'INFORMATIONAL (Business/Science/History)'}
+=== LUXURY ARCHITECT RULES ===
+
+RULE 1: STRUCTURAL DEPTH (No Filler)
+- Achieve page count through NEW insights, angles, and rich details.
+- NEVER repeat facts, paragraphs, or filler content from other chapters.
+- Each text block should provide unique, valuable information.
+
+RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
+This chapter MUST follow this rhythm:
+  1x Chapter Title Page (ALWAYS first block)
+  1-2x Full-Page "Hero" Images (image_full blocks)
+  4-6x Text Pages (text blocks, ~250 words each)
+  1x Pro Tip or Quote Page
+- BALANCE: Images must NOT exceed 30% of chapter pages.
+
+RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
+- For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
+- STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
+- Append to ALL queries: "no people no faces atmospheric"
+
+RULE 4: EDITORIAL WHITE SPACE
+- Each "text" block: STRICTLY 250 words MAXIMUM.
+- Write with precision. Every word must earn its place.
+
+RULE 5: CHAPTER BREAKER (Professional Offset)
+- If this is NOT chapter 1 and the previous chapter may end on odd page, start with a "quote" block before "chapter_title".
+
+TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Generate an array of page blocks. Each block = 1 physical page in the printed book.
-
 Block types:
-- "chapter_title": { "title": "Chapter Title" } (ALWAYS first)
-- "text": { "text": "~250 words" }
-- "image_full": { "query": "search term", "caption": "Caption" }
-- "image_half": { "query": "search term", "caption": "Caption" }
-- "pro_tip": { "text": "Expert advice" }
+- "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS included
+- "text": { "text": "~250 words max" }
+- "image_full": { "query": "search term + no people no faces", "caption": "Evocative caption" }
+- "image_half": { "query": "search term + no people no faces", "caption": "Caption" }
+- "pro_tip": { "text": "Expert insider advice" }
 - "heading": { "level": 2, "text": "Section heading" }
 - "list": { "items": ["item 1", "item 2", "item 3"] }
-
-${isVisualTopic ? 
-  'For VISUAL topics: Include 3-4 image_full blocks and 2-3 image_half blocks.' : 
-  'For INFORMATIONAL topics: Include 1-2 image_half blocks max. Focus on text.'}
+- "quote": { "text": "Inspirational quote", "attribution": "Author" }
+- "divider": { "style": "minimal" }
 
 REQUIREMENTS:
-- First block MUST be "chapter_title"
+- First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
 - Include at least 1 "pro_tip" block
-- Each "text" block must be ~250 words (to fit one page)
+- Each "text" block: exactly ~250 words
 - Total blocks: ${targetPagesPerChapter}
+- Images ≤30% of blocks
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "text", "content": {"text": "Opening content..."}},
-  {"block_type": "image_full", "content": {"query": "relevant image", "caption": "Description"}},
+  {"block_type": "image_full", "content": {"query": "atmospheric scene no people", "caption": "Hero image"}},
+  {"block_type": "text", "content": {"text": "Rich content (~250 words)..."}},
+  {"block_type": "text", "content": {"text": "More content (~250 words)..."}},
+  {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
   ...
 ]
 

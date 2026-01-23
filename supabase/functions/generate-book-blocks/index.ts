@@ -70,52 +70,80 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
-    // STEP 1: Generate book outline and Chapter 1 blocks
-    const pagesPerChapter = isVisual ? 12 : 6;
+    // STEP 1: Generate book outline and Chapter 1 blocks using Luxury Architect Rules
+    const pagesPerChapter = isVisual ? 12 : 8;
+    const minChapters = 10;
+    const targetTotalPages = 85; // Aim for 79+ to ensure spine compliance
     
-    const prompt = `You are an expert book architect. Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
+    const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
 
-TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Cooking/Art)' : 'INFORMATIONAL (Business/Science/History)'}
+=== LUXURY ARCHITECT RULES ===
+
+RULE 1: STRUCTURAL DEPTH (Spine Compliance)
+- TARGET: ${targetTotalPages}+ total pages across all chapters.
+- If the topic is COMPLEX (multi-faceted): Use 12-15 chapters with focused subtopics.
+- If the topic is NARROW: Use ${minChapters} chapters but include "Deep Dive" sub-pages (e.g., "A Closer Look at [Specific Detail]").
+- CONSTRAINT: NEVER repeat facts, paragraphs, or filler content. Achieve depth through NEW insights, angles, and details.
+
+RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
+Each chapter MUST follow this rhythm:
+  1x Chapter Title Page (ALWAYS first)
+  1-2x Full-Page "Hero" Images (image_full blocks)
+  4-6x Text Pages (text blocks, ~250 words each)
+  1x Pro Tip or Quote Page
+- BALANCE: Images must NOT exceed 30% of chapter pages. This is a "Read," not a photo album.
+
+RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
+- For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
+- STRICTLY FORBIDDEN in image queries: human faces, people, portraits, crowds, selfies.
+- Append to ALL image queries: "no people no faces architectural detail atmospheric"
+- The "Vibe" is more important than the "People."
+
+RULE 4: EDITORIAL WHITE SPACE
+- Each "text" block is STRICTLY LIMITED to 250 words maximum.
+- This ensures at least 1/4 of the physical page remains empty for a luxury aesthetic.
+- Write with precision. Every word must earn its place.
+
+RULE 5: CHAPTER BREAKER (Professional Offset)
+- Every chapter MUST start on a Right-Hand Page (odd page number).
+- If the previous chapter ends on an odd page, you MUST insert a "quote" or "divider" block as a buffer.
+- Include a "quote" block type: { "text": "An inspiring quote...", "attribution": "Author Name" }
+
+TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - More hero images, atmospheric' : 'INFORMATIONAL (Business/Science/History) - More text depth, fewer images'}
 TARGET PAGES PER CHAPTER: ${pagesPerChapter}
+MINIMUM CHAPTERS: ${minChapters}
 
-STRICT RULES:
-1. MAIN TITLE (Max 4 Words): Punchy, evocative title.
-2. SUBTITLE (Max 8 Words): Intriguing subtitle.
-3. CHAPTERS: Exactly 10 chapters with compelling titles.
-
-CHAPTER 1 BLOCKS:
-Generate an array of "page blocks" for Chapter 1. Each block = 1 physical page in the printed book.
-
-Block types:
-- "chapter_title": { "title": "Chapter Title" }
-- "text": { "text": "~250 words of content" } 
-- "image_full": { "query": "search term for image", "caption": "Photo caption" }
-- "image_half": { "query": "search term", "caption": "Caption" } (paired with short text)
-- "pro_tip": { "text": "Expert advice" }
+Block types available:
+- "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
+- "text": { "text": "~250 words max of rich, detailed content" }
+- "image_full": { "query": "search term + no people no faces", "caption": "Evocative caption" }
+- "image_half": { "query": "search term + no people no faces", "caption": "Caption" }
+- "pro_tip": { "text": "Expert insider advice" }
 - "heading": { "level": 2, "text": "Section heading" }
 - "list": { "items": ["item 1", "item 2", "item 3"] }
-
-${isVisual ? 
-  'For VISUAL topics: Include 3-4 image_full blocks and 2-3 image_half blocks per chapter.' : 
-  'For INFORMATIONAL topics: Include 1-2 image_half blocks max. Focus on text and lists.'}
+- "quote": { "text": "Inspirational quote", "attribution": "Author" } - Use for chapter breakers
+- "divider": { "style": "minimal" } - Use for visual breaks
 
 Return ONLY valid JSON:
 {
-  "main_title": "4-word title",
-  "subtitle": "8-word subtitle",
+  "main_title": "4-word evocative title",
+  "subtitle": "8-word compelling subtitle",
   "topic_name": "${topicTitleCase}",
+  "total_planned_pages": ${targetTotalPages},
   "chapters": [
-    {"chapter_number": 1, "title": "Introduction"},
+    {"chapter_number": 1, "title": "Compelling Chapter Title", "planned_pages": ${pagesPerChapter}},
     {"chapter_number": 2, "title": "..."},
-    ... (10 total)
+    ... (${minChapters}-15 chapters based on topic complexity)
   ],
   "chapter_1_blocks": [
     {"block_type": "chapter_title", "content": {"chapter_number": 1, "title": "Introduction"}},
-    {"block_type": "text", "content": {"text": "Opening paragraph..."}},
-    {"block_type": "image_full", "content": {"query": "beautiful landscape", "caption": "The view"}},
-    {"block_type": "text", "content": {"text": "More content..."}},
-    {"block_type": "pro_tip", "content": {"text": "Expert advice here"}},
-    ... (${pagesPerChapter} blocks total)
+    {"block_type": "image_full", "content": {"query": "atmospheric landscape no people", "caption": "Setting the scene"}},
+    {"block_type": "text", "content": {"text": "Opening paragraph (~250 words)..."}},
+    {"block_type": "text", "content": {"text": "Continued content (~250 words)..."}},
+    {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
+    {"block_type": "image_half", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
+    {"block_type": "text", "content": {"text": "More content (~250 words)..."}},
+    ... (${pagesPerChapter} blocks total following Luxury Rhythm)
   ]
 }
 
