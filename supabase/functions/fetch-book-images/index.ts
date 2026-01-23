@@ -6,9 +6,73 @@ const corsHeaders = {
 };
 
 interface ImageResult {
-  imageUrl: string;
+  imageUrl: string | null;
   attribution?: string;
-  source: 'unsplash' | 'wikimedia';
+  source: 'unsplash' | 'wikimedia' | 'none';
+}
+
+// AI-generated negative prompts and style keywords to remove
+const NOISE_PHRASES = [
+  'no people',
+  'no faces',
+  'no humans',
+  'without people',
+  'atmospheric',
+  'architectural detail',
+  'photorealistic',
+  'ultra high resolution',
+  'high quality',
+  'professional photo',
+  'stock photo',
+  'editorial',
+  'cinematic',
+  'dramatic lighting',
+  'moody',
+  'vibrant colors',
+  'texture',
+  'macro',
+  'close up',
+  'detailed',
+];
+
+// Clean the query by removing AI-specific phrases
+function cleanQuery(rawQuery: string): string {
+  let cleaned = rawQuery.toLowerCase();
+  
+  // Remove noise phrases
+  for (const phrase of NOISE_PHRASES) {
+    cleaned = cleaned.replace(new RegExp(phrase, 'gi'), '');
+  }
+  
+  // Remove extra whitespace and trim
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  console.log(`[QueryCleaner] "${rawQuery}" -> "${cleaned}"`);
+  return cleaned;
+}
+
+// Generate fallback queries by progressively simplifying
+function generateFallbackQueries(query: string): string[] {
+  const words = query.split(' ').filter(w => w.length > 2);
+  const fallbacks: string[] = [];
+  
+  // Try first 3 words
+  if (words.length > 3) {
+    fallbacks.push(words.slice(0, 3).join(' '));
+  }
+  
+  // Try first 2 words
+  if (words.length > 2) {
+    fallbacks.push(words.slice(0, 2).join(' '));
+  }
+  
+  // Try just the first word if it's meaningful
+  if (words.length > 1 && words[0].length > 3) {
+    fallbacks.push(words[0]);
+  }
+  
+  console.log(`[FallbackQueries] Generated ${fallbacks.length} fallbacks:`, fallbacks);
+  return fallbacks;
 }
 
 // Attempt 1: Unsplash - The "Luxury" Layer
@@ -59,6 +123,23 @@ async function searchUnsplash(query: string, orientation: 'landscape' | 'portrai
     console.error('[Unsplash] Fetch error:', error);
     return null;
   }
+}
+
+// Try Unsplash with fallback queries
+async function searchUnsplashWithFallbacks(query: string, orientation: 'landscape' | 'portrait' = 'landscape'): Promise<ImageResult | null> {
+  // Try the main query first
+  let result = await searchUnsplash(query, orientation);
+  if (result) return result;
+
+  // Try fallback queries
+  const fallbacks = generateFallbackQueries(query);
+  for (const fallbackQuery of fallbacks) {
+    console.log(`[Unsplash] Trying fallback: "${fallbackQuery}"`);
+    result = await searchUnsplash(fallbackQuery, orientation);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 // Attempt 2: Wikimedia Commons - The "Fact" Layer
@@ -135,6 +216,23 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
   }
 }
 
+// Try Wikimedia with fallback queries
+async function searchWikimediaWithFallbacks(query: string): Promise<ImageResult | null> {
+  // Try the main query first
+  let result = await searchWikimedia(query);
+  if (result) return result;
+
+  // Try fallback queries
+  const fallbacks = generateFallbackQueries(query);
+  for (const fallbackQuery of fallbacks) {
+    console.log(`[Wikimedia] Trying fallback: "${fallbackQuery}"`);
+    result = await searchWikimedia(fallbackQuery);
+    if (result) return result;
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -151,25 +249,43 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[fetch-book-images] Query: "${query}", Orientation: ${orientation}`);
+    console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}`);
 
-    // Attempt 1: Unsplash (The "Luxury" Layer)
-    let result = await searchUnsplash(query, orientation);
-
-    // Attempt 2: Wikimedia Commons (The "Fact" Layer)
-    if (!result) {
-      console.log('[fetch-book-images] Unsplash failed, trying Wikimedia...');
-      result = await searchWikimedia(query);
-    }
-
-    if (!result) {
-      console.log('[fetch-book-images] No images found from any source');
+    // STEP 1: Clean the query by removing AI noise phrases
+    const cleanedQuery = cleanQuery(query);
+    
+    if (!cleanedQuery || cleanedQuery.length < 2) {
+      console.log('[fetch-book-images] Query too short after cleaning, returning null');
       return new Response(
         JSON.stringify({ 
-          error: 'No images found',
-          query 
+          imageUrl: null,
+          source: 'none',
+          message: 'Query too short after cleaning'
         }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // STEP 2: Try Unsplash with fallbacks
+    let result = await searchUnsplashWithFallbacks(cleanedQuery, orientation);
+
+    // STEP 3: Try Wikimedia with fallbacks
+    if (!result) {
+      console.log('[fetch-book-images] Unsplash failed, trying Wikimedia...');
+      result = await searchWikimediaWithFallbacks(cleanedQuery);
+    }
+
+    // STEP 4: Return gracefully even if no images found (NO 404!)
+    if (!result) {
+      console.log('[fetch-book-images] No images found from any source, returning null gracefully');
+      return new Response(
+        JSON.stringify({ 
+          imageUrl: null,
+          source: 'none',
+          query: cleanedQuery,
+          message: 'No images found after exhaustive search'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -183,9 +299,15 @@ serve(async (req) => {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('[fetch-book-images] Error:', errorMessage);
+    
+    // Even on error, return 200 with null to prevent frontend crashes
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        imageUrl: null, 
+        source: 'none',
+        error: errorMessage 
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
