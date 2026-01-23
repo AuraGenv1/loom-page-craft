@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
 import LoadingAnimation from '@/components/LoadingAnimation';
@@ -84,6 +84,7 @@ const extractMaterials = (content?: string): string[] => {
 
 const Index = () => {
   const [searchParams] = useSearchParams();
+  const { bookId: routeBookId } = useParams<{ bookId?: string }>();
   const [viewState, setViewState] = useState<ViewState>('landing');
   const [topic, setTopic] = useState('');
   const [bookData, setBookData] = useState<BookData | null>(null);
@@ -168,11 +169,85 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Check for existing book on mount or load from URL params (Dashboard navigation)
+  // Load an existing book when landing directly on /book/:bookId (supports hard refresh)
+  // Also supports Dashboard navigation via query params.
   useEffect(() => {
     if (authLoading) return;
     
     const loadBook = async () => {
+      // 1) Route param has highest priority and should work for guests + logged-in users.
+      if (routeBookId) {
+        // Avoid re-loading if we already have this book hydrated.
+        if (routeBookId === bookId && viewState === 'book' && bookData) return;
+
+        setBookId(routeBookId);
+        setViewState('book');
+        setActiveChapter(1);
+
+        // Try to load metadata from books (may fail for guest books due to RLS).
+        let bookRow: any | null = null;
+        try {
+          const { data, error } = await supabase
+            .from('books')
+            .select('*')
+            .eq('id', routeBookId)
+            .maybeSingle();
+          if (!error && data) bookRow = data;
+        } catch {
+          // Ignore; we can still display the book from book_pages.
+        }
+
+        // Always derive TOC from chapter_title pages so the viewer can render even without books access.
+        const { data: tocRows, error: tocError } = await supabase
+          .from('book_pages')
+          .select('chapter_number, content')
+          .eq('book_id', routeBookId)
+          .eq('block_type', 'chapter_title')
+          .order('chapter_number', { ascending: true });
+
+        if (tocError) {
+          console.error('[Route load] Failed to load table of contents from book_pages:', tocError);
+        }
+
+        const derivedToc = (tocRows || []).map((row) => {
+          const content = row.content as any;
+          return {
+            chapter: row.chapter_number,
+            title: content?.title || `Chapter ${row.chapter_number}`,
+          };
+        });
+
+        if (bookRow?.topic) setTopic(bookRow.topic);
+        if (bookRow?.cover_image_url) {
+          const urls = Array.isArray(bookRow.cover_image_url)
+            ? bookRow.cover_image_url
+            : bookRow.cover_image_url
+              ? [bookRow.cover_image_url]
+              : [];
+          setCoverImageUrls(urls);
+        }
+        setIsPurchased(Boolean(bookRow?.is_purchased));
+
+        // Hydrate minimal BookData so the rest of the page renders.
+        setBookData({
+          title: bookRow?.title || 'Your Guide',
+          displayTitle: bookRow?.title || 'Your Guide',
+          subtitle: bookRow?.topic
+            ? `A Comprehensive Guide to ${bookRow.topic}`
+            : 'A luxury guide designed for reading',
+          tableOfContents:
+            (bookRow?.table_of_contents as unknown as BookData['tableOfContents']) || derivedToc,
+          chapter1Content: '[loaded from pages]',
+          localResources: (bookRow?.local_resources as unknown as BookData['localResources']) || [],
+          hasDisclaimer: bookRow?.has_disclaimer ?? false,
+          coverImageUrl: Array.isArray(bookRow?.cover_image_url)
+            ? bookRow.cover_image_url?.[0]
+            : bookRow?.cover_image_url || undefined,
+        });
+
+        return;
+      }
+
       // Check if navigating from Dashboard with specific book
       const bookIdParam = searchParams.get('bookId');
       const viewMode = searchParams.get('view');
@@ -219,24 +294,13 @@ const Index = () => {
         }
       }
       
-      // Guest users should always see the landing page on fresh load
-      // Clear any stale session data to prevent "Groundhog Day" effect
-      if (!user) {
-        setViewState('landing');
-        setBookData(null);
-        setBookId(null);
-        setCoverImageUrls([]);
-        setIsPurchased(false);
-        return;
-      }
-
       // No specific book requested - show landing for fresh start
       // Remove auto-loading last book to avoid confusion
       setViewState('landing');
     };
 
     loadBook();
-  }, [user, authLoading, searchParams]);
+  }, [user, authLoading, searchParams, routeBookId, bookId, viewState, bookData]);
 
   // Fetch blocks when viewing a chapter (block-based architecture)
   useEffect(() => {
@@ -504,6 +568,11 @@ const Index = () => {
       
       setBookData(generatedBook);
       setBookId(newBookId);
+
+      // Persist URL so refresh keeps the book loaded
+      if (newBookId) {
+        navigate(`/book/${newBookId}`, { replace: true });
+      }
       
       // Save to saved_projects if user is logged in
       if (user && newBookId) {

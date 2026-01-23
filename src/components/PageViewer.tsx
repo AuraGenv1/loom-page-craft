@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
 
 interface PageViewerProps {
-  bookId: string;
+  bookId?: string;
   initialChapter?: number;
   onPageChange?: (chapter: number, page: number) => void;
 }
@@ -232,6 +233,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   initialChapter = 1,
   onPageChange 
 }) => {
+  const { bookId: routeBookId } = useParams<{ bookId?: string }>();
+  const effectiveBookId = useMemo(() => bookId ?? routeBookId, [bookId, routeBookId]);
+
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -239,19 +243,25 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   // Sync with external chapter changes (from TOC clicks)
   useEffect(() => {
-    if (initialChapter !== currentChapter) {
-      setCurrentChapter(initialChapter);
-    }
+    setCurrentChapter(initialChapter);
   }, [initialChapter]);
 
   // Fetch blocks for a chapter
   const fetchBlocks = useCallback(async (chapter: number) => {
+    if (!effectiveBookId) {
+      setBlocks([]);
+      setLoading(false);
+      return;
+    }
+
+    console.log(`Fetching blocks for book ${effectiveBookId} chapter ${chapter}`);
+
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('book_pages')
         .select('*')
-        .eq('book_id', bookId)
+        .eq('book_id', effectiveBookId)
         .eq('chapter_number', chapter)
         .order('page_order', { ascending: true });
 
@@ -269,6 +279,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         created_at: row.created_at,
         updated_at: row.updated_at
       }));
+
+      console.log(`Found ${mappedBlocks.length} blocks.`);
       
       setBlocks(mappedBlocks);
       setCurrentIndex(0);
@@ -277,7 +289,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [bookId]);
+  }, [effectiveBookId]);
 
   useEffect(() => {
     fetchBlocks(currentChapter);
