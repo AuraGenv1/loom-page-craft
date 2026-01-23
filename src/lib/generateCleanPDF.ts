@@ -218,40 +218,24 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-  // Robust: reserve all of Page 2 with a fixed-height row, and pin content to the bottom
-  // using `valign: 'bottom'` (no spacer nodes or fragile margins).
-  const pageContentHeight = 648 - 54 - 54; // 540pt available height within margins
+  // Use a compact stack with calculated top margin to pin to bottom of Page 2.
+  // This avoids table overflow issues by keeping content minimal and explicit.
+  const copyrightTextHeight = 85; // Approximate height of copyright text block
+  const availableHeight = 540; // 648 - 54 - 54 margins
+  const topPush = availableHeight - copyrightTextHeight;
 
   contentArray.push({
-    unbreakable: true,
-    table: {
-      widths: ['*'],
-      heights: [pageContentHeight],
-      body: [
-        [
-          {
-            valign: 'bottom',
-            stack: [
-              { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
-              { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 3, 0, 0] },
-              { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 5, 0, 0] },
-              { text: 'Published by Loom & Page', fontSize: 10, color: '#555', margin: [0, 12, 0, 0] },
-              { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 3, 0, 0] },
-              { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', margin: [0, 3, 0, 0] }
-            ]
-          }
-        ]
-      ]
-    },
-    layout: {
-      hLineWidth: () => 0,
-      vLineWidth: () => 0,
-      paddingLeft: () => 0,
-      paddingRight: () => 0,
-      paddingTop: () => 0,
-      paddingBottom: () => 0
-    },
-    pageBreak: 'after' // Hard stop - TOC starts on Page 3
+    stack: [
+      { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
+      { text: 'All rights reserved.', fontSize: 10, color: '#555', margin: [0, 3, 0, 0] },
+      { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 5, 0, 0] },
+      { text: 'Larvotto Ventures, LLC', fontSize: 10, color: '#555', margin: [0, 12, 0, 0] },
+      { text: 'DBA Loom & Page', fontSize: 9, color: '#666', margin: [0, 2, 0, 0] },
+      { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 8, 0, 0] },
+      { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777', margin: [0, 3, 0, 0] }
+    ],
+    margin: [0, topPush, 0, 0],
+    pageBreak: 'after'
   });
 
   // --- 3. TOC ---
