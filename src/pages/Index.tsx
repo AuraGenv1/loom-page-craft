@@ -329,15 +329,39 @@ const Index = () => {
   }, [bookId, viewState]);
 
   // Calculate which chapters have blocks (block-based architecture)
+  // DYNAMIC: Use tableOfContents.length instead of hardcoded 10
+  const totalChapters = bookData?.tableOfContents?.length || 0;
+  
   const nextMissingChapter = useMemo(() => {
     if (!bookData?.tableOfContents?.length) return null;
 
-    for (let i = 2; i <= 10; i++) {
+    // Dynamic loop: iterate through ALL chapters in the ToC
+    for (let i = 2; i <= bookData.tableOfContents.length; i++) {
       // Check if we have blocks for this chapter
       if (!chapterBlocks[i] || chapterBlocks[i].length === 0) return i;
     }
     return null;
   }, [bookData?.tableOfContents, chapterBlocks]);
+  
+  // Calculate if ALL chapters are complete (dynamic)
+  const isGenerationComplete = useMemo(() => {
+    if (!totalChapters || totalChapters === 0) return false;
+    
+    // Check if we have blocks for all chapters
+    for (let i = 1; i <= totalChapters; i++) {
+      if (!chapterBlocks[i] || chapterBlocks[i].length === 0) return false;
+    }
+    return true;
+  }, [totalChapters, chapterBlocks]);
+  
+  // Count completed chapters (dynamic)
+  const completedChapterCount = useMemo(() => {
+    let count = 0;
+    for (let i = 1; i <= totalChapters; i++) {
+      if (chapterBlocks[i] && chapterBlocks[i].length > 0) count++;
+    }
+    return count;
+  }, [totalChapters, chapterBlocks]);
 
   // Daisy-chain: Generate missing chapter blocks (2-10)
   useEffect(() => {
@@ -769,22 +793,7 @@ const Index = () => {
                 isAdmin={isAdmin}
                 bookId={bookId || undefined}
                 bookData={bookData || undefined}
-                isGenerationComplete={(() => {
-                  // Check if all 10 chapters are present
-                  const allChaptersReady = [
-                    bookData?.chapter1Content,
-                    bookData?.chapter2Content,
-                    bookData?.chapter3Content,
-                    bookData?.chapter4Content,
-                    bookData?.chapter5Content,
-                    bookData?.chapter6Content,
-                    bookData?.chapter7Content,
-                    bookData?.chapter8Content,
-                    bookData?.chapter9Content,
-                    bookData?.chapter10Content,
-                  ].every(Boolean);
-                  return allChaptersReady;
-                })()}
+                isGenerationComplete={isGenerationComplete}
                 onCoverUpdate={(updates) => {
                   // Update local state immediately when Cover Studio makes changes
                   if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
@@ -799,60 +808,41 @@ const Index = () => {
               
               {/* Action Buttons */}
               <div className="flex flex-col items-center mt-8 gap-4">
-                {/* Calculate chapter completion */}
-                {(() => {
-                  const completedChapters = [
-                    bookData?.chapter1Content,
-                    bookData?.chapter2Content,
-                    bookData?.chapter3Content,
-                    bookData?.chapter4Content,
-                    bookData?.chapter5Content,
-                    bookData?.chapter6Content,
-                    bookData?.chapter7Content,
-                    bookData?.chapter8Content,
-                    bookData?.chapter9Content,
-                    bookData?.chapter10Content,
-                  ].filter(Boolean).length;
-                  const allChaptersComplete = completedChapters === 10;
-                  const isWeaving = isPaid && !allChaptersComplete && completedChapters < 10;
-                  
-                  return (
-                    <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap items-center">
-                      {isPaid ? (
-                        <ProgressDownloadButton
-                          completedChapters={completedChapters}
-                          totalChapters={10}
-                          disabled={!allChaptersComplete}
-                          isPurchased={isPurchased}
-                          bookData={bookData}
-                          topic={topic}
-                          coverImageUrls={coverImageUrls}
-                          isAdmin={isAdmin}
-                        />
-                      ) : (
-                        <>
-                          <Button
-                            onClick={handleDownloadPDF}
-                            variant="outline"
-                            size="lg"
-                            className="gap-2 font-serif"
-                          >
-                            <Download className="w-4 h-4" />
-                            {t('downloadFreeSample')}
-                          </Button>
-                          <Button
-                            size="lg"
-                            className="gap-2 font-serif bg-slate-900 hover:bg-slate-800 text-white"
-                            onClick={handlePurchase}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            {t('unlockFullGuide')} — $4.99
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* Use dynamic chapter completion */}
+                <div className="flex flex-col sm:flex-row justify-center gap-3 flex-wrap items-center">
+                  {isPaid ? (
+                    <ProgressDownloadButton
+                      completedChapters={completedChapterCount}
+                      totalChapters={totalChapters}
+                      disabled={!isGenerationComplete}
+                      isPurchased={isPurchased}
+                      bookData={bookData}
+                      topic={topic}
+                      coverImageUrls={coverImageUrls}
+                      isAdmin={isAdmin}
+                    />
+                  ) : (
+                    <>
+                      <Button
+                        onClick={handleDownloadPDF}
+                        variant="outline"
+                        size="lg"
+                        className="gap-2 font-serif"
+                      >
+                        <Download className="w-4 h-4" />
+                        {t('downloadFreeSample')}
+                      </Button>
+                      <Button
+                        size="lg"
+                        className="gap-2 font-serif bg-slate-900 hover:bg-slate-800 text-white"
+                        onClick={handlePurchase}
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        {t('unlockFullGuide')} — $4.99
+                      </Button>
+                    </>
+                  )}
+                </div>
                 {!isPaid && (
                   <p className="text-xs text-muted-foreground text-center max-w-md">
                     {t('freeSampleDesc')}
@@ -860,18 +850,7 @@ const Index = () => {
                 )}
                 {isPaid && (
                   <p className="text-xs text-accent text-center max-w-md font-medium">
-                    ✓ {t('fullAccessUnlocked')} — {[
-                      bookData?.chapter1Content,
-                      bookData?.chapter2Content,
-                      bookData?.chapter3Content,
-                      bookData?.chapter4Content,
-                      bookData?.chapter5Content,
-                      bookData?.chapter6Content,
-                      bookData?.chapter7Content,
-                      bookData?.chapter8Content,
-                      bookData?.chapter9Content,
-                      bookData?.chapter10Content,
-                    ].filter(Boolean).length} of 10 chapters ready
+                    ✓ {t('fullAccessUnlocked')} — {completedChapterCount} of {totalChapters} chapters ready
                   </p>
                 )}
                 {/* Save to Library Button */}
@@ -896,31 +875,23 @@ const Index = () => {
             {/* Table of Contents - pass chapter statuses and content for realtime sync */}
             <section className="mb-8">
               {(() => {
-                // Build chapter statuses
+                // Build chapter statuses dynamically based on chapterBlocks
                 const statuses: Record<number, 'drafting' | 'complete' | 'pending'> = {};
-                const chapterContentMap: Record<number, string | undefined> = {
-                  1: bookData?.chapter1Content,
-                  2: bookData?.chapter2Content,
-                  3: bookData?.chapter3Content,
-                  4: bookData?.chapter4Content,
-                  5: bookData?.chapter5Content,
-                  6: bookData?.chapter6Content,
-                  7: bookData?.chapter7Content,
-                  8: bookData?.chapter8Content,
-                  9: bookData?.chapter9Content,
-                  10: bookData?.chapter10Content,
-                };
+                const chapterContentMap: Record<number, string | undefined> = {};
                 
-                Object.entries(chapterContentMap).forEach(([num, content]) => {
-                  const chapterNum = parseInt(num);
-                  if (content && content.length > 0) {
-                    statuses[chapterNum] = 'complete';
-                  } else if (loadingChapter === chapterNum) {
-                    statuses[chapterNum] = 'drafting';
+                // Dynamically build status for ALL chapters in ToC
+                for (let i = 1; i <= totalChapters; i++) {
+                  const hasBlocks = chapterBlocks[i] && chapterBlocks[i].length > 0;
+                  chapterContentMap[i] = hasBlocks ? `[${chapterBlocks[i].length} blocks]` : undefined;
+                  
+                  if (hasBlocks) {
+                    statuses[i] = 'complete';
+                  } else if (loadingChapter === i) {
+                    statuses[i] = 'drafting';
                   } else {
-                    statuses[chapterNum] = 'pending';
+                    statuses[i] = 'pending';
                   }
-                });
+                }
                 
                 return (
                   <TableOfContents 
