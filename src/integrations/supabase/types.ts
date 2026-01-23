@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      book_pages: {
+        Row: {
+          block_type: Database["public"]["Enums"]["page_block_type"]
+          book_id: string
+          chapter_number: number
+          content: Json
+          created_at: string
+          id: string
+          image_url: string | null
+          page_order: number
+          updated_at: string
+        }
+        Insert: {
+          block_type: Database["public"]["Enums"]["page_block_type"]
+          book_id: string
+          chapter_number: number
+          content?: Json
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          page_order: number
+          updated_at?: string
+        }
+        Update: {
+          block_type?: Database["public"]["Enums"]["page_block_type"]
+          book_id?: string
+          chapter_number?: number
+          content?: Json
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          page_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_pages_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           chapter1_content: string
@@ -340,6 +384,14 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      page_block_type:
+        | "chapter_title"
+        | "text"
+        | "image_full"
+        | "image_half"
+        | "pro_tip"
+        | "heading"
+        | "list"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -468,6 +520,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      page_block_type: [
+        "chapter_title",
+        "text",
+        "image_full",
+        "image_half",
+        "pro_tip",
+        "heading",
+        "list",
+      ],
     },
   },
 } as const
