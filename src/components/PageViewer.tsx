@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,6 +7,14 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Track which blocks are currently being fetched to prevent duplicates
 const fetchingImages = new Set<string>();
@@ -27,6 +35,12 @@ interface PageViewerProps {
   canEditImages?: boolean;
   /** Is this an official Loom & Page book? */
   isOfficial?: boolean;
+  /** Topic for chapter regeneration */
+  topic?: string;
+  /** Table of contents for chapter regeneration */
+  tableOfContents?: Array<{ chapter: number; title: string }>;
+  /** Callback when blocks are updated (for parent state sync) */
+  onBlocksUpdate?: (chapter: number, blocks: PageBlock[]) => void;
 }
 
 // Individual block renderers
@@ -182,18 +196,81 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
   );
 };
 
-// "Search Image" button for empty blocks
-const SearchImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
+// Large "Add Image" button for empty blocks (replaces small search button)
+const AddImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
   <Button
     variant="outline"
-    size="sm"
+    size="lg"
     onClick={onSearch}
-    className="mt-4 gap-2"
+    className="gap-3 px-8 py-6 text-lg border-2 border-dashed hover:border-primary"
   >
-    <Search className="w-4 h-4" />
-    Search Image
+    <ImagePlus className="w-6 h-6" />
+    Add Image
   </Button>
 );
+
+// Page Content Edit Modal
+interface PageEditModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialContent: string;
+  onSave: (content: string) => Promise<void>;
+  isSaving: boolean;
+}
+
+const PageEditModal: React.FC<PageEditModalProps> = ({ open, onOpenChange, initialContent, onSave, isSaving }) => {
+  const [content, setContent] = useState(initialContent);
+
+  useEffect(() => {
+    setContent(initialContent);
+  }, [initialContent]);
+
+  const handleSave = async () => {
+    await onSave(content);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5" />
+            Edit Page Content
+          </DialogTitle>
+          <DialogDescription>
+            Manually edit the text content of this page block.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4">
+          <Textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="min-h-[300px] font-serif"
+            placeholder="Enter page content..."
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // Image Upload Modal with Liability Checkbox
 interface ImageUploadModalProps {
@@ -361,11 +438,14 @@ const ImageFullPage: React.FC<{
       // NO FALLBACK IMAGE - show skeleton instead
       <div className="flex-1 bg-muted flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
-          <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
-          {canEditImages && onManualSearch && (
-            <SearchImageButton onSearch={onManualSearch} />
+          {canEditImages && onManualSearch ? (
+            <AddImageButton onSearch={onManualSearch} />
+          ) : (
+            <>
+              <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
+              <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
+            </>
           )}
         </div>
       </div>
@@ -430,10 +510,13 @@ const ImageHalfPage: React.FC<{
         // NO FALLBACK IMAGE - show skeleton instead
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-            <p className="text-xs text-muted-foreground">Searching...</p>
-            {canEditImages && onManualSearch && (
-              <SearchImageButton onSearch={onManualSearch} />
+            {canEditImages && onManualSearch ? (
+              <AddImageButton onSearch={onManualSearch} />
+            ) : (
+              <>
+                <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+                <p className="text-xs text-muted-foreground">Searching...</p>
+              </>
             )}
           </div>
         </div>
@@ -663,7 +746,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   totalPageCount,
   isAdmin = false,
   canEditImages = false,
-  isOfficial = false
+  isOfficial = false,
+  topic = '',
+  tableOfContents = [],
+  onBlocksUpdate
 }) => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -676,6 +762,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Page edit modal state (Admin only)
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingContent, setEditingContent] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Sync with external chapter changes (from TOC clicks)
   useEffect(() => {
@@ -978,6 +1070,163 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [uploadingBlockId]);
 
+  // Admin: Regenerate current chapter
+  const handleRegenerateChapter = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    const confirm = window.confirm(`Regenerate Chapter ${currentChapter}? This will replace all existing content.`);
+    if (!confirm) return;
+    
+    setIsRegenerating(true);
+    toast.info(`Regenerating Chapter ${currentChapter}...`);
+    
+    try {
+      const tocEntry = tableOfContents.find((ch) => ch.chapter === currentChapter);
+      const { data, error } = await supabase.functions.invoke('generate-chapter-blocks', {
+        body: {
+          bookId,
+          chapterNumber: currentChapter,
+          chapterTitle: tocEntry?.title || `Chapter ${currentChapter}`,
+          topic,
+          tableOfContents,
+        },
+      });
+      
+      if (error) throw error;
+      if (!data?.blocks) throw new Error('No blocks returned');
+      
+      // Update local state
+      setBlocks(data.blocks);
+      setCurrentIndex(0);
+      
+      // Notify parent
+      onBlocksUpdate?.(currentChapter, data.blocks);
+      
+      toast.success(`Chapter ${currentChapter} regenerated!`);
+    } catch (err) {
+      console.error('Failed to regenerate chapter:', err);
+      toast.error('Failed to regenerate chapter');
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [isAdmin, currentChapter, bookId, topic, tableOfContents, onBlocksUpdate]);
+
+  // Admin: Open edit modal for current page
+  const handleOpenEditModal = useCallback(() => {
+    const currentBlock = blocks[currentIndex];
+    if (!currentBlock) return;
+    
+    // Extract text content from the block
+    let textContent = '';
+    const content = currentBlock.content as Record<string, unknown>;
+    
+    if (currentBlock.block_type === 'text' && content.text) {
+      textContent = content.text as string;
+    } else if (currentBlock.block_type === 'pro_tip' && content.text) {
+      textContent = content.text as string;
+    } else if (currentBlock.block_type === 'quote' && content.text) {
+      textContent = content.text as string;
+    } else if (currentBlock.block_type === 'heading' && content.text) {
+      textContent = content.text as string;
+    } else if (currentBlock.block_type === 'chapter_title' && content.title) {
+      textContent = content.title as string;
+    } else if (currentBlock.block_type === 'list' && Array.isArray(content.items)) {
+      textContent = (content.items as string[]).join('\n');
+    } else if (['image_full', 'image_half'].includes(currentBlock.block_type) && content.caption) {
+      textContent = content.caption as string;
+    } else {
+      textContent = JSON.stringify(content, null, 2);
+    }
+    
+    setEditingContent(textContent);
+    setEditModalOpen(true);
+  }, [blocks, currentIndex]);
+
+  // Admin: Save edited content
+  const handleSaveEdit = useCallback(async (newContent: string) => {
+    const currentBlock = blocks[currentIndex];
+    if (!currentBlock) return;
+    
+    setIsSavingEdit(true);
+    
+    try {
+      // Build updated content based on block type
+      let updatedContent: Record<string, unknown> = { ...(currentBlock.content as Record<string, unknown>) };
+      
+      if (currentBlock.block_type === 'text') {
+        updatedContent.text = newContent;
+      } else if (currentBlock.block_type === 'pro_tip') {
+        updatedContent.text = newContent;
+      } else if (currentBlock.block_type === 'quote') {
+        updatedContent.text = newContent;
+      } else if (currentBlock.block_type === 'heading') {
+        updatedContent.text = newContent;
+      } else if (currentBlock.block_type === 'chapter_title') {
+        updatedContent.title = newContent;
+      } else if (currentBlock.block_type === 'list') {
+        updatedContent.items = newContent.split('\n').filter(line => line.trim());
+      } else if (['image_full', 'image_half'].includes(currentBlock.block_type)) {
+        updatedContent.caption = newContent;
+      }
+      
+      // Update database
+      const { error } = await supabase
+        .from('book_pages')
+        .update({ content: updatedContent as unknown as import('@/integrations/supabase/types').Json })
+        .eq('id', currentBlock.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setBlocks(prev => prev.map(b => {
+        if (b.id !== currentBlock.id) return b;
+        return { ...b, content: updatedContent } as PageBlock;
+      }));
+      
+      toast.success('Page content updated');
+    } catch (err) {
+      console.error('Failed to save edit:', err);
+      toast.error('Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [blocks, currentIndex]);
+
+  // Admin: Delete current page
+  const handleDeletePage = useCallback(async () => {
+    const currentBlock = blocks[currentIndex];
+    if (!currentBlock) return;
+    
+    const confirm = window.confirm('Delete this page? This cannot be undone.');
+    if (!confirm) return;
+    
+    try {
+      const { error } = await supabase
+        .from('book_pages')
+        .delete()
+        .eq('id', currentBlock.id);
+      
+      if (error) throw error;
+      
+      // Update local state - remove the block
+      const newBlocks = blocks.filter(b => b.id !== currentBlock.id);
+      setBlocks(newBlocks);
+      
+      // Adjust current index if needed
+      if (currentIndex >= newBlocks.length && newBlocks.length > 0) {
+        setCurrentIndex(newBlocks.length - 1);
+      }
+      
+      // Notify parent
+      onBlocksUpdate?.(currentChapter, newBlocks);
+      
+      toast.success('Page deleted');
+    } catch (err) {
+      console.error('Failed to delete page:', err);
+      toast.error('Failed to delete page');
+    }
+  }, [blocks, currentIndex, currentChapter, onBlocksUpdate]);
+
   // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
   useEffect(() => {
     fetchBlocks(currentChapter);
@@ -1094,6 +1343,17 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         isUploading={isUploading}
       />
       
+      {/* Page Edit Modal (Admin only) */}
+      {isAdmin && (
+        <PageEditModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          initialContent={editingContent}
+          onSave={handleSaveEdit}
+          isSaving={isSavingEdit}
+        />
+      )}
+      
       {/* Page Container - Kindle-style aspect ratio */}
       <div className="relative bg-card rounded-lg border shadow-lg overflow-hidden" style={{ aspectRatio: '3/4' }}>
         <div className="absolute inset-0">
@@ -1147,17 +1407,56 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           Prev
         </Button>
 
-        <div className="text-center">
-          {/* Global page number like a real book */}
-          <p className="font-serif text-lg text-foreground">
-            {cumulativePageNumber}
-            {totalPageCount && (
-              <span className="text-muted-foreground/60"> of {totalPageCount}</span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground/60 mt-1">
-            Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
-          </p>
+        <div className="flex items-center gap-4">
+          {/* Admin Page Tools Menu */}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                  <Wrench className="w-4 h-4" />
+                  <span className="hidden sm:inline">Page Tools</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-56">
+                <DropdownMenuItem 
+                  onClick={handleRegenerateChapter}
+                  disabled={isRegenerating}
+                  className="gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                  Regenerate Chapter {currentChapter}
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleOpenEditModal}
+                  className="gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit Page Content
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={handleDeletePage}
+                  className="gap-2 text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete This Page
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          
+          <div className="text-center">
+            {/* Global page number like a real book */}
+            <p className="font-serif text-lg text-foreground">
+              {cumulativePageNumber}
+              {totalPageCount && (
+                <span className="text-muted-foreground/60"> of {totalPageCount}</span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
+            </p>
+          </div>
         </div>
 
         <Button
