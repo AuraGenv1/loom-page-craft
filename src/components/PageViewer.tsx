@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +58,7 @@ const ChapterTitlePage: React.FC<{ content: { chapter_number: number; title: str
 );
 
 const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
-  // Parse text for headers (lines starting with ## or ###)
+  // Parse text for headers, blockquotes, and lists
   const parseTextWithHeaders = (text: string) => {
     const lines = text.split('\n');
     const elements: JSX.Element[] = [];
@@ -65,32 +66,65 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
     
     const flushParagraph = () => {
       if (currentParagraph.length > 0) {
-        elements.push(
-          <p key={elements.length} className="font-serif text-base leading-relaxed text-foreground mb-4">
-            {currentParagraph.join('\n')}
-          </p>
-        );
+        const paragraphText = currentParagraph.join(' ').trim();
+        if (paragraphText) {
+          elements.push(
+            <p key={elements.length} className="font-serif text-base leading-relaxed text-foreground mb-4">
+              {paragraphText}
+            </p>
+          );
+        }
         currentParagraph = [];
       }
     };
     
     lines.forEach((line, i) => {
-      if (line.startsWith('### ')) {
+      const trimmedLine = line.trim();
+      
+      // H2 Headers (## )
+      if (trimmedLine.startsWith('## ')) {
         flushParagraph();
         elements.push(
-          <h3 key={`h3-${i}`} className="font-serif text-lg font-semibold text-foreground mt-6 mb-3">
-            {line.replace('### ', '')}
-          </h3>
-        );
-      } else if (line.startsWith('## ')) {
-        flushParagraph();
-        elements.push(
-          <h2 key={`h2-${i}`} className="font-serif text-xl font-bold text-foreground mt-8 mb-4">
-            {line.replace('## ', '')}
+          <h2 key={`h2-${i}`} className="text-2xl font-bold mt-6 mb-4 font-serif text-foreground">
+            {trimmedLine.replace('## ', '')}
           </h2>
         );
-      } else {
-        currentParagraph.push(line);
+      }
+      // H3 Headers (### )
+      else if (trimmedLine.startsWith('### ')) {
+        flushParagraph();
+        elements.push(
+          <h3 key={`h3-${i}`} className="text-xl font-semibold mt-4 mb-2 font-serif text-foreground">
+            {trimmedLine.replace('### ', '')}
+          </h3>
+        );
+      }
+      // Blockquotes (> )
+      else if (trimmedLine.startsWith('> ')) {
+        flushParagraph();
+        elements.push(
+          <blockquote key={`bq-${i}`} className="border-l-4 border-primary/30 pl-4 py-2 my-4 italic text-muted-foreground font-serif">
+            {trimmedLine.replace('> ', '')}
+          </blockquote>
+        );
+      }
+      // Bullet points (* or - )
+      else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+        flushParagraph();
+        elements.push(
+          <div key={`li-${i}`} className="flex items-start gap-2 mb-2 ml-4">
+            <span className="text-primary mt-1.5">•</span>
+            <span className="font-serif text-base text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
+          </div>
+        );
+      }
+      // Empty lines
+      else if (trimmedLine === '') {
+        flushParagraph();
+      }
+      // Regular text
+      else {
+        currentParagraph.push(trimmedLine);
       }
     });
     
@@ -113,31 +147,22 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
 // Author Toolbar for Image Blocks (Available to Admin or Paid Owner)
 interface AuthorImageToolbarProps {
   blockId: string;
-  currentQuery: string;
   currentCaption: string;
-  onEditQuery: (newQuery: string) => void;
   onEditCaption: (newCaption: string) => void;
   onReroll: () => void;
   onRemove: () => void;
   onUpload: () => void;
+  onManualSearch: () => void;
 }
 
 const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
-  currentQuery,
   currentCaption,
-  onEditQuery,
   onEditCaption,
   onReroll,
   onRemove,
-  onUpload
+  onUpload,
+  onManualSearch
 }) => {
-  const handleEditQuery = () => {
-    const newQuery = window.prompt('Enter new search term (e.g., "1960s red convertible"):', currentQuery);
-    if (newQuery && newQuery.trim() !== currentQuery) {
-      onEditQuery(newQuery.trim());
-    }
-  };
-
   const handleEditCaption = () => {
     const newCaption = window.prompt('Edit caption:', currentCaption);
     if (newCaption !== null && newCaption !== currentCaption) {
@@ -151,7 +176,7 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        onClick={handleEditQuery}
+        onClick={onManualSearch}
         title="Manual Search"
       >
         <Pencil className="w-4 h-4" />
@@ -398,13 +423,12 @@ const ImageFullPage: React.FC<{
   isLoading?: boolean;
   canEditImages?: boolean;
   blockId?: string;
-  onEditQuery?: (newQuery: string) => void;
   onEditCaption?: (newCaption: string) => void;
   onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
   <div className="flex flex-col h-full group">
     {isLoading ? (
       <div className="flex-1 bg-muted flex items-center justify-center">
@@ -416,16 +440,15 @@ const ImageFullPage: React.FC<{
       </div>
     ) : imageUrl ? (
       <div className="flex-1 relative">
-        {canEditImages && blockId && onEditQuery && onEditCaption && onReroll && onRemove && onUpload && (
+        {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
           <AuthorImageToolbar
             blockId={blockId}
-            currentQuery={content.query}
             currentCaption={content.caption}
-            onEditQuery={onEditQuery}
             onEditCaption={onEditCaption}
             onReroll={onReroll}
             onRemove={onRemove}
             onUpload={onUpload}
+            onManualSearch={onManualSearch}
           />
         )}
         <img 
@@ -470,13 +493,12 @@ const ImageHalfPage: React.FC<{
   isLoading?: boolean;
   canEditImages?: boolean;
   blockId?: string;
-  onEditQuery?: (newQuery: string) => void;
   onEditCaption?: (newCaption: string) => void;
   onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
   <div className="h-full flex flex-col group">
     <div className="h-1/2 relative">
       {isLoading ? (
@@ -488,16 +510,15 @@ const ImageHalfPage: React.FC<{
         </div>
       ) : imageUrl ? (
         <>
-          {canEditImages && blockId && onEditQuery && onEditCaption && onReroll && onRemove && onUpload && (
+          {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
             <AuthorImageToolbar
               blockId={blockId}
-              currentQuery={content.query}
               currentCaption={content.caption}
-              onEditQuery={onEditQuery}
               onEditCaption={onEditCaption}
               onReroll={onReroll}
               onRemove={onRemove}
               onUpload={onUpload}
+              onManualSearch={onManualSearch}
             />
           )}
           <img 
@@ -666,13 +687,12 @@ const BlockRenderer: React.FC<{
   loadingImages: Set<string>;
   imageAttributions: Map<string, string>;
   canEditImages?: boolean;
-  onEditQuery?: (blockId: string, newQuery: string) => void;
   onEditCaption?: (blockId: string, newCaption: string) => void;
   onReroll?: (blockId: string) => void;
   onRemove?: (blockId: string) => void;
   onManualSearch?: (blockId: string) => void;
   onUpload?: (blockId: string) => void;
-}> = ({ block, loadingImages, imageAttributions, canEditImages, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+}> = ({ block, loadingImages, imageAttributions, canEditImages, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
   const isLoading = loadingImages.has(block.id);
   const attribution = imageAttributions.get(block.id);
 
@@ -690,7 +710,6 @@ const BlockRenderer: React.FC<{
           isLoading={isLoading}
           canEditImages={canEditImages}
           blockId={block.id}
-          onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
           onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
@@ -707,7 +726,6 @@ const BlockRenderer: React.FC<{
           isLoading={isLoading}
           canEditImages={canEditImages}
           blockId={block.id}
-          onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
           onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
@@ -762,6 +780,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Manual search dialog state
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [searchingBlockId, setSearchingBlockId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // Track which blocks we've already attempted to fetch (to prevent infinite loops)
+  const attemptedFetches = useRef<Set<string>>(new Set());
   
   // Page edit modal state (Admin only)
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -881,46 +908,26 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [bookId, preloadedBlocks, findTitleBlockIndex]);
 
-  // Auto-trigger image fetch for blocks without images (skip for admins who prefer manual control)
+  // Auto-trigger image fetch for blocks without images on mount
+  // FIX: Check if block has no URL AND we haven't already attempted to fetch it
   useEffect(() => {
     if (isAdmin) return; // Admin can manually trigger searches
+    
     blocks.forEach(block => {
-      if (['image_full', 'image_half'].includes(block.block_type) && !block.image_url) {
+      const isImageBlock = ['image_full', 'image_half'].includes(block.block_type);
+      const hasNoImage = !block.image_url;
+      const notLoading = !loadingImages.has(block.id);
+      const notAttempted = !attemptedFetches.current.has(block.id);
+      
+      if (isImageBlock && hasNoImage && notLoading && notAttempted) {
+        // Mark as attempted to prevent duplicate fetches
+        attemptedFetches.current.add(block.id);
         fetchImageForBlock(block);
       }
     });
-  }, [blocks, fetchImageForBlock, isAdmin]);
+  }, [blocks, fetchImageForBlock, isAdmin, loadingImages]);
 
   // Admin image control handlers
-  const handleEditQuery = useCallback(async (blockId: string, newQuery: string) => {
-    const block = blocks.find(b => b.id === blockId);
-    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
-
-    const currentContent = block.content as { query: string; caption: string };
-    const updatedContent = { ...currentContent, query: newQuery };
-
-    // Update database
-    const { error } = await supabase
-      .from('book_pages')
-      .update({ content: updatedContent, image_url: null })
-      .eq('id', blockId);
-
-    if (error) {
-      toast.error('Failed to update query');
-      return;
-    }
-
-    // Update local state - cast to maintain type
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== blockId) return b;
-      return { ...b, content: updatedContent, image_url: undefined } as PageBlock;
-    }));
-
-    // Trigger new image fetch
-    toast.info(`Searching: "${newQuery}"...`);
-    const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
-    fetchImageForBlock(updatedBlock);
-  }, [blocks, fetchImageForBlock]);
 
   const handleEditCaption = useCallback(async (blockId: string, newCaption: string) => {
     const block = blocks.find(b => b.id === blockId);
@@ -988,33 +995,59 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     toast.success('Image removed');
   }, []);
 
-  const handleManualSearch = useCallback(async (blockId: string) => {
+  // Open manual search dialog
+  const handleOpenSearchDialog = useCallback((blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
-
-    const currentContent = block.content as { query: string; caption: string };
-    const newQuery = window.prompt('Enter search term:', currentContent.query);
     
-    if (!newQuery || newQuery.trim() === '') return;
+    const currentContent = block.content as { query: string; caption: string };
+    setSearchingBlockId(blockId);
+    setSearchQuery(currentContent.query || '');
+    setSearchDialogOpen(true);
+  }, [blocks]);
 
-    const updatedContent = { ...currentContent, query: newQuery.trim() };
+  // Execute manual search from dialog
+  const handleManualSearch = useCallback(async () => {
+    if (!searchingBlockId || !searchQuery.trim()) return;
+    
+    const block = blocks.find(b => b.id === searchingBlockId);
+    if (!block) return;
 
-    // Update database
-    await supabase
-      .from('book_pages')
-      .update({ content: updatedContent })
-      .eq('id', blockId);
+    setIsSearching(true);
+    const currentContent = block.content as { query: string; caption: string };
+    const updatedContent = { ...currentContent, query: searchQuery.trim() };
 
-    // Update local state
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== blockId) return b;
-      return { ...b, content: updatedContent } as PageBlock;
-    }));
+    try {
+      // Update database
+      await supabase
+        .from('book_pages')
+        .update({ content: updatedContent, image_url: null })
+        .eq('id', searchingBlockId);
 
-    toast.info(`Searching: "${newQuery}"...`);
-    const updatedBlock = { ...block, content: updatedContent } as PageBlock;
-    fetchImageForBlock(updatedBlock);
-  }, [blocks, fetchImageForBlock]);
+      // Update local state
+      setBlocks(prev => prev.map(b => {
+        if (b.id !== searchingBlockId) return b;
+        return { ...b, content: updatedContent, image_url: undefined } as PageBlock;
+      }));
+
+      // Close dialog
+      setSearchDialogOpen(false);
+      
+      toast.info(`Searching: "${searchQuery}"...`);
+      const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
+      
+      // Remove from attempted fetches so we can fetch again
+      attemptedFetches.current.delete(searchingBlockId);
+      fetchImageForBlock(updatedBlock);
+    } catch (err) {
+      console.error('Failed to update search query:', err);
+      toast.error('Failed to search');
+    } finally {
+      setIsSearching(false);
+      setSearchingBlockId(null);
+      setSearchQuery('');
+    }
+  }, [searchingBlockId, searchQuery, blocks, fetchImageForBlock]);
 
   // Handle opening upload modal
   const handleOpenUploadModal = useCallback((blockId: string) => {
@@ -1343,6 +1376,67 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         isUploading={isUploading}
       />
       
+      {/* Manual Search Dialog */}
+      <Dialog open={searchDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSearchDialogOpen(false);
+          setSearchingBlockId(null);
+          setSearchQuery('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="w-5 h-5" />
+              Search for Image
+            </DialogTitle>
+            <DialogDescription>
+              Enter a search term to find a new image. Be descriptive for best results.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="e.g., 1960s red convertible sunset"
+              className="w-full"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleManualSearch();
+                }
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Tip: Include atmosphere words like "atmospheric", "cinematic", or specific angles like "aerial view", "close-up"
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSearchDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleManualSearch} 
+              disabled={!searchQuery.trim() || isSearching}
+              className="gap-2"
+            >
+              {isSearching ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Search
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       {/* Page Edit Modal (Admin only) */}
       {isAdmin && (
         <PageEditModal
@@ -1362,11 +1456,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             loadingImages={loadingImages}
             imageAttributions={imageAttributions}
             canEditImages={canEditImages || isAdmin}
-            onEditQuery={handleEditQuery}
             onEditCaption={handleEditCaption}
             onReroll={handleReroll}
             onRemove={handleRemoveImage}
-            onManualSearch={handleManualSearch}
+            onManualSearch={handleOpenSearchDialog}
             onUpload={handleOpenUploadModal}
           />
         </div>
