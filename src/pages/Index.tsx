@@ -986,26 +986,34 @@ const Index = () => {
             </div>
 
             {/* Kindle-Style PageViewer - Block-Based Architecture */}
-            {bookId && chapterBlocks[1] && chapterBlocks[1].length > 0 ? (
-              <section className="max-w-2xl mx-auto">
-                <PageViewer 
-                  bookId={bookId}
-                  initialChapter={activeChapter}
-                  onPageChange={(chapter) => setActiveChapter(chapter)}
-                  preloadedBlocks={chapterBlocks}
-                />
-              </section>
-            ) : bookId && (
-              <section className="max-w-2xl mx-auto">
-                <div className="w-full bg-card rounded-lg border flex items-center justify-center" style={{ aspectRatio: '3/4' }}>
-                  <div className="text-center px-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-                    <p className="text-muted-foreground font-serif">Weaving Chapter 1...</p>
-                    <p className="text-xs text-muted-foreground/60 mt-2">Your guide will appear here momentarily</p>
+            {(() => {
+              // Calculate total page count across all chapters (for Amazon spine width)
+              const totalPageCount = Object.values(chapterBlocks).reduce((sum, blocks) => sum + blocks.length, 0);
+              
+              return bookId && chapterBlocks[1] && chapterBlocks[1].length > 0 ? (
+                <section className="max-w-2xl mx-auto">
+                  <PageViewer 
+                    bookId={bookId}
+                    initialChapter={activeChapter}
+                    totalChapters={totalChapters}
+                    onPageChange={(chapter) => setActiveChapter(chapter)}
+                    onChapterChange={(chapter) => setActiveChapter(chapter)}
+                    preloadedBlocks={chapterBlocks}
+                    totalPageCount={totalPageCount > 0 ? totalPageCount : undefined}
+                  />
+                </section>
+              ) : bookId && (
+                <section className="max-w-2xl mx-auto">
+                  <div className="w-full bg-card rounded-lg border flex items-center justify-center" style={{ aspectRatio: '3/4' }}>
+                    <div className="text-center px-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                      <p className="text-muted-foreground font-serif">Weaving Chapter 1...</p>
+                      <p className="text-xs text-muted-foreground/60 mt-2">Your guide will appear here momentarily</p>
+                    </div>
                   </div>
-                </div>
-              </section>
-            )}
+                </section>
+              );
+            })()}
             
             {/* Paywall - only show if not paid */}
             {!isPaid && (

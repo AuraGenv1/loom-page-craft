@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,9 +10,13 @@ const fetchingImages = new Set<string>();
 interface PageViewerProps {
   bookId: string;
   initialChapter?: number;
+  totalChapters?: number;
   onPageChange?: (chapter: number, page: number) => void;
+  onChapterChange?: (chapter: number) => void;
   /** Pre-loaded blocks from parent state - used for instant display before DB sync */
   preloadedBlocks?: Record<number, PageBlock[]>;
+  /** Total page count across all chapters (for Amazon spine width calculation) */
+  totalPageCount?: number;
 }
 
 // Individual block renderers
@@ -106,10 +110,12 @@ const ImageFullPage: React.FC<{
         />
       </div>
     ) : (
+      // NO FALLBACK IMAGE - show skeleton instead
       <div className="flex-1 bg-muted flex items-center justify-center">
         <div className="text-center">
-          <ImageIcon className="w-12 h-12 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground/60">No image found</p>
+          <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
+          <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
         </div>
       </div>
     )}
@@ -148,8 +154,12 @@ const ImageHalfPage: React.FC<{
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
+        // NO FALLBACK IMAGE - show skeleton instead
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
-          <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+            <p className="text-xs text-muted-foreground">Searching...</p>
+          </div>
         </div>
       )}
     </div>
@@ -261,6 +271,36 @@ const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' }
   </div>
 );
 
+// "Continue to Next Chapter" overlay
+const NextChapterOverlay: React.FC<{ 
+  nextChapterNumber: number; 
+  onContinue: () => void;
+  isNextChapterReady: boolean;
+}> = ({ nextChapterNumber, onContinue, isNextChapterReady }) => (
+  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/95 to-transparent flex flex-col items-center justify-end pb-16">
+    <div className="text-center">
+      <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
+        End of Chapter
+      </p>
+      {isNextChapterReady ? (
+        <Button
+          size="lg"
+          onClick={onContinue}
+          className="gap-2 font-serif text-lg"
+        >
+          Continue to Chapter {nextChapterNumber}
+          <ArrowRight className="w-5 h-5" />
+        </Button>
+      ) : (
+        <div className="text-center">
+          <Loader2 className="w-6 h-6 text-muted-foreground mx-auto mb-2 animate-spin" />
+          <p className="text-sm text-muted-foreground">Weaving Chapter {nextChapterNumber}...</p>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 // Block renderer dispatcher with auto-fetch support
 const BlockRenderer: React.FC<{ 
   block: PageBlock; 
@@ -317,8 +357,11 @@ const BlockRenderer: React.FC<{
 export const PageViewer: React.FC<PageViewerProps> = ({ 
   bookId, 
   initialChapter = 1,
+  totalChapters = 10,
   onPageChange,
-  preloadedBlocks
+  onChapterChange,
+  preloadedBlocks,
+  totalPageCount
 }) => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -331,11 +374,16 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   useEffect(() => {
     if (initialChapter !== currentChapter) {
       setCurrentChapter(initialChapter);
-      setCurrentIndex(0);
     }
   }, [initialChapter]);
 
-  // Auto-fetch images for blocks without URLs
+  // Find the chapter_title block index to start on
+  const findTitleBlockIndex = useCallback((blockList: PageBlock[]): number => {
+    const titleIndex = blockList.findIndex(b => b.block_type === 'chapter_title');
+    return titleIndex >= 0 ? titleIndex : 0;
+  }, []);
+
+  // Auto-fetch images for blocks without URLs using the hybrid engine
   const fetchImageForBlock = useCallback(async (block: PageBlock) => {
     if (fetchingImages.has(block.id)) return;
     fetchingImages.add(block.id);
@@ -343,7 +391,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     setLoadingImages(prev => new Set(prev).add(block.id));
 
     const content = block.content as { query: string; caption: string };
-    console.log('[PageViewer] Auto-fetching image for:', content.query);
+    console.log('[PageViewer] Auto-fetching image via hybrid engine:', content.query);
 
     try {
       const { data, error } = await supabase.functions.invoke('fetch-book-images', {
@@ -391,7 +439,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     // First, check if we have preloaded blocks from parent state
     if (preloadedBlocks && preloadedBlocks[chapter] && preloadedBlocks[chapter].length > 0) {
       console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloadedBlocks[chapter].length);
-      setBlocks(preloadedBlocks[chapter]);
+      const loadedBlocks = preloadedBlocks[chapter];
+      setBlocks(loadedBlocks);
+      // Start on the chapter_title block, not a quote or divider
+      setCurrentIndex(findTitleBlockIndex(loadedBlocks));
       setLoading(false);
       return;
     }
@@ -422,13 +473,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       }));
       
       setBlocks(mappedBlocks);
-      setCurrentIndex(0);
+      // Start on the chapter_title block
+      setCurrentIndex(findTitleBlockIndex(mappedBlocks));
     } catch (err) {
       console.error('Error fetching blocks:', err);
     } finally {
       setLoading(false);
     }
-  }, [bookId, preloadedBlocks]);
+  }, [bookId, preloadedBlocks, findTitleBlockIndex]);
 
   // Auto-trigger image fetch for blocks without images
   useEffect(() => {
@@ -458,6 +510,36 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [blocks.length, currentIndex]);
+
+  // Calculate cumulative page number across all chapters
+  const cumulativePageNumber = useMemo(() => {
+    if (!preloadedBlocks) return currentIndex + 1;
+    
+    let total = 0;
+    for (let i = 1; i < currentChapter; i++) {
+      if (preloadedBlocks[i]) {
+        total += preloadedBlocks[i].length;
+      }
+    }
+    return total + currentIndex + 1;
+  }, [preloadedBlocks, currentChapter, currentIndex]);
+
+  // Check if next chapter is ready
+  const isNextChapterReady = useMemo(() => {
+    if (currentChapter >= totalChapters) return false;
+    return preloadedBlocks?.[currentChapter + 1]?.length > 0;
+  }, [preloadedBlocks, currentChapter, totalChapters]);
+
+  const isLastPageOfChapter = currentIndex === blocks.length - 1;
+  const hasNextChapter = currentChapter < totalChapters;
+
+  const goToNextChapter = useCallback(() => {
+    if (currentChapter < totalChapters) {
+      const nextChapter = currentChapter + 1;
+      setCurrentChapter(nextChapter);
+      onChapterChange?.(nextChapter);
+    }
+  }, [currentChapter, totalChapters, onChapterChange]);
 
   const goNext = () => {
     if (currentIndex < blocks.length - 1) {
@@ -506,6 +588,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           />
         </div>
 
+        {/* "Continue to Chapter X" overlay when on last page */}
+        {isLastPageOfChapter && hasNextChapter && (
+          <NextChapterOverlay
+            nextChapterNumber={currentChapter + 1}
+            onContinue={goToNextChapter}
+            isNextChapterReady={isNextChapterReady}
+          />
+        )}
+
         {/* Navigation Overlays */}
         <button
           onClick={goPrev}
@@ -534,9 +625,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         </Button>
 
         <div className="text-center">
-          {/* Page number like a real book */}
+          {/* Global page number like a real book */}
           <p className="font-serif text-lg text-foreground">
-            {currentBlock?.page_order || currentIndex + 1}
+            {cumulativePageNumber}
+            {totalPageCount && (
+              <span className="text-muted-foreground/60"> of {totalPageCount}</span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground/60 mt-1">
             Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
@@ -554,11 +648,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         </Button>
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress Bar - Global progress */}
       <div className="mt-4 h-1 bg-muted rounded-full overflow-hidden">
         <div 
           className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${((currentIndex + 1) / blocks.length) * 100}%` }}
+          style={{ width: totalPageCount ? `${(cumulativePageNumber / totalPageCount) * 100}%` : `${((currentIndex + 1) / blocks.length) * 100}%` }}
         />
       </div>
     </div>
