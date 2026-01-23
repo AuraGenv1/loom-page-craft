@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Key, Image as ImageIcon, Quote, Loader2, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Track which blocks are currently being fetched to prevent duplicates
 const fetchingImages = new Set<string>();
@@ -17,6 +18,8 @@ interface PageViewerProps {
   preloadedBlocks?: Record<number, PageBlock[]>;
   /** Total page count across all chapters (for Amazon spine width calculation) */
   totalPageCount?: number;
+  /** Enable admin controls for image editing */
+  isAdmin?: boolean;
 }
 
 // Individual block renderers
@@ -86,13 +89,108 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
   );
 };
 
+// Admin Toolbar for Image Blocks
+interface AdminImageToolbarProps {
+  blockId: string;
+  currentQuery: string;
+  currentCaption: string;
+  onEditQuery: (newQuery: string) => void;
+  onEditCaption: (newCaption: string) => void;
+  onReroll: () => void;
+  onRemove: () => void;
+}
+
+const AdminImageToolbar: React.FC<AdminImageToolbarProps> = ({
+  currentQuery,
+  currentCaption,
+  onEditQuery,
+  onEditCaption,
+  onReroll,
+  onRemove
+}) => {
+  const handleEditQuery = () => {
+    const newQuery = window.prompt('Enter new search term:', currentQuery);
+    if (newQuery && newQuery.trim() !== currentQuery) {
+      onEditQuery(newQuery.trim());
+    }
+  };
+
+  const handleEditCaption = () => {
+    const newCaption = window.prompt('Edit caption:', currentCaption);
+    if (newCaption !== null && newCaption !== currentCaption) {
+      onEditCaption(newCaption);
+    }
+  };
+
+  return (
+    <div className="absolute top-2 right-2 z-10 flex gap-1 bg-background/90 backdrop-blur-sm rounded-lg p-1 shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={handleEditQuery}
+        title="Edit Search Query"
+      >
+        <Pencil className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={handleEditCaption}
+        title="Edit Caption"
+      >
+        <Type className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={onReroll}
+        title="Get New Image"
+      >
+        <RefreshCw className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        onClick={onRemove}
+        title="Remove Image"
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+};
+
+// Admin "Search Image" button for empty blocks
+const AdminSearchImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={onSearch}
+    className="mt-4 gap-2"
+  >
+    <Search className="w-4 h-4" />
+    Search Image
+  </Button>
+);
+
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
   attribution?: string;
   isLoading?: boolean;
-}> = ({ content, imageUrl, attribution, isLoading }) => (
-  <div className="flex flex-col h-full">
+  isAdmin?: boolean;
+  blockId?: string;
+  onEditQuery?: (newQuery: string) => void;
+  onEditCaption?: (newCaption: string) => void;
+  onReroll?: () => void;
+  onRemove?: () => void;
+  onManualSearch?: () => void;
+}> = ({ content, imageUrl, attribution, isLoading, isAdmin, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => (
+  <div className="flex flex-col h-full group">
     {isLoading ? (
       <div className="flex-1 bg-muted flex items-center justify-center">
         <div className="text-center">
@@ -103,6 +201,17 @@ const ImageFullPage: React.FC<{
       </div>
     ) : imageUrl ? (
       <div className="flex-1 relative">
+        {isAdmin && blockId && onEditQuery && onEditCaption && onReroll && onRemove && (
+          <AdminImageToolbar
+            blockId={blockId}
+            currentQuery={content.query}
+            currentCaption={content.caption}
+            onEditQuery={onEditQuery}
+            onEditCaption={onEditCaption}
+            onReroll={onReroll}
+            onRemove={onRemove}
+          />
+        )}
         <img 
           src={imageUrl} 
           alt={content.caption}
@@ -116,6 +225,9 @@ const ImageFullPage: React.FC<{
           <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
           <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
           <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
+          {isAdmin && onManualSearch && (
+            <AdminSearchImageButton onSearch={onManualSearch} />
+          )}
         </div>
       </div>
     )}
@@ -137,8 +249,15 @@ const ImageHalfPage: React.FC<{
   imageUrl?: string;
   attribution?: string;
   isLoading?: boolean;
-}> = ({ content, imageUrl, attribution, isLoading }) => (
-  <div className="h-full flex flex-col">
+  isAdmin?: boolean;
+  blockId?: string;
+  onEditQuery?: (newQuery: string) => void;
+  onEditCaption?: (newCaption: string) => void;
+  onReroll?: () => void;
+  onRemove?: () => void;
+  onManualSearch?: () => void;
+}> = ({ content, imageUrl, attribution, isLoading, isAdmin, blockId, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => (
+  <div className="h-full flex flex-col group">
     <div className="h-1/2 relative">
       {isLoading ? (
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
@@ -148,17 +267,33 @@ const ImageHalfPage: React.FC<{
           </div>
         </div>
       ) : imageUrl ? (
-        <img 
-          src={imageUrl} 
-          alt={content.caption}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        <>
+          {isAdmin && blockId && onEditQuery && onEditCaption && onReroll && onRemove && (
+            <AdminImageToolbar
+              blockId={blockId}
+              currentQuery={content.query}
+              currentCaption={content.caption}
+              onEditQuery={onEditQuery}
+              onEditCaption={onEditCaption}
+              onReroll={onReroll}
+              onRemove={onRemove}
+            />
+          )}
+          <img 
+            src={imageUrl} 
+            alt={content.caption}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        </>
       ) : (
         // NO FALLBACK IMAGE - show skeleton instead
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
           <div className="text-center">
             <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
             <p className="text-xs text-muted-foreground">Searching...</p>
+            {isAdmin && onManualSearch && (
+              <AdminSearchImageButton onSearch={onManualSearch} />
+            )}
           </div>
         </div>
       )}
@@ -306,7 +441,13 @@ const BlockRenderer: React.FC<{
   block: PageBlock; 
   loadingImages: Set<string>;
   imageAttributions: Map<string, string>;
-}> = ({ block, loadingImages, imageAttributions }) => {
+  isAdmin?: boolean;
+  onEditQuery?: (blockId: string, newQuery: string) => void;
+  onEditCaption?: (blockId: string, newCaption: string) => void;
+  onReroll?: (blockId: string) => void;
+  onRemove?: (blockId: string) => void;
+  onManualSearch?: (blockId: string) => void;
+}> = ({ block, loadingImages, imageAttributions, isAdmin, onEditQuery, onEditCaption, onReroll, onRemove, onManualSearch }) => {
   const isLoading = loadingImages.has(block.id);
   const attribution = imageAttributions.get(block.id);
 
@@ -322,6 +463,13 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
+          isAdmin={isAdmin}
+          blockId={block.id}
+          onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
+          onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
+          onReroll={onReroll ? () => onReroll(block.id) : undefined}
+          onRemove={onRemove ? () => onRemove(block.id) : undefined}
+          onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
         />
       );
     case 'image_half':
@@ -331,6 +479,13 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
+          isAdmin={isAdmin}
+          blockId={block.id}
+          onEditQuery={onEditQuery ? (q) => onEditQuery(block.id, q) : undefined}
+          onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
+          onReroll={onReroll ? () => onReroll(block.id) : undefined}
+          onRemove={onRemove ? () => onRemove(block.id) : undefined}
+          onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
         />
       );
     case 'pro_tip':
@@ -361,7 +516,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   onPageChange,
   onChapterChange,
   preloadedBlocks,
-  totalPageCount
+  totalPageCount,
+  isAdmin = false
 }) => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -482,13 +638,139 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [bookId, preloadedBlocks, findTitleBlockIndex]);
 
-  // Auto-trigger image fetch for blocks without images
+  // Auto-trigger image fetch for blocks without images (skip for admins who prefer manual control)
   useEffect(() => {
+    if (isAdmin) return; // Admin can manually trigger searches
     blocks.forEach(block => {
       if (['image_full', 'image_half'].includes(block.block_type) && !block.image_url) {
         fetchImageForBlock(block);
       }
     });
+  }, [blocks, fetchImageForBlock, isAdmin]);
+
+  // Admin image control handlers
+  const handleEditQuery = useCallback(async (blockId: string, newQuery: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
+
+    const currentContent = block.content as { query: string; caption: string };
+    const updatedContent = { ...currentContent, query: newQuery };
+
+    // Update database
+    const { error } = await supabase
+      .from('book_pages')
+      .update({ content: updatedContent, image_url: null })
+      .eq('id', blockId);
+
+    if (error) {
+      toast.error('Failed to update query');
+      return;
+    }
+
+    // Update local state - cast to maintain type
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      return { ...b, content: updatedContent, image_url: undefined } as PageBlock;
+    }));
+
+    // Trigger new image fetch
+    toast.info(`Searching: "${newQuery}"...`);
+    const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
+    fetchImageForBlock(updatedBlock);
+  }, [blocks, fetchImageForBlock]);
+
+  const handleEditCaption = useCallback(async (blockId: string, newCaption: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
+
+    const currentContent = block.content as { query: string; caption: string };
+    const updatedContent = { ...currentContent, caption: newCaption };
+
+    // Update database
+    const { error } = await supabase
+      .from('book_pages')
+      .update({ content: updatedContent })
+      .eq('id', blockId);
+
+    if (error) {
+      toast.error('Failed to update caption');
+      return;
+    }
+
+    // Update local state
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      return { ...b, content: updatedContent } as PageBlock;
+    }));
+
+    toast.success('Caption updated');
+  }, [blocks]);
+
+  const handleReroll = useCallback(async (blockId: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
+
+    // Clear current image and refetch
+    await supabase
+      .from('book_pages')
+      .update({ image_url: null })
+      .eq('id', blockId);
+
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      return { ...b, image_url: undefined } as PageBlock;
+    }));
+
+    toast.info('Finding new image...');
+    const updatedBlock = { ...block, image_url: undefined } as PageBlock;
+    fetchImageForBlock(updatedBlock);
+  }, [blocks, fetchImageForBlock]);
+
+  const handleRemoveImage = useCallback(async (blockId: string) => {
+    const { error } = await supabase
+      .from('book_pages')
+      .update({ image_url: null })
+      .eq('id', blockId);
+
+    if (error) {
+      toast.error('Failed to remove image');
+      return;
+    }
+
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      return { ...b, image_url: undefined } as PageBlock;
+    }));
+
+    toast.success('Image removed');
+  }, []);
+
+  const handleManualSearch = useCallback(async (blockId: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
+
+    const currentContent = block.content as { query: string; caption: string };
+    const newQuery = window.prompt('Enter search term:', currentContent.query);
+    
+    if (!newQuery || newQuery.trim() === '') return;
+
+    const updatedContent = { ...currentContent, query: newQuery.trim() };
+
+    // Update database
+    await supabase
+      .from('book_pages')
+      .update({ content: updatedContent })
+      .eq('id', blockId);
+
+    // Update local state
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      return { ...b, content: updatedContent } as PageBlock;
+    }));
+
+    toast.info(`Searching: "${newQuery}"...`);
+    const updatedBlock = { ...block, content: updatedContent } as PageBlock;
+    fetchImageForBlock(updatedBlock);
   }, [blocks, fetchImageForBlock]);
 
   // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
@@ -606,6 +888,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             block={currentBlock} 
             loadingImages={loadingImages}
             imageAttributions={imageAttributions}
+            isAdmin={isAdmin}
+            onEditQuery={handleEditQuery}
+            onEditCaption={handleEditCaption}
+            onReroll={handleReroll}
+            onRemove={handleRemoveImage}
+            onManualSearch={handleManualSearch}
           />
         </div>
 
