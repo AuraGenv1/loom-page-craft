@@ -227,43 +227,30 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   );
 
   // --- 2. COPYRIGHT PAGE ---
-  // IMPORTANT: pdfmake uses `valign` for vertical cell alignment (not `verticalAlignment`).
-  // Also, to truly hit the bottom of Page 2 with our margins, we must reserve the full
-  // usable page height (648 - 54 - 54 = 540pt). A 450pt table cannot reach the bottom.
-  const page2ContentHeight = 648 - 54 - 54; // 540pt within margins
-
+  
+  // A. The "Sticker" (Pinned to Bottom of Page 2)
   contentArray.push({
-    unbreakable: true,
-    table: {
-      widths: ['*'],
-      heights: [page2ContentHeight],
-      dontBreakRows: true,
-      body: [[
-        {
-          stack: [
-            { text: `Copyright © ${new Date().getFullYear()}`, fontSize: 10, color: '#555' },
-            { text: 'All rights reserved.', fontSize: 10, color: '#555' },
-            { text: 'No part of this publication may be reproduced without permission.', fontSize: 9, color: '#666', margin: [0, 2, 0, 2] },
-            { text: 'Larvotto Ventures, llc.', fontSize: 10, color: '#555', margin: [0, 10, 0, 0] },
-            { text: 'DBA Loom & Page', fontSize: 10, color: '#555' },
-            { text: 'Generated with AI assistance.', fontSize: 9, italics: true, color: '#777', margin: [0, 5, 0, 0] },
-            { text: `First Edition: ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}`, fontSize: 9, color: '#777' }
-          ],
-          valign: 'bottom',
-          border: [false, false, false, false]
-        }
-      ]]
-    },
-    layout: {
-      hLineWidth: () => 0,
-      vLineWidth: () => 0,
-      paddingLeft: () => 0,
-      paddingRight: () => 0,
-      paddingTop: () => 0,
-      paddingBottom: () => 0,
-    },
-    pageBreak: 'after'
+    stack: [
+      { text: 'Copyright © 2026 by Larvotto Ventures, LLC', fontSize: 10, bold: true, color: '#333' },
+      { text: 'DBA Loom & Page', fontSize: 10, color: '#555', margin: [0, 0, 0, 10] },
+      
+      { text: 'All rights reserved.', fontSize: 9, color: '#555' },
+      { text: 'No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.', fontSize: 9, color: '#666', margin: [0, 5, 0, 10] },
+      
+      { text: 'Disclaimer', fontSize: 9, bold: true, color: '#444' },
+      { text: 'This publication is designed to provide accurate and authoritative information in regard to the subject matter covered. It is sold with the understanding that the publisher is not engaged in rendering legal, accounting, or other professional services.', fontSize: 8, color: '#666', margin: [0, 2, 0, 10] },
+      
+      { text: 'Visit us online at:', fontSize: 9, bold: true, color: '#444' },
+      { text: 'www.LoomandPage.com', fontSize: 9, color: '#555', decoration: 'underline', margin: [0, 0, 0, 10] },
+      
+      { text: 'First Edition: January 2026', fontSize: 9, color: '#777' }
+    ],
+    // Pinned to bottom (Y=420 gives enough room for the longer text block)
+    absolutePosition: { x: 63, y: 420 }
   });
+  // B. The "Eject Button"
+  // Forces the PDF to jump to Page 3 for the Table of Contents
+  contentArray.push({ text: ' ', fontSize: 1, pageBreak: 'after' });
 
   // --- 3. TOC ---
   contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
