@@ -7,8 +7,8 @@ const corsHeaders = {
 
 type Variant = "cover" | "diagram" | "back-cover";
 
-// Fallback placeholder image - always works, never crashes
-const FALLBACK_IMAGE = "https://images.pexels.com/photos/1323550/pexels-photo-1323550.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
+// Fallback placeholder image - elegant abstract gradient (never crashes)
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=1200&q=80";
 
 // Successful response helper - always returns valid image(s)
 const successResponse = (imageUrl: string, imageUrls: string[] = [imageUrl]) => {
@@ -214,9 +214,21 @@ serve(async (req) => {
       // Continue with empty array
     }
 
-    // If no images found, return fallback (not error)
+    // RETRY LOGIC: If no images found, try broader query without strict safety suffix
     if (imageUrls.length === 0) {
-      console.log("No images found, returning fallback");
+      console.log("First search failed, trying broader query...");
+      const broaderQuery = `${topic || title || "abstract"} wallpaper`;
+      try {
+        imageUrls = await fetchPexelsImages(broaderQuery, PEXELS_API_KEY, orientation);
+        console.log(`Broader query "${broaderQuery}" returned ${imageUrls.length} results`);
+      } catch (retryError) {
+        console.error("Retry fetch also failed:", retryError);
+      }
+    }
+
+    // If still no images found after retry, return fallback (not error)
+    if (imageUrls.length === 0) {
+      console.log("No images found after retry, returning fallback");
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 

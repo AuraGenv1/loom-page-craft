@@ -227,7 +227,10 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
 // Large "Add Image" button for empty blocks (drop zone style)
 const AddImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
   <button
-    onClick={onSearch}
+    onClick={(e) => {
+      e.stopPropagation(); // CRITICAL: Prevents the page turn click
+      onSearch();
+    }}
     className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
   >
     <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
