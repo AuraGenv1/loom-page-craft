@@ -398,6 +398,7 @@ export type Database = {
         | "list"
         | "quote"
         | "divider"
+        | "key_takeaway"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -536,6 +537,7 @@ export const Constants = {
         "list",
         "quote",
         "divider",
+        "key_takeaway",
       ],
     },
   },
