@@ -60,40 +60,41 @@ serve(async (req) => {
 
 === LUXURY ARCHITECT RULES ===
 
-RULE 1: PRECISE TEXT DENSITY (6x9 Print Fit)
-- CRITICAL: Each "text" block MUST contain **250-280 words**. This is a 6x9 inch print book.
-- 200 words is TOO SHORT (leaves empty space). 300+ words is TOO LONG (causes scrolling).
-- Be PRECISE. Count your words. Target 250-280 words per text block.
+RULE 1: EXTREME COMPACITY (6x9 Print Fit - NO SCROLLING!)
+- CRITICAL: Each "text" block MUST contain **220-250 words MAXIMUM**. This is a 6x9 inch print book.
+- 200 words is the MINIMUM. 250 words is the MAXIMUM. 300 words causes overflow and scrolling.
+- Be CONCISE. Every sentence must earn its place.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
 - Use Markdown INSIDE text blocks: "## Header", "### Subheader", "* Bullet"
 - Do NOT create separate "heading", "list", "quote", or "key_takeaway" blocks - they are FORBIDDEN.
 - The FIRST text block of every chapter MUST start with a \`## Chapter Header\`.
 - Every text block MUST have at least one "## Header" or "### Subheader" to break up content.
-- NEVER write 3+ consecutive plain paragraphs without headers or bullets.
 
-RULE 3: KEY TAKEAWAYS (Inline Only!)
-- Do NOT use "key_takeaway" blocks. They are FORBIDDEN.
-- Instead, write a \`### 🔑 Key Takeaway\` subheader INSIDE the text block at the end of a section.
-- Example: "### 🔑 Key Takeaway\\n\\nThis is the main point of this section."
+RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
+- Include EXACTLY ONE "Key Takeaway" section per chapter.
+- Place it in the SECOND-TO-LAST text block, right before the "pro_tip" block.
+- Use a standard subheader: \`### Key Takeaway\` - NO emojis (🔑), NO icons. Just plain text.
+- Example: "### Key Takeaway\\n\\nThis is the single most important insight from this chapter."
+- Do NOT use "key_takeaway" blocks - they are FORBIDDEN. Keep it inline in a text block.
 
 RULE 4: BANNED FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
 - Do NOT use italics for summaries.
 - Do NOT use "quote" blocks. They cause rendering errors.
 
-RULE 5: VISUAL BREATHING ROOM (Luxury Rhythm)
-This chapter MUST follow this rhythm:
-  1x Chapter Title Page (ALWAYS first block)
-  1-2x Full-Page "Hero" Images (image_full blocks)
-  4-6x Text Pages (text blocks, ~250-280 words each with inline markdown)
-  1x Pro Tip Page
+RULE 5: CHAPTER STRUCTURE (Strict Order)
+This chapter MUST follow this structure:
+  1. Chapter Title Page (ALWAYS first block)
+  2. 1-2x Hero Images (image_full blocks)
+  3. 3-5x Text Pages (text blocks, 220-250 words each)
+  4. Second-to-last text block: Contains the ### Key Takeaway section
+  5. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
 RULE 6: NO FACES & VARIED CAMERA ANGLES (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
-- VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot.
 - Append to ALL queries: "no people no faces atmospheric"
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
@@ -102,17 +103,17 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 
 Block types (ONLY use these - heading, list, quote, key_takeaway blocks are STRICTLY FORBIDDEN):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "250-280 words. Use ## Header, ### Subheader, ### 🔑 Key Takeaway, * Bullet INSIDE. First text block MUST start with ## Header." }
-- "image_full": { "query": "search term no people varied angle atmospheric", "caption": "Evocative caption" }
+- "text": { "text": "220-250 words MAX. Use ## Header, ### Subheader, * Bullet INSIDE. First text MUST start with ## Header." }
+- "image_full": { "query": "search term no people atmospheric", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
-- "pro_tip": { "text": "Expert insider advice - practical tips ONLY" }
+- "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
-- Include exactly 1 "pro_tip" block per chapter
-- Each "text" block: 250-280 words with inline markdown (first text block MUST start with ## Header)
-- Use \`### 🔑 Key Takeaway\` subheader INSIDE text blocks instead of separate key_takeaway blocks
+- Last block MUST be "pro_tip" (anchored to end)
+- Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
+- Each "text" block: 220-250 words MAX with inline markdown
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
 - NEVER use "heading", "list", "quote", or "key_takeaway" blocks!
