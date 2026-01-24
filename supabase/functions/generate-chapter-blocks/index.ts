@@ -61,14 +61,14 @@ serve(async (req) => {
 === LUXURY ARCHITECT RULES ===
 
 RULE 1: PRECISE TEXT DENSITY (6x9 Print Fit)
-- CRITICAL: Each "text" block MUST contain **exactly 300-325 words**. This is a 6x9 inch print book.
+- CRITICAL: Each "text" block MUST contain **exactly 300 words**. This is a 6x9 inch print book.
 - 200 words is TOO SHORT (leaves empty space). 400 words is TOO LONG (causes overflow).
-- Be PRECISE. Count your words. Target exactly 300-325 words per text block.
+- Be PRECISE. Count your words. Target exactly 300 words per text block.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
 - Use Markdown INSIDE text blocks: "## Header", "### Subheader", "> Blockquote", "* Bullet"
-- Do NOT create separate "heading" or "list" blocks - they are DEPRECATED.
-- Every text block should have at least one "## Header" to break up content.
+- Do NOT create separate "heading" or "list" blocks - they are DEPRECATED and FORBIDDEN.
+- Every text block MUST have at least one "## Header" to break up content.
 - NEVER write 3+ consecutive plain paragraphs without headers, blockquotes, or bullets.
 
 RULE 3: VISUAL BREATHING ROOM (Luxury Rhythm)
@@ -76,19 +76,24 @@ This chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first block)
   1-2x Full-Page "Hero" Images (image_full blocks)
   4-6x Text Pages (text blocks, ~300 words each with inline markdown)
-  1x Pro Tip or Quote Page
+  1x Pro Tip Page
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
 RULE 4: NO FACES & VARIED CAMERA ANGLES (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
-- VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot to avoid visual repetition.
+- VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot.
 - Append to ALL queries: "no people no faces atmospheric"
 
-RULE 5: CHAPTER BREAKER (Professional Offset)
-- If this is NOT chapter 1, start with a "quote" block before "chapter_title" for professional page offset.
+RULE 5: QUOTE VS PRO_TIP DISTINCTION (CRITICAL!)
+- "quote" blocks are ONLY for famous inspirational quotes from notable people. Include attribution.
+- "pro_tip" blocks are for practical advice, insider tips, and actionable guidance. NO attribution.
+- Do NOT use "quote" for tips. Do NOT use "pro_tip" for quotes.
 
-RULE 6: END WITH VISUAL VARIETY
+RULE 6: CHAPTER BREAKER (Professional Offset)
+- If this is NOT chapter 1, you may start with a "quote" block before "chapter_title" for professional page offset.
+
+RULE 7: END WITH VISUAL VARIETY
 - Always end a text block with either:
   - A "> Blockquote" summarizing the key insight
   - A "* Bullet list" of 3-5 takeaways
@@ -98,30 +103,30 @@ TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images'
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these - heading and list blocks are DEPRECATED):
+Block types (ONLY use these - heading and list blocks are FORBIDDEN):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "Strictly 300-325 words. Use ## Header, ### Subheader, > Blockquote, * Bullet INSIDE." }
-- "image_full": { "query": "search term no people varied angle", "caption": "Evocative caption" }
-- "image_half": { "query": "search term no people", "caption": "Caption" }
-- "pro_tip": { "text": "Expert insider advice" }
-- "quote": { "text": "Inspirational quote", "attribution": "Author" }
+- "text": { "text": "Exactly 300 words. Use ## Header, ### Subheader, > Blockquote, * Bullet INSIDE." }
+- "image_full": { "query": "search term no people varied angle atmospheric", "caption": "Evocative caption" }
+- "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
+- "pro_tip": { "text": "Expert insider advice - practical tips ONLY, no famous quotes" }
+- "quote": { "text": "Famous inspirational quote", "attribution": "Famous Person Name" }
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
 - First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
-- Include at least 1 "pro_tip" block
-- Each "text" block: EXACTLY 300-325 words with inline markdown
+- Include exactly 1 "pro_tip" block per chapter
+- Each "text" block: EXACTLY 300 words with inline markdown
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NO "heading" or "list" blocks - embed ALL formatting in text blocks!
+- NEVER use "heading" or "list" blocks - embed ALL formatting in text blocks!
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene", "caption": "Hero image"}},
-  {"block_type": "text", "content": {"text": "## Section Header\\n\\nRich content paragraph (300-325 words total)...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote"}},
-  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content (300-325 words)...\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
-  {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
+  {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene no people", "caption": "Hero image"}},
+  {"block_type": "text", "content": {"text": "## Section Header\\n\\nRich content paragraph...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote"}},
+  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content...\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
+  {"block_type": "pro_tip", "content": {"text": "Expert practical advice"}},
   ...
 ]
 

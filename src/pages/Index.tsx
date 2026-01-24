@@ -510,6 +510,17 @@ const Index = () => {
       setBookData(generatedBook);
       setBookId(newBookId);
       
+      // FIX: Immediately update the book title in database to prevent "Untitled" bug
+      if (newBookId && title) {
+        supabase
+          .from('books')
+          .update({ title, topic: query })
+          .eq('id', newBookId)
+          .then(({ error: titleError }) => {
+            if (titleError) console.error('Error updating book title:', titleError);
+          });
+      }
+      
       // Save to saved_projects if user is logged in
       if (user && newBookId) {
         supabase
