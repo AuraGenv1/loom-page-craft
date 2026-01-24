@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Quote, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Quote, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, PanelTop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -305,7 +305,84 @@ const PageEditModal: React.FC<PageEditModalProps> = ({ open, onOpenChange, initi
   );
 };
 
-// Image Upload Modal with Liability Checkbox
+// Insert Page Dialog - Choose block type for new page
+type InsertDirection = 'before' | 'after';
+type InsertBlockType = 'text' | 'image_full' | 'image_half';
+
+interface InsertPageDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onInsert: (blockType: InsertBlockType) => void;
+  direction: InsertDirection;
+}
+
+const InsertPageDialog: React.FC<InsertPageDialogProps> = ({ open, onOpenChange, onInsert, direction }) => {
+  const blockOptions: { type: InsertBlockType; icon: React.ReactNode; label: string; description: string }[] = [
+    { 
+      type: 'text', 
+      icon: <Type className="w-8 h-8" />, 
+      label: 'Text Layout', 
+      description: 'Rich text with headers and paragraphs' 
+    },
+    { 
+      type: 'image_full', 
+      icon: <Image className="w-8 h-8" />, 
+      label: 'Full Page Image', 
+      description: 'Full-bleed photograph with caption' 
+    },
+    { 
+      type: 'image_half', 
+      icon: <PanelTop className="w-8 h-8" />, 
+      label: 'Half Image & Text', 
+      description: 'Split layout with image above text' 
+    },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {direction === 'before' ? <PlusCircle className="w-5 h-5" /> : <PlusSquare className="w-5 h-5" />}
+            Insert Page {direction === 'before' ? 'Before' : 'After'}
+          </DialogTitle>
+          <DialogDescription>
+            What kind of page would you like to add?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-3 py-4">
+          {blockOptions.map((option) => (
+            <button
+              key={option.type}
+              onClick={() => {
+                onInsert(option.type);
+                onOpenChange(false);
+              }}
+              className="flex items-center gap-4 p-4 border rounded-lg hover:bg-accent hover:border-primary transition-colors text-left group"
+            >
+              <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                <span className="text-muted-foreground group-hover:text-primary transition-colors">
+                  {option.icon}
+                </span>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">{option.label}</p>
+                <p className="text-sm text-muted-foreground">{option.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 interface ImageUploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -792,6 +869,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [editingContent, setEditingContent] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  
+  // Insert page dialog state (Admin only)
+  const [insertDialogOpen, setInsertDialogOpen] = useState(false);
+  const [insertDirection, setInsertDirection] = useState<InsertDirection>('after');
+  const [isInserting, setIsInserting] = useState(false);
 
   // Sync with external chapter changes (from TOC clicks)
   useEffect(() => {
@@ -1257,7 +1339,117 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [blocks, currentIndex, currentChapter, onBlocksUpdate]);
 
-  // Re-fetch when chapter changes OR when preloadedBlocks update for current chapter
+  // Admin: Insert a new page before/after current
+  const handleInsertPage = useCallback(async (blockType: InsertBlockType) => {
+    if (!isAdmin) return;
+    
+    setIsInserting(true);
+    toast.info('Inserting new page...');
+    
+    try {
+      const currentBlock = blocks[currentIndex];
+      if (!currentBlock) throw new Error('No current block');
+      
+      // Step A: Calculate new page_order
+      const targetOrder = insertDirection === 'before' 
+        ? currentBlock.page_order 
+        : currentBlock.page_order + 1;
+      
+      // Step B: Create new block content based on type
+      let newContent: Record<string, unknown>;
+      if (blockType === 'text') {
+        newContent = { 
+          text: "## New Page Title\n\nStart writing here. Use Markdown headers to structure your content.\n\n### Subheader\n\nAdd your detailed content in this section. Aim for 220-250 words for optimal 6x9 page fit." 
+        };
+      } else {
+        // image_full or image_half
+        newContent = { 
+          query: "", 
+          caption: "Enter caption..." 
+        };
+      }
+      
+      // Step C: Identify all subsequent blocks that need page_order increment
+      const blocksToShift = blocks.filter(b => b.page_order >= targetOrder);
+      
+      // Step D: Perform bulk operations in Supabase
+      // First, shift all subsequent blocks by +1
+      if (blocksToShift.length > 0) {
+        for (const block of blocksToShift) {
+          await supabase
+            .from('book_pages')
+            .update({ page_order: block.page_order + 1 })
+            .eq('id', block.id);
+        }
+      }
+      
+      // Insert the new block (let Supabase generate the ID)
+      const { data: insertedBlock, error: insertError } = await supabase
+        .from('book_pages')
+        .insert({
+          book_id: bookId,
+          chapter_number: currentChapter,
+          page_order: targetOrder,
+          block_type: blockType,
+          content: newContent as unknown as import('@/integrations/supabase/types').Json,
+          image_url: null
+        })
+        .select()
+        .single();
+      
+      if (insertError) throw insertError;
+      
+      // Step E: Update local state
+      const newBlock: PageBlock = {
+        id: insertedBlock.id,
+        book_id: insertedBlock.book_id,
+        chapter_number: insertedBlock.chapter_number,
+        page_order: insertedBlock.page_order,
+        block_type: insertedBlock.block_type as PageBlock['block_type'],
+        content: insertedBlock.content as any,
+        image_url: insertedBlock.image_url || undefined,
+        created_at: insertedBlock.created_at,
+        updated_at: insertedBlock.updated_at
+      };
+      
+      // Update blocks array: shift orders and insert new block
+      const updatedBlocks = blocks.map(b => {
+        if (b.page_order >= targetOrder) {
+          return { ...b, page_order: b.page_order + 1 };
+        }
+        return b;
+      });
+      
+      // Insert new block at correct position
+      const insertIndex = updatedBlocks.findIndex(b => b.page_order > targetOrder);
+      if (insertIndex === -1) {
+        updatedBlocks.push(newBlock);
+      } else {
+        updatedBlocks.splice(insertIndex, 0, newBlock);
+      }
+      
+      // Sort by page_order to ensure correct order
+      updatedBlocks.sort((a, b) => a.page_order - b.page_order);
+      
+      setBlocks(updatedBlocks);
+      
+      // Navigate to the new page
+      const newPageIndex = updatedBlocks.findIndex(b => b.id === newBlock.id);
+      if (newPageIndex >= 0) {
+        setCurrentIndex(newPageIndex);
+      }
+      
+      // Notify parent
+      onBlocksUpdate?.(currentChapter, updatedBlocks);
+      
+      toast.success('Page inserted! Click "Edit Page Content" to customize.');
+    } catch (err) {
+      console.error('Failed to insert page:', err);
+      toast.error('Failed to insert page');
+    } finally {
+      setIsInserting(false);
+    }
+  }, [isAdmin, blocks, currentIndex, insertDirection, bookId, currentChapter, onBlocksUpdate]);
   useEffect(() => {
     fetchBlocks(currentChapter);
   }, [currentChapter, fetchBlocks, preloadedBlocks]);
@@ -1455,7 +1647,16 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         />
       )}
       
-      {/* Page Container - Kindle-style aspect ratio with Zoom support */}
+      {/* Insert Page Dialog (Admin only) */}
+      {isAdmin && (
+        <InsertPageDialog
+          open={insertDialogOpen}
+          onOpenChange={setInsertDialogOpen}
+          onInsert={handleInsertPage}
+          direction={insertDirection}
+        />
+      )}
+      
       <div 
         className="relative bg-card rounded-lg border shadow-lg overflow-hidden transition-transform duration-200 flex-1 mx-auto w-full"
         style={{ 
@@ -1534,6 +1735,30 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-56">
+                {/* Insert Page Options - at the top */}
+                <DropdownMenuItem 
+                  onClick={() => {
+                    setInsertDirection('before');
+                    setInsertDialogOpen(true);
+                  }}
+                  disabled={isInserting}
+                  className="gap-2"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Insert Page Before
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => {
+                    setInsertDirection('after');
+                    setInsertDialogOpen(true);
+                  }}
+                  disabled={isInserting}
+                  className="gap-2"
+                >
+                  <PlusSquare className="w-4 h-4" />
+                  Insert Page After
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem 
                   onClick={handleRegenerateChapter}
                   disabled={isRegenerating}
