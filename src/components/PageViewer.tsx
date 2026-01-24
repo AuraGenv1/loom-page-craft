@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Quote, Loader2, ArrowRight, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Quote, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,6 +43,14 @@ interface PageViewerProps {
   /** Callback when blocks are updated (for parent state sync) */
   onBlocksUpdate?: (chapter: number, blocks: PageBlock[]) => void;
 }
+
+// Loading state component
+const LoadingState: React.FC = () => (
+  <div className="flex flex-col items-center justify-center h-full text-center px-8">
+    <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
+    <p className="text-sm text-muted-foreground">Loading page...</p>
+  </div>
+);
 
 // Individual block renderers
 const ChapterTitlePage: React.FC<{ content: { chapter_number: number; title: string } }> = ({ content }) => (
@@ -553,19 +561,20 @@ const ImageHalfPage: React.FC<{
   </div>
 );
 
+// Pro Tip page - BOXED style for advice
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
   <div className="h-full flex items-start justify-center pt-12" style={{
     paddingLeft: '72px',
     paddingRight: '48px'
   }}>
-    <div className="bg-card border-l-4 border-foreground p-8 max-w-md">
+    <div className="bg-muted/50 border-2 border-foreground/20 rounded-lg p-8 max-w-md shadow-sm">
       <div className="flex items-start gap-4">
         <Key className="w-5 h-5 text-foreground flex-shrink-0 mt-1" />
         <div>
           <p className="text-xs font-bold tracking-[0.2em] uppercase text-foreground mb-3">
             PRO TIP
           </p>
-          <p className="font-serif text-lg italic text-muted-foreground leading-relaxed">
+          <p className="font-serif text-lg text-foreground leading-relaxed">
             {content.text}
           </p>
         </div>
@@ -612,12 +621,12 @@ const ListPage: React.FC<{ content: { items: string[]; ordered?: boolean } }> = 
   </div>
 );
 
-// Quote page for chapter breakers
+// Quote page for chapter breakers - CENTER, ITALIC PULL QUOTE style (famous quotes only)
 const QuotePage: React.FC<{ content: { text: string; attribution?: string } }> = ({ content }) => (
-  <div className="h-full flex items-center justify-center px-8">
-    <div className="text-center max-w-md">
-      <Quote className="w-10 h-10 text-muted-foreground/40 mx-auto mb-6 rotate-180" />
-      <p className="font-serif text-xl md:text-2xl italic text-foreground leading-relaxed mb-6">
+  <div className="h-full flex items-center justify-center px-12">
+    <div className="text-center max-w-lg">
+      <Quote className="w-10 h-10 text-muted-foreground/30 mx-auto mb-6 rotate-180" />
+      <p className="font-serif text-2xl italic text-foreground leading-relaxed mb-6">
         "{content.text}"
       </p>
       {content.attribution && (
@@ -643,36 +652,6 @@ const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' }
         <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
       </div>
     )}
-  </div>
-);
-
-// "Continue to Next Chapter" overlay - NO gradient fade, just bottom-aligned button
-const NextChapterOverlay: React.FC<{ 
-  nextChapterNumber: number; 
-  onContinue: () => void;
-  isNextChapterReady: boolean;
-}> = ({ nextChapterNumber, onContinue, isNextChapterReady }) => (
-  <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pb-16 pt-8 bg-card">
-    <div className="text-center">
-      <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
-        End of Chapter
-      </p>
-      {isNextChapterReady ? (
-        <Button
-          size="lg"
-          onClick={onContinue}
-          className="gap-2 font-serif text-lg"
-        >
-          Continue to Chapter {nextChapterNumber}
-          <ArrowRight className="w-5 h-5" />
-        </Button>
-      ) : (
-        <div className="text-center">
-          <Loader2 className="w-6 h-6 text-muted-foreground mx-auto mb-2 animate-spin" />
-          <p className="text-sm text-muted-foreground">Weaving Chapter {nextChapterNumber}...</p>
-        </div>
-      )}
-    </div>
   </div>
 );
 
@@ -1296,21 +1275,29 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   const isLastPageOfChapter = currentIndex === blocks.length - 1;
   const hasNextChapter = currentChapter < totalChapters;
+  
+  // Zoom state for "Fit to Screen" toggle
+  const [zoomMode, setZoomMode] = useState<'100%' | 'fit'>('100%');
 
   const goToNextChapter = useCallback(() => {
     if (currentChapter < totalChapters) {
       const nextChapter = currentChapter + 1;
       setCurrentChapter(nextChapter);
+      setCurrentIndex(0); // Reset to first page
       onChapterChange?.(nextChapter);
     }
   }, [currentChapter, totalChapters, onChapterChange]);
 
-  const goNext = () => {
+  // AUTO-NAVIGATION: goNext automatically advances to next chapter when on last page
+  const goNext = useCallback(() => {
     if (currentIndex < blocks.length - 1) {
       setCurrentIndex(prev => prev + 1);
       onPageChange?.(currentChapter, currentIndex + 1);
+    } else if (hasNextChapter && isNextChapterReady) {
+      // AUTO-ADVANCE: Last page of chapter → automatically go to next chapter
+      goToNextChapter();
     }
-  };
+  }, [currentIndex, blocks.length, hasNextChapter, isNextChapterReady, goToNextChapter, onPageChange, currentChapter]);
 
   const goToPrevChapter = useCallback(() => {
     if (currentChapter > 1) {
@@ -1327,7 +1314,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [currentChapter, preloadedBlocks, onChapterChange]);
 
-  const goPrev = () => {
+  const goPrev = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       onPageChange?.(currentChapter, currentIndex - 1);
@@ -1335,10 +1322,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       // Navigate to previous chapter
       goToPrevChapter();
     }
-  };
+  }, [currentIndex, currentChapter, goToPrevChapter, onPageChange]);
 
   // Can go back if not at index 0, OR if there's a previous chapter
   const canGoPrev = currentIndex > 0 || currentChapter > 1;
+  // Can go forward if not at last page, OR if next chapter is ready
+  const canGoNext = currentIndex < blocks.length - 1 || (hasNextChapter && isNextChapterReady);
 
   if (loading) {
     return (
@@ -1443,29 +1432,44 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         />
       )}
       
-      {/* Page Container - Kindle-style aspect ratio */}
-      <div className="relative bg-card rounded-lg border shadow-lg overflow-hidden" style={{ aspectRatio: '3/4' }}>
+      {/* Page Container - Kindle-style aspect ratio with Zoom support */}
+      <div 
+        className="relative bg-card rounded-lg border shadow-lg overflow-hidden transition-transform duration-200"
+        style={{ 
+          aspectRatio: '3/4',
+          transform: zoomMode === 'fit' ? 'scale(0.85)' : 'scale(1)',
+          transformOrigin: 'top center'
+        }}
+      >
         <div className="absolute inset-0">
-          <BlockRenderer 
-            block={currentBlock} 
-            loadingImages={loadingImages}
-            imageAttributions={imageAttributions}
-            canEditImages={canEditImages || isAdmin}
-            onEditCaption={handleEditCaption}
-            onReroll={handleReroll}
-            onRemove={handleRemoveImage}
-            onManualSearch={handleOpenSearchDialog}
-            onUpload={handleOpenUploadModal}
-          />
+          {/* CRASH FIX: Wrap in null check */}
+          {!currentBlock ? (
+            <LoadingState />
+          ) : (
+            <BlockRenderer 
+              block={currentBlock} 
+              loadingImages={loadingImages}
+              imageAttributions={imageAttributions}
+              canEditImages={canEditImages || isAdmin}
+              onEditCaption={handleEditCaption}
+              onReroll={handleReroll}
+              onRemove={handleRemoveImage}
+              onManualSearch={handleOpenSearchDialog}
+              onUpload={handleOpenUploadModal}
+            />
+          )}
         </div>
 
-        {/* "Continue to Chapter X" overlay when on last page */}
-        {isLastPageOfChapter && hasNextChapter && (
-          <NextChapterOverlay
-            nextChapterNumber={currentChapter + 1}
-            onContinue={goToNextChapter}
-            isNextChapterReady={isNextChapterReady}
-          />
+        {/* REMOVED: NextChapterOverlay - Auto-navigation handles this now */}
+        
+        {/* Weaving indicator when next chapter is loading */}
+        {isLastPageOfChapter && hasNextChapter && !isNextChapterReady && (
+          <div className="absolute bottom-4 inset-x-0 flex justify-center">
+            <div className="bg-background/90 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2 shadow-lg border">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Weaving Chapter {currentChapter + 1}...</span>
+            </div>
+          </div>
         )}
 
         {/* Navigation Overlays */}
@@ -1477,7 +1481,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         />
         <button
           onClick={goNext}
-          disabled={currentIndex === blocks.length - 1}
+          disabled={!canGoNext}
           className="absolute right-0 top-0 bottom-0 w-1/4 bg-transparent hover:bg-black/5 transition-colors disabled:opacity-0 disabled:cursor-default"
           aria-label="Next page"
         />
@@ -1533,6 +1537,22 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             </DropdownMenu>
           )}
           
+          {/* Zoom Toggle Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setZoomMode(prev => prev === '100%' ? 'fit' : '100%')}
+            className="gap-1.5 text-muted-foreground"
+            title={zoomMode === '100%' ? 'Fit to Screen' : 'Full Size (100%)'}
+          >
+            {zoomMode === '100%' ? (
+              <ZoomOut className="w-4 h-4" />
+            ) : (
+              <ZoomIn className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{zoomMode === '100%' ? 'Fit' : '100%'}</span>
+          </Button>
+          
           <div className="text-center">
             {/* Global page number like a real book */}
             <p className="font-serif text-lg text-foreground">
@@ -1551,7 +1571,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           variant="outline"
           size="sm"
           onClick={goNext}
-          disabled={currentIndex === blocks.length - 1}
+          disabled={!canGoNext}
         >
           Next
           <ChevronRight className="w-4 h-4 ml-1" />
