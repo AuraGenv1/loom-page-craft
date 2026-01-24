@@ -1468,26 +1468,44 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           const textRgb = hexToRgb(spineTextColor);
           ctx.fillStyle = `rgb(${textRgb.r}, ${textRgb.g}, ${textRgb.b})`;
           
-          // Calculate proportional font size based on spine width (at 300 DPI)
-          // Spine width in pixels; font should be ~45% of spine width for readability
-          const spineFontSize = Math.max(spineWidth * 0.42, 20);
-          const titleFontSize = Math.max(spineWidth * 0.48, 24);
+          // Safe margins from top/bottom edges (6% of total height)
+          const safeMargin = totalHeight * 0.06;
+          // Available width for text (when rotated, this becomes the vertical space)
+          const availableTextWidth = totalHeight - (safeMargin * 2) - 50; // Leave gap between edition and title
           
-          // Safe margins from top/bottom edges (5% of total height)
-          const safeMargin = totalHeight * 0.05;
+          // Calculate proportional font size based on spine width (at 300 DPI)
+          const baseFontSize = Math.max(spineWidth * 0.40, 18);
           
           // Edition text at TOP of spine (rotated -90° so text reads bottom-to-top when book is on shelf)
           ctx.save();
           ctx.translate(spineX + spineWidth / 2, safeMargin);
           ctx.rotate(-Math.PI / 2);
-          ctx.font = `400 ${spineFontSize}px 'Playfair Display', Georgia, serif`;
+          ctx.font = `400 ${baseFontSize}px 'Playfair Display', Georgia, serif`;
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
           ctx.globalAlpha = 0.75;
           ctx.fillText(editionText, 0, 0);
+          const editionWidth = ctx.measureText(editionText).width;
           ctx.restore();
           
-          // Title at BOTTOM of spine (rotated -90° so text reads bottom-to-top)
+          // Title at BOTTOM of spine - AUTO-SCALE to fit available space
+          const displaySpineTitle = (spineText || title).toUpperCase();
+          
+          // Calculate max available width for title (total height minus margins and edition text space)
+          const maxTitleWidth = availableTextWidth - editionWidth - 30;
+          
+          // Start with desired font size and scale down if needed
+          let titleFontSize = Math.max(spineWidth * 0.45, 20);
+          ctx.font = `600 ${titleFontSize}px 'Playfair Display', Georgia, serif`;
+          let titleWidth = ctx.measureText(displaySpineTitle).width;
+          
+          // Scale down font until text fits
+          while (titleWidth > maxTitleWidth && titleFontSize > 10) {
+            titleFontSize -= 1;
+            ctx.font = `600 ${titleFontSize}px 'Playfair Display', Georgia, serif`;
+            titleWidth = ctx.measureText(displaySpineTitle).width;
+          }
+          
           ctx.save();
           ctx.translate(spineX + spineWidth / 2, totalHeight - safeMargin);
           ctx.rotate(-Math.PI / 2);
@@ -1495,7 +1513,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
           ctx.globalAlpha = 1;
-          const displaySpineTitle = (spineText || title).slice(0, 28).toUpperCase();
           ctx.fillText(displaySpineTitle, 0, 0);
           ctx.restore();
         }
