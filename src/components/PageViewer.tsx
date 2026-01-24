@@ -1299,8 +1299,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const isLastPageOfChapter = currentIndex === blocks.length - 1;
   const hasNextChapter = currentChapter < totalChapters;
   
-  // Zoom state for "Fit to Screen" toggle
-  const [zoomMode, setZoomMode] = useState<'100%' | 'fit'>('100%');
+  // Zoom state for "Fit to Screen" toggle - default to 'fit' for best visibility
+  const [zoomMode, setZoomMode] = useState<'100%' | 'fit'>('fit');
 
   const goToNextChapter = useCallback(() => {
     if (currentChapter < totalChapters) {

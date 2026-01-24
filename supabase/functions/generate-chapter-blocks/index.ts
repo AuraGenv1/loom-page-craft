@@ -108,11 +108,16 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 
 Block types (ONLY use these - heading, list, quote, key_takeaway blocks are STRICTLY FORBIDDEN):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader, * Bullet INSIDE." }
+- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside. NO asterisks for emphasis." }
 - "image_full": { "query": "search term no people atmospheric", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "divider": { "style": "minimal" }
+
+FORMATTING BANS:
+- Do NOT use asterisks (*) for emphasis or bullet points. Use standard punctuation.
+- Do NOT generate "quote" blocks. AI quotes are often inaccurate.
+- Do NOT copy example placeholder text. Generate UNIQUE content for every block.
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
@@ -124,13 +129,13 @@ REQUIREMENTS:
 - Images ≤30% of blocks
 - NEVER use "heading", "list", "quote", or "key_takeaway" blocks!
 
-Return ONLY valid JSON array:
+Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene no people", "caption": "Hero image"}},
-  {"block_type": "text", "content": {"text": "## Opening Section Header\\n\\nRich content paragraph with 220-250 words...\\n\\n### Subsection\\n\\nMore detailed content..."}},
-  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content with bullets...\\n\\n* Takeaway 1\\n* Takeaway 2\\n\\n### Key Takeaway\\n\\nThe main insight from this chapter."}},
-  {"block_type": "pro_tip", "content": {"text": "Expert practical advice"}}
+  {"block_type": "image_full", "content": {"query": "[unique search query] no people atmospheric", "caption": "[unique evocative caption]"}},
+  {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words of original content here. Be specific and substantive.]\\n\\n### [Unique Subheader]\\n\\n[Continue with detailed, original content...]"}},
+  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
+  {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
 
 Language: ${language}`;
