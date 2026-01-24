@@ -63,6 +63,8 @@ serve(async (req) => {
 RULE 0: CHAPTER 1 IS NOT A SUMMARY!
 - CRITICAL: Chapter 1 must be a FULL chapter with the SAME depth, headers, and word count as Chapter 2.
 - Do NOT write thin introductions. Chapter 1 is substantive content, not a book overview.
+- The FIRST text block of Chapter 1 MUST start with a \`## Chapter Header\` immediately. No "introduction" preamble.
+- Write deep, actionable, expert-level content from the very first paragraph. Treat Chapter 1 exactly like Chapter 5.
 
 RULE 1: EXTREME COMPACITY (6x9 Print Fit - NO SCROLLING!)
 - CRITICAL: Each "text" block MUST contain **220-250 words MAXIMUM**. This is a 6x9 inch print book.
