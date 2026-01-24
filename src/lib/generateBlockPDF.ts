@@ -304,7 +304,7 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
   // --- 2. COPYRIGHT PAGE ---
   contentArray.push({
     stack: [
-      { text: 'Copyright © 2026 by Larvotto Ventures, LLC', fontSize: 10, bold: true, color: '#333333' },
+      { text: 'Copyright © 2026 by Larvotto Ventures LLC', fontSize: 10, bold: true, color: '#333333' },
       { text: 'DBA Loom & Page', fontSize: 10, color: '#555555', margin: [0, 0, 0, 10] },
       { text: 'All rights reserved.', fontSize: 9, color: '#555555' },
       { text: 'No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.', fontSize: 9, color: '#666666', margin: [0, 5, 0, 10] },
