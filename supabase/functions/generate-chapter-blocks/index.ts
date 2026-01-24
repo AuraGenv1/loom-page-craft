@@ -60,11 +60,11 @@ serve(async (req) => {
 
 === LUXURY ARCHITECT RULES ===
 
-RULE 0: CHAPTER 1 IS NOT A SUMMARY!
-- CRITICAL: Chapter 1 must be a FULL chapter with the SAME depth, headers, and word count as Chapter 2.
-- Do NOT write thin introductions. Chapter 1 is substantive content, not a book overview.
-- The FIRST text block of Chapter 1 MUST start with a \`## Chapter Header\` immediately. No "introduction" preamble.
-- Write deep, actionable, expert-level content from the very first paragraph. Treat Chapter 1 exactly like Chapter 5.
+RULE 0: FORCE HEADERS (ESPECIALLY CHAPTER 1!)
+- The VERY FIRST text block of Chapter 1 MUST start with a Markdown header (e.g., \`## The Journey Begins\`).
+- Do NOT write a plain introduction paragraph. Treat Chapter 1 EXACTLY like Chapter 5.
+- Chapter 1 is NOT a summary. It must contain full-density text blocks (220-250 words each) with explicit headers.
+- Every single text block must contain at least one \`## Header\` or \`### Subheader\`. No blocks of just plain text.
 
 RULE 1: EXTREME COMPACITY (6x9 Print Fit - NO SCROLLING!)
 - CRITICAL: Each "text" block MUST contain **220-250 words MAXIMUM**. This is a 6x9 inch print book.
@@ -72,29 +72,27 @@ RULE 1: EXTREME COMPACITY (6x9 Print Fit - NO SCROLLING!)
 - Be CONCISE. Every sentence must earn its place.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
-- Use Markdown INSIDE text blocks: "## Header", "### Subheader", "* Bullet"
+- Use Markdown INSIDE text blocks: "## Header", "### Subheader"
 - EVERY text block MUST start with a \`## Header\`. No exceptions.
-- The FIRST text block of every chapter MUST start with a \`## Chapter Header\`.
 - Use "### Subheader" to break up content within text blocks.
+- No plain text paragraphs without headers.
 
 RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
 - Include EXACTLY ONE "Key Takeaway" section per chapter.
 - Place it in the SECOND-TO-LAST text block, right before the "pro_tip" block.
-- Use a standard subheader: \`### Key Takeaway\` - NO emojis (🔑), NO icons. Just plain text.
-- Example: "### Key Takeaway\\n\\nThis is the single most important insight from this chapter."
-- Do NOT use "key_takeaway" blocks - they are FORBIDDEN. Keep it inline in a text block.
+- Use a standard subheader: \`### Key Takeaway\` - NO emojis, NO icons. Just plain text.
+- Keep it inline in a text block.
 
 RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
-- Do NOT use italics for summaries.
-- Do NOT generate "quote" blocks. AI quotes are often inaccurate. Use "text" blocks ONLY.
-- Do NOT use "heading", "list", "quote", or "key_takeaway" blocks - STRICTLY FORBIDDEN.
+- Do NOT use italics or asterisks (*) for emphasis.
+- Do NOT use "heading", "list", "quote", or "key_takeaway" block types - STRICTLY FORBIDDEN.
 
 RULE 5: CHAPTER STRUCTURE (Strict Order)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
   2. 1-2x Hero Images (image_full blocks)
-  3. 3-5x Text Pages (text blocks, 220-250 words each, EACH starts with ## Header)
+  3. 5-7x Text Pages (text blocks, 220-250 words each, EACH starts with ## Header)
   4. Second-to-last text block: Contains the ### Key Takeaway section
   5. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
@@ -108,13 +106,12 @@ TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images'
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these - heading, list, quote, key_takeaway blocks are STRICTLY FORBIDDEN):
+Block types (ONLY use these four types):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside. NO asterisks for emphasis." }
+- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "search term no people atmospheric", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
-- "divider": { "style": "minimal" }
 
 FORMATTING BANS:
 - Do NOT use asterisks (*) for emphasis or bullet points. Use standard punctuation.
