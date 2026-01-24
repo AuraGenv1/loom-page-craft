@@ -150,10 +150,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const hasFetchedFallbackRef = useRef(false);
     
     // Known placeholder/bad image patterns to detect
+    // NUCLEAR OPTION: Pexels is now a "bad" source to prevent Red Apple fallback
     const PLACEHOLDER_PATTERNS = [
       'placeholder',
       'default-image',
       'no-image',
+      'pexels.com',
+      'images.pexels.com',
     ];
     
     // Known GOOD image sources (should never be overwritten)
@@ -316,7 +319,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     }, [displayUrl, imageLoaded, handleImageError]);
 
     // Check if we have any valid URL after fallbacks
-    const hasValidUrl = displayUrl && currentUrlIndex < lockedUrls.length;
+    // NUCLEAR OPTION: Treat Pexels and placeholders as "Loading" - show skeleton instead
+    const hasValidUrl = displayUrl && currentUrlIndex < lockedUrls.length && !isPlaceholderUrl(displayUrl) && !displayUrl.includes('pexels.com');
 
     // Get session ID for API calls
     const getSessionId = () => {
