@@ -1201,6 +1201,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           chapterTitle: tocEntry?.title || `Chapter ${currentChapter}`,
           topic,
           tableOfContents,
+          targetPagesPerChapter: 10,
         },
       });
       
