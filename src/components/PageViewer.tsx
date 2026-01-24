@@ -107,11 +107,11 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
           </h3>
         );
       }
-      // Blockquotes (> ) - styled as subtle inline emphasis
+      // Blockquotes (> ) - render as bold emphasis text (no gray line)
       else if (trimmedLine.startsWith('> ')) {
         flushParagraph();
         elements.push(
-          <p key={`bq-${i}`} className="font-serif text-[15px] italic text-muted-foreground my-4 leading-relaxed">
+          <p key={`bq-${i}`} className="font-serif text-[15px] font-bold text-foreground my-4 leading-relaxed">
             {trimmedLine.replace('> ', '')}
           </p>
         );

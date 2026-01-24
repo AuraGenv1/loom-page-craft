@@ -61,74 +61,69 @@ serve(async (req) => {
 === LUXURY ARCHITECT RULES ===
 
 RULE 1: PRECISE TEXT DENSITY (6x9 Print Fit)
-- CRITICAL: Each "text" block MUST contain **exactly 300 words**. This is a 6x9 inch print book.
-- 200 words is TOO SHORT (leaves empty space). 400 words is TOO LONG (causes overflow).
-- Be PRECISE. Count your words. Target exactly 300 words per text block.
+- CRITICAL: Each "text" block MUST contain **250-280 words**. This is a 6x9 inch print book.
+- 200 words is TOO SHORT (leaves empty space). 300+ words is TOO LONG (causes scrolling).
+- Be PRECISE. Count your words. Target 250-280 words per text block.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
-- Use Markdown INSIDE text blocks: "## Header", "### Subheader", "> Blockquote", "* Bullet"
-- Do NOT create separate "heading" or "list" blocks - they are DEPRECATED and FORBIDDEN.
-- Every text block MUST have at least one "## Header" to break up content.
-- NEVER write 3+ consecutive plain paragraphs without headers, blockquotes, or bullets.
+- Use Markdown INSIDE text blocks: "## Header", "### Subheader", "* Bullet"
+- Do NOT create separate "heading", "list", "quote", or "key_takeaway" blocks - they are FORBIDDEN.
+- The FIRST text block of every chapter MUST start with a \`## Chapter Header\`.
+- Every text block MUST have at least one "## Header" or "### Subheader" to break up content.
+- NEVER write 3+ consecutive plain paragraphs without headers or bullets.
 
-RULE 3: VISUAL BREATHING ROOM (Luxury Rhythm)
+RULE 3: KEY TAKEAWAYS (Inline Only!)
+- Do NOT use "key_takeaway" blocks. They are FORBIDDEN.
+- Instead, write a \`### 🔑 Key Takeaway\` subheader INSIDE the text block at the end of a section.
+- Example: "### 🔑 Key Takeaway\\n\\nThis is the main point of this section."
+
+RULE 4: BANNED FORMATTING
+- Do NOT use blockquotes (>). They are FORBIDDEN.
+- Do NOT use italics for summaries.
+- Do NOT use "quote" blocks. They cause rendering errors.
+
+RULE 5: VISUAL BREATHING ROOM (Luxury Rhythm)
 This chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first block)
   1-2x Full-Page "Hero" Images (image_full blocks)
-  4-6x Text Pages (text blocks, ~300 words each with inline markdown)
+  4-6x Text Pages (text blocks, ~250-280 words each with inline markdown)
   1x Pro Tip Page
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 4: NO FACES & VARIED CAMERA ANGLES (Image Queries)
+RULE 6: NO FACES & VARIED CAMERA ANGLES (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
 - VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot.
 - Append to ALL queries: "no people no faces atmospheric"
 
-RULE 5: KEY_TAKEAWAY VS PRO_TIP DISTINCTION (CRITICAL!)
-- "key_takeaway" blocks are for powerful 1-sentence summaries emphasizing a key point. Use to reinforce learning.
-- "pro_tip" blocks are for practical advice, insider tips, and actionable guidance.
-- NEVER use "quote" blocks - they are deprecated and forbidden.
-
-RULE 6: CHAPTER OPENER (Always Start Strong)
-- The FIRST text block of every chapter MUST start with a Markdown header (\`## Title\`) to anchor the content.
-
-RULE 7: END WITH VISUAL VARIETY
-- Always end a text block with either:
-  - A "> Blockquote" summarizing the key insight
-  - A "* Bullet list" of 3-5 takeaways
-  - A "### Summary" subheader with closing thoughts
-
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these - heading, list, and quote blocks are FORBIDDEN):
+Block types (ONLY use these - heading, list, quote, key_takeaway blocks are STRICTLY FORBIDDEN):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "Exactly 300 words. Use ## Header, ### Subheader, > Blockquote, * Bullet INSIDE." }
+- "text": { "text": "250-280 words. Use ## Header, ### Subheader, ### 🔑 Key Takeaway, * Bullet INSIDE. First text block MUST start with ## Header." }
 - "image_full": { "query": "search term no people varied angle atmospheric", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" }
-- "key_takeaway": { "text": "A powerful 1-sentence summary reinforcing the section's key insight." }
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
 - Include exactly 1 "pro_tip" block per chapter
-- You may include 1 "key_takeaway" block to emphasize a powerful point
-- Each "text" block: EXACTLY 300 words with inline markdown (first text block MUST start with ## Header)
+- Each "text" block: 250-280 words with inline markdown (first text block MUST start with ## Header)
+- Use \`### 🔑 Key Takeaway\` subheader INSIDE text blocks instead of separate key_takeaway blocks
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NEVER use "heading", "list", or "quote" blocks - they are deprecated!
+- NEVER use "heading", "list", "quote", or "key_takeaway" blocks!
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
   {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene no people", "caption": "Hero image"}},
-  {"block_type": "text", "content": {"text": "## Opening Section Header\\n\\nRich content paragraph...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote"}},
-  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content...\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
+  {"block_type": "text", "content": {"text": "## Opening Section Header\\n\\nRich content paragraph with 250-280 words...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n### 🔑 Key Takeaway\\n\\nThe main insight from this section."}},
+  {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content with bullets...\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
   {"block_type": "pro_tip", "content": {"text": "Expert practical advice"}},
-  {"block_type": "key_takeaway", "content": {"text": "A powerful one-sentence summary of the chapter's core insight."}},
   ...
 ]
 
