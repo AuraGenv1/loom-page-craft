@@ -77,7 +77,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         const paragraphText = currentParagraph.join(' ').trim();
         if (paragraphText) {
           elements.push(
-            <p key={elements.length} className="font-serif text-[15px] leading-relaxed text-foreground mb-4">
+            <p key={elements.length} className="font-serif text-sm leading-7 text-foreground mb-3">
               {paragraphText}
             </p>
           );
@@ -93,7 +93,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       if (trimmedLine.startsWith('## ')) {
         flushParagraph();
         elements.push(
-          <h2 key={`h2-${i}`} className="text-xl font-bold mt-5 mb-3 font-serif text-foreground">
+          <h2 key={`h2-${i}`} className="text-lg font-bold mt-4 mb-2 font-serif text-foreground">
             {trimmedLine.replace('## ', '')}
           </h2>
         );
@@ -102,7 +102,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('### ')) {
         flushParagraph();
         elements.push(
-          <h3 key={`h3-${i}`} className="text-lg font-semibold mt-4 mb-2 font-serif text-foreground">
+          <h3 key={`h3-${i}`} className="text-base font-semibold mt-3 mb-2 font-serif text-foreground">
             {trimmedLine.replace('### ', '')}
           </h3>
         );
@@ -111,7 +111,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('> ')) {
         flushParagraph();
         elements.push(
-          <p key={`bq-${i}`} className="font-serif text-[15px] font-bold text-foreground my-4 leading-relaxed">
+          <p key={`bq-${i}`} className="font-serif text-sm font-bold text-foreground my-3 leading-7">
             {trimmedLine.replace('> ', '')}
           </p>
         );
@@ -120,9 +120,9 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
         flushParagraph();
         elements.push(
-          <div key={`li-${i}`} className="flex items-start gap-2 mb-2 ml-4">
+          <div key={`li-${i}`} className="flex items-start gap-2 mb-2 ml-3">
             <span className="text-primary mt-1">•</span>
-            <span className="font-serif text-[15px] text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
+            <span className="font-serif text-sm leading-7 text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
           </div>
         );
       }
@@ -141,7 +141,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
   };
 
   return (
-    <div className="h-full overflow-y-auto px-12 py-10">
+    <div className="h-full overflow-y-auto px-8 py-8">
       {parseTextWithHeaders(content.text)}
     </div>
   );
