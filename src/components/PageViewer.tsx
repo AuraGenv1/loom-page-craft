@@ -107,13 +107,13 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
           </h3>
         );
       }
-      // Blockquotes (> )
+      // Blockquotes (> ) - styled as subtle inline emphasis
       else if (trimmedLine.startsWith('> ')) {
         flushParagraph();
         elements.push(
-          <blockquote key={`bq-${i}`} className="border-l-4 border-primary/30 pl-4 py-2 my-4 italic text-muted-foreground font-serif text-[15px]">
+          <p key={`bq-${i}`} className="font-serif text-[15px] italic text-muted-foreground my-4 leading-relaxed">
             {trimmedLine.replace('> ', '')}
-          </blockquote>
+          </p>
         );
       }
       // Bullet points (* or - )
@@ -566,18 +566,19 @@ const ImageHalfPage: React.FC<{
   </div>
 );
 
-// Pro Tip page - ELEGANT style (centered, no box)
+// Pro Tip page - LEFT-ALIGNED style with subtle left border
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
-  <div className="h-full flex flex-col items-center justify-start pt-16 px-12">
-    <div className="text-center max-w-md">
-      {/* Large centered key icon */}
-      <Key className="w-12 h-12 text-primary/60 mx-auto mb-4" />
-      {/* Small caps label */}
-      <p className="text-xs font-bold tracking-[0.3em] uppercase text-muted-foreground mb-6">
-        PRO TIP
-      </p>
-      {/* Italic serif text */}
-      <p className="font-serif text-xl italic text-foreground leading-relaxed">
+  <div className="h-full flex items-start justify-center pt-16 px-12">
+    <div className="max-w-md border-l-2 border-muted-foreground/30 pl-4">
+      {/* Small icon + label row */}
+      <div className="flex items-center gap-2 mb-3">
+        <Key className="w-4 h-4 text-muted-foreground" />
+        <p className="text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground">
+          PRO TIP
+        </p>
+      </div>
+      {/* Left-aligned italic serif text */}
+      <p className="font-serif text-lg italic text-foreground leading-relaxed">
         {content.text}
       </p>
     </div>
