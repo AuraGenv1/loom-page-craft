@@ -686,11 +686,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (showSpineText) {
         const textRgb = hexToRgb(spineTextColor);
         pdf.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+        
+        // Calculate spine center for vertical text positioning
+        const spineCenterX = coverWidth + spineWidth / 2;
+        const spineTextMaxWidth = pageHeight - 1.0; // Leave 0.5" margin on each end
+        
+        // Edition text at top of spine (rotated 90° so reads bottom-to-top)
         pdf.setFont(fontName, 'normal');
-        pdf.setFontSize(FONT_SIZES.spineEdition);
-        pdf.text(editionText, coverWidth + spineWidth / 2, 0.4, { angle: 90, align: 'left' });
-        pdf.setFontSize(FONT_SIZES.spineTitle);
-        pdf.text((spineText || title).slice(0, 35), coverWidth + spineWidth / 2, pageHeight - 0.4, { angle: 90, align: 'right' });
+        const editionFontSize = Math.min(FONT_SIZES.spineEdition, spineWidth * 18); // Scale to spine width
+        pdf.setFontSize(editionFontSize);
+        pdf.text(editionText, spineCenterX, 0.5, { angle: 90, align: 'left' });
+        
+        // Title at bottom of spine (rotated 90° so reads bottom-to-top)
+        pdf.setFont(fontName, 'bold');
+        const titleFontSize = Math.min(FONT_SIZES.spineTitle, spineWidth * 22); // Slightly larger for title
+        pdf.setFontSize(titleFontSize);
+        const displaySpineTitle = (spineText || title).slice(0, 30).toUpperCase();
+        pdf.text(displaySpineTitle, spineCenterX, pageHeight - 0.5, { angle: 90, align: 'right' });
       }
 
       // === FRONT COVER ===
@@ -1456,25 +1468,35 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           const textRgb = hexToRgb(spineTextColor);
           ctx.fillStyle = `rgb(${textRgb.r}, ${textRgb.g}, ${textRgb.b})`;
           
-          // Edition text (rotated, at top)
-          const spineFontSize = spineWidth * 0.35;
+          // Calculate proportional font size based on spine width (at 300 DPI)
+          // Spine width in pixels; font should be ~45% of spine width for readability
+          const spineFontSize = Math.max(spineWidth * 0.42, 20);
+          const titleFontSize = Math.max(spineWidth * 0.48, 24);
+          
+          // Safe margins from top/bottom edges (5% of total height)
+          const safeMargin = totalHeight * 0.05;
+          
+          // Edition text at TOP of spine (rotated -90° so text reads bottom-to-top when book is on shelf)
           ctx.save();
-          ctx.translate(spineX + spineWidth / 2, totalHeight * 0.08);
+          ctx.translate(spineX + spineWidth / 2, safeMargin);
           ctx.rotate(-Math.PI / 2);
           ctx.font = `400 ${spineFontSize}px 'Playfair Display', Georgia, serif`;
-          ctx.textAlign = 'left';
-          ctx.globalAlpha = 0.7;
-          ctx.fillText(editionText, 0, spineFontSize * 0.3);
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.globalAlpha = 0.75;
+          ctx.fillText(editionText, 0, 0);
           ctx.restore();
           
-          // Title (rotated, at bottom)
+          // Title at BOTTOM of spine (rotated -90° so text reads bottom-to-top)
           ctx.save();
-          ctx.translate(spineX + spineWidth / 2, totalHeight * 0.92);
+          ctx.translate(spineX + spineWidth / 2, totalHeight - safeMargin);
           ctx.rotate(-Math.PI / 2);
-          ctx.font = `500 ${spineFontSize * 1.2}px 'Playfair Display', Georgia, serif`;
-          ctx.textAlign = 'right';
+          ctx.font = `600 ${titleFontSize}px 'Playfair Display', Georgia, serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
           ctx.globalAlpha = 1;
-          ctx.fillText((spineText || title).slice(0, 35), 0, spineFontSize * 0.4);
+          const displaySpineTitle = (spineText || title).slice(0, 28).toUpperCase();
+          ctx.fillText(displaySpineTitle, 0, 0);
           ctx.restore();
         }
         
