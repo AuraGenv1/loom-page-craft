@@ -224,17 +224,22 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
   );
 };
 
-// Large "Add Image" button for empty blocks (replaces small search button)
+// Large "Add Image" button for empty blocks (drop zone style)
 const AddImageButton: React.FC<{ onSearch: () => void }> = ({ onSearch }) => (
-  <Button
-    variant="outline"
-    size="lg"
+  <button
     onClick={onSearch}
-    className="gap-3 px-8 py-6 text-lg border-2 border-dashed hover:border-primary"
+    className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-muted-foreground/30 rounded-xl hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
   >
-    <ImagePlus className="w-6 h-6" />
-    Add Image
-  </Button>
+    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+      <ImagePlus className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+    </div>
+    <span className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
+      Add Image
+    </span>
+    <span className="text-xs text-muted-foreground/60">
+      Click to search or upload
+    </span>
+  </button>
 );
 
 // Page Content Edit Modal
@@ -561,24 +566,20 @@ const ImageHalfPage: React.FC<{
   </div>
 );
 
-// Pro Tip page - BOXED style for advice
+// Pro Tip page - ELEGANT style (centered, no box)
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
-  <div className="h-full flex items-start justify-center pt-12" style={{
-    paddingLeft: '72px',
-    paddingRight: '48px'
-  }}>
-    <div className="bg-muted/50 border-2 border-foreground/20 rounded-lg p-8 max-w-md shadow-sm">
-      <div className="flex items-start gap-4">
-        <Key className="w-5 h-5 text-foreground flex-shrink-0 mt-1" />
-        <div>
-          <p className="text-xs font-bold tracking-[0.2em] uppercase text-foreground mb-3">
-            PRO TIP
-          </p>
-          <p className="font-serif text-lg text-foreground leading-relaxed">
-            {content.text}
-          </p>
-        </div>
-      </div>
+  <div className="h-full flex flex-col items-center justify-start pt-16 px-12">
+    <div className="text-center max-w-md">
+      {/* Large centered key icon */}
+      <Key className="w-12 h-12 text-primary/60 mx-auto mb-4" />
+      {/* Small caps label */}
+      <p className="text-xs font-bold tracking-[0.3em] uppercase text-muted-foreground mb-6">
+        PRO TIP
+      </p>
+      {/* Italic serif text */}
+      <p className="font-serif text-xl italic text-foreground leading-relaxed">
+        {content.text}
+      </p>
     </div>
   </div>
 );
@@ -621,13 +622,16 @@ const ListPage: React.FC<{ content: { items: string[]; ordered?: boolean } }> = 
   </div>
 );
 
-// Quote page for chapter breakers - CENTER, ITALIC PULL QUOTE style (famous quotes only)
+// Quote page - CLASSIC EDITORIAL style (large quotation mark, centered, no gray line)
 const QuotePage: React.FC<{ content: { text: string; attribution?: string } }> = ({ content }) => (
   <div className="h-full flex items-center justify-center px-12">
-    <div className="text-center max-w-lg">
-      <Quote className="w-10 h-10 text-muted-foreground/30 mx-auto mb-6 rotate-180" />
-      <p className="font-serif text-2xl italic text-foreground leading-relaxed mb-6">
-        "{content.text}"
+    <div className="text-center max-w-lg relative">
+      {/* Large decorative opening quotation mark */}
+      <span className="absolute -top-8 left-1/2 -translate-x-1/2 text-8xl font-serif text-muted-foreground/15 leading-none select-none">
+        "
+      </span>
+      <p className="font-serif text-2xl italic text-foreground leading-relaxed mb-6 pt-8">
+        {content.text}
       </p>
       {content.attribution && (
         <p className="text-sm tracking-[0.15em] uppercase text-muted-foreground">
@@ -1351,7 +1355,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const currentBlock = blocks[currentIndex];
 
   return (
-    <div className="w-full">
+    <div className="w-full h-[calc(100vh-180px)] flex flex-col">
       {/* Image Upload Modal */}
       <ImageUploadModal
         open={uploadModalOpen}
@@ -1434,10 +1438,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       
       {/* Page Container - Kindle-style aspect ratio with Zoom support */}
       <div 
-        className="relative bg-card rounded-lg border shadow-lg overflow-hidden transition-transform duration-200"
+        className="relative bg-card rounded-lg border shadow-lg overflow-hidden transition-transform duration-200 flex-1 mx-auto w-full"
         style={{ 
+          maxWidth: zoomMode === 'fit' ? 'calc((100vh - 280px) * 0.75)' : '100%',
           aspectRatio: '3/4',
-          transform: zoomMode === 'fit' ? 'scale(0.85)' : 'scale(1)',
+          transform: zoomMode === 'fit' ? 'scale(0.9)' : 'scale(1)',
           transformOrigin: 'top center'
         }}
       >
@@ -1487,8 +1492,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         />
       </div>
 
-      {/* Navigation Controls */}
-      <div className="flex items-center justify-between mt-4 px-2">
+      {/* Navigation Controls - Fixed at bottom */}
+      <div className="flex items-center justify-between mt-auto pt-4 px-2 flex-shrink-0">
         <Button
           variant="outline"
           size="sm"
