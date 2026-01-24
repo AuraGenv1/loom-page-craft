@@ -233,18 +233,35 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     }, [allUrls, title, bookId, isPlaceholderUrl, onCoverUpdate]);
     
     // Update locked URLs when we get new ones
+    // PROTECTION: Never downgrade from a valid image to a placeholder
     useEffect(() => {
-      if (allUrls.length > 0 && lockedUrls.length === 0) {
+      if (allUrls.length === 0) return;
+      
+      // Check if we currently have a "Good" image (not a placeholder)
+      const hasGoodLocal = lockedUrls.length > 0 && !isPlaceholderUrl(lockedUrls[0]);
+      
+      // Check if the incoming update is a "Bad" image (placeholder)
+      const incomingIsBad = allUrls.length > 0 && isPlaceholderUrl(allUrls[0]);
+      
+      // PROTECT: If we have a good image, and the update is bad, REJECT the update
+      if (hasGoodLocal && incomingIsBad) {
+        console.log('[BookCover] Ignoring downgrade to placeholder - keeping valid image');
+        return; 
+      }
+      
+      if (lockedUrls.length === 0) {
+        // First time setting URLs
         setLockedUrls(allUrls);
         setImageLoaded(false);
         setCurrentUrlIndex(0);
-      } else if (allUrls.length > 0 && JSON.stringify(allUrls) !== JSON.stringify(lockedUrls)) {
-        // DB update with new URLs - use them
+      } else if (JSON.stringify(allUrls) !== JSON.stringify(lockedUrls)) {
+        // DB update with new URLs - use them (already validated above)
+        console.log('[BookCover] Updating cover URLs:', allUrls[0]);
         setLockedUrls(allUrls);
         setCurrentUrlIndex(0);
         setImageLoaded(false);
       }
-    }, [allUrls, lockedUrls]);
+    }, [allUrls, lockedUrls, isPlaceholderUrl]);
 
     // Sync props to local state
     useEffect(() => {
