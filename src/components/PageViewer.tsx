@@ -69,7 +69,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         const paragraphText = currentParagraph.join(' ').trim();
         if (paragraphText) {
           elements.push(
-            <p key={elements.length} className="font-serif text-base leading-relaxed text-foreground mb-4">
+            <p key={elements.length} className="font-serif text-[15px] leading-relaxed text-foreground mb-4">
               {paragraphText}
             </p>
           );
@@ -85,7 +85,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       if (trimmedLine.startsWith('## ')) {
         flushParagraph();
         elements.push(
-          <h2 key={`h2-${i}`} className="text-2xl font-bold mt-6 mb-4 font-serif text-foreground">
+          <h2 key={`h2-${i}`} className="text-xl font-bold mt-5 mb-3 font-serif text-foreground">
             {trimmedLine.replace('## ', '')}
           </h2>
         );
@@ -94,7 +94,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('### ')) {
         flushParagraph();
         elements.push(
-          <h3 key={`h3-${i}`} className="text-xl font-semibold mt-4 mb-2 font-serif text-foreground">
+          <h3 key={`h3-${i}`} className="text-lg font-semibold mt-4 mb-2 font-serif text-foreground">
             {trimmedLine.replace('### ', '')}
           </h3>
         );
@@ -103,7 +103,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('> ')) {
         flushParagraph();
         elements.push(
-          <blockquote key={`bq-${i}`} className="border-l-4 border-primary/30 pl-4 py-2 my-4 italic text-muted-foreground font-serif">
+          <blockquote key={`bq-${i}`} className="border-l-4 border-primary/30 pl-4 py-2 my-4 italic text-muted-foreground font-serif text-[15px]">
             {trimmedLine.replace('> ', '')}
           </blockquote>
         );
@@ -113,8 +113,8 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         flushParagraph();
         elements.push(
           <div key={`li-${i}`} className="flex items-start gap-2 mb-2 ml-4">
-            <span className="text-primary mt-1.5">•</span>
-            <span className="font-serif text-base text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
+            <span className="text-primary mt-1">•</span>
+            <span className="font-serif text-[15px] text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
           </div>
         );
       }
@@ -133,12 +133,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
   };
 
   return (
-    <div className="h-full overflow-y-auto" style={{ 
-      paddingLeft: '72px',  // Inner gutter: 0.75in
-      paddingRight: '48px', // Outer edge: 0.5in
-      paddingTop: '48px',   // Top: 0.5in
-      paddingBottom: '48px' // Bottom: 0.5in
-    }}>
+    <div className="h-full overflow-y-auto px-12 py-10">
       {parseTextWithHeaders(content.text)}
     </div>
   );
