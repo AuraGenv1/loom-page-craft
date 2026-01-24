@@ -66,7 +66,7 @@ const ChapterTitlePage: React.FC<{ content: { chapter_number: number; title: str
 );
 
 const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
-  // Parse text for headers, blockquotes, and lists
+  // Parse text for headers and lists (blockquotes banned)
   const parseTextWithHeaders = (text: string) => {
     const lines = text.split('\n');
     const elements: JSX.Element[] = [];
@@ -77,7 +77,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         const paragraphText = currentParagraph.join(' ').trim();
         if (paragraphText) {
           elements.push(
-            <p key={elements.length} className="font-serif text-sm leading-7 text-foreground mb-3">
+            <p key={elements.length} className="font-serif text-[15px] leading-relaxed text-foreground mb-3">
               {paragraphText}
             </p>
           );
@@ -107,11 +107,11 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
           </h3>
         );
       }
-      // Blockquotes (> ) - render as bold emphasis text (no gray line)
+      // Blockquotes (> ) - render as bold text (no border/gray line)
       else if (trimmedLine.startsWith('> ')) {
         flushParagraph();
         elements.push(
-          <p key={`bq-${i}`} className="font-serif text-sm font-bold text-foreground my-3 leading-7">
+          <p key={`bq-${i}`} className="font-serif text-[15px] font-semibold text-foreground my-2 leading-relaxed">
             {trimmedLine.replace('> ', '')}
           </p>
         );
@@ -120,9 +120,9 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
       else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
         flushParagraph();
         elements.push(
-          <div key={`li-${i}`} className="flex items-start gap-2 mb-2 ml-3">
-            <span className="text-primary mt-1">•</span>
-            <span className="font-serif text-sm leading-7 text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
+          <div key={`li-${i}`} className="flex items-start gap-2 mb-1.5 ml-3">
+            <span className="text-primary mt-0.5">•</span>
+            <span className="font-serif text-[15px] leading-relaxed text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
           </div>
         );
       }
