@@ -235,7 +235,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
   // A. The "Sticker" (Pinned to Bottom of Page 2)
   contentArray.push({
     stack: [
-      { text: 'Copyright © 2026 by Larvotto Ventures, LLC', fontSize: 10, bold: true, color: '#333' },
+      { text: 'Copyright © 2026 by Larvotto Ventures LLC', fontSize: 10, bold: true, color: '#333' },
       { text: 'DBA Loom & Page', fontSize: 10, color: '#555', margin: [0, 0, 0, 10] },
       
       { text: 'All rights reserved.', fontSize: 9, color: '#555' },
