@@ -117,6 +117,7 @@ FORMATTING BANS:
 - Do NOT use asterisks (*) for emphasis or bullet points. Use standard punctuation.
 - Do NOT generate "quote" blocks. AI quotes are often inaccurate.
 - Do NOT copy example placeholder text. Generate UNIQUE content for every block.
+- JSON SAFETY RULE: You MUST escape all double quotes inside string values. Example: write \\"quote\\" instead of "quote". Do NOT use unescaped double quotes inside text fields.
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
