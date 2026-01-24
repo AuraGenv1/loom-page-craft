@@ -151,23 +151,47 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     
     // Known placeholder/bad image patterns to detect
     const PLACEHOLDER_PATTERNS = [
-      'pexels.com', // Generic Pexels (often "Apple Lady")
       'placeholder',
       'default-image',
       'no-image',
     ];
     
+    // Known GOOD image sources (should never be overwritten)
+    const VALID_IMAGE_SOURCES = [
+      'unsplash.com',
+      'images.unsplash.com',
+      'upload.wikimedia.org',
+    ];
+    
+    // Check if a URL is from a valid source (should be locked)
+    const isValidSourceUrl = useCallback((url: string | null | undefined): boolean => {
+      if (!url) return false;
+      const lowerUrl = url.toLowerCase();
+      return VALID_IMAGE_SOURCES.some(source => lowerUrl.includes(source));
+    }, []);
+    
     // Check if a URL is a known placeholder
     const isPlaceholderUrl = useCallback((url: string | null | undefined): boolean => {
       if (!url) return true;
+      // If it's from a valid source, it's NOT a placeholder
+      if (isValidSourceUrl(url)) return false;
       const lowerUrl = url.toLowerCase();
       return PLACEHOLDER_PATTERNS.some(pattern => lowerUrl.includes(pattern));
-    }, []);
+    }, [isValidSourceUrl]);
     
-    // Auto-fetch cover image if empty or placeholder detected
+    // Auto-fetch cover image ONLY if empty or placeholder detected
+    // CRITICAL: Never overwrite a valid Unsplash/Wikimedia URL
     useEffect(() => {
       // Only run once per mount/book
       if (hasFetchedFallbackRef.current) return;
+      
+      // If we already have a valid source URL, lock it and don't fetch
+      const hasValidSource = allUrls.some(url => isValidSourceUrl(url));
+      if (hasValidSource) {
+        console.log('[BookCover] Valid cover image detected, locking:', allUrls[0]);
+        hasFetchedFallbackRef.current = true;
+        return;
+      }
       
       // Check if we need to fetch a new cover
       const needsFetch = allUrls.length === 0 || allUrls.every(url => isPlaceholderUrl(url));
