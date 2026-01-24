@@ -623,11 +623,24 @@ const ListPage: React.FC<{ content: { items: string[]; ordered?: boolean } }> = 
   </div>
 );
 
-// Quote page - CLASSIC EDITORIAL style (large quotation mark, centered, no gray line)
+// Key Takeaway page - Professional summary box with left accent
+const KeyTakeawayPage: React.FC<{ content: { text: string } }> = ({ content }) => (
+  <div className="h-full flex items-center justify-center px-12">
+    <div className="max-w-lg bg-secondary/10 border-l-4 border-primary p-6 rounded-r-lg">
+      <p className="text-xs font-bold tracking-[0.2em] uppercase text-primary mb-3">
+        KEY TAKEAWAY
+      </p>
+      <p className="font-serif text-lg text-foreground leading-relaxed">
+        {content.text}
+      </p>
+    </div>
+  </div>
+);
+
+// Legacy Quote page (kept for backward compatibility with existing data)
 const QuotePage: React.FC<{ content: { text: string; attribution?: string } }> = ({ content }) => (
   <div className="h-full flex items-center justify-center px-12">
     <div className="text-center max-w-lg relative">
-      {/* Large decorative opening quotation mark */}
       <span className="absolute -top-8 left-1/2 -translate-x-1/2 text-8xl font-serif text-muted-foreground/15 leading-none select-none">
         "
       </span>
@@ -719,14 +732,19 @@ const BlockRenderer: React.FC<{
     case 'list':
       return <ListPage content={block.content as { items: string[]; ordered?: boolean }} />;
     case 'quote':
+      // Handle both legacy 'quote' blocks AND new 'key_takeaway' blocks that may come through as 'quote'
       return <QuotePage content={block.content as { text: string; attribution?: string }} />;
     case 'divider':
       return <DividerPage content={block.content as { style?: 'minimal' | 'ornate' | 'line' }} />;
     default: {
-      const _exhaustiveCheck: never = block;
+      // Handle unknown block types including 'key_takeaway' until DB enum is updated
+      const blockType = (block as any).block_type;
+      if (blockType === 'key_takeaway') {
+        return <KeyTakeawayPage content={(block as any).content as { text: string }} />;
+      }
       return (
         <div className="h-full flex items-center justify-center">
-          <p className="text-muted-foreground">Unknown block type: {(block as any).block_type}</p>
+          <p className="text-muted-foreground">Unknown block type: {blockType}</p>
         </div>
       );
     }

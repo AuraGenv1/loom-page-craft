@@ -85,13 +85,13 @@ RULE 4: NO FACES & VARIED CAMERA ANGLES (Image Queries)
 - VARY CAMERA ANGLES: Use Wide Shot, Macro/Close-Up, Action Shot, Aerial View, Detail Shot.
 - Append to ALL queries: "no people no faces atmospheric"
 
-RULE 5: QUOTE VS PRO_TIP DISTINCTION (CRITICAL!)
-- "quote" blocks are ONLY for famous inspirational quotes from notable people. Include attribution.
-- "pro_tip" blocks are for practical advice, insider tips, and actionable guidance. NO attribution.
-- Do NOT use "quote" for tips. Do NOT use "pro_tip" for quotes.
+RULE 5: KEY_TAKEAWAY VS PRO_TIP DISTINCTION (CRITICAL!)
+- "key_takeaway" blocks are for powerful 1-sentence summaries emphasizing a key point. Use to reinforce learning.
+- "pro_tip" blocks are for practical advice, insider tips, and actionable guidance.
+- NEVER use "quote" blocks - they are deprecated and forbidden.
 
-RULE 6: CHAPTER BREAKER (Professional Offset)
-- If this is NOT chapter 1, you may start with a "quote" block before "chapter_title" for professional page offset.
+RULE 6: CHAPTER OPENER (Always Start Strong)
+- The FIRST text block of every chapter MUST start with a Markdown header (\`## Title\`) to anchor the content.
 
 RULE 7: END WITH VISUAL VARIETY
 - Always end a text block with either:
@@ -103,30 +103,32 @@ TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images'
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these - heading and list blocks are FORBIDDEN):
+Block types (ONLY use these - heading, list, and quote blocks are FORBIDDEN):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "Exactly 300 words. Use ## Header, ### Subheader, > Blockquote, * Bullet INSIDE." }
 - "image_full": { "query": "search term no people varied angle atmospheric", "caption": "Evocative caption" }
 - "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
-- "pro_tip": { "text": "Expert insider advice - practical tips ONLY, no famous quotes" }
-- "quote": { "text": "Famous inspirational quote", "attribution": "Famous Person Name" }
+- "pro_tip": { "text": "Expert insider advice - practical tips ONLY" }
+- "key_takeaway": { "text": "A powerful 1-sentence summary reinforcing the section's key insight." }
 - "divider": { "style": "minimal" }
 
 REQUIREMENTS:
-- First block MUST be "chapter_title" (or "quote" then "chapter_title" for offset)
+- First block MUST be "chapter_title"
 - Include exactly 1 "pro_tip" block per chapter
-- Each "text" block: EXACTLY 300 words with inline markdown
+- You may include 1 "key_takeaway" block to emphasize a powerful point
+- Each "text" block: EXACTLY 300 words with inline markdown (first text block MUST start with ## Header)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NEVER use "heading" or "list" blocks - embed ALL formatting in text blocks!
+- NEVER use "heading", "list", or "quote" blocks - they are deprecated!
 
 Return ONLY valid JSON array:
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
   {"block_type": "image_full", "content": {"query": "atmospheric wide shot scene no people", "caption": "Hero image"}},
-  {"block_type": "text", "content": {"text": "## Section Header\\n\\nRich content paragraph...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote"}},
+  {"block_type": "text", "content": {"text": "## Opening Section Header\\n\\nRich content paragraph...\\n\\n### Subsection\\n\\nMore detailed content...\\n\\n> Key insight blockquote"}},
   {"block_type": "text", "content": {"text": "## Another Section\\n\\nMore content...\\n\\n* Takeaway 1\\n* Takeaway 2\\n* Takeaway 3"}},
   {"block_type": "pro_tip", "content": {"text": "Expert practical advice"}},
+  {"block_type": "key_takeaway", "content": {"text": "A powerful one-sentence summary of the chapter's core insight."}},
   ...
 ]
 
