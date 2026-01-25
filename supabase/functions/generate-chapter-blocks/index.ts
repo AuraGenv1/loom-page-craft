@@ -60,16 +60,17 @@ serve(async (req) => {
 
 === LUXURY ARCHITECT RULES ===
 
-RULE 0: FORCE HEADERS (ESPECIALLY CHAPTER 1!)
-- The VERY FIRST text block of Chapter 1 MUST start with a Markdown header (e.g., \`## The Journey Begins\`).
+RULE 0: FORCE HEADERS (AGGRESSIVE!)
+- Chapter 1 MUST start with \`## Chapter 1\` or a similar descriptive header.
+- EVERY SINGLE text block MUST have a \`## Header\` or \`### Subheader\` to break up the wall of text.
 - Do NOT write a plain introduction paragraph. Treat Chapter 1 EXACTLY like Chapter 5.
-- Chapter 1 is NOT a summary. It must contain full-density text blocks (220-250 words each) with explicit headers.
-- Every single text block must contain at least one \`## Header\` or \`### Subheader\`. No blocks of just plain text.
+- Chapter 1 is NOT a summary. It must contain full-density text blocks with explicit headers.
+- No blocks of just plain text. Headers are MANDATORY.
 
-RULE 1: EXTREME COMPACITY (6x9 Print Fit - NO SCROLLING!)
-- CRITICAL: Each "text" block MUST contain **220-250 words MAXIMUM**. This is a 6x9 inch print book.
-- 200 words is the MINIMUM. 250 words is the MAXIMUM. 300+ words causes overflow and scrolling.
-- Be CONCISE. Every sentence must earn its place.
+RULE 1: DENSE CONTENT (Fill the 6x9 Page!)
+- CRITICAL: Each "text" block MUST contain **350-400 words**. The user wants dense, substantial content to fill the 6x9 page. No white space at the bottom.
+- 350 words is the MINIMUM. 400 words is the TARGET. This ensures the page is fully utilized.
+- Be substantive. Every paragraph must add value and depth.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
 - Use Markdown INSIDE text blocks: "## Header", "### Subheader"
@@ -92,7 +93,7 @@ RULE 5: CHAPTER STRUCTURE (Strict Order)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
   2. 1-2x Hero Images (image_full blocks)
-  3. 5-7x Text Pages (text blocks, 220-250 words each, EACH starts with ## Header)
+  3. 5-7x Text Pages (text blocks, 350-400 words each, EACH starts with ## Header)
   4. Second-to-last text block: Contains the ### Key Takeaway section
   5. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
@@ -108,9 +109,9 @@ TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images'
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these four types):
+Block types (ONLY use these four types - NO quote blocks!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
+- "text": { "text": "350-400 words. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "image_half": { "query": "Literal visual description of scene", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
@@ -126,17 +127,17 @@ REQUIREMENTS:
 - Last block MUST be "pro_tip" (anchored to end)
 - Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
-- Each "text" block: 220-250 words MAX with inline markdown
+- Each "text" block: 350-400 words with inline markdown (fill the page!)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NEVER use "heading", "list", "quote", or "key_takeaway" blocks!
+- NEVER use "heading", "list", "quote", or "key_takeaway" blocks! Only: chapter_title, text, image_full, image_half, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "[unique search query] no people atmospheric", "caption": "[unique evocative caption]"}},
-  {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words of original content here. Be specific and substantive.]\\n\\n### [Unique Subheader]\\n\\n[Continue with detailed, original content...]"}},
-  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
+  {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
+  {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 350-400 words of original content here. Be specific and substantive. Fill the page!]\\n\\n### [Unique Subheader]\\n\\n[Continue with detailed, original content...]"}},
+  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 350-400 words...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
 
