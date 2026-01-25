@@ -11,28 +11,12 @@ interface ImageResult {
   source: 'unsplash' | 'wikimedia' | 'none';
 }
 
-// AI-generated negative prompts and style keywords to remove
+// AI-generated negative prompts to remove (keep useful descriptive terms)
 const NOISE_PHRASES = [
   'no people',
   'no faces',
   'no humans',
   'without people',
-  'atmospheric',
-  'architectural detail',
-  'photorealistic',
-  'ultra high resolution',
-  'high quality',
-  'professional photo',
-  'stock photo',
-  'editorial',
-  'cinematic',
-  'dramatic lighting',
-  'moody',
-  'vibrant colors',
-  'texture',
-  'macro',
-  'close up',
-  'detailed',
 ];
 
 // Clean the query by removing AI-specific phrases
@@ -269,13 +253,30 @@ serve(async (req) => {
     // STEP 2: Try Unsplash with fallbacks
     let result = await searchUnsplashWithFallbacks(cleanedQuery, orientation);
 
-    // STEP 3: Try Wikimedia with fallbacks
+    // STEP 3: Retry with "wallpaper" suffix if first attempt failed
     if (!result) {
-      console.log('[fetch-book-images] Unsplash failed, trying Wikimedia...');
+      const wallpaperQuery = `${cleanedQuery} wallpaper`;
+      console.log(`[fetch-book-images] First attempt failed, trying with wallpaper: "${wallpaperQuery}"`);
+      result = await searchUnsplashWithFallbacks(wallpaperQuery, orientation);
+    }
+
+    // STEP 4: Retry with just first 2 words if wallpaper also failed
+    if (!result) {
+      const words = cleanedQuery.split(' ').filter(w => w.length > 2);
+      if (words.length >= 2) {
+        const twoWordQuery = words.slice(0, 2).join(' ');
+        console.log(`[fetch-book-images] Wallpaper failed, trying first 2 words: "${twoWordQuery}"`);
+        result = await searchUnsplashWithFallbacks(twoWordQuery, orientation);
+      }
+    }
+
+    // STEP 5: Try Wikimedia with fallbacks as last resort
+    if (!result) {
+      console.log('[fetch-book-images] Unsplash exhausted, trying Wikimedia...');
       result = await searchWikimediaWithFallbacks(cleanedQuery);
     }
 
-    // STEP 4: Return gracefully even if no images found (NO 404!)
+    // STEP 6: Return gracefully even if no images found (NO 404!)
     if (!result) {
       console.log('[fetch-book-images] No images found from any source, returning null gracefully');
       return new Response(
