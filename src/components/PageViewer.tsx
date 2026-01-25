@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Quote, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, PanelTop } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, PanelTop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -646,7 +646,7 @@ const ImageHalfPage: React.FC<{
   </div>
 );
 
-// Pro Tip page - LEFT-ALIGNED style with subtle left border
+// Pro Tip page - LEFT-ALIGNED style with subtle left border (NO ITALICS)
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
   <div className="h-full flex items-start justify-center pt-16 px-12">
     <div className="max-w-md border-l-2 border-muted-foreground/30 pl-4">
@@ -657,8 +657,8 @@ const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
           PRO TIP
         </p>
       </div>
-      {/* Left-aligned italic serif text */}
-      <p className="font-serif text-lg italic text-foreground leading-relaxed">
+      {/* Left-aligned normal serif text (no italics) */}
+      <p className="font-serif text-lg text-foreground leading-relaxed">
         {content.text}
       </p>
     </div>
@@ -717,24 +717,7 @@ const KeyTakeawayPage: React.FC<{ content: { text: string } }> = ({ content }) =
   </div>
 );
 
-// Legacy Quote page (kept for backward compatibility with existing data)
-const QuotePage: React.FC<{ content: { text: string; attribution?: string } }> = ({ content }) => (
-  <div className="h-full flex items-center justify-center px-12">
-    <div className="text-center max-w-lg relative">
-      <span className="absolute -top-8 left-1/2 -translate-x-1/2 text-8xl font-serif text-muted-foreground/15 leading-none select-none">
-        "
-      </span>
-      <p className="font-serif text-2xl italic text-foreground leading-relaxed mb-6 pt-8">
-        {content.text}
-      </p>
-      {content.attribution && (
-        <p className="text-sm tracking-[0.15em] uppercase text-muted-foreground">
-          — {content.attribution}
-        </p>
-      )}
-    </div>
-  </div>
-);
+// QuotePage REMOVED - quotes now render as TextPage via fallback
 
 // Divider page for visual breaks
 const DividerPage: React.FC<{ content: { style?: 'minimal' | 'ornate' | 'line' } }> = ({ content }) => (
@@ -811,17 +794,33 @@ const BlockRenderer: React.FC<{
       return <HeadingPage content={block.content as { level: 2 | 3; text: string }} />;
     case 'list':
       return <ListPage content={block.content as { items: string[]; ordered?: boolean }} />;
-    case 'quote':
-      // Handle both legacy 'quote' blocks AND new 'key_takeaway' blocks that may come through as 'quote'
-      return <QuotePage content={block.content as { text: string; attribution?: string }} />;
     case 'divider':
       return <DividerPage content={block.content as { style?: 'minimal' | 'ornate' | 'line' }} />;
     default: {
-      // Handle unknown block types including 'key_takeaway' until DB enum is updated
+      // Fallback: Render unknown block types (including 'quote', 'key_takeaway') as TextPage
       const blockType = (block as any).block_type;
+      const content = (block as any).content;
+      
+      // Handle key_takeaway blocks
       if (blockType === 'key_takeaway') {
-        return <KeyTakeawayPage content={(block as any).content as { text: string }} />;
+        return <KeyTakeawayPage content={content as { text: string }} />;
       }
+      
+      // Handle quote blocks as plain text (no special styling)
+      if (blockType === 'quote') {
+        const quoteContent = content as { text: string; attribution?: string };
+        const textWithAttribution = quoteContent.attribution 
+          ? `${quoteContent.text}\n\n— ${quoteContent.attribution}`
+          : quoteContent.text;
+        return <TextPage content={{ text: textWithAttribution }} />;
+      }
+      
+      // Any other unknown type: try to render as text if it has a text field
+      if (content?.text) {
+        return <TextPage content={{ text: content.text }} />;
+      }
+      
+      // Last resort: show unknown block message
       return (
         <div className="h-full flex items-center justify-center">
           <p className="text-muted-foreground">Unknown block type: {blockType}</p>
