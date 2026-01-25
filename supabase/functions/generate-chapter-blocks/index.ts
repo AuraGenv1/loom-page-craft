@@ -97,10 +97,12 @@ This chapter MUST follow this structure:
   5. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 6: NO FACES & VARIED CAMERA ANGLES (Image Queries)
-- For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
-- STRICTLY FORBIDDEN: human faces, people, portraits, crowds, selfies.
-- Append to ALL queries: "no people no faces atmospheric"
+RULE 6: LITERAL VISUAL QUERIES (Image Queries)
+- Image queries must be physical descriptions of objects or places, NOT abstract concepts.
+- BAD: "The concept of freedom" → GOOD: "A soaring eagle against a blue sky"
+- BAD: "Business success" → GOOD: "A modern glass skyscraper from below"
+- BAD: "History forged in sand" → GOOD: "Ancient desert ruins at sunset"
+- Do NOT append "no people" manually. Just describe a scene that naturally lacks people (e.g., "Empty desk", "Lonely road", "Abandoned building interior").
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
@@ -109,8 +111,8 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 Block types (ONLY use these four types):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
-- "image_full": { "query": "search term no people atmospheric", "caption": "Evocative caption" }
-- "image_half": { "query": "search term no people atmospheric", "caption": "Caption" }
+- "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
+- "image_half": { "query": "Literal visual description of scene", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:

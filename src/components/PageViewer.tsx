@@ -174,12 +174,12 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
   };
 
   return (
-    <div className="absolute top-2 right-2 z-10 flex gap-1 bg-background/90 backdrop-blur-sm rounded-lg p-1 shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="absolute top-2 right-2 z-50 flex gap-1 bg-background/90 backdrop-blur-sm rounded-lg p-1 shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity">
       <Button
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        onClick={onManualSearch}
+        onClick={(e) => { e.stopPropagation(); onManualSearch(); }}
         title="Manual Search"
       >
         <Pencil className="w-4 h-4" />
@@ -188,7 +188,7 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        onClick={onUpload}
+        onClick={(e) => { e.stopPropagation(); onUpload(); }}
         title="Upload Own Photo"
       >
         <Upload className="w-4 h-4" />
@@ -197,7 +197,7 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        onClick={handleEditCaption}
+        onClick={(e) => { e.stopPropagation(); handleEditCaption(); }}
         title="Edit Caption"
       >
         <Type className="w-4 h-4" />
@@ -206,7 +206,7 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        onClick={onReroll}
+        onClick={(e) => { e.stopPropagation(); onReroll(); }}
         title="Get New Image"
       >
         <RefreshCw className="w-4 h-4" />
@@ -215,7 +215,7 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         variant="ghost"
         size="icon"
         className="h-8 w-8 text-destructive hover:text-destructive"
-        onClick={onRemove}
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
         title="Remove Image"
       >
         <Trash2 className="w-4 h-4" />
