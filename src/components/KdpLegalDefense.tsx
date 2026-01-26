@@ -125,12 +125,13 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons. In compliance with the Unsplash "Significant Modification" requirement, all assets have been incorporated into a larger creative design (Book Cover/Interior) and are not being resold as standalone image files.\\par\\par`;
     
     // 3. TRADEMARKS
-    rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par`;
+    // Add delimiter space after the final \\par so the next line doesn't get parsed as part of an RTF control word
+    // (this was causing some readers to drop "Sincerely" and leave a stray comma on its own line).
+    rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par `;
     
     // SIGNATURE - Add delimiter spaces after \\par to avoid "\\parLarvotto" being parsed as a control word (which can drop "Larvotto").
     rtf += `Sincerely,\\par\\par `;
-    rtf += `${publisherName}\\par `;
-    rtf += `Publisher`;
+    rtf += `${publisherName}`;
     
     rtf += `}`; 
     return rtf;
