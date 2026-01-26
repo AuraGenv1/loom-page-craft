@@ -11,6 +11,7 @@ interface GeneratePDFOptions {
   bookData: BookData;
   coverImageUrl?: string;
   includeCoverPage?: boolean;
+  returnBlob?: boolean;
 }
 
 // 1. ASSETS
@@ -177,7 +178,7 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
   return content;
 };
 
-export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions): Promise<void> => {
+export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, includeCoverPage, returnBlob }: GeneratePDFOptions): Promise<void | Blob> => {
   console.log('[PDF] Starting pdfmake generation...');
 
   // A. Pre-fetch Images
@@ -319,8 +320,19 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
     styles
   };
 
-  // E. Generate and download
+  // E. Generate and download (or return blob)
   console.log('[PDF] Creating document...');
-  pdfMake.createPdf(docDefinition).download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+  const pdfDoc = pdfMake.createPdf(docDefinition);
+  
+  if (returnBlob) {
+    return new Promise<Blob>((resolve, reject) => {
+      pdfDoc.getBlob((blob: Blob) => {
+        console.log('[PDF] Blob generated.');
+        resolve(blob);
+      });
+    });
+  }
+  
+  pdfDoc.download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
   console.log('[PDF] Download initiated.');
 };
