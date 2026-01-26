@@ -23,12 +23,13 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low');
   const [flaggedTerms, setFlaggedTerms] = useState<string[]>([]);
   const [factualClaims, setFactualClaims] = useState<string[]>([]);
+  const [repeatedPhrases, setRepeatedPhrases] = useState<string[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
 
   // Trademarks Watchlist
   const TRADEMARK_WATCHLIST = [
     'Disney', 'Marvel', 'Star Wars', 'Harry Potter', 'Nike', 'Coca-Cola', 'Lego', 
-    'Minecraft', 'Barbie', 'Apple', 'Google', 'Amazon', 'Netflix', 'Tesla', 'Instagram', 'Facebook'
+    'Minecraft', 'Barbie', 'Apple', 'Google', 'Amazon', 'Netflix', 'Tesla', 'Instagram', 'Facebook', 'Mickey Mouse'
   ];
 
   const scanContent = () => {
@@ -39,11 +40,13 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
        if (ch) allText += " " + ch;
     }
 
+    // 1. Trademarks
     const foundTrademarks = TRADEMARK_WATCHLIST.filter(term => 
       allText.toLowerCase().includes(term.toLowerCase())
     );
     setFlaggedTerms(foundTrademarks);
 
+    // 2. Fact Claims
     const sentences = allText.match(/[^.!?]+[.!?]/g) || [];
     const claims = sentences.filter(s => 
       s.match(/\b(19|20)\d{2}\b/) || 
@@ -53,7 +56,19 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     ).slice(0, 20);
     setFactualClaims(claims);
 
-    if (foundTrademarks.length > 0) setRiskLevel('high');
+    // 3. Repetition Detection
+    const counts: Record<string, number> = {};
+    const repeats: string[] = [];
+    sentences.forEach(s => {
+      const clean = s.trim();
+      if (clean.length > 25) {
+        counts[clean] = (counts[clean] || 0) + 1;
+        if (counts[clean] === 2) repeats.push(clean);
+      }
+    });
+    setRepeatedPhrases(repeats);
+
+    if (foundTrademarks.length > 0 || repeats.length > 5) setRiskLevel('high');
     else if (claims.length > 10) setRiskLevel('medium');
     else setRiskLevel('low');
 
@@ -205,6 +220,7 @@ Publisher
         {/* Scan Results */}
         {hasScanned && (
           <div className="space-y-3">
+            {/* Trademarks */}
             <div className="flex items-start gap-2 p-3 bg-secondary/50 rounded-lg">
                <AlertTriangle className={`h-5 w-5 shrink-0 ${flaggedTerms.length > 0 ? 'text-amber-500' : 'text-green-600'}`} />
                <div>
@@ -212,6 +228,23 @@ Publisher
                 {flaggedTerms.length > 0 && <p className="text-xs text-muted-foreground mt-1">{flaggedTerms.join(", ")}</p>}
                </div>
              </div>
+             
+             {/* Repetitive Text - RESTORED */}
+             <div className="flex items-start gap-2 p-3 bg-secondary/50 rounded-lg">
+               <AlertTriangle className={`h-5 w-5 shrink-0 ${repeatedPhrases.length > 0 ? 'text-amber-500' : 'text-green-600'}`} />
+               <div>
+                <p className="text-sm font-medium">Repetitive Phrases: {repeatedPhrases.length}</p>
+                {repeatedPhrases.length > 0 ? (
+                  <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                    {repeatedPhrases.slice(0, 3).map((s, i) => <p key={i} className="truncate max-w-xs">"{s}"</p>)}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">None detected.</p>
+                )}
+               </div>
+             </div>
+
+             {/* Fact Claims */}
              <div className="flex items-start gap-2 p-3 bg-secondary/50 rounded-lg">
                <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
                <p className="text-sm font-medium">Fact Claims Found: {factualClaims.length}</p>
@@ -228,6 +261,7 @@ Publisher
               placeholder="e.g., John Doe Publishing LLC"
               value={publisherName}
               onChange={(e) => setPublisherName(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()} /* CRITICAL FIX for Space Bar */
               className="mt-1"
             />
           </div>
