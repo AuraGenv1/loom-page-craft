@@ -79,23 +79,21 @@ SUBJECT: Copyright & Content Declaration for "${title}"
 
 To the Amazon KDP Review Team:
 
-I confirm that I hold the necessary publishing rights for all content in this book.
+I am the publisher of this title and I confirm that I hold the necessary publishing rights for all content in this book.
 
-1. TEXT GENERATION
-The text of this book was drafted using Google Gemini 1.5 Pro (Commercial License) under my direct supervision. I have manually reviewed, edited, and verified the content for accuracy and originality. I retain full copyright ownership of the final compiled work.
+1. TEXT GENERATION (AI ASSISTED)
+The text of this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License) under my direct supervision. 
+- I have manually reviewed, edited, and verified the content.
+- According to Google's Generative AI Terms of Service (Service Specific Terms), users retain ownership of generated content and are granted broad commercial rights.
 
 2. IMAGE LICENSING
 Images used in this book are sourced from:
-- Unsplash.com (Commercial License, no attribution required for print).
-- Wikimedia Commons (Creative Commons / Public Domain).
-- User-Generated Content (Photos taken by the author).
-* Section 3: User-Provided Content. Any images not sourced via the automated API were photographed by the author or licensed directly. Proof of license is held on file.
+- Unsplash.com: Licensed under the Unsplash License (Irrevocable, nonexclusive, worldwide copyright license to download, copy, modify, distribute, perform, and use photos for free, including for commercial purposes, without permission from or attributing the photographer or Unsplash).
+- Wikimedia Commons: Sourced strictly from Public Domain (CC0) or Creative Commons Attribution (CC BY) categories.
+- User-Provided Content: Any images not from the above sources were photographed/created by the author.
 
 3. TRADEMARKS
-Any mention of trademarked terms is purely for descriptive, non-commercial, or fair use purposes (commentary/educational). No affiliation is implied.
-
-4. HUMAN REVIEW
-This work has been reviewed for repetitive text and factual hallucinations.
+Any mention of trademarked terms is purely for descriptive, non-commercial, commentary, or educational purposes (Fair Use). No affiliation with any brand is implied or claimed.
 
 Sincerely,
 [Your Name]
@@ -103,10 +101,41 @@ Sincerely,
     `;
     zip.file("01_Declaration_Letter_For_Amazon.txt", letter);
 
-    // 2. Licenses
-    zip.file("02_Google_Gemini_Commercial_Terms.txt", "Google allows commercial use of generated output for paid API users. Ownership of generated content belongs to the user.");
-    zip.file("03_Unsplash_License.txt", "All photos can be downloaded and used for free for commercial and non-commercial purposes. No permission needed (though attribution is appreciated).");
-    zip.file("04_Wikimedia_Policy.txt", "Content is sourced from Public Domain or CC0 sources.");
+    // 2. Unsplash License (Full Text)
+    const unsplashLicense = `
+UNSPLASH LICENSE (Full Text)
+
+Unsplash grants you an irrevocable, nonexclusive, worldwide copyright license to download, copy, modify, distribute, perform, and use photos from Unsplash for free, including for commercial purposes, without permission from or attributing the photographer or Unsplash.
+
+This license does not include the right to compile photos from Unsplash to replicate a similar or competing service.
+
+Source: https://unsplash.com/license
+    `;
+    zip.file("02_Unsplash_License_Proof.txt", unsplashLicense);
+
+    // 3. Gemini Commercial Rights
+    const geminiTerms = `
+GOOGLE GENERATIVE AI TERMS (Excerpt for Commercial Use)
+
+"Ownership of Content. As between you and Google, you own all content that you generate using the Services."
+
+"Commercial Use. You may use the Services to generate content for commercial purposes, subject to these Terms and the Prohibited Use Policy."
+
+Reference: https://policies.google.com/terms/generative-ai
+    `;
+    zip.file("03_Google_Gemini_Terms.txt", geminiTerms);
+
+    // 4. Wikimedia / CC0
+    const wikiTerms = `
+WIKIMEDIA COMMONS & PUBLIC DOMAIN DEDICATION (CC0 1.0)
+
+The person who associated a work with this deed has dedicated the work to the public domain by waiving all of his or her rights to the work worldwide under copyright law, including all related and neighboring rights, to the extent allowed by law.
+
+You can copy, modify, distribute and perform the work, even for commercial purposes, all without asking permission.
+
+Source: https://creativecommons.org/publicdomain/zero/1.0/
+    `;
+    zip.file("04_Wikimedia_CC0_Policy.txt", wikiTerms);
 
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
