@@ -1547,8 +1547,11 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
 
         console.log('[KDP] Generating Manuscript PDF...');
         const manuscriptBlob = await generateManuscriptPDFBlob();
-        if (manuscriptBlob) zip.file('Manuscript.pdf', manuscriptBlob);
-        console.log('[KDP] Manuscript PDF done:', manuscriptBlob ? `${manuscriptBlob.size} bytes` : 'skipped');
+        if (!manuscriptBlob) {
+          throw new Error('Manuscript PDF failed to generate for the ZIP package');
+        }
+        zip.file('Manuscript.pdf', manuscriptBlob);
+        console.log('[KDP] Manuscript PDF done:', `${manuscriptBlob.size} bytes`);
 
         console.log('[KDP] Generating EPUB...');
         const epubBlob = await generateEPUBBlob();
