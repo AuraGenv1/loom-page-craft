@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, ShieldCheck, Search, Download, FileText } from 'lucide-react';
 import { BookData } from '@/lib/bookTypes';
@@ -19,12 +17,13 @@ interface KdpLegalDefenseProps {
 }
 
 const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) => {
-  const [publisherName, setPublisherName] = useState('');
+  const publisherName = "Larvotto Ventures LLC DBA Loom & Page";
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low');
   const [flaggedTerms, setFlaggedTerms] = useState<string[]>([]);
   const [factualClaims, setFactualClaims] = useState<string[]>([]);
   const [repeatedPhrases, setRepeatedPhrases] = useState<string[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   // Trademarks Watchlist
   const TRADEMARK_WATCHLIST = [
@@ -33,54 +32,54 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   ];
 
   const scanContent = () => {
-    let allText = bookData.chapter1Content || "";
-    for (let i = 2; i <= 12; i++) {
-       // @ts-ignore
-       const ch = bookData[`chapter${i}Content`];
-       if (ch) allText += " " + ch;
-    }
-
-    // 1. Trademarks
-    const foundTrademarks = TRADEMARK_WATCHLIST.filter(term => 
-      allText.toLowerCase().includes(term.toLowerCase())
-    );
-    setFlaggedTerms(foundTrademarks);
-
-    // 2. Fact Claims
-    const sentences = allText.match(/[^.!?]+[.!?]/g) || [];
-    const claims = sentences.filter(s => 
-      s.match(/\b(19|20)\d{2}\b/) || 
-      s.match(/\$\d+/) || 
-      s.match(/\d+%/) || 
-      s.toLowerCase().includes('proven')
-    ).slice(0, 20);
-    setFactualClaims(claims);
-
-    // 3. Repetition Detection
-    const counts: Record<string, number> = {};
-    const repeats: string[] = [];
-    sentences.forEach(s => {
-      const clean = s.trim();
-      if (clean.length > 25) {
-        counts[clean] = (counts[clean] || 0) + 1;
-        if (counts[clean] === 2) repeats.push(clean);
+    setIsScanning(true);
+    
+    setTimeout(() => {
+      let allText = bookData.chapter1Content || "";
+      for (let i = 2; i <= 12; i++) {
+         // @ts-ignore
+         const ch = bookData[`chapter${i}Content`];
+         if (ch) allText += " " + ch;
       }
-    });
-    setRepeatedPhrases(repeats);
 
-    if (foundTrademarks.length > 0 || repeats.length > 5) setRiskLevel('high');
-    else if (claims.length > 10) setRiskLevel('medium');
-    else setRiskLevel('low');
+      // 1. Trademarks
+      const foundTrademarks = TRADEMARK_WATCHLIST.filter(term => 
+        allText.toLowerCase().includes(term.toLowerCase())
+      );
+      setFlaggedTerms(foundTrademarks);
 
-    setHasScanned(true);
+      // 2. Fact Claims
+      const sentences = allText.match(/[^.!?]+[.!?]/g) || [];
+      const claims = sentences.filter(s => 
+        s.match(/\b(19|20)\d{2}\b/) || 
+        s.match(/\$\d+/) || 
+        s.match(/\d+%/) || 
+        s.toLowerCase().includes('proven')
+      ).slice(0, 20);
+      setFactualClaims(claims);
+
+      // 3. Repetition Detection
+      const counts: Record<string, number> = {};
+      const repeats: string[] = [];
+      sentences.forEach(s => {
+        const clean = s.trim();
+        if (clean.length > 25) {
+          counts[clean] = (counts[clean] || 0) + 1;
+          if (counts[clean] === 2) repeats.push(clean);
+        }
+      });
+      setRepeatedPhrases(repeats);
+
+      if (foundTrademarks.length > 0 || repeats.length > 5) setRiskLevel('high');
+      else if (claims.length > 10) setRiskLevel('medium');
+      else setRiskLevel('low');
+
+      setHasScanned(true);
+      setIsScanning(false);
+    }, 1500);
   };
 
   const generateDefensePackage = async () => {
-    if (!publisherName.trim()) {
-      toast.error("Please enter a Publisher Legal Name to sign the documents.");
-      return;
-    }
-
     const zip = new JSZip();
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -211,8 +210,17 @@ Publisher
             </div>
           </div>
           {!hasScanned && (
-            <Button onClick={scanContent} variant="outline" size="sm">
-              <Search className="h-4 w-4 mr-2" /> Scan
+            <Button onClick={scanContent} variant="outline" size="sm" disabled={isScanning}>
+              {isScanning ? (
+                <>
+                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" /> Scan
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -252,21 +260,9 @@ Publisher
           </div>
         )}
 
-        {/* Publisher Name Input & Download */}
-        <div className="space-y-4 pt-4 border-t">
-          <div>
-            <Label htmlFor="publisherName">Publisher Legal Name (Required for Documents)</Label>
-            <Input
-              id="publisherName"
-              placeholder="e.g., John Doe Publishing LLC"
-              value={publisherName}
-              onChange={(e) => setPublisherName(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()} /* CRITICAL FIX for Space Bar */
-              className="mt-1"
-            />
-          </div>
-          
-          <Button onClick={generateDefensePackage} className="w-full" disabled={!publisherName.trim()}>
+        {/* Download Button */}
+        <div className="pt-4 border-t">
+          <Button onClick={() => generateDefensePackage()} className="w-full">
             <Download className="h-4 w-4 mr-2" />
             Download Defense Kit (.zip)
           </Button>
