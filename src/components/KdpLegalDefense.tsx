@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, ShieldCheck, Search, Download, FileText, Loader2 } from 'lucide-react';
@@ -23,6 +23,7 @@ const isSafari = () => {
   return /Safari/i.test(ua) && !/Chrome|CriOS|Edg/i.test(ua);
 };
 
+// Browser-safe download trigger (escapes React tree / Dialog constraints by appending to <body>)
 const triggerBrowserDownload = (blob: Blob, filename: string, popup?: Window | null) => {
   const url = URL.createObjectURL(blob);
 
@@ -31,13 +32,20 @@ const triggerBrowserDownload = (blob: Blob, filename: string, popup?: Window | n
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
-    a.rel = 'noopener';
+    a.rel = 'noopener noreferrer';
     // Some embedded contexts block downloads; target _blank improves odds.
     a.target = '_blank';
     a.style.display = 'none';
-    document.body.appendChild(a);
+    document.body.appendChild(a); // Append to body to escape Dialog/React root constraints
     a.click();
-    document.body.removeChild(a);
+    // Cleanup a element (keep blob URL for a bit longer for fallback)
+    setTimeout(() => {
+      try {
+        document.body.removeChild(a);
+      } catch {
+        // ignore
+      }
+    }, 100);
   } catch {
     // ignore
   }
@@ -74,6 +82,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   const [repeatedPhrases, setRepeatedPhrases] = useState<string[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+
+  // Preserve user gesture for downloads in restrictive contexts (dialogs/iframes)
+  const downloadPopupRef = useRef<Window | null>(null);
 
   const TRADEMARK_WATCHLIST = [
     'Disney', 'Marvel', 'Star Wars', 'Harry Potter', 'Nike', 'Coca-Cola', 'Lego', 
@@ -136,18 +147,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e as any).nativeEvent?.stopImmediatePropagation?.();
 
-    // Preserve a user gesture by opening a blank tab immediately.
-    // This helps in embedded/iframe contexts where programmatic downloads are blocked.
-    let popup: Window | null = null;
-    try {
-      popup = window.open('', '_blank', 'noopener,noreferrer');
-      if (popup) {
-        popup.document.title = 'Preparing download…';
-        popup.document.body.innerHTML = '<p style="font-family: system-ui; padding: 24px;">Preparing your Defense Kit…</p>';
-      }
-    } catch {
-      popup = null;
-    }
+    const popup = downloadPopupRef.current;
     
     try {
       toast.info("Generating defense documents...");
@@ -249,7 +249,8 @@ Publisher
         }
       };
 
-      // Generate PDF Blob (promisified + timeout so failures don't stay silent)
+      // Generate PDF Blob (promisified + hard timeout).
+      // NOTE: getBlob can hang silently in some browser/iframe combos; getBuffer is more reliable.
       const pdfBlob = await new Promise<Blob>((resolve, reject) => {
         let settled = false;
         const timeout = window.setTimeout(() => {
@@ -257,15 +258,18 @@ Publisher
             settled = true;
             reject(new Error('PDF generation timed out.'));
           }
-        }, 15_000);
+        }, 30_000);
 
         try {
           const pdfDocGenerator = (pdfMake as any).createPdf(docDefinition);
-          pdfDocGenerator.getBlob((blob: Blob) => {
+          pdfDocGenerator.getBuffer((buffer: Uint8Array) => {
             if (settled) return;
             settled = true;
             window.clearTimeout(timeout);
-            resolve(blob);
+            // Ensure we hand Blob a real ArrayBuffer (avoids SharedArrayBuffer typing issues)
+            const copy = new Uint8Array(buffer.byteLength);
+            copy.set(buffer);
+            resolve(new Blob([copy.buffer], { type: 'application/pdf' }));
           });
         } catch (err) {
           if (settled) return;
@@ -381,7 +385,32 @@ Publisher
           <p className="text-xs text-muted-foreground mb-3">
             Publisher Identity: <span className="font-medium">{publisherName}</span>
           </p>
-          <Button onClick={(e) => generateDefensePackage(e)} className="w-full">
+          {/* Capture-phase handler to preserve gesture + stop Dialog interception */}
+          <Button
+            className="w-full"
+            onPointerDownCapture={(e) => {
+              // Stop parent Dialog/native listeners as early as React allows
+              e.stopPropagation();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (e as any).nativeEvent?.stopImmediatePropagation?.();
+
+              // Open a blank tab synchronously (user gesture) for restrictive environments
+              if (!downloadPopupRef.current || downloadPopupRef.current.closed) {
+                try {
+                  const popup = window.open('', '_blank', 'noopener,noreferrer');
+                  if (popup) {
+                    popup.document.title = 'Preparing download…';
+                    popup.document.body.innerHTML =
+                      '<p style="font-family: system-ui; padding: 24px;">Preparing your Defense Kit…</p>';
+                    downloadPopupRef.current = popup;
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }}
+            onClick={generateDefensePackage}
+          >
             <Download className="h-4 w-4 mr-2" />
             Download Defense Kit (.zip)
           </Button>
