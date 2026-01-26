@@ -164,115 +164,34 @@ Language: ${language}`;
 
     let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // === ROBUST JSON CLEANING ===
-    
-    // Step 1: Strip Markdown code fences (```json ... ``` or ``` ... ```)
-    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
-    
-    // Step 2: Extract JSON array
+    // Extract JSON array
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
-      console.error("[generate-chapter-blocks] No JSON array found. Raw output (first 1000 chars):", text.substring(0, 1000));
+      console.error("Gemini Raw Output:", text);
       throw new Error("No JSON array found in AI response");
     }
     
-    let cleanJson = jsonMatch[0];
+    // Sanitize
+    let cleanJson = jsonMatch[0]
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, (char: string) => {
+        if (char === '\n' || char === '\r' || char === '\t') return char;
+        return '';
+      });
     
-    // Step 3: Aggressive sanitization
-    // 3a: Remove invisible control characters (except standard whitespace)
-    cleanJson = cleanJson.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
-    
-    // 3b: Fix unescaped newlines/tabs INSIDE string values
-    // This regex finds content between quotes and escapes internal newlines/tabs
-    cleanJson = cleanJson.replace(/"((?:[^"\\]|\\.)*)"/g, (_match: string, content: string) => {
-      // Escape literal newlines, carriage returns, and tabs that weren't already escaped
+    cleanJson = cleanJson.replace(/"([^"]*?)"/g, (_match: string, content: string) => {
       const escaped = content
-        .replace(/(?<!\\)\n/g, '\\n')
-        .replace(/(?<!\\)\r/g, '\\r')
-        .replace(/(?<!\\)\t/g, '\\t');
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
       return `"${escaped}"`;
     });
-    
-    // 3c: Fix common AI mistakes: trailing commas before ] or }
-    cleanJson = cleanJson.replace(/,\s*([\]}])/g, '$1');
-    
-    // Step 4: Parse with fallbacks
-    // Failure mode we are seeing in prod logs:
-    // - The model returns a JSON array where *every quote is escaped*, e.g. [{\"block_type\": \"chapter_title\" ...}]
-    // - JSON.parse then fails with: Unexpected token '\\'
-    //
-    // We avoid "blind" replacing of \\" -> " because that can corrupt legitimate escaped quotes inside text fields.
-    // Instead we decode a single "string-escape" layer, then parse again.
 
-    const escapeForJsonStringWrapper = (value: string) => {
-      // Make `value` safe to embed inside a JSON string literal WITHOUT destroying its backslash escapes.
-      // 1) Convert raw control chars to escapes
-      // 2) Escape any quotes that are not already escaped
-      // 3) Ensure backslashes that are not starting a valid JSON escape become literal backslashes
-      return value
-        .replace(/\r/g, '\\r')
-        .replace(/\n/g, '\\n')
-        .replace(/\t/g, '\\t')
-        // Backslashes that don't begin a valid JSON escape become literal backslashes in the wrapper
-        .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
-        // Escape quotes that are not already escaped (no lookbehind for broad JS compatibility)
-        .replace(/(^|[^\\])"/g, '$1\\"');
-    };
-
-    const parseAttemptFns: Array<{ label: string; parse: () => unknown }> = [
-      {
-        label: 'clean',
-        parse: () => {
-          const parsed = JSON.parse(cleanJson);
-          return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-        },
-      },
-      {
-        label: 'decode-one-string-layer',
-        parse: () => {
-          // Treat the entire JSON array as a JSON *string*, letting JSON.parse decode the escape sequences once.
-          // Example: "block_type" becomes "block_type" (as a real quote), then we parse the resulting JSON.
-          const wrapped = `"${escapeForJsonStringWrapper(cleanJson)}"`;
-          const decoded = JSON.parse(wrapped);
-          if (typeof decoded !== 'string') throw new Error('Decoded value was not a string');
-          return JSON.parse(decoded);
-        },
-      },
-    ];
-
-    let blocksData: unknown = null;
-    let lastError: Error | null = null;
-
-    for (const attempt of parseAttemptFns) {
-      try {
-        blocksData = attempt.parse();
-        lastError = null;
-        break;
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error('Unknown JSON parse error');
-        console.error(`[generate-chapter-blocks] JSON parse attempt failed (${attempt.label}):`, lastError.message);
-      }
-    }
-
-    if (!blocksData) {
-      // Fallback requirement: do NOT crash the whole generation.
-      // We still return a structured response so the client can surface the issue.
-      console.error('[generate-chapter-blocks] JSON Parse Failed (all attempts).');
-      console.error('[generate-chapter-blocks] Cleaned JSON (first 4000 chars):', cleanJson.substring(0, 4000));
-      console.error('[generate-chapter-blocks] Raw AI output (first 4000 chars):', text.substring(0, 4000));
-
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: `Failed to parse blocks: ${lastError?.message || 'Unknown parse error'}`,
-          raw: text.substring(0, 4000),
-        }),
-        {
-          // Use 200 to avoid a hard 500 crash loop; the client can check `success`.
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      );
+    let blocksData;
+    try {
+      blocksData = JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("JSON Parse Failed:", cleanJson.substring(0, 500));
+      throw new Error(`Failed to parse blocks: ${(e as Error).message}`);
     }
 
     if (!Array.isArray(blocksData) || blocksData.length === 0) {
@@ -292,8 +211,7 @@ Language: ${language}`;
       .eq('chapter_number', chapterNumber);
 
     // Insert new blocks
-    const blocksArray = blocksData as any[];
-    const blocks = blocksArray.map((block: any, index: number) => ({
+    const blocks = blocksData.map((block: any, index: number) => ({
       book_id: bookId,
       chapter_number: chapterNumber,
       page_order: index + 1,
