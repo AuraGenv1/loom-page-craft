@@ -91,7 +91,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     }, 1000);
   };
 
-  // --- 2. RTF GENERATOR (Professional - NO URLs) ---
+  // --- 2. RTF GENERATOR (Fixed Grammar & Formatting) ---
   const getRtfContent = () => {
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     
@@ -119,9 +119,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `\\b 1. TEXT GENERATION (AI ASSISTED)\\b0\\par`;
     rtf += `The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
     
-    // 2. IMAGES
+    // 2. IMAGES (Expanded Wording)
     rtf += `\\b 2. IMAGE LICENSING\\b0\\par`;
-    rtf += `All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons.\\par\\par`;
+    rtf += `All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons. In compliance with the Unsplash "Significant Modification" requirement, all assets have been incorporated into a larger creative design (Book Cover/Interior) and are not being resold as standalone image files.\\par\\par`;
     
     // 3. TRADEMARKS
     rtf += `\\b 3. TRADEMARK USAGE\\b0\\par`;
@@ -130,8 +130,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // SIGNATURE
     rtf += `Sincerely,\\par\\par`;
     rtf += `${publisherName}\\par`;
-    rtf += `Publisher\\par`;
-    rtf += `Larvotto Ventures LLC`;
+    rtf += `Publisher`;
     
     rtf += `}`; 
     return rtf;
@@ -204,6 +203,8 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     doc.text(splitImg, 1, y);
     y += 0.3;
     doc.setFont("times", "normal");
+    doc.text("Usage: Incorporated into creative design (Significant Modification).", 1, y);
+    y += 0.2;
     doc.setTextColor(0, 0, 255);
     doc.text("URL: https://unsplash.com/license", 1, y);
     doc.setTextColor(0, 0, 0);
