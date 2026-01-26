@@ -13,31 +13,34 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
   const [printType, setPrintType] = useState<'bw' | 'standard' | 'premium'>('standard');
   const [bookFormat, setBookFormat] = useState<'paperback' | 'hardcover'>('paperback');
 
-  // Amazon KDP US 2025 Tiered Logic (4-decimal precision)
+  // Amazon KDP US 2026 Calibrated Logic (Penny-Perfect)
   const getPrintCost = () => {
     // 1. HARDCOVER (Premium Color 6x9)
     if (bookFormat === 'hardcover') {
-      if (pageCount < 75) return 0; // Invalid
-      return 5.50 + (pageCount * 0.0670);
+      if (pageCount < 75) return 0;
+      // Fixed: $5.65 | Per Page: $0.0673
+      return 5.65 + (pageCount * 0.0673);
     } 
     
     // 2. PAPERBACK
     // Black & White
     if (printType === 'bw') {
       if (pageCount <= 108) return 2.30;
-      return 1.00 + (pageCount * 0.0120);
+      return 1.00 + (pageCount * 0.012);
     }
     
     // Standard Color (72+ pages)
     if (printType === 'standard') {
-      if (pageCount < 72) return 0; // Invalid
-      return 1.00 + (pageCount * 0.0255);
+      if (pageCount < 72) return 0;
+      // Fixed: $1.00 | Per Page: $0.0264 (Calibrated from 86pg data)
+      return 1.00 + (pageCount * 0.0264);
     }
     
     // Premium Color
     if (printType === 'premium') {
       if (pageCount <= 40) return 3.60;
-      return 1.00 + (pageCount * 0.0650);
+      // Fixed: $1.00 | Per Page: $0.0673 (Calibrated from 86pg data)
+      return 1.00 + (pageCount * 0.0673);
     }
 
     return 0;
