@@ -13,40 +13,58 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
   const [printType, setPrintType] = useState<'bw' | 'standard' | 'premium'>('standard');
   const [bookFormat, setBookFormat] = useState<'paperback' | 'hardcover'>('paperback');
 
-  // Amazon KDP 2025 Cost Constants (US Market 6x9)
+  // Amazon KDP US 2025 Tiered Logic
   const getPrintCost = () => {
+    // 1. HARDCOVER (Premium Color 6x9)
     if (bookFormat === 'hardcover') {
-      // Hardcover usually forces Premium or B&W. Standard is rare for 6x9 HC.
-      // High fixed cost ($6.25) + page cost
-      if (printType === 'bw') return 6.25 + (pageCount * 0.012);
-      return 6.25 + (pageCount * 0.070); // Hardcover Premium
-    } else {
-      // Paperback
-      switch (printType) {
-        case 'bw': return 1.00 + (pageCount * 0.012);
-        case 'standard': return 0.60 + (pageCount * 0.030); // Lower fixed cost for Std
-        case 'premium': return 1.00 + (pageCount * 0.065);
-      }
+      // Hardcover requires 75+ pages
+      if (pageCount < 75) return 0; // Invalid
+      return 5.20 + (pageCount * 0.070);
+    } 
+    
+    // 2. PAPERBACK
+    // Black & White
+    if (printType === 'bw') {
+      if (pageCount <= 108) return 2.30;
+      return 1.00 + (pageCount * 0.012);
     }
+    
+    // Standard Color (72+ pages)
+    if (printType === 'standard') {
+      if (pageCount < 72) return 0; // Invalid
+      return 1.00 + (pageCount * 0.0255);
+    }
+    
+    // Premium Color
+    if (printType === 'premium') {
+      if (pageCount <= 40) return 3.60;
+      return 1.00 + (pageCount * 0.065);
+    }
+
     return 0;
   };
 
   const printCost = getPrintCost();
-  const minPrice = printCost / 0.60;
+  const minPrice = printCost > 0 ? printCost / 0.60 : 0;
   const royalty = Math.max(0, (listPrice * 0.60) - printCost);
   const margin = listPrice > 0 ? (royalty / listPrice) * 100 : 0;
   
-  // Logic checks
+  // Availability Checks
   const isStandardAvailable = bookFormat === 'paperback' && pageCount >= 72;
+  const isHardcoverAvailable = pageCount >= 75;
 
   // Auto-correct invalid states
   useEffect(() => {
-    if (bookFormat === 'hardcover' && printType === 'standard') {
-      setPrintType('premium');
-    } else if (printType === 'standard' && !isStandardAvailable) {
+    if (bookFormat === 'hardcover' && printType !== 'premium') {
       setPrintType('premium');
     }
-  }, [bookFormat, printType, isStandardAvailable]);
+    if (printType === 'standard' && !isStandardAvailable) {
+      setPrintType('premium');
+    }
+    if (bookFormat === 'hardcover' && !isHardcoverAvailable) {
+      setBookFormat('paperback');
+    }
+  }, [bookFormat, printType, isStandardAvailable, isHardcoverAvailable]);
 
   return (
     <Card className="p-6 space-y-6">
@@ -75,7 +93,10 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
       <div className="space-y-4">
         {/* Format Toggle */}
         <div className="space-y-2">
-          <Label>Book Format</Label>
+          <div className="flex items-center justify-between">
+            <Label>Book Format</Label>
+            {!isHardcoverAvailable && <span className="text-xs text-muted-foreground">Hardcover requires 75+ pages</span>}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setBookFormat('paperback')}
@@ -84,8 +105,12 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
               Paperback
             </button>
             <button
-              onClick={() => setBookFormat('hardcover')}
-              className={`flex-1 py-2 text-sm rounded-md border transition-colors ${bookFormat === 'hardcover' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
+              onClick={() => isHardcoverAvailable && setBookFormat('hardcover')}
+              disabled={!isHardcoverAvailable}
+              className={`flex-1 py-2 text-sm rounded-md border transition-colors ${
+                bookFormat === 'hardcover' ? 'bg-primary text-primary-foreground border-primary' : 
+                !isHardcoverAvailable ? 'opacity-50 cursor-not-allowed bg-muted' : 'bg-transparent border-border hover:bg-secondary'
+              }`}
             >
               Hardcover
             </button>
@@ -97,21 +122,25 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
           <div className="flex items-center justify-between">
             <Label>Ink Quality</Label>
             {!isStandardAvailable && bookFormat === 'paperback' && <span className="text-xs text-muted-foreground">Standard requires 72+ pages</span>}
-            {bookFormat === 'hardcover' && <span className="text-xs text-muted-foreground">Hardcover: B&W or Premium only</span>}
+            {bookFormat === 'hardcover' && <span className="text-xs text-muted-foreground">Hardcover: Premium only</span>}
           </div>
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setPrintType('bw')}
-              className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${printType === 'bw' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
+              disabled={bookFormat !== 'paperback'}
+              className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${
+                printType === 'bw' ? 'bg-primary text-primary-foreground border-primary' : 
+                bookFormat !== 'paperback' ? 'opacity-50 cursor-not-allowed bg-muted' : 'bg-transparent border-border hover:bg-secondary'
+              }`}
             >
               Black & White
             </button>
             <button
               onClick={() => isStandardAvailable && setPrintType('standard')}
-              disabled={!isStandardAvailable}
+              disabled={!isStandardAvailable || bookFormat !== 'paperback'}
               className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${
                 printType === 'standard' ? 'bg-primary text-primary-foreground border-primary' : 
-                !isStandardAvailable ? 'opacity-50 cursor-not-allowed bg-muted' : 'bg-transparent border-border hover:bg-secondary'
+                (!isStandardAvailable || bookFormat !== 'paperback') ? 'opacity-50 cursor-not-allowed bg-muted' : 'bg-transparent border-border hover:bg-secondary'
               }`}
             >
               Standard Color
@@ -126,11 +155,6 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
           {printType === 'standard' && (
             <div className="flex items-center gap-1 text-xs text-blue-600">
               <Info className="h-3 w-3" /> Best value for books with 10-20 images.
-            </div>
-          )}
-          {bookFormat === 'hardcover' && (
-            <div className="flex items-center gap-1 text-xs text-amber-600">
-              <Info className="h-3 w-3" /> Hardcover has $6.25 fixed cost + per-page rate.
             </div>
           )}
         </div>
