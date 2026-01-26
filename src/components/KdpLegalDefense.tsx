@@ -8,8 +8,13 @@ import { toast } from 'sonner';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 
-// Register fonts (same pattern as generateBlockPDF.ts)
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || pdfFonts;
+// Register fonts safely
+const pdfMakeAny = pdfMake as any;
+if (pdfMakeAny && pdfFonts && (pdfFonts as any).pdfMake && (pdfFonts as any).pdfMake.vfs) {
+  pdfMakeAny.vfs = (pdfFonts as any).pdfMake.vfs;
+} else if (pdfMakeAny && pdfFonts) {
+  pdfMakeAny.vfs = pdfFonts;
+}
 
 interface KdpLegalDefenseProps {
   bookData: BookData;
