@@ -77,7 +77,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         const paragraphText = currentParagraph.join(' ').trim();
         if (paragraphText) {
           elements.push(
-            <p key={elements.length} className="font-serif text-[15px] leading-relaxed text-foreground mb-3">
+            <p key={elements.length} className="font-serif text-[15px] leading-relaxed text-foreground mb-5">
               {paragraphText}
             </p>
           );

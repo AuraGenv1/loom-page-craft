@@ -79,49 +79,47 @@ serve(async (req) => {
 
 === LUXURY ARCHITECT RULES ===
 
-RULE 1: STRUCTURAL DEPTH (Spine Compliance)
-- TARGET: ${targetTotalPages}+ total pages across all chapters.
-- If the topic is COMPLEX (multi-faceted): Use 12-15 chapters with focused subtopics.
-- If the topic is NARROW: Use ${minChapters} chapters but include "Deep Dive" sub-pages (e.g., "A Closer Look at [Specific Detail]").
-- CONSTRAINT: NEVER repeat facts, paragraphs, or filler content. Achieve depth through NEW insights, angles, and details.
+RULE 0: FORCE HEADERS (AGGRESSIVE!)
+- Chapter 1 MUST start with a \`## Header\` (e.g., "## Welcome to ${topicTitleCase}").
+- EVERY SINGLE text block MUST contain at least one \`## Header\` or \`### Subheader\`.
+- Do NOT write plain text blocks without headers. Headers are MANDATORY.
+
+RULE 1: GOLDILOCKS DENSITY (300-320 Words)
+- TARGET: Each "text" block must be **300-320 words**. This is the Goldilocks zone for 6x9 pages—dense enough to fill the page, but short enough to avoid scrolling.
+- Target exactly 310 words per text block to perfectly fill the layout without overflow.
+- Be substantive. Every paragraph must add value and depth.
 
 RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
 Each chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first)
   1-2x Full-Page "Hero" Images (image_full blocks)
-  4-6x Text Pages (text blocks, ~250 words each)
-  1x Pro Tip or Quote Page
-- BALANCE: Images must NOT exceed 30% of chapter pages. This is a "Read," not a photo album.
+  4-6x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
+  1x Pro Tip Page (ALWAYS last block)
+- BALANCE: Images must NOT exceed 30% of chapter pages.
 
 RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
 - For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
 - STRICTLY FORBIDDEN in image queries: human faces, people, portraits, crowds, selfies.
-- Append to ALL image queries: "no people no faces architectural detail atmospheric"
-- The "Vibe" is more important than the "People."
+- Do NOT append "no people" manually. Just describe a scene that naturally lacks people.
 
-RULE 4: EDITORIAL WHITE SPACE
-- Each "text" block is STRICTLY LIMITED to 250 words maximum.
-- This ensures at least 1/4 of the physical page remains empty for a luxury aesthetic.
-- Write with precision. Every word must earn its place.
-
-RULE 5: CHAPTER BREAKER (Professional Offset)
-- Every chapter MUST start on a Right-Hand Page (odd page number).
-- If the previous chapter ends on an odd page, you MUST insert a "quote" or "divider" block as a buffer.
-- Include a "quote" block type: { "text": "An inspiring quote...", "attribution": "Author Name" }
+RULE 4: STRUCTURAL DEPTH (Spine Compliance)
+- TARGET: ${targetTotalPages}+ total pages across all chapters.
+- If the topic is COMPLEX: Use 12-15 chapters with focused subtopics.
+- If the topic is NARROW: Use ${minChapters} chapters but include "Deep Dive" sub-pages.
+- CONSTRAINT: NEVER repeat facts, paragraphs, or filler content.
 
 TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - More hero images, atmospheric' : 'INFORMATIONAL (Business/Science/History) - More text depth, fewer images'}
 TARGET PAGES PER CHAPTER: ${pagesPerChapter}
 MINIMUM CHAPTERS: ${minChapters}
 
-Block types available:
+Block types available (ONLY use these - NO quote blocks!):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
-- "text": { "text": "~250 words max of rich, detailed content" }
-- "image_full": { "query": "search term + no people no faces", "caption": "Evocative caption" }
-- "image_half": { "query": "search term + no people no faces", "caption": "Caption" }
-- "pro_tip": { "text": "Expert insider advice" }
+- "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
+- "image_full": { "query": "Literal visual description (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
+- "image_half": { "query": "Literal visual description", "caption": "Caption" }
+- "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "heading": { "level": 2, "text": "Section heading" }
 - "list": { "items": ["item 1", "item 2", "item 3"] }
-- "quote": { "text": "Inspirational quote", "attribution": "Author" } - Use for chapter breakers
 - "divider": { "style": "minimal" } - Use for visual breaks
 
 Return ONLY valid JSON:
@@ -137,13 +135,12 @@ Return ONLY valid JSON:
   ],
   "chapter_1_blocks": [
     {"block_type": "chapter_title", "content": {"chapter_number": 1, "title": "Introduction"}},
-    {"block_type": "image_full", "content": {"query": "atmospheric landscape no people", "caption": "Setting the scene"}},
-    {"block_type": "text", "content": {"text": "Opening paragraph (~250 words)..."}},
-    {"block_type": "text", "content": {"text": "Continued content (~250 words)..."}},
-    {"block_type": "pro_tip", "content": {"text": "Expert advice"}},
+    {"block_type": "image_full", "content": {"query": "atmospheric landscape scene", "caption": "Setting the scene"}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of opening content...]"}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of continued content...]"}},
     {"block_type": "image_half", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
-    {"block_type": "text", "content": {"text": "More content (~250 words)..."}},
-    ... (${pagesPerChapter} blocks total following Luxury Rhythm)
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of content...]"}},
+    {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
 }
 
