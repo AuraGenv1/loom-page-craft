@@ -325,21 +325,31 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
   const pdfDoc = pdfMake.createPdf(docDefinition);
   
   if (returnBlob) {
+    // NOTE: In some browsers/environments pdfMake's getBlob callback can fail to fire.
+    // getBuffer is more reliable; we then wrap it into a Blob for JSZip.
     return new Promise<Blob>((resolve, reject) => {
+      const timeoutMs = 120_000;
       const timeout = setTimeout(() => {
-        console.error('[PDF] getBlob timed out after 30s');
+        console.error(`[PDF] getBuffer timed out after ${timeoutMs}ms`);
         reject(new Error('PDF generation timed out'));
-      }, 30000);
-      
+      }, timeoutMs);
+
       try {
-        pdfDoc.getBlob((blob: Blob) => {
+        // pdfMake types don't include getBuffer in some builds; treat as any.
+        (pdfDoc as any).getBuffer((buffer: Uint8Array) => {
           clearTimeout(timeout);
-          console.log('[PDF] Blob generated:', blob.size, 'bytes');
+
+          const size = (buffer as any)?.byteLength ?? (buffer as any)?.length ?? 0;
+          console.log('[PDF] Buffer generated:', size, 'bytes');
+
+          // Ensure we don't pass a SharedArrayBuffer-backed view into BlobParts (TS + some browsers)
+          const safeBytes = new Uint8Array(buffer);
+          const blob = new Blob([safeBytes], { type: 'application/pdf' });
           resolve(blob);
         });
       } catch (err) {
         clearTimeout(timeout);
-        console.error('[PDF] getBlob error:', err);
+        console.error('[PDF] getBuffer error:', err);
         reject(err);
       }
     });
