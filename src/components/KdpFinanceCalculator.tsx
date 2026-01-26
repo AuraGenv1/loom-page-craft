@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Printer, BookOpen, TrendingUp, AlertTriangle, DollarSign } from 'lucide-react';
+import { Printer, BookOpen, TrendingUp, AlertTriangle, DollarSign, Info } from 'lucide-react';
 
 interface KdpFinanceCalculatorProps {
   pageCount: number;
@@ -10,15 +10,27 @@ interface KdpFinanceCalculatorProps {
 
 const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }) => {
   const [listPrice, setListPrice] = useState(14.99);
-  const [printType, setPrintType] = useState<'bw' | 'premium'>('premium');
+  const [printType, setPrintType] = useState<'bw' | 'standard' | 'premium'>('standard');
 
-  // Amazon KDP 2025 Estimations (US Market)
-  // B&W: $1.00 fixed + $0.012 per page
-  // Premium Color: $1.00 fixed + $0.07 per page
-  const printCost = printType === 'bw' 
-    ? 1.00 + (pageCount * 0.012)
-    : 1.00 + (pageCount * 0.07);
+  const isStandardAvailable = pageCount >= 72;
 
+  // Auto-switch if Standard is selected but not available
+  useEffect(() => {
+    if (printType === 'standard' && !isStandardAvailable) {
+      setPrintType('premium');
+    }
+  }, [printType, isStandardAvailable]);
+
+  // Amazon KDP 2025 Estimations (US Market - 6x9 Trim)
+  const getPrintCost = () => {
+    switch (printType) {
+      case 'bw': return 1.00 + (pageCount * 0.012);
+      case 'standard': return 1.00 + (pageCount * 0.036);
+      case 'premium': return 1.00 + (pageCount * 0.070);
+    }
+  };
+
+  const printCost = getPrintCost();
   const minPrice = printCost / 0.60;
   const royalty = (listPrice * 0.60) - printCost;
   const margin = listPrice > 0 ? (royalty / listPrice) * 100 : 0;
@@ -42,28 +54,46 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
             <span className="text-sm font-medium">Print Cost</span>
           </div>
           <p className="text-2xl font-bold text-red-600">-${printCost.toFixed(2)}</p>
-          <p className="text-sm text-muted-foreground">Per copy (Amazon)</p>
+          <p className="text-sm text-muted-foreground">Per copy</p>
         </div>
       </div>
 
       {/* Ink Quality & List Price */}
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label>Ink Quality</Label>
-          <div className="flex gap-2">
+          <div className="flex items-center justify-between">
+            <Label>Ink Quality</Label>
+            {!isStandardAvailable && <span className="text-xs text-muted-foreground">Standard requires 72+ pages</span>}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setPrintType('bw')}
-              className={`flex-1 py-2 text-sm rounded-md border transition-colors ${printType === 'bw' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
+              className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${printType === 'bw' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
             >
               Black & White
             </button>
             <button
+              onClick={() => isStandardAvailable && setPrintType('standard')}
+              disabled={!isStandardAvailable}
+              className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${
+                printType === 'standard' ? 'bg-primary text-primary-foreground border-primary' : 
+                !isStandardAvailable ? 'opacity-50 cursor-not-allowed bg-muted' : 'bg-transparent border-border hover:bg-secondary'
+              }`}
+            >
+              Standard Color
+            </button>
+            <button
               onClick={() => setPrintType('premium')}
-              className={`flex-1 py-2 text-sm rounded-md border transition-colors ${printType === 'premium' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
+              className={`py-2 text-xs sm:text-sm rounded-md border transition-colors ${printType === 'premium' ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border hover:bg-secondary'}`}
             >
               Premium Color
             </button>
           </div>
+          {printType === 'standard' && (
+            <div className="flex items-center gap-1 text-xs text-blue-600">
+              <Info className="h-3 w-3" /> Best value for books with 10-20 images.
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -79,11 +109,15 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
               step="0.50"
             />
           </div>
-          {listPrice < minPrice && (
+          {listPrice < minPrice ? (
             <div className="flex items-center gap-2 text-amber-600 text-sm">
               <AlertTriangle className="h-4 w-4" />
-              <span>Minimum price for this length is ${minPrice.toFixed(2)}</span>
+              <span>Minimum price is ${minPrice.toFixed(2)}</span>
             </div>
+          ) : (
+             <div className="flex items-center gap-1 text-xs text-muted-foreground">
+               <Info className="h-3 w-3" /> Amazon takes 40% + Print Cost
+             </div>
           )}
         </div>
       </div>
@@ -93,7 +127,7 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <TrendingUp className={`h-5 w-5 ${royalty > 0 ? 'text-green-600' : 'text-red-600'}`} />
-            <span className="font-medium">Estimated Royalty</span>
+            <span className="font-medium">Your Net Profit</span>
           </div>
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${royalty > 0 ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
             {margin.toFixed(0)}% Margin
@@ -103,7 +137,7 @@ const KdpFinanceCalculator: React.FC<KdpFinanceCalculatorProps> = ({ pageCount }
           ${royalty.toFixed(2)}
         </p>
         <p className="text-sm text-muted-foreground mt-1">
-          Paid to you per copy sold (after Amazon takes their cut and printing costs).
+          Per copy sold.
         </p>
       </Card>
     </Card>
