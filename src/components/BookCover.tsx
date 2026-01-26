@@ -1540,15 +1540,22 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         const zip = new JSZip();
         const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
 
+        console.log('[KDP] Generating Cover PDF...');
         const coverPdf = await generateCoverPDFBlob();
         if (coverPdf) zip.file('Cover-File.pdf', coverPdf);
+        console.log('[KDP] Cover PDF done:', coverPdf ? 'success' : 'skipped');
 
+        console.log('[KDP] Generating Manuscript PDF...');
         const manuscriptBlob = await generateManuscriptPDFBlob();
         if (manuscriptBlob) zip.file('Manuscript.pdf', manuscriptBlob);
+        console.log('[KDP] Manuscript PDF done:', manuscriptBlob ? `${manuscriptBlob.size} bytes` : 'skipped');
 
+        console.log('[KDP] Generating EPUB...');
         const epubBlob = await generateEPUBBlob();
         if (epubBlob) zip.file('Kindle-eBook.epub', epubBlob);
+        console.log('[KDP] EPUB done:', epubBlob ? 'success' : 'skipped');
 
+        console.log('[KDP] Generating Kindle Cover JPG...');
         const kindleJpgBlob = await generateCoverJPGBlob();
         if (kindleJpgBlob) zip.file('Kindle_Cover.jpg', kindleJpgBlob);
 

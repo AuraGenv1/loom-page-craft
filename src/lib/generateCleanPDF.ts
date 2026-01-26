@@ -326,10 +326,22 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
   
   if (returnBlob) {
     return new Promise<Blob>((resolve, reject) => {
-      pdfDoc.getBlob((blob: Blob) => {
-        console.log('[PDF] Blob generated.');
-        resolve(blob);
-      });
+      const timeout = setTimeout(() => {
+        console.error('[PDF] getBlob timed out after 30s');
+        reject(new Error('PDF generation timed out'));
+      }, 30000);
+      
+      try {
+        pdfDoc.getBlob((blob: Blob) => {
+          clearTimeout(timeout);
+          console.log('[PDF] Blob generated:', blob.size, 'bytes');
+          resolve(blob);
+        });
+      } catch (err) {
+        clearTimeout(timeout);
+        console.error('[PDF] getBlob error:', err);
+        reject(err);
+      }
     });
   }
   
