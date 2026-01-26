@@ -8,8 +8,48 @@ import { toast } from 'sonner';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 
-// Register fonts (same pattern as generateBlockPDF.ts)
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || pdfFonts;
+// Register fonts safely (Vite/Safari friendly)
+// pdfmake's vfs_fonts is a UMD bundle; depending on bundler interop it may expose fonts via pdfFonts.pdfMake.vfs or directly.
+const pdfMakeAny = pdfMake as any;
+const vfs = (pdfFonts as any)?.pdfMake?.vfs ?? (pdfFonts as any);
+if (pdfMakeAny && vfs) {
+  pdfMakeAny.vfs = vfs;
+}
+
+const isSafari = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  // Safari includes "Safari" but not "Chrome" (Chrome on iOS uses CriOS)
+  return /Safari/i.test(ua) && !/Chrome|CriOS|Edg/i.test(ua);
+};
+
+const triggerBrowserDownload = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+
+  // Primary path (works in most browsers)
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // Safari fallback: navigating to blob URL is more reliable than the download attribute.
+  if (isSafari()) {
+    // Give the "download" attempt a tick, then navigate.
+    setTimeout(() => {
+      try {
+        window.location.href = url;
+      } catch {
+        // no-op
+      }
+    }, 50);
+  }
+
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+};
 
 interface KdpLegalDefenseProps {
   bookData: BookData;
@@ -80,7 +120,11 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   };
 
   const generateDefensePackage = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents parent dialog from catching the click
+    e.preventDefault();
+    e.stopPropagation(); // Prevent parent dialog from catching the click
+    // Some Radix/Dialog parents attach native handlers; this prevents silent interception.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (e as any).nativeEvent?.stopImmediatePropagation?.();
     
     try {
       toast.info("Generating defense documents...");
@@ -182,23 +226,43 @@ Publisher
         }
       };
 
-      // Generate PDF Blob
-      const pdfDocGenerator = pdfMake.createPdf(docDefinition);
-      
-      pdfDocGenerator.getBlob((blob) => {
-        // Add PDF to ZIP
-        zip.file("02_Evidence_Dossier.pdf", blob);
-        
-        // Generate and Download ZIP
-        zip.generateAsync({ type: "blob" }).then((content) => {
-          const url = URL.createObjectURL(content);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `Defense_Kit_${title.substring(0, 15).replace(/\s/g, '_')}.zip`;
-          a.click();
-          toast.success("Defense Kit Downloaded!");
-        });
+      // Generate PDF Blob (promisified + timeout so failures don't stay silent)
+      const pdfBlob = await new Promise<Blob>((resolve, reject) => {
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            reject(new Error('PDF generation timed out.'));
+          }
+        }, 15_000);
+
+        try {
+          const pdfDocGenerator = (pdfMake as any).createPdf(docDefinition);
+          pdfDocGenerator.getBlob((blob: Blob) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve(blob);
+          });
+        } catch (err) {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          reject(err instanceof Error ? err : new Error('PDF generation failed.'));
+        }
       });
+
+      zip.file("02_Evidence_Dossier.pdf", pdfBlob);
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const safeTitle = (title || 'Untitled')
+        .trim()
+        .slice(0, 40)
+        .replace(/[^a-z0-9-_]+/gi, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      triggerBrowserDownload(zipBlob, `Defense_Kit_${safeTitle || 'Book'}.zip`);
+      toast.success("Defense Kit Downloaded!");
     } catch (e: any) {
       console.error("Defense Kit failed:", e);
       toast.error(`Error: ${e.message}`);
