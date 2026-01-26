@@ -109,12 +109,14 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `TITLE: "${title}"\\par`;
     rtf += `DATE: ${dateStr}\\par\\par`;
     
-    // BODY - Note: Extra \\par for blank line after greeting
-    rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par\\par`;
+    // BODY - Note: Add a delimiter space after the final \\par so the next word isn't parsed as part of an RTF control word
+    // (e.g., "\\parThis" would drop "This" in some RTF readers).
+    rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par\\par `;
     
-    rtf += `This correspondence serves as a formal declaration regarding the copyright ownership and licensing for the title referenced above.\\par\\par`;
+    // Add a delimiter space after the final \\par for safe RTF parsing.
+    rtf += `This correspondence serves as a formal declaration regarding the copyright ownership and licensing for the title referenced above.\\par\\par `;
     
-    rtf += `Larvotto Ventures LLC DBA Loom & Page hereby confirms that we are the publisher of this work and hold all necessary publishing rights. The content was created under our direct supervision using the tools and licenses detailed below.\\par\\par`;
+    rtf += `Larvotto Ventures LLC DBA Loom & Page hereby confirms that we are the publisher of this work and hold all necessary publishing rights. The content was created under our direct supervision using the tools and licenses detailed below.\\par\\par `;
     
     // 1. TEXT
     rtf += `\\b 1. TEXT GENERATION (AI ASSISTED): \\b0 The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
@@ -125,9 +127,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // 3. TRADEMARKS
     rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par`;
     
-    // SIGNATURE - Clean block with proper spacing
-    rtf += `Sincerely,\\par\\par`;
-    rtf += `Larvotto Ventures LLC DBA Loom & Page\\par`;
+    // SIGNATURE - Add delimiter spaces after \\par to avoid "\\parLarvotto" being parsed as a control word (which can drop "Larvotto").
+    rtf += `Sincerely,\\par\\par `;
+    rtf += `${publisherName}\\par `;
     rtf += `Publisher`;
     
     rtf += `}`; 
