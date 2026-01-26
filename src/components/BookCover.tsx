@@ -1807,8 +1807,8 @@ p { margin-bottom: 1em; }`);
             )}
           </div>
 
-          {/* Bottom branding - matches header logo exactly */}
-          <div className="text-center flex flex-col items-center gap-3 pt-4">
+          {/* Bottom branding - matches header logo exactly, positioned at bottom */}
+          <div className="mt-auto text-center flex flex-col items-center gap-3 pb-4">
             {/* Logo icon matching Logo.tsx */}
             <div className="relative w-8 h-8 opacity-60">
               {/* Vertical loom lines */}
@@ -1825,8 +1825,7 @@ p { margin-bottom: 1em; }`);
               Loom & Page
             </span>
             
-            {/* Official Badge or Self-Published Label */}
-            {/* Only show badge for official books - no self-published text */}
+            {/* Official Badge - only show for official books */}
             {isOfficial && (
               <div className="flex items-center gap-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 rounded-full">
                 <svg className="w-3 h-3 text-amber-600 dark:text-amber-400" viewBox="0 0 20 20" fill="currentColor">
@@ -1837,11 +1836,6 @@ p { margin-bottom: 1em; }`);
                 </span>
               </div>
             )}
-            
-            {/* Disclaimer */}
-            <p className="text-[8px] text-center text-muted-foreground/40 leading-relaxed max-w-[200px] italic">
-              AI-generated content for creative inspiration only. Not professional advice.
-            </p>
           </div>
         </div>
 
