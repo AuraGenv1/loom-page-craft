@@ -7,7 +7,7 @@ import JSZip from 'jszip';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 
-// Helper: Trigger Download
+// --- HELPER: Trigger Download (Hidden Anchor) ---
 const triggerDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -91,12 +91,13 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     }, 1000);
   };
 
-  // --- 2. RTF GENERATOR (Fixed Grammar & Formatting) ---
+  // --- 2. RTF GENERATOR (Approved Text) ---
   const getRtfContent = () => {
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     
+    // Header: US Letter, Times New Roman
     let rtf = `{\\rtf1\\ansi\\deff0\\nouicompat\\paperw12240\\paperh15840\\margl1440\\margr1440\\margt1440\\margb1440{\\fonttbl{\\f0\\froman\\fcharset0 Times New Roman;}}`;
-    rtf += `\\viewkind4\\uc1\\pard\\sa200\\sl276\\slmult1\\f0\\fs24`;
+    rtf += `\\viewkind4\\uc1\\pard\\sa200\\sl276\\slmult1\\f0\\fs24`; // 12pt font
     
     // LETTERHEAD
     rtf += `\\qc\\b\\fs32 LOOM & PAGE\\par`;
@@ -108,40 +109,37 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `TITLE: "${title}"\\par`;
     rtf += `DATE: ${dateStr}\\par\\par`;
     
-    // BODY (Corporate Tone)
+    // BODY
     rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par`;
     
     rtf += `This correspondence serves as a formal declaration regarding the copyright ownership and licensing for the title referenced above.\\par\\par`;
     
-    rtf += `I, ${publisherName}, hereby confirm that I am the publisher of this work and hold all necessary publishing rights. The content was created under my direct supervision using the tools and licenses detailed below.\\par\\par`;
+    rtf += `Larvotto Ventures LLC DBA Loom & Page hereby confirms that we are the publisher of this work and hold all necessary publishing rights. The content was created under our direct supervision using the tools and licenses detailed below.\\par\\par`;
     
     // 1. TEXT
-    rtf += `\\b 1. TEXT GENERATION (AI ASSISTED)\\b0\\par`;
-    rtf += `The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
+    rtf += `\\b 1. TEXT GENERATION (AI ASSISTED): \\b0 The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
     
-    // 2. IMAGES (Expanded Wording)
-    rtf += `\\b 2. IMAGE LICENSING\\b0\\par`;
-    rtf += `All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons. In compliance with the Unsplash "Significant Modification" requirement, all assets have been incorporated into a larger creative design (Book Cover/Interior) and are not being resold as standalone image files.\\par\\par`;
+    // 2. IMAGES (Approved "Significant Modification" wording)
+    rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons. In compliance with the Unsplash "Significant Modification" requirement, all assets have been incorporated into a larger creative design (Book Cover/Interior) and are not being resold as standalone image files.\\par\\par`;
     
     // 3. TRADEMARKS
-    rtf += `\\b 3. TRADEMARK USAGE\\b0\\par`;
-    rtf += `Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par`;
+    rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par`;
     
     // SIGNATURE
     rtf += `Sincerely,\\par\\par`;
-    rtf += `${publisherName}\\par`;
+    rtf += `Larvotto Ventures LLC DBA Loom & Page\\par`;
     rtf += `Publisher`;
     
     rtf += `}`; 
     return rtf;
   };
 
-  // --- 3. PDF GENERATOR (jsPDF - with Visible URLs) ---
+  // --- 3. PDF GENERATOR (jsPDF) ---
   const generatePdfBlob = (): Blob => {
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
 
-    // Title
+    // Header
     doc.setFont("times", "bold");
     doc.setFontSize(16);
     doc.text("COMPLIANCE EVIDENCE DOSSIER", 4.25, 1, { align: "center" });
@@ -149,7 +147,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     doc.setFontSize(12);
     doc.text("LICENSING & RIGHTS DOCUMENTATION", 4.25, 1.3, { align: "center" });
 
-    // Table Info
+    // Meta Data Table
     doc.setFont("times", "normal");
     doc.setFontSize(10);
     let y = 2.0;
@@ -180,17 +178,20 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     doc.text("Source: Google Generative AI Service Specific Terms.", 1, y);
     y += 0.2;
     doc.setFont("times", "italic");
-    const textQuote = "\"As between you and Google, you own all content that you generate using the Services.\"";
+    const textQuote = "\"As between you and Google, you own all content that you generate using the Services. You may use the Services to generate content for commercial purposes.\"";
     const splitText = doc.splitTextToSize(textQuote, 6.5);
     doc.text(splitText, 1, y);
-    y += 0.3;
+    y += (splitText.length * 0.2) + 0.1; 
+    
     doc.setFont("times", "normal");
     doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
     doc.text("URL: https://policies.google.com/terms/generative-ai", 1, y);
     doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
     y += 0.5;
 
-    // 2. IMAGES (Unsplash)
+    // 2. IMAGES
     doc.setFont("times", "bold");
     doc.text("2. Image License (Unsplash)", 1, y);
     y += 0.2;
@@ -201,16 +202,20 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     const imgQuote = "\"Unsplash grants you an irrevocable, nonexclusive, worldwide copyright license to download, copy, modify, distribute, perform, and use photos for free.\"";
     const splitImg = doc.splitTextToSize(imgQuote, 6.5);
     doc.text(splitImg, 1, y);
-    y += 0.3;
+    y += (splitImg.length * 0.2) + 0.1;
+
     doc.setFont("times", "normal");
     doc.text("Usage: Incorporated into creative design (Significant Modification).", 1, y);
     y += 0.2;
+
     doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
     doc.text("URL: https://unsplash.com/license", 1, y);
     doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
     y += 0.5;
 
-    // 3. WIKIMEDIA (Public Domain)
+    // 3. WIKIMEDIA
     doc.setFont("times", "bold");
     doc.text("3. Public Domain (Wikimedia Commons)", 1, y);
     y += 0.2;
@@ -221,16 +226,17 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     const wikiQuote = "\"The person who associated a work with this deed has dedicated the work to the public domain by waiving all of his or her rights to the work worldwide.\"";
     const splitWiki = doc.splitTextToSize(wikiQuote, 6.5);
     doc.text(splitWiki, 1, y);
-    y += 0.3;
-    doc.setFont("times", "normal");
+    y += (splitWiki.length * 0.2) + 0.1;
+
     doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
     doc.text("URL: https://creativecommons.org/publicdomain/zero/1.0/", 1, y);
-    doc.setTextColor(0, 0, 0);
 
     return doc.output('blob');
   };
 
   // --- HANDLERS ---
+
   const handleDownloadTxt = () => {
     const blob = new Blob([getRtfContent()], { type: 'application/rtf' });
     triggerDownload(blob, '01_Declaration_Letter.rtf');
@@ -287,29 +293,26 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
           </Button>
         </div>
 
-        {/* Scan Results (Only visible after scan) */}
+        {/* Scan Results */}
         {scanResults.hasRun && (
           <div className="grid grid-cols-3 gap-2 text-xs">
-             {/* Trademarks */}
              <div className="p-2 rounded-md bg-secondary/50 flex items-start gap-2">
                 <AlertTriangle className={`w-4 h-4 shrink-0 ${scanResults.trademarks.length > 0 ? 'text-amber-500' : 'text-green-600'}`} />
                <div>
-                <p className="font-medium">Trademarks: {scanResults.trademarks.length}</p>
+                <p className="font-medium">Trademarks Found: {scanResults.trademarks.length}</p>
                 {scanResults.trademarks.length > 0 && <p className="text-muted-foreground truncate">{scanResults.trademarks.join(", ")}</p>}
                </div>
              </div>
-             {/* Repetition */}
              <div className="p-2 rounded-md bg-secondary/50 flex items-start gap-2">
                 <Copy className={`w-4 h-4 shrink-0 ${scanResults.repeats.length > 0 ? 'text-amber-500' : 'text-green-600'}`} />
                <div>
-                <p className="font-medium">Repetition: {scanResults.repeats.length}</p>
+                <p className="font-medium">Repetitive Phrases: {scanResults.repeats.length}</p>
                </div>
              </div>
-             {/* Facts */}
              <div className="p-2 rounded-md bg-secondary/50 flex items-start gap-2">
                <FileText className="w-4 h-4 shrink-0 text-blue-500" />
                <div>
-                <p className="font-medium">Fact Claims: {scanResults.facts.length}</p>
+                <p className="font-medium">Fact Claims Checked: {scanResults.facts.length}</p>
                </div>
              </div>
           </div>
@@ -321,7 +324,6 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
         {/* DOWNLOADS (Always Visible) */}
         <div className="space-y-3">
           
-          {/* Main ZIP Download */}
           <div className="border rounded-lg p-4 bg-secondary/30 text-center space-y-2">
             <Button onClick={handleDownloadZip} disabled={isGenerating} className="w-full">
               {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
@@ -338,7 +340,6 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
             <div className="flex-1 border-t" />
           </div>
 
-          {/* Individual Downloads */}
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" onClick={handleDownloadTxt}>
               <FileText className="w-4 h-4 mr-1 text-blue-600" />
