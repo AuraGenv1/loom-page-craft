@@ -196,25 +196,39 @@ Language: ${language}`;
     // 3c: Fix common AI mistakes: trailing commas before ] or }
     cleanJson = cleanJson.replace(/,\s*([\]}])/g, '$1');
     
-    // 3d: Fix unescaped double quotes inside strings (heuristic: quotes followed by lowercase letter)
-    // This is a best-effort fix for cases like: "He said "hello" to her"
-    // We attempt to escape them: "He said \"hello\" to her"
-    // Note: This is imperfect but helps in many cases
-    cleanJson = cleanJson.replace(/"([^"]*)"([a-z])/gi, (_match: string, p1: string, p2: string) => {
-      // If a quote is immediately followed by a lowercase letter, it's likely unescaped
-      return `"${p1}\\"${p2}`;
-    });
+    // Step 4: Parse with fallbacks
+    // Common failure mode: model returns an *escaped JSON string* (e.g. [{\"block_type\": ...}])
+    // We try multiple decoding strategies before giving up.
+    const parseAttempts: Array<{ label: string; value: string }> = [
+      { label: 'clean', value: cleanJson },
+      // If the model escaped structural quotes, remove escaping (best-effort)
+      { label: 'unescape-structural-quotes', value: cleanJson.replace(/\\\\/g, '\\').replace(/\\"/g, '"') },
+    ];
 
-    let blocksData;
-    try {
-      blocksData = JSON.parse(cleanJson);
-    } catch (e) {
-      // Log detailed debug info before throwing
-      console.error("[generate-chapter-blocks] JSON Parse Failed.");
-      console.error("[generate-chapter-blocks] Error:", (e as Error).message);
-      console.error("[generate-chapter-blocks] Cleaned JSON (first 1500 chars):", cleanJson.substring(0, 1500));
-      console.error("[generate-chapter-blocks] Raw AI output (first 1500 chars):", text.substring(0, 1500));
-      throw new Error(`Failed to parse blocks: ${(e as Error).message}`);
+    let blocksData: unknown = null;
+    let lastError: Error | null = null;
+
+    for (const attempt of parseAttempts) {
+      try {
+        const parsed = JSON.parse(attempt.value);
+
+        // If parsed is a JSON string containing the array, parse again.
+        const maybeDoubleParsed = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+
+        blocksData = maybeDoubleParsed;
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error('Unknown JSON parse error');
+        console.error(`[generate-chapter-blocks] JSON parse attempt failed (${attempt.label}):`, lastError.message);
+      }
+    }
+
+    if (!blocksData) {
+      console.error('[generate-chapter-blocks] JSON Parse Failed (all attempts).');
+      console.error('[generate-chapter-blocks] Cleaned JSON (first 2000 chars):', cleanJson.substring(0, 2000));
+      console.error('[generate-chapter-blocks] Raw AI output (first 2000 chars):', text.substring(0, 2000));
+      throw new Error(`Failed to parse blocks: ${lastError?.message || 'Unknown parse error'}`);
     }
 
     if (!Array.isArray(blocksData) || blocksData.length === 0) {
@@ -234,7 +248,8 @@ Language: ${language}`;
       .eq('chapter_number', chapterNumber);
 
     // Insert new blocks
-    const blocks = blocksData.map((block: any, index: number) => ({
+    const blocksArray = blocksData as any[];
+    const blocks = blocksArray.map((block: any, index: number) => ({
       book_id: bookId,
       chapter_number: chapterNumber,
       page_order: index + 1,
