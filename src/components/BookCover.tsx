@@ -7,7 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package } from 'lucide-react';
+import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck } from 'lucide-react';
+import KdpFinanceCalculator from './KdpFinanceCalculator';
+import KdpLegalDefense from './KdpLegalDefense';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -1850,11 +1852,13 @@ p { margin-bottom: 1em; }`);
             </DialogHeader>
 
             <Tabs defaultValue="front" className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="front" className="text-xs sm:text-sm">Front Cover</TabsTrigger>
                 <TabsTrigger value="back" className="text-xs sm:text-sm">Back Cover</TabsTrigger>
                 <TabsTrigger value="spine" className="text-xs sm:text-sm">Spine</TabsTrigger>
                 <TabsTrigger value="wrap" className="text-xs sm:text-sm">Full Wrap</TabsTrigger>
+                <TabsTrigger value="finance" className="gap-1 text-xs sm:text-sm"><DollarSign className="w-3 h-3"/> $$$</TabsTrigger>
+                <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm"><ShieldCheck className="w-3 h-3"/> Legal</TabsTrigger>
                 <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Export</TabsTrigger>
               </TabsList>
 
@@ -2498,7 +2502,23 @@ p { margin-bottom: 1em; }`);
                 </div>
               </TabsContent>
 
-              {/* TAB 5: Export - Unified KDP Package */}
+              {/* TAB 5: Finance - KDP Profit Calculator */}
+              <TabsContent value="finance" className="pt-4">
+                <div className="max-w-2xl mx-auto">
+                  <h3 className="font-medium mb-4 text-center">KDP Profit Calculator (2025 Estimates)</h3>
+                  <KdpFinanceCalculator pageCount={estimatedPages} />
+                </div>
+              </TabsContent>
+
+              {/* TAB 6: Legal - Copyright & Hallucination Defense */}
+              <TabsContent value="legal" className="pt-4 h-[500px]">
+                <div className="max-w-2xl mx-auto h-full">
+                  <h3 className="font-medium mb-4 text-center">Copyright & Hallucination Defense</h3>
+                  {bookData && <KdpLegalDefense bookData={bookData} title={title} />}
+                </div>
+              </TabsContent>
+
+              {/* TAB 7: Export - Unified KDP Package */}
               <TabsContent value="manuscript" className="space-y-4 pt-4">
                 <div className="max-w-lg mx-auto text-center space-y-6">
                   {/* Unified KDP Package */}
