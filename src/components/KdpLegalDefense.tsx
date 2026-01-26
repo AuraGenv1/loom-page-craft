@@ -109,8 +109,8 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `TITLE: "${title}"\\par`;
     rtf += `DATE: ${dateStr}\\par\\par`;
     
-    // BODY
-    rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par`;
+    // BODY - Note: Extra \\par for blank line after greeting
+    rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par\\par`;
     
     rtf += `This correspondence serves as a formal declaration regarding the copyright ownership and licensing for the title referenced above.\\par\\par`;
     
@@ -125,7 +125,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // 3. TRADEMARKS
     rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par`;
     
-    // SIGNATURE
+    // SIGNATURE - Clean block with proper spacing
     rtf += `Sincerely,\\par\\par`;
     rtf += `Larvotto Ventures LLC DBA Loom & Page\\par`;
     rtf += `Publisher`;
