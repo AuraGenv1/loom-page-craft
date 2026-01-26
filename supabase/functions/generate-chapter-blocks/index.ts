@@ -164,33 +164,56 @@ Language: ${language}`;
 
     let text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Extract JSON array
+    // === ROBUST JSON CLEANING ===
+    
+    // Step 1: Strip Markdown code fences (```json ... ``` or ``` ... ```)
+    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    
+    // Step 2: Extract JSON array
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
-      console.error("Gemini Raw Output:", text);
+      console.error("[generate-chapter-blocks] No JSON array found. Raw output (first 1000 chars):", text.substring(0, 1000));
       throw new Error("No JSON array found in AI response");
     }
     
-    // Sanitize
-    let cleanJson = jsonMatch[0]
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, (char: string) => {
-        if (char === '\n' || char === '\r' || char === '\t') return char;
-        return '';
-      });
+    let cleanJson = jsonMatch[0];
     
-    cleanJson = cleanJson.replace(/"([^"]*?)"/g, (_match: string, content: string) => {
+    // Step 3: Aggressive sanitization
+    // 3a: Remove invisible control characters (except standard whitespace)
+    cleanJson = cleanJson.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+    
+    // 3b: Fix unescaped newlines/tabs INSIDE string values
+    // This regex finds content between quotes and escapes internal newlines/tabs
+    cleanJson = cleanJson.replace(/"((?:[^"\\]|\\.)*)"/g, (_match: string, content: string) => {
+      // Escape literal newlines, carriage returns, and tabs that weren't already escaped
       const escaped = content
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r')
-        .replace(/\t/g, '\\t');
+        .replace(/(?<!\\)\n/g, '\\n')
+        .replace(/(?<!\\)\r/g, '\\r')
+        .replace(/(?<!\\)\t/g, '\\t');
       return `"${escaped}"`;
+    });
+    
+    // 3c: Fix common AI mistakes: trailing commas before ] or }
+    cleanJson = cleanJson.replace(/,\s*([\]}])/g, '$1');
+    
+    // 3d: Fix unescaped double quotes inside strings (heuristic: quotes followed by lowercase letter)
+    // This is a best-effort fix for cases like: "He said "hello" to her"
+    // We attempt to escape them: "He said \"hello\" to her"
+    // Note: This is imperfect but helps in many cases
+    cleanJson = cleanJson.replace(/"([^"]*)"([a-z])/gi, (_match: string, p1: string, p2: string) => {
+      // If a quote is immediately followed by a lowercase letter, it's likely unescaped
+      return `"${p1}\\"${p2}`;
     });
 
     let blocksData;
     try {
       blocksData = JSON.parse(cleanJson);
     } catch (e) {
-      console.error("JSON Parse Failed:", cleanJson.substring(0, 500));
+      // Log detailed debug info before throwing
+      console.error("[generate-chapter-blocks] JSON Parse Failed.");
+      console.error("[generate-chapter-blocks] Error:", (e as Error).message);
+      console.error("[generate-chapter-blocks] Cleaned JSON (first 1500 chars):", cleanJson.substring(0, 1500));
+      console.error("[generate-chapter-blocks] Raw AI output (first 1500 chars):", text.substring(0, 1500));
       throw new Error(`Failed to parse blocks: ${(e as Error).message}`);
     }
 
