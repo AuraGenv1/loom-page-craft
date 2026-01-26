@@ -327,35 +327,21 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
   console.log('[PDF] Document object created in', Date.now() - t0, 'ms');
   
   if (returnBlob) {
-    // NOTE: In some browsers/environments pdfMake's getBlob callback can fail to fire.
-    // getBuffer is more reliable; we then wrap it into a Blob for JSZip.
-    return new Promise<Blob>((resolve, reject) => {
-      const timeoutMs = 120_000;
-      const timeout = setTimeout(() => {
-        console.error(`[PDF] getBuffer timed out after ${timeoutMs}ms`);
-        reject(new Error('PDF generation timed out'));
-      }, timeoutMs);
+    // pdfMake browser build uses Promise-based APIs (download() calls getBlob() internally).
+    // Our previous callback-style usage could hang forever, so we await getBlob() directly.
+    const timeoutMs = 120_000;
+    const tGen = Date.now();
+    console.log('[PDF] Requesting PDF blob...');
 
-      try {
-        console.log('[PDF] Requesting PDF buffer...');
-        // pdfMake types don't include getBuffer in some builds; treat as any.
-        (pdfDoc as any).getBuffer((buffer: Uint8Array) => {
-          clearTimeout(timeout);
+    const blob = (await Promise.race([
+      (pdfDoc as any).getBlob() as Promise<Blob>,
+      new Promise<Blob>((_, reject) =>
+        setTimeout(() => reject(new Error('PDF generation timed out')), timeoutMs)
+      ),
+    ])) as Blob;
 
-          const size = (buffer as any)?.byteLength ?? (buffer as any)?.length ?? 0;
-          console.log('[PDF] Buffer generated:', size, 'bytes');
-
-          // Ensure we don't pass a SharedArrayBuffer-backed view into BlobParts (TS + some browsers)
-          const safeBytes = new Uint8Array(buffer);
-          const blob = new Blob([safeBytes], { type: 'application/pdf' });
-          resolve(blob);
-        });
-      } catch (err) {
-        clearTimeout(timeout);
-        console.error('[PDF] getBuffer error:', err);
-        reject(err);
-      }
-    });
+    console.log('[PDF] Blob generated:', blob.size, 'bytes in', Date.now() - tGen, 'ms');
+    return blob;
   }
   
   pdfDoc.download(`${topic.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
