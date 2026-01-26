@@ -23,32 +23,42 @@ const isSafari = () => {
   return /Safari/i.test(ua) && !/Chrome|CriOS|Edg/i.test(ua);
 };
 
-const triggerBrowserDownload = (blob: Blob, filename: string) => {
+const triggerBrowserDownload = (blob: Blob, filename: string, popup?: Window | null) => {
   const url = URL.createObjectURL(blob);
 
-  // Primary path (works in most browsers)
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  // Safari fallback: navigating to blob URL is more reliable than the download attribute.
-  if (isSafari()) {
-    // Give the "download" attempt a tick, then navigate.
-    setTimeout(() => {
-      try {
-        window.location.href = url;
-      } catch {
-        // no-op
-      }
-    }, 50);
+  // Attempt 1: download attribute (works in many browsers)
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    // Some embedded contexts block downloads; target _blank improves odds.
+    a.target = '_blank';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch {
+    // ignore
   }
 
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  // Attempt 2: If we managed to open a popup synchronously from the click handler,
+  // navigate it to the blob URL (works even when iframe blocks downloads).
+  try {
+    if (popup && !popup.closed) {
+      popup.location.href = url;
+    } else if (isSafari()) {
+      // Safari fallback: navigating to blob URL is often more reliable.
+      window.location.href = url;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Keep URL around long enough for manual fallback clicks.
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
+
+  return url;
 };
 
 interface KdpLegalDefenseProps {
@@ -125,6 +135,19 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // Some Radix/Dialog parents attach native handlers; this prevents silent interception.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e as any).nativeEvent?.stopImmediatePropagation?.();
+
+    // Preserve a user gesture by opening a blank tab immediately.
+    // This helps in embedded/iframe contexts where programmatic downloads are blocked.
+    let popup: Window | null = null;
+    try {
+      popup = window.open('', '_blank', 'noopener,noreferrer');
+      if (popup) {
+        popup.document.title = 'Preparing download…';
+        popup.document.body.innerHTML = '<p style="font-family: system-ui; padding: 24px;">Preparing your Defense Kit…</p>';
+      }
+    } catch {
+      popup = null;
+    }
     
     try {
       toast.info("Generating defense documents...");
@@ -261,7 +284,24 @@ Publisher
         .replace(/[^a-z0-9-_]+/gi, '_')
         .replace(/_+/g, '_')
         .replace(/^_+|_+$/g, '');
-      triggerBrowserDownload(zipBlob, `Defense_Kit_${safeTitle || 'Book'}.zip`);
+      const filename = `Defense_Kit_${safeTitle || 'Book'}.zip`;
+      const url = triggerBrowserDownload(zipBlob, filename, popup);
+
+      // If the popup was blocked, give the user a manual fallback action.
+      if (!popup) {
+        toast('If the download didn\'t start, your browser may be blocking downloads in this view.', {
+          action: {
+            label: 'Open download',
+            onClick: () => {
+              try {
+                window.open(url, '_blank', 'noopener,noreferrer');
+              } catch {
+                // ignore
+              }
+            },
+          },
+        });
+      }
       toast.success("Defense Kit Downloaded!");
     } catch (e: any) {
       console.error("Defense Kit failed:", e);
