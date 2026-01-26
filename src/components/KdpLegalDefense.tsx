@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, ShieldCheck, Search, Download, FileText, Loader2 } from 'lucide-react';
@@ -16,57 +16,28 @@ if (pdfMakeAny && vfs) {
   pdfMakeAny.vfs = vfs;
 }
 
-const isSafari = () => {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent;
-  // Safari includes "Safari" but not "Chrome" (Chrome on iOS uses CriOS)
-  return /Safari/i.test(ua) && !/Chrome|CriOS|Edg/i.test(ua);
-};
-
-// Browser-safe download trigger (escapes React tree / Dialog constraints by appending to <body>)
-const triggerBrowserDownload = (blob: Blob, filename: string, popup?: Window | null) => {
+// Browser-safe download trigger (no blank tabs)
+// Safari can be picky: avoid target=_blank and avoid popups.
+const triggerBrowserDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
+  document.body.appendChild(a);
 
-  // Attempt 1: download attribute (works in many browsers)
-  try {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener noreferrer';
-    // Some embedded contexts block downloads; target _blank improves odds.
-    a.target = '_blank';
-    a.style.display = 'none';
-    document.body.appendChild(a); // Append to body to escape Dialog/React root constraints
-    a.click();
-    // Cleanup a element (keep blob URL for a bit longer for fallback)
-    setTimeout(() => {
-      try {
-        document.body.removeChild(a);
-      } catch {
-        // ignore
-      }
-    }, 100);
-  } catch {
-    // ignore
-  }
+  // Dispatching a real click event is sometimes more reliable than a.click() in Safari.
+  a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 
-  // Attempt 2: If we managed to open a popup synchronously from the click handler,
-  // navigate it to the blob URL (works even when iframe blocks downloads).
-  try {
-    if (popup && !popup.closed) {
-      popup.location.href = url;
-    } else if (isSafari()) {
-      // Safari fallback: navigating to blob URL is often more reliable.
-      window.location.href = url;
+  setTimeout(() => {
+    try {
+      document.body.removeChild(a);
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
-  }
-
-  // Keep URL around long enough for manual fallback clicks.
-  setTimeout(() => URL.revokeObjectURL(url), 120_000);
-
-  return url;
+    URL.revokeObjectURL(url);
+  }, 250);
 };
 
 interface KdpLegalDefenseProps {
@@ -82,9 +53,6 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   const [repeatedPhrases, setRepeatedPhrases] = useState<string[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-
-  // Preserve user gesture for downloads in restrictive contexts (dialogs/iframes)
-  const downloadPopupRef = useRef<Window | null>(null);
 
   const TRADEMARK_WATCHLIST = [
     'Disney', 'Marvel', 'Star Wars', 'Harry Potter', 'Nike', 'Coca-Cola', 'Lego', 
@@ -146,8 +114,6 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // Some Radix/Dialog parents attach native handlers; this prevents silent interception.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e as any).nativeEvent?.stopImmediatePropagation?.();
-
-    const popup = downloadPopupRef.current;
     
     try {
       toast.info("Generating defense documents...");
@@ -289,24 +255,8 @@ Publisher
         .replace(/_+/g, '_')
         .replace(/^_+|_+$/g, '');
       const filename = `Defense_Kit_${safeTitle || 'Book'}.zip`;
-      const url = triggerBrowserDownload(zipBlob, filename, popup);
-
-      // If the popup was blocked, give the user a manual fallback action.
-      if (!popup) {
-        toast('If the download didn\'t start, your browser may be blocking downloads in this view.', {
-          action: {
-            label: 'Open download',
-            onClick: () => {
-              try {
-                window.open(url, '_blank', 'noopener,noreferrer');
-              } catch {
-                // ignore
-              }
-            },
-          },
-        });
-      }
-      toast.success("Defense Kit Downloaded!");
+      triggerBrowserDownload(zipBlob, filename);
+      toast.success("Defense Kit Downloaded (v3)");
     } catch (e: any) {
       console.error("Defense Kit failed:", e);
       toast.error(`Error: ${e.message}`);
@@ -388,27 +338,6 @@ Publisher
           {/* Capture-phase handler to preserve gesture + stop Dialog interception */}
           <Button
             className="w-full"
-            onPointerDownCapture={(e) => {
-              // Stop parent Dialog/native listeners as early as React allows
-              e.stopPropagation();
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (e as any).nativeEvent?.stopImmediatePropagation?.();
-
-              // Open a blank tab synchronously (user gesture) for restrictive environments
-              if (!downloadPopupRef.current || downloadPopupRef.current.closed) {
-                try {
-                  const popup = window.open('', '_blank', 'noopener,noreferrer');
-                  if (popup) {
-                    popup.document.title = 'Preparing download…';
-                    popup.document.body.innerHTML =
-                      '<p style="font-family: system-ui; padding: 24px;">Preparing your Defense Kit…</p>';
-                    downloadPopupRef.current = popup;
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }}
             onClick={generateDefensePackage}
           >
             <Download className="h-4 w-4 mr-2" />
