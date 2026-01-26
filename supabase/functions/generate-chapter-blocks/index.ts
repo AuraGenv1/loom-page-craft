@@ -197,25 +197,55 @@ Language: ${language}`;
     cleanJson = cleanJson.replace(/,\s*([\]}])/g, '$1');
     
     // Step 4: Parse with fallbacks
-    // Common failure mode: model returns an *escaped JSON string* (e.g. [{\"block_type\": ...}])
-    // We try multiple decoding strategies before giving up.
-    const parseAttempts: Array<{ label: string; value: string }> = [
-      { label: 'clean', value: cleanJson },
-      // If the model escaped structural quotes, remove escaping (best-effort)
-      { label: 'unescape-structural-quotes', value: cleanJson.replace(/\\\\/g, '\\').replace(/\\"/g, '"') },
+    // Failure mode we are seeing in prod logs:
+    // - The model returns a JSON array where *every quote is escaped*, e.g. [{\"block_type\": \"chapter_title\" ...}]
+    // - JSON.parse then fails with: Unexpected token '\\'
+    //
+    // We avoid "blind" replacing of \\" -> " because that can corrupt legitimate escaped quotes inside text fields.
+    // Instead we decode a single "string-escape" layer, then parse again.
+
+    const escapeForJsonStringWrapper = (value: string) => {
+      // Make `value` safe to embed inside a JSON string literal WITHOUT destroying its backslash escapes.
+      // 1) Convert raw control chars to escapes
+      // 2) Escape any quotes that are not already escaped
+      // 3) Ensure backslashes that are not starting a valid JSON escape become literal backslashes
+      return value
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t')
+        // Backslashes that don't begin a valid JSON escape become literal backslashes in the wrapper
+        .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+        // Escape quotes that are not already escaped (no lookbehind for broad JS compatibility)
+        .replace(/(^|[^\\])"/g, '$1\\"');
+    };
+
+    const parseAttemptFns: Array<{ label: string; parse: () => unknown }> = [
+      {
+        label: 'clean',
+        parse: () => {
+          const parsed = JSON.parse(cleanJson);
+          return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+        },
+      },
+      {
+        label: 'decode-one-string-layer',
+        parse: () => {
+          // Treat the entire JSON array as a JSON *string*, letting JSON.parse decode the escape sequences once.
+          // Example: "block_type" becomes "block_type" (as a real quote), then we parse the resulting JSON.
+          const wrapped = `"${escapeForJsonStringWrapper(cleanJson)}"`;
+          const decoded = JSON.parse(wrapped);
+          if (typeof decoded !== 'string') throw new Error('Decoded value was not a string');
+          return JSON.parse(decoded);
+        },
+      },
     ];
 
     let blocksData: unknown = null;
     let lastError: Error | null = null;
 
-    for (const attempt of parseAttempts) {
+    for (const attempt of parseAttemptFns) {
       try {
-        const parsed = JSON.parse(attempt.value);
-
-        // If parsed is a JSON string containing the array, parse again.
-        const maybeDoubleParsed = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-
-        blocksData = maybeDoubleParsed;
+        blocksData = attempt.parse();
         lastError = null;
         break;
       } catch (e) {
@@ -225,10 +255,24 @@ Language: ${language}`;
     }
 
     if (!blocksData) {
+      // Fallback requirement: do NOT crash the whole generation.
+      // We still return a structured response so the client can surface the issue.
       console.error('[generate-chapter-blocks] JSON Parse Failed (all attempts).');
-      console.error('[generate-chapter-blocks] Cleaned JSON (first 2000 chars):', cleanJson.substring(0, 2000));
-      console.error('[generate-chapter-blocks] Raw AI output (first 2000 chars):', text.substring(0, 2000));
-      throw new Error(`Failed to parse blocks: ${lastError?.message || 'Unknown parse error'}`);
+      console.error('[generate-chapter-blocks] Cleaned JSON (first 4000 chars):', cleanJson.substring(0, 4000));
+      console.error('[generate-chapter-blocks] Raw AI output (first 4000 chars):', text.substring(0, 4000));
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Failed to parse blocks: ${lastError?.message || 'Unknown parse error'}`,
+          raw: text.substring(0, 4000),
+        }),
+        {
+          // Use 200 to avoid a hard 500 crash loop; the client can check `success`.
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     if (!Array.isArray(blocksData) || blocksData.length === 0) {
