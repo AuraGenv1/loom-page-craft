@@ -16,28 +16,19 @@ if (pdfMakeAny && vfs) {
   pdfMakeAny.vfs = vfs;
 }
 
-// Browser-safe download trigger (no blank tabs)
-// Safari can be picky: avoid target=_blank and avoid popups.
+// Browser-safe download trigger (no blank tabs, no popups)
 const triggerBrowserDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  a.rel = 'noopener noreferrer';
   a.style.display = 'none';
   document.body.appendChild(a);
-
-  // Dispatching a real click event is sometimes more reliable than a.click() in Safari.
-  a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-
+  a.click();
   setTimeout(() => {
-    try {
-      document.body.removeChild(a);
-    } catch {
-      // ignore
-    }
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, 250);
+  }, 500);
 };
 
 interface KdpLegalDefenseProps {
