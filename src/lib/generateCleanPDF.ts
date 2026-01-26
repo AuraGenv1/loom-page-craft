@@ -22,7 +22,7 @@ interface GeneratePDFOptions {
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 // Helper: Fetch with Timeout
-const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = 3000) => {
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = 5000) => {
   return Promise.race([
     fetch(url, options),
     new Promise<Response>((_, reject) =>
@@ -35,8 +35,7 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
   if (!url || typeof url !== 'string' || url.includes('placeholder')) return TRANSPARENT_PIXEL;
   
   try {
-    // Try direct fetch first with 3s timeout
-    const response = await fetchWithTimeout(url, { mode: 'cors' }, 3000);
+    const response = await fetchWithTimeout(url, { mode: 'cors' }, 5000);
     if (!response.ok) throw new Error('Network response was not ok');
     
     const blob = await response.blob();
@@ -49,11 +48,9 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       reader.readAsDataURL(blob);
     });
   } catch (e) {
-    // Fallback to Edge Function proxy if direct fetch fails/times out
+    // Fallback proxy
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-image-data-url', { 
-        body: { url } 
-      });
+      const { data, error } = await supabase.functions.invoke('fetch-image-data-url', { body: { url } });
       if (!error && data?.dataUrl) return data.dataUrl;
     } catch (proxyErr) {
       console.warn('[PDF] Image load failed:', url);
@@ -74,7 +71,6 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
       content.push({ text: headerMatch[2].trim(), style: level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3' });
       return;
     }
-    // Handle Images
     const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
     if (imgMatch && imgMatch[1]) {
       const base64 = imageMap.get(imgMatch[1]) || TRANSPARENT_PIXEL;
@@ -108,7 +104,6 @@ export const generateCleanPDF = async ({ topic, bookData, returnBlob = false }: 
   while ((match = regex.exec(allContent)) !== null) { if (match[1]) urls.push(match[1]); }
 
   const imageMap = new Map<string, string>();
-  // Limit concurrent fetches to prevent network choking
   await Promise.all(urls.slice(0, 10).map(async (url) => {
     const b64 = await fetchImageAsBase64(url);
     imageMap.set(url, b64);
@@ -141,12 +136,11 @@ export const generateCleanPDF = async ({ topic, bookData, returnBlob = false }: 
     }
   };
 
-  // 3. Generate
   const pdfDoc = pdfMake.createPdf(docDefinition);
 
   if (returnBlob) {
     return new Promise((resolve, reject) => {
-      // Safety timeout for the PDF generation itself
+      // Safety timeout
       const t = setTimeout(() => reject(new Error('PDF Blob generation timed out')), 10000);
       try {
         pdfDoc.getBlob((blob) => {
