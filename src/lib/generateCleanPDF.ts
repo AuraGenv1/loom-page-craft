@@ -322,7 +322,9 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
 
   // E. Generate and download (or return blob)
   console.log('[PDF] Creating document...');
+  const t0 = Date.now();
   const pdfDoc = pdfMake.createPdf(docDefinition);
+  console.log('[PDF] Document object created in', Date.now() - t0, 'ms');
   
   if (returnBlob) {
     // NOTE: In some browsers/environments pdfMake's getBlob callback can fail to fire.
@@ -335,6 +337,7 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
       }, timeoutMs);
 
       try {
+        console.log('[PDF] Requesting PDF buffer...');
         // pdfMake types don't include getBuffer in some builds; treat as any.
         (pdfDoc as any).getBuffer((buffer: Uint8Array) => {
           clearTimeout(timeout);
