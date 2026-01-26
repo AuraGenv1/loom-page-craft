@@ -8,12 +8,16 @@ import { toast } from 'sonner';
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 
-// Register fonts safely (Vite/Safari friendly)
-// pdfmake's vfs_fonts is a UMD bundle; depending on bundler interop it may expose fonts via pdfFonts.pdfMake.vfs or directly.
+// 1. ROBUST FONT REGISTRATION (Fixes the Timeout/Crash)
 const pdfMakeAny = pdfMake as any;
-const vfs = (pdfFonts as any)?.pdfMake?.vfs ?? (pdfFonts as any);
-if (pdfMakeAny && vfs) {
-  pdfMakeAny.vfs = vfs;
+if (pdfMakeAny && pdfFonts) {
+  // Try standard path first, then fallback for different bundler environments
+  const vfs = (pdfFonts as any).pdfMake?.vfs || (pdfFonts as any).vfs || pdfFonts;
+  if (vfs) {
+    pdfMakeAny.vfs = vfs;
+  } else {
+    console.warn("Could not find pdfMake VFS fonts. PDF generation may fail.");
+  }
 }
 
 // Browser-safe download trigger (no blank tabs, no popups)
