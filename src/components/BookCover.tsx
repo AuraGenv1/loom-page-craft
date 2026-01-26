@@ -1233,39 +1233,19 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const bottomMargin = height * 0.05; // 5% padding from bottom
       const anchorY = yOffset + height - bottomMargin;
 
-      // 1. DISCLAIMER
-      ctx.fillStyle = 'rgba(0,0,0,0.3)'; // Text Opacity 0.3
-      const discFontSize = width * 0.015;
-      ctx.font = `italic 400 ${discFontSize}px "Playfair Display", serif`;
-      ctx.textAlign = 'center';
-      
-      const disclaimerLine2 = "Not professional advice.";
-      const disclaimerLine1 = "AI-generated content for creative inspiration only.";
-      
-      ctx.fillText(disclaimerLine2, centerX, anchorY);
-      ctx.fillText(disclaimerLine1, centerX, anchorY - (discFontSize * 1.4));
-      
-      // Calculate Top of Disclaimer Block
-      const disclaimerTopY = anchorY - (discFontSize * 1.4) - discFontSize;
-
-      // 2. LOGO (Positioned high enough to leave room)
-      // We calculate positions first, then draw.
+      // 1. LOGO (Now positioned at bottom where disclaimer used to be)
       const logoSize = width * 0.085; 
-      // Total available vertical space for branding area
-      const brandingHeight = height * 0.15; 
-      
-      // Top of the Logo (calculated relative to disclaimer top)
       const logoH = logoSize;
       const logoW = logoSize;
       const logoX = centerX - (logoW / 2);
       
-      // We place the logo at a fixed distance above the disclaimer to establish the "bracket"
-      const totalGap = height * 0.06; 
-      const logoBottomY = disclaimerTopY - totalGap;
+      // Position logo so its bottom is near the anchor point (with room for brand name below)
+      const brandFontSize = width * 0.022;
+      const brandTextHeight = brandFontSize * 1.5;
+      const logoBottomY = anchorY - brandTextHeight - (height * 0.02);
       const logoTopY = logoBottomY - logoH;
 
-      // 3. DRAW LOGO (Main Body - Darker)
-      // CSS Preview has parent opacity 0.6, so main lines are 0.6
+      // 2. DRAW LOGO (Main Body - Darker)
       ctx.strokeStyle = '#000000'; 
       ctx.globalAlpha = 0.6;       
       ctx.lineWidth = logoSize * 0.06; 
@@ -1294,39 +1274,29 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       ctx.lineTo(logoX + logoW, logoTopY + (logoH / 2));
       ctx.stroke();
 
-      // 4. DRAW CORNER FOLD (Lighter Shade & Rounded)
-      // CSS Preview has corner opacity 0.6 INSIDE a parent of 0.6 = 0.36 total
+      // 3. DRAW CORNER FOLD (Lighter Shade & Rounded)
       ctx.globalAlpha = 0.36; 
       
       const cornerSize = logoSize * 0.25;
-      const cornerRadius = logoSize * 0.06; // Rounding
+      const cornerRadius = logoSize * 0.06;
       const cornerX = logoX + logoW;       
       const cornerY = logoTopY;               
       
       ctx.beginPath();
-      // Start left of corner
       ctx.moveTo(cornerX - cornerSize, cornerY); 
-      // Arc the corner (Top Right)
       ctx.arcTo(cornerX, cornerY, cornerX, cornerY + cornerSize, cornerRadius);
-      // Line down
       ctx.lineTo(cornerX, cornerY + cornerSize);
       ctx.stroke();
       
       // Reset Alpha
       ctx.globalAlpha = 1.0;
 
-      // 5. BRAND NAME "Loom & Page" (Perfectly Centered)
-      // Calculate the middle point between Logo Bottom and Disclaimer Top
-      const centerPointY = (logoBottomY + disclaimerTopY) / 2;
-      
-      const brandFontSize = width * 0.022; 
+      // 4. BRAND NAME "Loom & Page" (Positioned below logo at bottom)
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
-      
-      // Draw text centered at that midpoint (adjusting for baseline)
-      ctx.textBaseline = 'middle';
-      ctx.fillText("Loom & Page", centerX, centerPointY);
-      ctx.textBaseline = 'alphabetic'; // Reset defaults
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText("Loom & Page", centerX, anchorY);
     };
     
     // ========== CANVAS-BASED Kindle JPG Generator ==========
@@ -1951,10 +1921,6 @@ p { margin-bottom: 1em; }`);
                           <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
                             Loom & Page
                           </span>
-
-                          <p className="text-[6px] text-center text-muted-foreground/40 leading-relaxed max-w-[180px] italic">
-                            AI-generated content for creative inspiration only. Not professional advice.
-                          </p>
                         </div>
                       </div>
                     </div>
@@ -2515,10 +2481,6 @@ p { margin-bottom: 1em; }`);
                               <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
                                 Loom & Page
                               </span>
-
-                              <p className="text-[6px] text-center text-muted-foreground/40 leading-relaxed max-w-[180px] italic">
-                                AI-generated content for creative inspiration only. Not professional advice.
-                              </p>
                             </div>
                           </div>
                         </div>

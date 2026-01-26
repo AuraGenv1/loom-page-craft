@@ -242,7 +242,7 @@ export const generateCleanPDF = async ({ topic, bookData }: GeneratePDFOptions):
       { text: 'No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.', fontSize: 9, color: '#666', margin: [0, 5, 0, 10] },
       
       { text: 'Disclaimer', fontSize: 9, bold: true, color: '#444' },
-      { text: 'This publication is designed to provide accurate and authoritative information in regard to the subject matter covered. It is sold with the understanding that the publisher is not engaged in rendering legal, accounting, or other professional services.', fontSize: 8, color: '#666', margin: [0, 2, 0, 10] },
+      { text: 'AI-generated content for creative inspiration only.', fontSize: 8, color: '#666', margin: [0, 2, 0, 10] },
       
       { text: 'Visit us online at:', fontSize: 9, bold: true, color: '#444' },
       { text: 'www.LoomandPage.com', fontSize: 9, color: '#555', decoration: 'underline', margin: [0, 0, 0, 10] },
