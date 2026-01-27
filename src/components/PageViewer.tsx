@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ImageSearchGallery } from '@/components/ImageSearchGallery';
 
 // A stable key for a block that survives "preloaded" rehydration/replacement.
 // We cannot rely on `id` during generation because blocks may be replaced while
@@ -1151,57 +1152,53 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     setSearchDialogOpen(true);
   }, [blocks]);
 
-  // Execute manual search from dialog
-  const handleManualSearch = useCallback(async () => {
-    if (!searchingBlockId || !searchQuery.trim()) return;
+  // Handle image selection from gallery
+  const handleImageSelect = useCallback(async (imageUrl: string, attribution?: string) => {
+    if (!searchingBlockId) return;
     
     const block = blocks.find(b => b.id === searchingBlockId);
     if (!block) return;
     const key = getBlockKey(block);
 
-    setIsSearching(true);
-    const currentContent = block.content as { query: string; caption: string };
-    const updatedContent = { ...currentContent, query: searchQuery.trim() };
-
     try {
-      // Update database
+      // Update database with selected image
       const { error: updateErr } = await supabase
         .from('book_pages')
-        .update({ content: updatedContent, image_url: null })
+        .update({ image_url: imageUrl })
         .eq('id', searchingBlockId);
 
       if (updateErr) {
-        console.warn('[PageViewer] Failed to persist manual search to DB (continuing locally):', updateErr);
+        console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
       }
 
       // Update local state
       setBlocksAndPropagate(block.chapter_number, (prev) =>
-        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, content: updatedContent, image_url: undefined } as PageBlock)))
+        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: imageUrl } as PageBlock)))
       );
 
-      // Close dialog
-      setSearchDialogOpen(false);
-      
-      toast.info(`Searching: "${searchQuery}"...`);
-      const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
-      
-      // Remove from attempted fetches so we can fetch again
-      attemptedFetchesRef.current.delete(key);
-      setAttemptedFetches(prev => {
+      // Store attribution if present
+      if (attribution) {
+        setImageAttributions(prev => new Map(prev).set(key, attribution));
+      }
+
+      // Mark as fetched so loading state clears
+      attemptedFetchesRef.current.add(key);
+      setAttemptedFetches(prev => new Set(prev).add(key));
+      setLoadingImages(prev => {
         const next = new Set(prev);
         next.delete(key);
         return next;
       });
-      fetchImageForBlock(updatedBlock);
+
+      toast.success('Image updated!');
     } catch (err) {
-      console.error('Failed to update search query:', err);
-      toast.error('Failed to search');
+      console.error('Failed to update image:', err);
+      toast.error('Failed to update image');
     } finally {
-      setIsSearching(false);
       setSearchingBlockId(null);
       setSearchQuery('');
     }
-  }, [searchingBlockId, searchQuery, blocks, fetchImageForBlock, setBlocksAndPropagate]);
+  }, [searchingBlockId, blocks, setBlocksAndPropagate]);
 
 
   // Handle opening upload modal
@@ -1658,66 +1655,24 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         isUploading={isUploading}
       />
       
-      {/* Manual Search Dialog */}
-      <Dialog open={searchDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setSearchDialogOpen(false);
-          setSearchingBlockId(null);
-          setSearchQuery('');
+      {/* Image Search Gallery */}
+      <ImageSearchGallery
+        open={searchDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSearchDialogOpen(false);
+            setSearchingBlockId(null);
+            setSearchQuery('');
+          }
+        }}
+        initialQuery={searchQuery}
+        onSelect={handleImageSelect}
+        orientation={
+          blocks.find(b => b.id === searchingBlockId)?.block_type === 'image_full' 
+            ? 'landscape' 
+            : 'portrait'
         }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Search className="w-5 h-5" />
-              Search for Image
-            </DialogTitle>
-            <DialogDescription>
-              Enter a search term to find a new image. Be descriptive for best results.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="e.g., 1960s red convertible sunset"
-              className="w-full"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleManualSearch();
-                }
-              }}
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              Tip: Include atmosphere words like "atmospheric", "cinematic", or specific angles like "aerial view", "close-up"
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSearchDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleManualSearch} 
-              disabled={!searchQuery.trim() || isSearching}
-              className="gap-2"
-            >
-              {isSearching ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4" />
-                  Search
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
       
       {/* Page Edit Modal (Admin only) */}
       {isAdmin && (
