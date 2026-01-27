@@ -75,7 +75,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
         body: { 
           query: query.trim(),
           orientation,
-          limit: 100, // Request more results for variety
+          limit: 150, // More variety (server enforces print-quality + no-faces)
         }
       });
 

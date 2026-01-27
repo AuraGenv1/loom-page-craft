@@ -538,22 +538,27 @@ const ImageFullPage: React.FC<{
           </div>
         </div>
       ) : imageUrl ? (
-        <div className="flex-1 relative">
-          {canEditImages && blockId && onEditCaption && onRemove && onUpload && onManualSearch && (
-            <AuthorImageToolbar
-              blockId={blockId}
-              currentCaption={content.caption}
-              onEditCaption={onEditCaption}
-              onRemove={onRemove}
-              onUpload={onUpload}
-              onManualSearch={onManualSearch}
-            />
-          )}
-          <img 
-            src={imageUrl} 
-            alt={content.caption}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+        <div className="flex-1 flex items-start justify-center pt-10 pb-6 px-6 bg-muted/10">
+          <div className="relative w-full max-w-[520px] max-h-[55vh]">
+            {canEditImages && blockId && onEditCaption && onRemove && onUpload && onManualSearch && (
+              <AuthorImageToolbar
+                blockId={blockId}
+                currentCaption={content.caption}
+                onEditCaption={onEditCaption}
+                onRemove={onRemove}
+                onUpload={onUpload}
+                onManualSearch={onManualSearch}
+              />
+            )}
+            <div className="w-full rounded-xl border border-border bg-background shadow-sm overflow-hidden">
+              <img
+                src={imageUrl}
+                alt={content.caption}
+                className="w-full max-h-[55vh] object-contain"
+                loading="lazy"
+              />
+            </div>
+          </div>
         </div>
       ) : showEmptyState ? (
         <div className="flex-1 bg-muted flex items-center justify-center">
@@ -997,6 +1002,13 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
+    // Preserve the user's current page when we re-hydrate from the backend
+    // (e.g., after image upload/select updates that sync parent state).
+    const preserveKey =
+      chapter === currentChapter && blocks[currentIndex]
+        ? getBlockKey(blocks[currentIndex])
+        : null;
+
     // We may receive preloaded blocks first (fast), but we still need to hydrate from DB
     // so blocks have real IDs (required for auto-fetch + manual image tools) and so
     // subsequent preloaded updates don't wipe out hydrated state.
@@ -1007,7 +1019,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (hasPreloaded && !alreadyHydrated) {
       console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloaded!.length);
       setBlocks(preloaded!);
-      setCurrentIndex(findTitleBlockIndex(preloaded!));
+      if (preserveKey) {
+        const idx = preloaded!.findIndex(b => getBlockKey(b) === preserveKey);
+        setCurrentIndex(idx >= 0 ? idx : findTitleBlockIndex(preloaded!));
+      } else {
+        setCurrentIndex(findTitleBlockIndex(preloaded!));
+      }
       setLoading(false);
     } else if (!hasPreloaded) {
       setLoading(true);
@@ -1040,7 +1057,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       if (mappedBlocks.length > 0) {
         hydratedChaptersRef.current.add(chapter);
         setBlocks(mappedBlocks);
-        setCurrentIndex(findTitleBlockIndex(mappedBlocks));
+        if (preserveKey) {
+          const idx = mappedBlocks.findIndex(b => getBlockKey(b) === preserveKey);
+          setCurrentIndex(idx >= 0 ? idx : findTitleBlockIndex(mappedBlocks));
+        } else {
+          setCurrentIndex(findTitleBlockIndex(mappedBlocks));
+        }
       } else if (!hasPreloaded) {
         // No DB rows and no preloaded blocks -> stay in loading state
         setBlocks([]);
@@ -1050,7 +1072,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [bookId, preloadedBlocks, findTitleBlockIndex]);
+  }, [bookId, preloadedBlocks, findTitleBlockIndex, blocks, currentIndex, currentChapter]);
 
   // Auto-trigger image fetch for blocks without images on mount
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
@@ -1612,15 +1634,26 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // IMPORTANT: don't hijack keyboard when user is typing in an input/textarea/search field.
+      // IMPORTANT: don't hijack keyboard when user is typing OR interacting with any open dialog.
       const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      const isTypingTarget =
-        tag === 'input' ||
-        tag === 'textarea' ||
-        (target ? (target as any).isContentEditable === true : false);
+      const active = (document.activeElement as HTMLElement | null) ?? null;
 
-      if (isTypingTarget) return;
+      const isTypingEl = (el: HTMLElement | null) => {
+        const tag = el?.tagName?.toLowerCase();
+        return (
+          tag === 'input' ||
+          tag === 'textarea' ||
+          (el ? (el as any).isContentEditable === true : false) ||
+          el?.getAttribute?.('role') === 'textbox'
+        );
+      };
+
+      const inDialog =
+        !!active?.closest?.('[role="dialog"]') ||
+        !!target?.closest?.('[role="dialog"]') ||
+        !!document.querySelector('[data-state="open"][role="dialog"]');
+
+      if (inDialog || isTypingEl(active) || isTypingEl(target)) return;
 
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
