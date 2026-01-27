@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Loader2, Check, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { cropImageToJpegBlob } from '@/lib/cropImage';
 
 interface ImageCropperProps {
   open: boolean;
@@ -64,45 +65,17 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
   const getCroppedImg = useCallback(async (): Promise<Blob | null> => {
     if (!completedCrop || !imgRef.current) return null;
 
-    const image = imgRef.current;
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    // Calculate crop dimensions in natural image coordinates
-    const cropX = completedCrop.x * scaleX;
-    const cropY = completedCrop.y * scaleY;
-    const cropWidth = completedCrop.width * scaleX;
-    const cropHeight = completedCrop.height * scaleY;
-
-    // Set canvas size to match desired output (maintain quality)
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
-
-    // Draw the cropped portion
-    ctx.drawImage(
-      image,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      cropWidth,
-      cropHeight
-    );
-
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => resolve(blob),
-        'image/jpeg',
-        0.92
-      );
-    });
-  }, [completedCrop]);
+    try {
+      return await cropImageToJpegBlob(imgRef.current, completedCrop, {
+        scale,
+        rotate: 0,
+        quality: 0.92,
+      });
+    } catch (e) {
+      console.error('[ImageCropper] Failed to crop image:', e);
+      return null;
+    }
+  }, [completedCrop, scale]);
 
   const handleApplyCrop = async () => {
     setIsProcessing(true);

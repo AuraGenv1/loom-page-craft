@@ -30,6 +30,7 @@ interface ImageSearchGalleryProps {
   onSelectBlob?: (blob: Blob, attribution?: string) => void; // For cropped images
   orientation?: 'landscape' | 'portrait';
   enableCrop?: boolean; // Enable crop feature for 6x9 format
+  cropAspectRatio?: number; // Defaults to 6/9 for book pages; use 1 for cover image box
 }
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
@@ -40,6 +41,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   onSelectBlob,
   orientation = 'landscape',
   enableCrop = false,
+  cropAspectRatio = 6 / 9,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [images, setImages] = useState<ImageResult[]>([]);
@@ -288,7 +290,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
                   className="gap-2"
                 >
                   <Crop className="w-4 h-4" />
-                  Crop for 6×9
+                   {cropAspectRatio === 1 ? 'Crop to Fit' : 'Crop for 6×9'}
                 </Button>
               )}
               <Button 
@@ -310,7 +312,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             onOpenChange={setShowCropper}
             imageUrl={selectedImage.imageUrl}
             onCropComplete={handleCropComplete}
-            aspectRatio={6 / 9}
+            aspectRatio={cropAspectRatio}
           />
         )}
       </DialogContent>
