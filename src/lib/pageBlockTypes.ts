@@ -134,13 +134,13 @@ export const isVisualTopic = (topic: string): boolean => {
 };
 
 // Luxury Architect targets
-export const LUXURY_TARGET_PAGES = 85; // Minimum for spine compliance (79+)
+export const LUXURY_TARGET_PAGES = 120; // Increased target for 100+ page books
 export const LUXURY_MIN_CHAPTERS = 10;
 export const LUXURY_MAX_IMAGE_RATIO = 0.30; // Max 30% images
 
 // Calculate target page count based on topic type
 export const getTargetPageCount = (topic: string, chapterCount: number): number => {
-  const pagesPerChapter = isVisualTopic(topic) ? 12 : 8;
+  const pagesPerChapter = isVisualTopic(topic) ? 14 : 10;
   const frontMatter = 4; // Title, Copyright, TOC
   return frontMatter + (chapterCount * pagesPerChapter);
 };

@@ -41,7 +41,7 @@ serve(async (req) => {
       topic, 
       tableOfContents,
       isVisualTopic = false,
-      targetPagesPerChapter = 6,
+      targetPagesPerChapter = 10, // Increased from 6 for 100+ page books
       language = 'en' 
     } = await req.json();
 
@@ -98,17 +98,16 @@ This chapter MUST follow this structure:
   5. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 6: LITERAL VISUAL QUERIES (Image Queries)
-- CRITICAL: Every image query MUST include the book's specific topic/location.
-- For a "London Travel Guide", use "London Big Ben at sunset" NOT just "Historic clock tower at sunset"
-- For an "Aspen Ski Guide", use "Aspen Colorado ski slopes" NOT just "Snowy mountain slopes"  
-- For a "Tokyo Food Guide", use "Tokyo ramen shop interior" NOT just "Asian noodle restaurant"
-- ALWAYS include the primary subject (city name, topic) at the START of the query.
-- Image queries must be physical descriptions of objects or places, NOT abstract concepts.
-- BAD: "The concept of freedom" → GOOD: "London statue of Britannia with clear sky"
-- BAD: "Business success" → GOOD: "London Canary Wharf skyscraper from below"
-- BAD: "History forged in sand" → GOOD: "London Tower of London at sunset"
-- Do NOT append "no people" manually. Just describe a scene that naturally lacks people (e.g., "Empty desk", "Lonely road", "Abandoned building interior").
+RULE 6: LITERAL VISUAL QUERIES - CAPTION-TO-QUERY MATCHING
+- CRITICAL: The image query MUST describe EXACTLY what the caption says. If the caption mentions "Hotel Jerome", the query MUST be "Hotel Jerome Aspen Colorado exterior" - not a generic "luxury hotel".
+- NEVER use a generic building/scene when the caption references a specific named place, hotel, restaurant, or landmark.
+- ALWAYS include the book's primary location (city/region) at the START of the query.
+- For a caption "Hotel Jerome, a landmark of luxury", use query: "Hotel Jerome Aspen Colorado historic hotel exterior"
+- For a caption "The Shard towers over the Thames", use query: "The Shard London skyscraper Thames river view"
+- For a caption "Maroon Bells at sunrise", use query: "Maroon Bells Aspen Colorado mountain lake reflection sunrise"
+- Image queries must be specific physical descriptions that will return the EXACT subject mentioned in the caption.
+- BAD: Generic caption "Luxury accommodations" with query "hotel lobby" → GOOD: Specific caption "The Little Nell hotel lobby" with query "The Little Nell Aspen Colorado hotel lobby interior"
+- Do NOT write vague queries like "mountain scenery" or "fine dining restaurant" - ALWAYS include the specific name from the caption.
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}

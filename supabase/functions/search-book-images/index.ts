@@ -110,8 +110,23 @@ async function searchUnsplashMultiple(
   }
 }
 
+// Licenses that are NOT safe for commercial cover use (require ShareAlike derivative distribution)
+const UNSAFE_COVER_LICENSES = [
+  'cc by-sa',
+  'cc-by-sa',
+  'sharealike',
+  'sa',
+  'gfdl', // GNU Free Documentation License - also requires ShareAlike-like terms
+];
+
+// Check if a license is safe for commercial cover use
+function isCoverSafeLicense(license: string): boolean {
+  const lowerLicense = license.toLowerCase();
+  return !UNSAFE_COVER_LICENSES.some(unsafe => lowerLicense.includes(unsafe));
+}
+
 // Search Wikimedia Commons and return multiple results
-async function searchWikimediaMultiple(query: string, limit: number = 20): Promise<ImageResult[]> {
+async function searchWikimediaMultiple(query: string, limit: number = 20, filterForCover: boolean = false): Promise<ImageResult[]> {
   try {
     // Use simpler search without filetype (filetype: syntax not supported in gsrsearch)
     const searchParams = new URLSearchParams({
@@ -170,6 +185,12 @@ async function searchWikimediaMultiple(query: string, limit: number = 20): Promi
       const artist = metadata.Artist?.value?.replace(/<[^>]*>/g, '').trim() || 'Unknown';
       const license = metadata.LicenseShortName?.value || metadata.License?.value || 'CC';
       
+      // COVER LICENSE FILTER: Exclude CC BY-SA and similar ShareAlike licenses for covers
+      if (filterForCover && !isCoverSafeLicense(license)) {
+        console.log(`[Wikimedia] Skipping image with restrictive license for cover: ${license}`);
+        continue;
+      }
+      
       results.push({
         id: `wikimedia-${page.pageid}`,
         // Use the ORIGINAL URL for high-res (not thumburl)
@@ -183,7 +204,7 @@ async function searchWikimediaMultiple(query: string, limit: number = 20): Promi
       });
     }
 
-    console.log(`[Wikimedia] Found ${results.length} high-res images for query:`, query);
+    console.log(`[Wikimedia] Found ${results.length} high-res images for query${filterForCover ? ' (cover-safe only)' : ''}:`, query);
     return results;
   } catch (error) {
     console.error('[Wikimedia] Fetch error:', error);
@@ -226,7 +247,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 100, bookTopic } = await req.json();
+    const { query, orientation = 'landscape', limit = 100, bookTopic, forCover = false } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -235,7 +256,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}, Topic: "${bookTopic || 'none'}"`);
+    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}, Topic: "${bookTopic || 'none'}", ForCover: ${forCover}`);
 
     const cleanedQuery = cleanQuery(query);
     
@@ -251,12 +272,12 @@ serve(async (req) => {
 
     // Search both sources in parallel - get more results from each (using anchored query)
     // Unsplash: 3 pages of 30 = 90 results max (before filtering)
-    // Wikimedia: 50 results (before filtering)
+    // Wikimedia: 50 results (before filtering) - apply cover license filter if needed
     const [unsplashPage1, unsplashPage2, unsplashPage3, wikimediaResults] = await Promise.all([
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
-      searchWikimediaMultiple(anchoredQuery, 50),
+      searchWikimediaMultiple(anchoredQuery, 50, forCover), // Pass forCover to filter licenses
     ]);
 
     // Combine results, prioritizing Unsplash but interleaving for variety

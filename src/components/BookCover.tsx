@@ -2066,6 +2066,7 @@ p { margin-bottom: 1em; }`);
                   onSelect={handleCoverSelectFromGallery}
                   onSelectBlob={async (blob) => handleCroppedCoverUpload(blob)}
                   bookTopic={topic} // Anchor search to book's topic for relevance
+                  forCover // Filter out CC BY-SA licenses for commercial cover use
                 />
               </TabsContent>
 

@@ -106,7 +106,7 @@ const Index = () => {
   // Block-based architecture state
   const [chapterBlocks, setChapterBlocks] = useState<Record<number, PageBlock[]>>({});
   const [isVisualTopic, setIsVisualTopic] = useState(false);
-  const [targetPagesPerChapter, setTargetPagesPerChapter] = useState(8);
+  const [targetPagesPerChapter, setTargetPagesPerChapter] = useState(10); // Increased for 100+ page books
 
   // Check if user is admin via database role - run immediately when user changes
   useEffect(() => {
@@ -494,7 +494,7 @@ const Index = () => {
 
       // Store visual/pages settings for chapter generation
       setIsVisualTopic(isVisual || false);
-      setTargetPagesPerChapter(targetPages || 8);
+      setTargetPagesPerChapter(targetPages || 10); // Increased default for 100+ page books
 
       // Create BookData for backward compatibility
       const generatedBook: BookData = {
