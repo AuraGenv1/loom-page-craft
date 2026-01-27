@@ -10,8 +10,7 @@ export type PageBlockType =
   | 'heading'
   | 'list'
   | 'quote'
-  | 'divider'
-  | 'key_takeaway';
+  | 'divider';
 
 // Base block with common fields
 interface BaseBlock {
@@ -105,14 +104,6 @@ export interface DividerBlock extends BaseBlock {
   };
 }
 
-// Key Takeaway block (summary/highlight box)
-export interface KeyTakeawayBlock extends BaseBlock {
-  block_type: 'key_takeaway';
-  content: {
-    text: string;
-  };
-}
-
 // Union type for all blocks
 export type PageBlock = 
   | ChapterTitleBlock
@@ -123,8 +114,7 @@ export type PageBlock =
   | HeadingBlock
   | ListBlock
   | QuoteBlock
-  | DividerBlock
-  | KeyTakeawayBlock;
+  | DividerBlock;
 
 // Helper to determine if topic is visual (travel, cooking, etc.)
 export const isVisualTopic = (topic: string): boolean => {
