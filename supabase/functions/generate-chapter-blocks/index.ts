@@ -171,27 +171,79 @@ Language: ${language}`;
       throw new Error("No JSON array found in AI response");
     }
     
-    // Sanitize
-    let cleanJson = jsonMatch[0]
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, (char: string) => {
-        if (char === '\n' || char === '\r' || char === '\t') return char;
-        return '';
+    // Robust JSON sanitization with multiple strategies
+    function sanitizeJsonString(raw: string): string {
+      // Step 1: Remove dangerous control characters but keep whitespace
+      let clean = raw.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+      
+      // Step 2: Fix common AI escape issues inside string values
+      // Match string contents between quotes (handling escaped quotes)
+      clean = clean.replace(/"((?:[^"\\]|\\.)*)"/g, (_match: string, content: string) => {
+        let fixed = content
+          // Fix unescaped newlines/tabs inside strings
+          .replace(/(?<!\\)\n/g, '\\n')
+          .replace(/(?<!\\)\r/g, '\\r')
+          .replace(/(?<!\\)\t/g, '\\t')
+          // Fix double-escaped sequences (\\n -> \n is fine, but \\\n is bad)
+          .replace(/\\{3,}([nrt"])/g, '\\$1');
+        return `"${fixed}"`;
       });
+      
+      return clean;
+    }
     
-    cleanJson = cleanJson.replace(/"([^"]*?)"/g, (_match: string, content: string) => {
-      const escaped = content
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r')
-        .replace(/\t/g, '\\t');
-      return `"${escaped}"`;
-    });
-
-    let blocksData;
-    try {
-      blocksData = JSON.parse(cleanJson);
-    } catch (e) {
-      console.error("JSON Parse Failed:", cleanJson.substring(0, 500));
-      throw new Error(`Failed to parse blocks: ${(e as Error).message}`);
+    function tryParseJson(jsonStr: string): any {
+      // Strategy 1: Direct parse after sanitization
+      try {
+        return JSON.parse(jsonStr);
+      } catch (_e1) {
+        // Strategy 2: More aggressive cleanup - fix bad escape sequences
+        try {
+          const aggressive = jsonStr
+            // Remove any backslash not followed by valid escape char
+            .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+            // Fix truncated unicode escapes
+            .replace(/\\u(?![0-9a-fA-F]{4})/g, '\\\\u');
+          return JSON.parse(aggressive);
+        } catch (_e2) {
+          // Strategy 3: Extract and rebuild block by block
+          try {
+            const blockMatches = jsonStr.match(/\{[^{}]*"block_type"[^{}]*\}/g);
+            if (blockMatches && blockMatches.length > 0) {
+              const blocks = blockMatches.map(block => {
+                try {
+                  return JSON.parse(block);
+                } catch {
+                  // Try to extract essential fields manually
+                  const typeMatch = block.match(/"block_type"\s*:\s*"([^"]+)"/);
+                  const type = typeMatch ? typeMatch[1] : 'text';
+                  return { block_type: type, content: { text: 'Content parsing failed' } };
+                }
+              });
+              return blocks;
+            }
+          } catch (_e3) {
+            // All strategies failed
+          }
+          return null;
+        }
+      }
+    }
+    
+    const cleanJson = sanitizeJsonString(jsonMatch[0]);
+    let blocksData = tryParseJson(cleanJson);
+    
+    if (!blocksData) {
+      console.error("JSON Parse Failed (all strategies):", cleanJson.substring(0, 1000));
+      // Return graceful failure instead of 500
+      return new Response(JSON.stringify({ 
+        success: false,
+        error: 'Failed to parse AI response - please retry',
+        chapterNumber,
+        rawPreview: cleanJson.substring(0, 500)
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     if (!Array.isArray(blocksData) || blocksData.length === 0) {
