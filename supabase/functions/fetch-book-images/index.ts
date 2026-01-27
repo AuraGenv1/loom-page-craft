@@ -11,21 +11,33 @@ interface ImageResult {
   source: 'unsplash' | 'wikimedia' | 'none';
 }
 
-// AI-generated negative prompts to remove (keep useful descriptive terms)
+// AI-generated negative prompts AND face/people keywords to remove
 const NOISE_PHRASES = [
   'no people',
   'no faces',
   'no humans',
   'without people',
+  // Actively filter out face/people terms to ensure KDP compliance
+  'person',
+  'people',
+  'man',
+  'woman',
+  'face',
+  'portrait',
+  'crowd',
+  'selfie',
+  'human',
+  'model',
 ];
 
-// Clean the query by removing AI-specific phrases
+// Clean the query by removing AI-specific phrases AND face/people terms
 function cleanQuery(rawQuery: string): string {
   let cleaned = rawQuery.toLowerCase();
   
-  // Remove noise phrases
+  // Remove noise phrases and face/people keywords
   for (const phrase of NOISE_PHRASES) {
-    cleaned = cleaned.replace(new RegExp(phrase, 'gi'), '');
+    // Match whole words only to avoid "woman" matching "snowman" etc.
+    cleaned = cleaned.replace(new RegExp(`\\b${phrase}s?\\b`, 'gi'), '');
   }
   
   // Remove extra whitespace and trim
@@ -60,7 +72,12 @@ function generateFallbackQueries(query: string): string[] {
 }
 
 // Attempt 1: Unsplash - The "Luxury" Layer
-async function searchUnsplash(query: string, orientation: 'landscape' | 'portrait' = 'landscape'): Promise<ImageResult | null> {
+// excludeUrls: list of already-used image URLs to skip (deduplication)
+async function searchUnsplash(
+  query: string, 
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
   const accessKey = Deno.env.get('UNSPLASH_ACCESS_KEY');
   if (!accessKey) {
     console.log('[Unsplash] No API key configured');
@@ -68,10 +85,11 @@ async function searchUnsplash(query: string, orientation: 'landscape' | 'portrai
   }
 
   try {
+    // Request multiple results so we can deduplicate
     const params = new URLSearchParams({
       query: query,
       orientation: orientation,
-      per_page: '1',
+      per_page: '10',
     });
 
     const response = await fetch(`https://api.unsplash.com/search/photos?${params}`, {
@@ -88,17 +106,23 @@ async function searchUnsplash(query: string, orientation: 'landscape' | 'portrai
     const data = await response.json();
     
     if (data.results && data.results.length > 0) {
-      const photo = data.results[0];
-      // Use regular size for book images (1080px wide)
-      const imageUrl = photo.urls?.regular || photo.urls?.full;
+      // Find first result that isn't in excludeUrls
+      for (const photo of data.results) {
+        const imageUrl = photo.urls?.regular || photo.urls?.full;
+        if (!imageUrl) continue;
+        
+        // Check if this URL is already used (dedupe)
+        if (excludeUrls.has(imageUrl)) {
+          console.log('[Unsplash] Skipping duplicate:', imageUrl.substring(0, 60));
+          continue;
+        }
+        
+        console.log('[Unsplash] Found unique image:', imageUrl.substring(0, 60));
+        return { imageUrl, source: 'unsplash' };
+      }
       
-      console.log('[Unsplash] Found image:', imageUrl);
-      
-      // Unsplash doesn't require attribution in the book per their license
-      return {
-        imageUrl,
-        source: 'unsplash',
-      };
+      console.log('[Unsplash] All results were duplicates');
+      return null;
     }
 
     console.log('[Unsplash] No results for query:', query);
@@ -109,17 +133,21 @@ async function searchUnsplash(query: string, orientation: 'landscape' | 'portrai
   }
 }
 
-// Try Unsplash with fallback queries
-async function searchUnsplashWithFallbacks(query: string, orientation: 'landscape' | 'portrait' = 'landscape'): Promise<ImageResult | null> {
+// Try Unsplash with fallback queries + deduplication
+async function searchUnsplashWithFallbacks(
+  query: string, 
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
   // Try the main query first
-  let result = await searchUnsplash(query, orientation);
+  let result = await searchUnsplash(query, orientation, excludeUrls);
   if (result) return result;
 
   // Try fallback queries
   const fallbacks = generateFallbackQueries(query);
   for (const fallbackQuery of fallbacks) {
     console.log(`[Unsplash] Trying fallback: "${fallbackQuery}"`);
-    result = await searchUnsplash(fallbackQuery, orientation);
+    result = await searchUnsplash(fallbackQuery, orientation, excludeUrls);
     if (result) return result;
   }
 
@@ -224,7 +252,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape' } = await req.json();
+    const { query, orientation = 'landscape', excludeUrls = [] } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -233,9 +261,12 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}`);
+    console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}, Exclude: ${excludeUrls.length} URLs`);
 
-    // STEP 1: Clean the query by removing AI noise phrases
+    // Build exclusion set for deduplication
+    const excludeSet = new Set<string>(excludeUrls);
+
+    // STEP 1: Clean the query by removing AI noise phrases AND face/people keywords
     const cleanedQuery = cleanQuery(query);
     
     if (!cleanedQuery || cleanedQuery.length < 2) {
@@ -250,14 +281,14 @@ serve(async (req) => {
       );
     }
 
-    // STEP 2: Try Unsplash with fallbacks
-    let result = await searchUnsplashWithFallbacks(cleanedQuery, orientation);
+    // STEP 2: Try Unsplash with fallbacks + deduplication
+    let result = await searchUnsplashWithFallbacks(cleanedQuery, orientation, excludeSet);
 
     // STEP 3: Retry with "wallpaper" suffix if first attempt failed
     if (!result) {
       const wallpaperQuery = `${cleanedQuery} wallpaper`;
       console.log(`[fetch-book-images] First attempt failed, trying with wallpaper: "${wallpaperQuery}"`);
-      result = await searchUnsplashWithFallbacks(wallpaperQuery, orientation);
+      result = await searchUnsplashWithFallbacks(wallpaperQuery, orientation, excludeSet);
     }
 
     // STEP 4: Retry with just first 2 words if wallpaper also failed
@@ -266,7 +297,7 @@ serve(async (req) => {
       if (words.length >= 2) {
         const twoWordQuery = words.slice(0, 2).join(' ');
         console.log(`[fetch-book-images] Wallpaper failed, trying first 2 words: "${twoWordQuery}"`);
-        result = await searchUnsplashWithFallbacks(twoWordQuery, orientation);
+        result = await searchUnsplashWithFallbacks(twoWordQuery, orientation, excludeSet);
       }
     }
 
@@ -290,13 +321,12 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[fetch-book-images] Success from ${result.source}:`, result.imageUrl);
+    console.log(`[fetch-book-images] Success from ${result.source}:`, result.imageUrl?.substring(0, 60));
 
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('[fetch-book-images] Error:', errorMessage);

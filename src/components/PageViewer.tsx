@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, PanelTop } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -325,7 +325,7 @@ const PageEditModal: React.FC<PageEditModalProps> = ({ open, onOpenChange, initi
 
 // Insert Page Dialog - Choose block type for new page
 type InsertDirection = 'before' | 'after';
-type InsertBlockType = 'text' | 'image_full' | 'image_half';
+type InsertBlockType = 'text' | 'image_full';
 
 interface InsertPageDialogProps {
   open: boolean;
@@ -347,12 +347,6 @@ const InsertPageDialog: React.FC<InsertPageDialogProps> = ({ open, onOpenChange,
       icon: <Image className="w-8 h-8" />, 
       label: 'Full Page Image', 
       description: 'Full-bleed photograph with caption' 
-    },
-    { 
-      type: 'image_half', 
-      icon: <PanelTop className="w-8 h-8" />, 
-      label: 'Half Image & Text', 
-      description: 'Split layout with image above text' 
     },
   ];
 
@@ -932,6 +926,22 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     [onBlocksUpdate]
   );
 
+  // Collect already-used image URLs for deduplication
+  const getUsedImageUrls = useCallback((): string[] => {
+    const urls: string[] = [];
+    blocks.forEach(b => {
+      if (b.image_url) urls.push(b.image_url);
+    });
+    // Also check parent preloadedBlocks for this chapter
+    const preloaded = preloadedBlocks?.[currentChapter];
+    if (preloaded) {
+      preloaded.forEach(b => {
+        if ((b as any).image_url) urls.push((b as any).image_url);
+      });
+    }
+    return [...new Set(urls)]; // Unique
+  }, [blocks, preloadedBlocks, currentChapter]);
+
   // Auto-fetch images for blocks without URLs using the hybrid engine
   const fetchImageForBlock = useCallback(async (block: PageBlock) => {
     const key = getBlockKey(block);
@@ -947,10 +957,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     console.log('[PageViewer] Auto-fetching image via hybrid engine:', content.query);
 
     try {
+      // Pass already-used URLs for deduplication
+      const excludeUrls = getUsedImageUrls();
+      
       const { data, error } = await supabase.functions.invoke('fetch-book-images', {
         body: { 
           query: content.query,
-          orientation: block.block_type === 'image_full' ? 'landscape' : 'portrait'
+          orientation: 'landscape', // Always landscape now (no image_half)
+          excludeUrls,
         }
       });
 
@@ -989,7 +1003,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         return next;
       });
     }
-  }, [setBlocksAndPropagate]);
+  }, [setBlocksAndPropagate, getUsedImageUrls]);
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
@@ -1146,16 +1160,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (!error) toast.success('Image removed');
   }, [blocks, currentChapter, setBlocksAndPropagate]);
 
-  // Open manual search dialog
+  // Open manual search dialog - works even if block isn't synced to DB yet
   const handleOpenSearchDialog = useCallback((blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
 
-    if (!hasValidDbId(block)) {
-      // Allow opening anyway (we'll still update locally even if DB isn't ready).
-      toast.info('This page is still syncing—changes may take a moment to persist.');
-    }
-    
+    // No longer showing "still syncing" toast - we'll update locally and persist later
     const currentContent = block.content as { query: string; caption: string };
     setSearchingBlockId(blockId);
     setSearchQuery(currentContent.query || '');
@@ -1211,15 +1221,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   }, [searchingBlockId, blocks, setBlocksAndPropagate]);
 
 
-  // Handle opening upload modal
+  // Handle opening upload modal - works even if block isn't synced to DB yet
   const handleOpenUploadModal = useCallback((blockId: string) => {
-    const block = blocks.find(b => b.id === blockId);
-    if (block && !hasValidDbId(block)) {
-      toast.info('This page is still syncing—uploads may take a moment to persist.');
-    }
+    // No longer showing "still syncing" toast - we'll update locally and persist later
     setUploadingBlockId(blockId);
     setUploadModalOpen(true);
-  }, [blocks]);
+  }, []);
 
   // Handle image upload from modal
   const handleImageUpload = useCallback(async (file: File) => {
@@ -1467,7 +1474,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           text: "## New Page Title\n\nStart writing here. Use Markdown headers to structure your content.\n\n### Subheader\n\nAdd your detailed content in this section. Aim for 220-250 words for optimal 6x9 page fit." 
         };
       } else {
-        // image_full or image_half
+        // image_full
         newContent = { 
           query: "", 
           caption: "Enter caption..." 
