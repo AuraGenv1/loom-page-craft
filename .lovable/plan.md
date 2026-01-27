@@ -1,159 +1,203 @@
 
-# Plan: Improve Image Relevance for Book Generation
+# Image Manifest with Permanent Archive System
 
-## Problem Analysis
+## Overview
 
-The current image search system has a fundamental **relevance problem**:
+This plan implements a bulletproof image tracking and archiving system that:
+1. **Permanently archives** all images to your Supabase storage (eliminating "link rot")
+2. **Tracks metadata** for every image (source, license, original URL, attribution)
+3. **Generates a legal manifest** (03_Image_Manifest.pdf) with embedded thumbnails
 
-1. **AI-Generated Queries Are Too Abstract**: The `generate-chapter-blocks` function asks the AI to create "literal visual descriptions" for image queries (e.g., "A soaring eagle against a blue sky"), but these prompts are often:
-   - Too metaphorical (not grounded in the actual book topic)
-   - Missing geographic context (a London book might get "ancient ruins at sunset" which returns Hawaiian temples)
-   - Not anchored to the specific chapter content
-
-2. **No Topic Grounding**: The `fetch-book-images` and `search-book-images` functions search exactly what the AI requested without any awareness of the **book's overall topic**. So a query like "modern architecture sunset" for a London travel guide might return buildings from Dubai or Tokyo.
-
-3. **Keyword-Only Search**: Unsplash and Wikimedia are keyword-based - they don't understand semantic intent. A query for "peak indulgence" (Aspen book subtitle) returns random results because those words aren't descriptive of actual imagery.
+This ensures KDP defense remains valid even if original images are removed from Unsplash/Pexels/Wikimedia years later.
 
 ---
 
-## Proposed Solution: Context-Aware Image Search
+## Phase 1: Database Schema Update
 
-### Strategy 1: Topic Anchoring (Primary Fix)
+Add new metadata columns to the `book_pages` table to track image provenance:
 
-Automatically prepend the book's main topic/location to every image search query to ground results geographically and topically.
+| Column | Type | Purpose |
+|--------|------|---------|
+| `image_source` | TEXT | 'unsplash', 'pexels', 'wikimedia', or 'upload' |
+| `original_url` | TEXT | The original external URL (before archiving) |
+| `image_license` | TEXT | 'Unsplash License', 'Pexels License', 'CC0', 'Rights Certified' |
+| `image_attribution` | TEXT | 'Photo by John Doe on Pexels' or artist string |
+| `archived_at` | TIMESTAMP | When the image was archived to our storage |
 
-**Current flow:**
-```
-AI Query: "Modern glass skyscraper from below"
-→ Unsplash Search: "Modern glass skyscraper from below"
-→ Results: Buildings from anywhere in the world
-```
-
-**Proposed flow:**
-```
-Book Topic: "London Travel Guide"
-AI Query: "Modern glass skyscraper from below"
-→ Processed Query: "London Modern glass skyscraper from below"
-→ Results: London buildings (The Shard, Gherkin, etc.)
-```
-
-### Strategy 2: AI Query Enhancement (Secondary Fix)
-
-Use Gemini to rewrite vague/abstract image queries into specific, searchable terms grounded in the book context.
-
-**Example:**
-```
-Book Topic: "Aspen Luxury Travel Guide"
-Original Query: "Peak indulgence atmosphere"
-→ AI Rewrites: "Aspen Colorado ski lodge interior fireplace"
-→ Results: Relevant Aspen imagery
-```
-
-### Strategy 3: Cover Image Intelligence
-
-The cover image generation (`generate-cover-image`) uses Pexels but doesn't leverage the same topic-grounding. We'll unify it with the Unsplash/Wikimedia engine and apply topic anchoring.
+**User Upload Handling:**
+- `image_source`: "upload"
+- `image_license`: "Rights Certified by Publisher"
+- `image_attribution`: "Uploaded by [Publisher Name]"
+- `original_url`: NULL (not applicable)
 
 ---
 
-## Technical Changes
+## Phase 2: Image Archive Pipeline
 
-### 1. Update `fetch-book-images` Edge Function
+### New Edge Function: `archive-image`
 
-Add a new `bookTopic` parameter that gets prepended to search queries:
+Creates a dedicated function that:
+1. Downloads image bytes from external URL (Unsplash/Pexels/Wikimedia)
+2. Uploads to Supabase storage under `archived/{book_id}/{timestamp}.jpg`
+3. Returns the permanent Supabase URL
 
-```typescript
-// New parameter in request body
-const { query, orientation, excludeUrls, bookTopic } = await req.json();
-
-// Topic anchoring logic
-function anchorQueryToTopic(query: string, topic: string | undefined): string {
-  if (!topic) return query;
-  
-  // Extract location from topic (e.g., "London" from "London Travel Guide")
-  const location = extractLocation(topic);
-  
-  // Prepend location/topic to query for geographic grounding
-  if (location && !query.toLowerCase().includes(location.toLowerCase())) {
-    return `${location} ${query}`;
-  }
-  
-  return query;
-}
+```text
+External URL (Unsplash/Pexels)
+        |
+        v
++------------------+
+| archive-image    |
+| Edge Function    |
++------------------+
+        |
+        v
+Download image bytes
+        |
+        v
+Upload to Supabase Storage
+(archived/{book_id}/{timestamp}.jpg)
+        |
+        v
+Return permanent URL + metadata
 ```
 
-### 2. Update `search-book-images` Edge Function
+### Updated Image Selection Flow
 
-Apply the same topic-anchoring logic to the Search Gallery so manual searches also get context.
+When a user selects an image (via Search Gallery or auto-fetch):
 
-### 3. Update `generate-chapter-blocks` Edge Function
-
-Improve the AI prompt to generate more specific, searchable image queries:
-
-```
-RULE 6: LITERAL VISUAL QUERIES (Image Queries)
-- CRITICAL: Every image query MUST include the book's topic/location.
-- For a "London Travel Guide", use "London Big Ben at sunset" NOT just "Historic clock tower at sunset"
-- For an "Aspen Ski Guide", use "Aspen Colorado ski slopes" NOT just "Snowy mountain slopes"
-- Always include the primary subject (place name, topic) in the query.
-```
-
-### 4. Update PageViewer.tsx
-
-Pass the book topic to the `fetch-book-images` call:
-
-```typescript
-const { data, error } = await supabase.functions.invoke('fetch-book-images', {
-  body: { 
-    query: content.query,
-    orientation: 'landscape',
-    excludeUrls,
-    bookTopic: topic, // NEW: Pass book topic for anchoring
-  }
-});
-```
-
-### 5. Update BookCover.tsx
-
-Apply the same topic-anchoring to cover image searches.
-
-### 6. Update ImageSearchGallery.tsx
-
-Pass book topic context to the gallery search so user manual searches are also grounded.
+1. Call `archive-image` with the external URL
+2. Receive permanent Supabase URL + original URL
+3. Store both URLs + metadata in `book_pages`
 
 ---
 
-## Files to Modify
+## Phase 3: Frontend Updates
 
-| File | Changes |
-|------|---------|
-| `supabase/functions/fetch-book-images/index.ts` | Add topic anchoring logic, location extraction |
-| `supabase/functions/search-book-images/index.ts` | Add topic anchoring for gallery searches |
-| `supabase/functions/generate-chapter-blocks/index.ts` | Update AI prompt to require topic in queries |
-| `src/components/PageViewer.tsx` | Pass `topic` prop to fetch-book-images calls |
-| `src/components/BookCover.tsx` | Pass topic to image searches |
-| `src/components/ImageSearchGallery.tsx` | Accept and use `bookTopic` prop |
+### ImageSearchGallery.tsx
+- Pass source metadata (`source`, `attribution`, `license`) to selection handlers
+- Include original URL in callback data
 
----
+### PageViewer.tsx
+- Update `handleImageSelect` to save metadata columns
+- Update `handleCroppedImageUpload` to save metadata columns
+- Update `fetchImageForBlock` to archive images and save metadata
+- Update `handleImageUpload` to mark as "upload" source with "Rights Certified" license
 
-## Expected Outcome
-
-**Before:**
-- Query: "Modern architecture sunset" for London book
-- Results: Random skyscrapers from Dubai, Tokyo, NYC
-
-**After:**
-- Query: "London Modern architecture sunset"
-- Results: The Shard, Gherkin, Canary Wharf buildings
-
-This should dramatically improve image relevance while keeping the existing infrastructure intact. Users who want to override can still manually search with any terms they prefer in the Search Gallery.
+### bookImages.ts
+- Add `archiveExternalImage()` helper function
+- Add `saveImageMetadata()` helper for consistent DB updates
 
 ---
 
-## Alternative Considered: Remove Auto-Images Entirely
+## Phase 4: Image Manifest Generator
 
-If topic-anchoring doesn't provide sufficient improvement, we can also:
-1. Disable auto-image generation entirely
-2. Show placeholder boxes with "Add Image" buttons
-3. Let users manually search/select every image
+### Update KdpLegalDefense.tsx
 
-This would guarantee relevance (user chooses) but requires more user effort.
+Add a third document to the Defense Kit ZIP:
+
+**03_Image_Manifest.pdf**
+
+Contents:
+- Header: "IMAGE LICENSING MANIFEST"
+- Book title, publisher, date
+- Table with columns:
+
+| Page | Chapter | Caption | Source | License | Archived URL | Original URL |
+|------|---------|---------|--------|---------|--------------|--------------|
+
+**Special Features:**
+- Embedded 50x50px thumbnails for visual proof
+- User uploads marked as "Rights Certified by Publisher"
+- Clickable URLs for both archived and original locations
+
+### Sample Row Examples:
+
+**Unsplash Image:**
+| 3 | 1 | Aspen mountain at sunset | Unsplash | Unsplash License | https://[supabase]/archived/... | https://unsplash.com/photos/abc123 |
+
+**Pexels Image:**
+| 7 | 2 | Hotel Jerome lobby | Pexels | Pexels License | https://[supabase]/archived/... | https://pexels.com/photo/456 |
+
+**User Upload:**
+| 12 | 4 | Custom restaurant photo | User Upload | Rights Certified by Publisher | https://[supabase]/user-uploads/... | N/A |
+
+---
+
+## Files to Create/Modify
+
+| File | Action | Description |
+|------|--------|-------------|
+| `supabase/migrations/add_image_metadata.sql` | CREATE | Add 5 columns to book_pages |
+| `supabase/functions/archive-image/index.ts` | CREATE | Download + reupload images |
+| `supabase/config.toml` | UPDATE | Add archive-image function config |
+| `src/lib/bookImages.ts` | UPDATE | Add archiveExternalImage helper |
+| `src/components/ImageSearchGallery.tsx` | UPDATE | Pass metadata to handlers |
+| `src/components/PageViewer.tsx` | UPDATE | Save metadata on image selection |
+| `src/components/KdpLegalDefense.tsx` | UPDATE | Generate 03_Image_Manifest.pdf |
+
+---
+
+## Data Flow Summary
+
+```text
++-------------------+     +------------------+     +-------------------+
+| User selects      | --> | archive-image    | --> | Supabase Storage  |
+| image from        |     | Edge Function    |     | archived/{id}/    |
+| Unsplash/Pexels   |     | (downloads +     |     | timestamp.jpg     |
+| OR uploads own    |     | reuploads)       |     +-------------------+
++-------------------+     +------------------+              |
+                                                           v
++-----------------------------------------------------------+
+| book_pages table                                          |
+|-----------------------------------------------------------|
+| image_url        = Supabase archived URL (permanent)      |
+| original_url     = External URL (provenance)              |
+| image_source     = 'unsplash' | 'pexels' | 'upload'       |
+| image_license    = 'Unsplash License' | 'Rights Certified'|
+| image_attribution= 'Photo by X on Pexels'                 |
+| archived_at      = timestamp                              |
++-----------------------------------------------------------+
+                                |
+                                v
++-----------------------------------------------------------+
+| 03_Image_Manifest.pdf (in Defense Kit ZIP)                |
+|-----------------------------------------------------------|
+| Table of all images with:                                 |
+| - Page/Chapter location                                   |
+| - 50x50 thumbnail (embedded)                              |
+| - Source + License                                        |
+| - Archived URL (permanent, your control)                  |
+| - Original URL (provenance proof)                         |
++-----------------------------------------------------------+
+```
+
+---
+
+## Benefits
+
+1. **Link Rot Immunity**: Your Supabase storage URL is permanent and under your control
+2. **Complete Audit Trail**: Original URLs documented for legal provenance
+3. **Visual Proof**: Embedded thumbnails in PDF survive even if all URLs die
+4. **User Upload Coverage**: Uploads marked with "Rights Certified by Publisher"
+5. **KDP Defensible**: Demonstrates clear ownership, licensing, and archive chain
+
+---
+
+## Technical Notes
+
+- The archive-image Edge Function uses the existing `book-images` storage bucket
+- Images are stored under `archived/{book_id}/{timestamp}.ext` path
+- Original resolution is preserved (uses full/large2x URLs)
+- Metadata is saved atomically with the image_url update
+- The manifest PDF uses jsPDF for generation (same as Evidence Dossier)
+- Thumbnail embedding uses base64 data URLs in the PDF
+
+---
+
+## Estimated Implementation Steps
+
+1. **Database Migration** - Add 5 columns to book_pages (simple ALTER TABLE)
+2. **Archive Edge Function** - Create download/upload pipeline
+3. **Frontend Handlers** - Update selection/upload flows to save metadata
+4. **Manifest Generator** - Add PDF table with embedded thumbnails
+5. **Testing** - Verify metadata persists and manifest generates correctly
