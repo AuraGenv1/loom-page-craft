@@ -5,8 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type Variant = "cover" | "diagram" | "back-cover";
-
 // Fallback placeholder image - elegant abstract gradient (never crashes)
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=1200&q=80";
 
@@ -17,152 +15,75 @@ const successResponse = (imageUrl: string, imageUrls: string[] = [imageUrl]) => 
   });
 };
 
-// More permissive location extraction
-const extractGeographicLocation = (topic: string): string | null => {
-  const patterns = [
-    /\b(?:in|to|of|about|for|visiting|exploring)\s+([A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*(?:,\s*[A-Z][\w''\-\.]+(?:\s+[A-Z][\w''\-\.]+)*)?)/i,
-    /^([A-Z][\w''\-\.]+(?:,?\s+[A-Z][\w''\-\.]+)*)/,
-  ];
-
-  for (const p of patterns) {
-    const m = topic.match(p);
-    if (m?.[1]) return m[1].trim();
-  }
-  return null;
-};
-
-const isTravelTopic = (topic: string): boolean => {
-  const travelPatterns = /\b(travel|trip|vacation|tour|visit|guide|destination|city|country|explore|journey|getaway|resort|hotel|tourism|itinerary)\b/i;
-  return travelPatterns.test(topic);
+/**
+ * TOPIC ANCHORING: Extract the core subject/location from a book topic
+ * "Aspen Luxury Travel Guide" → "Aspen Colorado"
+ * "London Travel Guide" → "London"
+ */
+const extractTopicAnchor = (topic: string): string => {
+  const stopWords = ['guide', 'travel', 'comprehensive', 'complete', 'ultimate', 'luxury', 
+                     'artisan', 'curated', 'definitive', 'essential', 'peak', 'indulgence',
+                     'a', 'the', 'to', 'for', 'of', 'in', 'about', 'hotel', 'resort'];
+  
+  const words = topic.toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .split(/\s+/)
+    .filter(w => !stopWords.includes(w) && w.length > 2);
+  
+  // Return first 2 significant words (usually location + descriptor)
+  return words.slice(0, 2).join(' ');
 };
 
 /**
- * STRICT SAFETY SANITIZER
- * Removes forbidden human keywords from input text before sending to Pexels
+ * Fetch images from Unsplash API (higher quality, better relevance)
  */
-const sanitizeInput = (input: string): string => {
-  const FORBIDDEN_KEYWORDS = [
-    'woman', 'women', 'man', 'men', 'person', 'people', 
-    'girl', 'boy', 'child', 'children', 'face', 'couple', 'selfie'
-  ];
-  
-  let sanitized = input.toLowerCase();
-  for (const keyword of FORBIDDEN_KEYWORDS) {
-    // Remove the forbidden word (case-insensitive, with word boundaries)
-    const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-    sanitized = sanitized.replace(regex, '');
-  }
-  
-  // Clean up extra spaces
-  return sanitized.replace(/\s+/g, ' ').trim();
-};
-
-/**
- * Build search query for Pexels
- * PRIORITY: customPrompt takes precedence over auto-generated queries
- * SAFETY: 
- * - ALL images: strict sanitization + "still life, object focus, no people"
- * - Custom prompts: Use as provided (after sanitization) + quality keywords
- */
-const buildSearchQuery = (variant: Variant, topicOrTitle: string, caption?: string, customPrompt?: string): string => {
-  // Strict safety keywords for ALL images - ban humans completely
-  const SAFETY_SUFFIX = "no people no human no face still life object focus minimalist";
-  
-  // For custom prompts: Quality enhancement only
-  const CUSTOM_PROMPT_QUALITY = "4k high resolution";
-
-  // CUSTOM PROMPT: Sanitize first, then add quality + safety keywords
-  if (customPrompt && customPrompt.trim().length > 0) {
-    const sanitized = sanitizeInput(customPrompt.trim());
-    console.log("Original custom prompt:", customPrompt);
-    console.log("Sanitized custom prompt:", sanitized);
-    return `${sanitized} ${CUSTOM_PROMPT_QUALITY} ${SAFETY_SUFFIX}`;
-  }
-
-  const location = extractGeographicLocation(topicOrTitle);
-  const isTravel = isTravelTopic(topicOrTitle);
-
-  // Back cover variant: minimalist texture-focused backgrounds
-  if (variant === "back-cover") {
-    // Abstract textures and backgrounds for back covers
-    if (location) {
-      return `${location} texture abstract background ${SAFETY_SUFFIX}`;
-    }
-    return `abstract texture background minimalist ${SAFETY_SUFFIX}`;
-  }
-
-  // Diagram/chapter images: sanitize caption and add safety
-  if (variant === "diagram" && caption) {
-    const sanitizedCaption = sanitizeInput(caption);
-    const locationSuffix = location ? ` ${location}` : "";
-    return `${sanitizedCaption}${locationSuffix} ${SAFETY_SUFFIX}`;
-  }
-
-  // Cover image: sanitize and prioritize location grounding for travel topics
-  const sanitizedTopic = sanitizeInput(topicOrTitle);
-  if (isTravel && location) {
-    return `${location} landmark architecture ${SAFETY_SUFFIX}`;
-  }
-
-  return `${sanitizedTopic} ${SAFETY_SUFFIX}`;
-};
-
-/**
- * Fetch images from Pexels API with full error handling
- * NEVER throws - always returns array (empty on failure)
- */
-async function fetchPexelsImages(query: string, apiKey: string, orientation: string = "landscape"): Promise<string[]> {
+async function fetchUnsplashImages(query: string, accessKey: string): Promise<string[]> {
   try {
-    // Random page (1-3) to shuffle results while keeping relevance high
-    const randomPage = Math.floor(Math.random() * 3) + 1;
-    console.log("Pexels search query:", query, "orientation:", orientation, "page:", randomPage);
-
+    console.log("Unsplash search query:", query);
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&orientation=${orientation}&page=${randomPage}`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10&orientation=squarish`,
       {
-        headers: { Authorization: apiKey },
+        headers: { Authorization: `Client-ID ${accessKey}` },
         signal: controller.signal,
       }
     );
-
+    
     clearTimeout(timeoutId);
-
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Pexels API error:", response.status, errorText);
+      console.error("Unsplash API error:", response.status);
       return [];
     }
-
+    
     const data = await response.json();
-    const photos = data.photos ?? [];
-
-    if (!photos.length) {
-      console.log("Pexels returned no results for query:", query);
+    const results = data.results ?? [];
+    
+    if (!results.length) {
+      console.log("Unsplash returned no results for query:", query);
       return [];
     }
-
-    // Extract large2x or large image URLs
-    const imageUrls = photos
+    
+    // Get regular-sized images (suitable for covers)
+    const imageUrls = results
       .slice(0, 5)
-      .map((photo: { src?: { large2x?: string; large?: string; original?: string } }) => {
-        return photo.src?.large2x || photo.src?.large || photo.src?.original;
-      })
-      .filter((url: string | undefined): url is string => typeof url === "string" && url.length > 0);
-
-    console.log(`Returning ${imageUrls.length} Pexels image URLs`);
+      .map((photo: { urls?: { regular?: string; full?: string } }) => 
+        photo.urls?.regular || photo.urls?.full
+      )
+      .filter((url: string | undefined): url is string => typeof url === "string");
+    
+    console.log(`Returning ${imageUrls.length} Unsplash image URLs`);
     return imageUrls;
   } catch (error) {
-    // Catch ALL errors - timeout, network, parsing, etc.
-    console.error("Pexels fetch error (handled gracefully):", error);
+    console.error("Unsplash fetch error:", error);
     return [];
   }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -170,74 +91,65 @@ serve(async (req) => {
   try {
     const { title, topic, sessionId, variant, caption, customPrompt } = await req.json();
 
-    // Session validation
     if (!sessionId || typeof sessionId !== "string" || sessionId.length < 10) {
-      console.error("Invalid or missing sessionId:", sessionId);
-      // Return fallback instead of error to prevent crashes
-      console.log("Returning fallback due to invalid session");
+      console.error("Invalid sessionId");
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    const MAX_INPUT_LENGTH = 500; // Increased for custom prompts
     const rawSubject = (customPrompt || topic || title || "").toString();
-    if (!rawSubject || rawSubject.length > MAX_INPUT_LENGTH) {
-      console.log("Input too long or empty, using fallback");
+    if (!rawSubject || rawSubject.length > 500) {
+      console.log("Input invalid, using fallback");
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    const resolvedVariant: Variant = variant === "diagram" ? "diagram" : variant === "back-cover" ? "back-cover" : "cover";
-
-    // ============ PEXELS API KEY - CRITICAL ============
-    const PEXELS_API_KEY = Deno.env.get("PEXELS_API_KEY");
-
-    if (!PEXELS_API_KEY) {
-      // Log clearly but DO NOT crash - return fallback
-      console.error("⚠️ PEXELS_API_KEY not configured in Supabase secrets");
-      console.log("Returning fallback image due to missing API key");
+    // ============ UNSPLASH API KEY ============
+    const UNSPLASH_ACCESS_KEY = Deno.env.get("UNSPLASH_ACCESS_KEY");
+    
+    if (!UNSPLASH_ACCESS_KEY) {
+      console.error("⚠️ UNSPLASH_ACCESS_KEY not configured");
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    // Build search query - customPrompt takes priority
-    const coverSubject = (topic || title || "").toString();
-    const subjectForQuery = resolvedVariant === "cover" ? coverSubject : rawSubject;
-    const searchQuery = buildSearchQuery(resolvedVariant, subjectForQuery, caption, customPrompt);
-
-    // Determine orientation based on variant
-    const orientation = resolvedVariant === "back-cover" ? "portrait" : "landscape";
-
-    // Attempt to fetch images - wrapped in try/catch
-    let imageUrls: string[] = [];
-    try {
-      imageUrls = await fetchPexelsImages(searchQuery, PEXELS_API_KEY, orientation);
-    } catch (fetchError) {
-      console.error("Outer catch for Pexels fetch:", fetchError);
-      // Continue with empty array
-    }
-
-    // RETRY LOGIC: If no images found, try broader query without strict safety suffix
+    // Build topic-anchored search query for covers
+    const coverSubject = topic || title || "";
+    const topicAnchor = extractTopicAnchor(coverSubject);
+    
+    // Primary search: Topic anchor + "landmark scenic"
+    let searchQuery = `${topicAnchor} landmark scenic architecture`;
+    console.log("Cover search query (anchored):", searchQuery);
+    
+    let imageUrls = await fetchUnsplashImages(searchQuery, UNSPLASH_ACCESS_KEY);
+    
+    // Retry 1: Just the topic anchor + "landscape"
     if (imageUrls.length === 0) {
-      console.log("First search failed, trying broader query...");
-      const broaderQuery = `${topic || title || "abstract"} wallpaper`;
-      try {
-        imageUrls = await fetchPexelsImages(broaderQuery, PEXELS_API_KEY, orientation);
-        console.log(`Broader query "${broaderQuery}" returned ${imageUrls.length} results`);
-      } catch (retryError) {
-        console.error("Retry fetch also failed:", retryError);
-      }
+      searchQuery = `${topicAnchor} landscape beautiful`;
+      console.log("Retry 1:", searchQuery);
+      imageUrls = await fetchUnsplashImages(searchQuery, UNSPLASH_ACCESS_KEY);
+    }
+    
+    // Retry 2: Broader - just topic anchor
+    if (imageUrls.length === 0) {
+      searchQuery = topicAnchor;
+      console.log("Retry 2:", searchQuery);
+      imageUrls = await fetchUnsplashImages(searchQuery, UNSPLASH_ACCESS_KEY);
+    }
+    
+    // Retry 3: Abstract luxury fallback
+    if (imageUrls.length === 0) {
+      searchQuery = "luxury resort mountain landscape";
+      console.log("Retry 3 (fallback):", searchQuery);
+      imageUrls = await fetchUnsplashImages(searchQuery, UNSPLASH_ACCESS_KEY);
     }
 
-    // If still no images found after retry, return fallback (not error)
     if (imageUrls.length === 0) {
-      console.log("No images found after retry, returning fallback");
+      console.log("No images found after retries, returning fallback");
       return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
     }
 
-    // Success - return images
     return successResponse(imageUrls[0], imageUrls);
 
   } catch (error: unknown) {
-    // GLOBAL catch - NEVER return 500, always return fallback
-    console.error("Error in generate-cover-image (handled):", error);
+    console.error("Error in generate-cover-image:", error);
     return successResponse(FALLBACK_IMAGE, [FALLBACK_IMAGE]);
   }
 });
