@@ -81,9 +81,16 @@ const ChapterTitlePage: React.FC<{ content: { chapter_number: number; title: str
 );
 
 const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
+  // Strip **bold** markdown syntax (AI sometimes includes this despite being banned)
+  const stripAsterisks = (text: string): string => {
+    return text.replace(/\*\*([^*]+)\*\*/g, '$1');
+  };
+
   // Parse text for headers and lists (blockquotes banned)
   const parseTextWithHeaders = (text: string) => {
-    const lines = text.split('\n');
+    // First, strip any errant **bold** markdown
+    const cleanedText = stripAsterisks(text);
+    const lines = cleanedText.split('\n');
     const elements: JSX.Element[] = [];
     let currentParagraph: string[] = [];
     
@@ -109,7 +116,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         flushParagraph();
         elements.push(
           <h2 key={`h2-${i}`} className="text-lg font-bold mt-4 mb-2 font-serif text-foreground">
-            {trimmedLine.replace('## ', '')}
+            {stripAsterisks(trimmedLine.replace('## ', ''))}
           </h2>
         );
       }
@@ -118,7 +125,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         flushParagraph();
         elements.push(
           <h3 key={`h3-${i}`} className="text-base font-semibold mt-3 mb-2 font-serif text-foreground">
-            {trimmedLine.replace('### ', '')}
+            {stripAsterisks(trimmedLine.replace('### ', ''))}
           </h3>
         );
       }
@@ -127,7 +134,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         flushParagraph();
         elements.push(
           <p key={`bq-${i}`} className="font-serif text-[15px] font-semibold text-foreground my-2 leading-relaxed">
-            {trimmedLine.replace('> ', '')}
+            {stripAsterisks(trimmedLine.replace('> ', ''))}
           </p>
         );
       }
@@ -137,7 +144,7 @@ const TextPage: React.FC<{ content: { text: string } }> = ({ content }) => {
         elements.push(
           <div key={`li-${i}`} className="flex items-start gap-2 mb-1.5 ml-3">
             <span className="text-primary mt-0.5">•</span>
-            <span className="font-serif text-[15px] leading-relaxed text-foreground">{trimmedLine.replace(/^[\*\-]\s/, '')}</span>
+            <span className="font-serif text-[15px] leading-relaxed text-foreground">{stripAsterisks(trimmedLine.replace(/^[\*\-]\s/, ''))}</span>
           </div>
         );
       }

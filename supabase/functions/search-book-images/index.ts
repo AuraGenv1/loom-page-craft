@@ -5,12 +5,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Minimum width for KDP print quality (hidden filter)
+const MIN_WIDTH_FILTER = 1200;
+// Width threshold for "Print Ready" badge
+const PRINT_READY_WIDTH = 1800;
+
 interface ImageResult {
-  imageUrl: string;
-  thumbnailUrl: string;
+  imageUrl: string;        // Full/Regular resolution for database
+  thumbnailUrl: string;    // Small version for preview
   attribution?: string;
   source: 'unsplash' | 'wikimedia';
   id: string;
+  width: number;           // Image width for quality filtering
+  height: number;          // Image height
+  isPrintReady: boolean;   // True if width >= 1800px
 }
 
 // AI-generated negative prompts to remove
@@ -70,14 +78,31 @@ async function searchUnsplashMultiple(
       return [];
     }
 
-    const results: ImageResult[] = data.results.map((photo: any) => ({
-      id: `unsplash-${photo.id}`,
-      imageUrl: photo.urls?.regular || photo.urls?.full,
-      thumbnailUrl: photo.urls?.small || photo.urls?.thumb,
-      source: 'unsplash' as const,
-    }));
+    const results: ImageResult[] = [];
+    
+    for (const photo of data.results) {
+      const width = photo.width || 0;
+      const height = photo.height || 0;
+      
+      // HIDDEN FILTER: Skip images below minimum print quality
+      if (width < MIN_WIDTH_FILTER) {
+        continue;
+      }
+      
+      results.push({
+        id: `unsplash-${photo.id}`,
+        // IMPORTANT: Use 'regular' or 'full' for database storage (high-res)
+        imageUrl: photo.urls?.regular || photo.urls?.full,
+        // Use 'small' for thumbnail preview only
+        thumbnailUrl: photo.urls?.small || photo.urls?.thumb,
+        source: 'unsplash' as const,
+        width,
+        height,
+        isPrintReady: width >= PRINT_READY_WIDTH,
+      });
+    }
 
-    console.log(`[Unsplash] Found ${results.length} images for query (page ${page}):`, query);
+    console.log(`[Unsplash] Found ${results.length} high-res images for query (page ${page}, filtered from ${data.results.length}):`, query);
     return results;
   } catch (error) {
     console.error('[Unsplash] Fetch error:', error);
@@ -135,8 +160,11 @@ async function searchWikimediaMultiple(query: string, limit: number = 20): Promi
       const mime = imageInfo.mime || '';
       if (!mime.startsWith('image/')) continue;
       
-      // Skip small images
-      if (imageInfo.width < 600 || imageInfo.height < 400) continue;
+      const width = imageInfo.width || 0;
+      const height = imageInfo.height || 0;
+      
+      // HIDDEN FILTER: Skip images below minimum print quality (1200px)
+      if (width < MIN_WIDTH_FILTER) continue;
 
       const metadata = imageInfo.extmetadata || {};
       const artist = metadata.Artist?.value?.replace(/<[^>]*>/g, '').trim() || 'Unknown';
@@ -144,14 +172,18 @@ async function searchWikimediaMultiple(query: string, limit: number = 20): Promi
       
       results.push({
         id: `wikimedia-${page.pageid}`,
-        imageUrl: imageInfo.thumburl || imageInfo.url,
+        // Use the ORIGINAL URL for high-res (not thumburl)
+        imageUrl: imageInfo.url || imageInfo.thumburl,
         thumbnailUrl: imageInfo.thumburl || imageInfo.url,
         attribution: `${artist} / ${license}`,
         source: 'wikimedia',
+        width,
+        height,
+        isPrintReady: width >= PRINT_READY_WIDTH,
       });
     }
 
-    console.log(`[Wikimedia] Found ${results.length} valid images for query:`, query);
+    console.log(`[Wikimedia] Found ${results.length} high-res images for query:`, query);
     return results;
   } catch (error) {
     console.error('[Wikimedia] Fetch error:', error);
@@ -186,13 +218,13 @@ serve(async (req) => {
     }
 
     // Search both sources in parallel - get more results from each
-    // Unsplash: 3 pages of 30 = 90 results max
-    // Wikimedia: 40 results
+    // Unsplash: 3 pages of 30 = 90 results max (before filtering)
+    // Wikimedia: 50 results (before filtering)
     const [unsplashPage1, unsplashPage2, unsplashPage3, wikimediaResults] = await Promise.all([
       searchUnsplashMultiple(cleanedQuery, orientation, 30, 1),
       searchUnsplashMultiple(cleanedQuery, orientation, 30, 2),
       searchUnsplashMultiple(cleanedQuery, orientation, 30, 3),
-      searchWikimediaMultiple(cleanedQuery, 40),
+      searchWikimediaMultiple(cleanedQuery, 50),
     ]);
 
     // Combine results, prioritizing Unsplash but interleaving for variety
@@ -212,7 +244,10 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Wikimedia: ${wikimediaResults.length})`);
+    // Count print-ready images
+    const printReadyCount = allResults.filter(img => img.isPrintReady).length;
+
+    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
@@ -221,7 +256,8 @@ serve(async (req) => {
         sources: {
           unsplash: unsplashResults.length,
           wikimedia: wikimediaResults.length,
-        }
+        },
+        printReadyCount,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

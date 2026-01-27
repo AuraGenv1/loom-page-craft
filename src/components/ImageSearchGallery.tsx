@@ -17,6 +17,9 @@ interface ImageResult {
   thumbnailUrl: string;
   attribution?: string;
   source: 'unsplash' | 'wikimedia';
+  width?: number;
+  height?: number;
+  isPrintReady?: boolean;
 }
 
 interface ImageSearchGalleryProps {
@@ -365,7 +368,16 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
                 loading="lazy"
               />
               
-              {/* Source badge */}
+              {/* Print Ready badge - top left for high-res images */}
+              {image.isPrintReady && (
+                <div className="absolute top-1 left-1">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-green-600 text-white">
+                    Print Ready
+                  </span>
+                </div>
+              )}
+              
+              {/* Source badge - bottom left */}
               <div className="absolute bottom-1 left-1">
                 <span className={`
                   text-[10px] px-1.5 py-0.5 rounded-full font-medium
