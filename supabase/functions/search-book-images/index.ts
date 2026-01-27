@@ -14,7 +14,7 @@ interface ImageResult {
   imageUrl: string;        // Full/Regular resolution for database
   thumbnailUrl: string;    // Small version for preview
   attribution?: string;
-  source: 'unsplash' | 'wikimedia';
+  source: 'unsplash' | 'wikimedia' | 'pexels';
   id: string;
   width: number;           // Image width for quality filtering
   height: number;          // Image height
@@ -106,6 +106,82 @@ async function searchUnsplashMultiple(
     return results;
   } catch (error) {
     console.error('[Unsplash] Fetch error:', error);
+    return [];
+  }
+}
+
+// Search Pexels and return multiple results
+async function searchPexelsMultiple(
+  query: string,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  perPage: number = 30,
+  page: number = 1
+): Promise<ImageResult[]> {
+  const apiKey = Deno.env.get('PEXELS_API_KEY');
+  if (!apiKey) {
+    console.log('[Pexels] No API key configured');
+    return [];
+  }
+
+  try {
+    const params = new URLSearchParams({
+      query: query,
+      orientation: orientation,
+      per_page: String(Math.min(perPage, 80)), // Pexels max is 80
+      page: String(page),
+    });
+
+    const response = await fetch(`https://api.pexels.com/v1/search?${params}`, {
+      headers: {
+        'Authorization': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('[Pexels] API error:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+
+    if (!data.photos || data.photos.length === 0) {
+      console.log('[Pexels] No results for query:', query);
+      return [];
+    }
+
+    const results: ImageResult[] = [];
+
+    for (const photo of data.photos) {
+      const width = photo.width || 0;
+      const height = photo.height || 0;
+
+      // HIDDEN FILTER: Skip images below minimum print quality (1200px)
+      if (width < MIN_WIDTH_FILTER) {
+        continue;
+      }
+
+      // Pexels provides multiple sizes - use 'large2x' or 'original' for high-res
+      const imageUrl = photo.src?.large2x || photo.src?.original || photo.src?.large;
+      const thumbnailUrl = photo.src?.medium || photo.src?.small;
+
+      if (!imageUrl) continue;
+
+      results.push({
+        id: `pexels-${photo.id}`,
+        imageUrl,
+        thumbnailUrl: thumbnailUrl || imageUrl,
+        attribution: photo.photographer ? `Photo by ${photo.photographer} on Pexels` : 'Pexels',
+        source: 'pexels' as const,
+        width,
+        height,
+        isPrintReady: width >= PRINT_READY_WIDTH,
+      });
+    }
+
+    console.log(`[Pexels] Found ${results.length} high-res images for query (page ${page}, filtered from ${data.photos.length}):`, query);
+    return results;
+  } catch (error) {
+    console.error('[Pexels] Fetch error:', error);
     return [];
   }
 }
@@ -247,7 +323,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 100, bookTopic, forCover = false } = await req.json();
+    const { query, orientation = 'landscape', limit = 150, bookTopic, forCover = false } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -270,26 +346,34 @@ serve(async (req) => {
     // Anchor the query to the book's topic for relevance
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
-    // Search both sources in parallel - get more results from each (using anchored query)
+    // Search all sources in parallel
     // Unsplash: 3 pages of 30 = 90 results max (before filtering)
+    // Pexels: 2 pages of 40 = 80 results max (before filtering)
     // Wikimedia: 50 results (before filtering) - apply cover license filter if needed
-    const [unsplashPage1, unsplashPage2, unsplashPage3, wikimediaResults] = await Promise.all([
+    const [unsplashPage1, unsplashPage2, unsplashPage3, pexelsPage1, pexelsPage2, wikimediaResults] = await Promise.all([
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
+      searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
+      searchPexelsMultiple(anchoredQuery, orientation, 40, 2),
       searchWikimediaMultiple(anchoredQuery, 50, forCover), // Pass forCover to filter licenses
     ]);
 
-    // Combine results, prioritizing Unsplash but interleaving for variety
+    // Combine results
     const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3];
+    const pexelsResults = [...pexelsPage1, ...pexelsPage2];
     
-    // Interleave: 3 Unsplash, 1 Wikimedia pattern for variety
+    // Interleave: 3 Unsplash, 2 Pexels, 1 Wikimedia pattern for variety
     const allResults: ImageResult[] = [];
-    let uIdx = 0, wIdx = 0;
-    while (allResults.length < limit && (uIdx < unsplashResults.length || wIdx < wikimediaResults.length)) {
+    let uIdx = 0, pIdx = 0, wIdx = 0;
+    while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || wIdx < wikimediaResults.length)) {
       // Add up to 3 Unsplash
       for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
         allResults.push(unsplashResults[uIdx++]);
+      }
+      // Add up to 2 Pexels
+      for (let i = 0; i < 2 && pIdx < pexelsResults.length && allResults.length < limit; i++) {
+        allResults.push(pexelsResults[pIdx++]);
       }
       // Add 1 Wikimedia
       if (wIdx < wikimediaResults.length && allResults.length < limit) {
@@ -300,7 +384,7 @@ serve(async (req) => {
     // Count print-ready images
     const printReadyCount = allResults.filter(img => img.isPrintReady).length;
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
@@ -308,6 +392,7 @@ serve(async (req) => {
         query: cleanedQuery,
         sources: {
           unsplash: unsplashResults.length,
+          pexels: pexelsResults.length,
           wikimedia: wikimediaResults.length,
         },
         printReadyCount,

@@ -16,7 +16,7 @@ interface ImageResult {
   imageUrl: string;
   thumbnailUrl: string;
   attribution?: string;
-  source: 'unsplash' | 'wikimedia';
+  source: 'unsplash' | 'wikimedia' | 'pexels';
   width?: number;
   height?: number;
   isPrintReady?: boolean;
@@ -137,6 +137,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
 
   // Group images by source
   const unsplashImages = images.filter(img => img.source === 'unsplash');
+  const pexelsImages = images.filter(img => img.source === 'pexels');
   const wikimediaImages = images.filter(img => img.source === 'wikimedia');
 
   return (
@@ -148,7 +149,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             Search Images
           </DialogTitle>
           <DialogDescription>
-            Search Unsplash and Wikimedia for the perfect image. Click to select, then confirm.
+            Search Unsplash, Pexels, and Wikimedia for the perfect image. Click to select, then confirm.
           </DialogDescription>
         </DialogHeader>
 
@@ -212,9 +213,10 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             </div>
           ) : (
             <Tabs defaultValue="all" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-3 mb-2">
+              <TabsList className="grid w-full grid-cols-4 mb-2">
                 <TabsTrigger value="all">All ({images.length})</TabsTrigger>
                 <TabsTrigger value="unsplash">Unsplash ({unsplashImages.length})</TabsTrigger>
+                <TabsTrigger value="pexels">Pexels ({pexelsImages.length})</TabsTrigger>
                 <TabsTrigger value="wikimedia">Wikimedia ({wikimediaImages.length})</TabsTrigger>
               </TabsList>
               
@@ -229,6 +231,14 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
               <TabsContent value="unsplash" className="flex-1 min-h-0 mt-0">
                 <ImageGrid 
                   images={unsplashImages} 
+                  selectedImage={selectedImage}
+                  onSelectImage={setSelectedImage}
+                />
+              </TabsContent>
+
+              <TabsContent value="pexels" className="flex-1 min-h-0 mt-0">
+                <ImageGrid 
+                  images={pexelsImages} 
                   selectedImage={selectedImage}
                   onSelectImage={setSelectedImage}
                 />
@@ -257,7 +267,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
-                  Selected from {selectedImage.source === 'unsplash' ? 'Unsplash' : 'Wikimedia'}
+                  Selected from {selectedImage.source === 'unsplash' ? 'Unsplash' : selectedImage.source === 'pexels' ? 'Pexels' : 'Wikimedia'}
                 </p>
                 {selectedImage.attribution && (
                   <p className="text-xs text-muted-foreground truncate">
@@ -391,10 +401,12 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
                   text-[10px] px-1.5 py-0.5 rounded-full font-medium
                   ${image.source === 'unsplash' 
                     ? 'bg-foreground/70 text-background' 
+                    : image.source === 'pexels'
+                    ? 'bg-emerald-600 text-white'
                     : 'bg-primary/80 text-primary-foreground'
                   }
                 `}>
-                  {image.source === 'unsplash' ? 'Unsplash' : 'Wikimedia'}
+                  {image.source === 'unsplash' ? 'Unsplash' : image.source === 'pexels' ? 'Pexels' : 'Wikimedia'}
                 </span>
               </div>
               
