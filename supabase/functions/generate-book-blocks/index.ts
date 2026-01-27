@@ -116,7 +116,6 @@ Block types available (ONLY use these - NO quote blocks!):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
 - "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
-- "image_half": { "query": "Literal visual description", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "heading": { "level": 2, "text": "Section heading" }
 - "list": { "items": ["item 1", "item 2", "item 3"] }
@@ -138,7 +137,7 @@ Return ONLY valid JSON:
     {"block_type": "image_full", "content": {"query": "atmospheric landscape scene", "caption": "Setting the scene"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of opening content...]"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of continued content...]"}},
-    {"block_type": "image_half", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
+    {"block_type": "image_full", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of content...]"}},
     {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
@@ -229,26 +228,29 @@ Language: ${language}`;
 
     console.log(`[generate-book-blocks] Created book: ${book.id}`);
 
-    // Insert page blocks for Chapter 1
-    const blocks = (aiData.chapter_1_blocks || []).map((block: any, index: number) => ({
+    // Insert page blocks for Chapter 1 (force image_half -> image_full)
+    const blocksToInsert = (aiData.chapter_1_blocks || []).map((block: any, index: number) => ({
       book_id: book.id,
       chapter_number: 1,
       page_order: index + 1,
-      block_type: block.block_type,
+      block_type: block.block_type === 'image_half' ? 'image_full' : block.block_type,
       content: block.content,
       image_url: null
     }));
 
-    if (blocks.length > 0) {
-      const { error: blocksError } = await supabase
+    let insertedBlocks: any[] = [];
+    if (blocksToInsert.length > 0) {
+      const { data, error: blocksError } = await supabase
         .from('book_pages')
-        .insert(blocks);
+        .insert(blocksToInsert)
+        .select('*');
 
       if (blocksError) {
         console.error('Blocks insert error:', blocksError);
         // Don't throw - book was created, blocks can be retried
       } else {
-        console.log(`[generate-book-blocks] Inserted ${blocks.length} blocks for chapter 1`);
+        insertedBlocks = data ?? [];
+        console.log(`[generate-book-blocks] Inserted ${blocksToInsert.length} blocks for chapter 1`);
       }
     }
 
@@ -262,7 +264,7 @@ Language: ${language}`;
         chapter: ch.chapter_number, 
         title: ch.title 
       })),
-      chapter1Blocks: blocks,
+      chapter1Blocks: insertedBlocks,
       isVisualTopic: isVisual,
       targetPagesPerChapter: pagesPerChapter
     }), { 
