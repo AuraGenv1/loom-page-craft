@@ -960,6 +960,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           query: content.query,
           orientation: 'landscape', // Always landscape now (no image_half)
           excludeUrls,
+          bookTopic: topic, // Anchor search to book's topic for relevance
         }
       });
 
@@ -1788,6 +1789,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         onSelectBlob={handleCroppedImageUpload}
         orientation="landscape"
         enableCrop={true} // Enable 6x9 crop feature
+        bookTopic={topic} // Anchor search to book's topic for relevance
       />
       
       {/* Page Edit Modal (Admin only) */}

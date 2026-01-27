@@ -245,6 +245,49 @@ async function searchWikimediaWithFallbacks(query: string): Promise<ImageResult 
   return null;
 }
 
+// Extract location/topic for grounding searches
+function extractTopicAnchor(topic: string | undefined): string | null {
+  if (!topic) return null;
+  
+  // Common patterns to extract location from book titles
+  // "London Travel Guide" → "London"
+  // "A Comprehensive Guide to Paris" → "Paris"
+  // "Exploring Tokyo: A Culinary Journey" → "Tokyo"
+  // "aspen luxury travel guide" → "Aspen"
+  
+  const lowerTopic = topic.toLowerCase();
+  
+  // Skip generic words
+  const skipWords = ['the', 'a', 'an', 'guide', 'to', 'of', 'comprehensive', 'ultimate', 'complete', 'exploring', 'travel', 'luxury', 'best', 'top'];
+  
+  // Split and find first meaningful word (likely the location/subject)
+  const words = topic.split(/[\s:,\-]+/).filter(w => w.length > 2);
+  
+  for (const word of words) {
+    if (!skipWords.includes(word.toLowerCase())) {
+      // Capitalize first letter for proper noun treatment
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }
+  }
+  
+  return null;
+}
+
+// Anchor the query to the book's topic for geographic/topical relevance
+function anchorQueryToTopic(query: string, topic: string | undefined): string {
+  const anchor = extractTopicAnchor(topic);
+  if (!anchor) return query;
+  
+  // Check if query already contains the anchor (case-insensitive)
+  if (query.toLowerCase().includes(anchor.toLowerCase())) {
+    return query;
+  }
+  
+  // Prepend the anchor to ground the search
+  console.log(`[TopicAnchor] Grounding query with "${anchor}": "${anchor} ${query}"`);
+  return `${anchor} ${query}`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -252,7 +295,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', excludeUrls = [] } = await req.json();
+    const { query, orientation = 'landscape', excludeUrls = [], bookTopic } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -261,7 +304,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}, Exclude: ${excludeUrls.length} URLs`);
+    console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}, Exclude: ${excludeUrls.length} URLs, Topic: "${bookTopic || 'none'}"`);
 
     // Build exclusion set for deduplication
     const excludeSet = new Set<string>(excludeUrls);
@@ -280,20 +323,23 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // STEP 1.5: Anchor the query to the book's topic for relevance
+    const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
-    // STEP 2: Try Unsplash with fallbacks + deduplication
-    let result = await searchUnsplashWithFallbacks(cleanedQuery, orientation, excludeSet);
+    // STEP 2: Try Unsplash with fallbacks + deduplication (using anchored query)
+    let result = await searchUnsplashWithFallbacks(anchoredQuery, orientation, excludeSet);
 
     // STEP 3: Retry with "wallpaper" suffix if first attempt failed
     if (!result) {
-      const wallpaperQuery = `${cleanedQuery} wallpaper`;
+      const wallpaperQuery = `${anchoredQuery} wallpaper`;
       console.log(`[fetch-book-images] First attempt failed, trying with wallpaper: "${wallpaperQuery}"`);
       result = await searchUnsplashWithFallbacks(wallpaperQuery, orientation, excludeSet);
     }
 
     // STEP 4: Retry with just first 2 words if wallpaper also failed
     if (!result) {
-      const words = cleanedQuery.split(' ').filter(w => w.length > 2);
+      const words = anchoredQuery.split(' ').filter(w => w.length > 2);
       if (words.length >= 2) {
         const twoWordQuery = words.slice(0, 2).join(' ');
         console.log(`[fetch-book-images] Wallpaper failed, trying first 2 words: "${twoWordQuery}"`);
@@ -301,10 +347,10 @@ serve(async (req) => {
       }
     }
 
-    // STEP 5: Try Wikimedia with fallbacks as last resort
+    // STEP 5: Try Wikimedia with fallbacks as last resort (use anchored query)
     if (!result) {
       console.log('[fetch-book-images] Unsplash exhausted, trying Wikimedia...');
-      result = await searchWikimediaWithFallbacks(cleanedQuery);
+      result = await searchWikimediaWithFallbacks(anchoredQuery);
     }
 
     // STEP 6: Return gracefully even if no images found (NO 404!)
