@@ -560,9 +560,21 @@ const ImageFullPage: React.FC<{
             </div>
             {/* Compact caption below image */}
             {content.caption && (
-              <p className="text-xs text-muted-foreground text-center mt-3 italic max-w-[80%] mx-auto">
-                {content.caption}
-              </p>
+              <div className="text-center mt-3 max-w-[80%] mx-auto">
+                <p className="text-xs text-muted-foreground italic">{content.caption}</p>
+                {canEditImages && onManualSearch && (
+                  <button
+                    type="button"
+                    className="print:hidden mt-2 text-[11px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onManualSearch();
+                    }}
+                  >
+                    AI-selected image — click to swap
+                  </button>
+                )}
+              </div>
             )}
             {attribution && (
               <p className="text-[8px] text-muted-foreground/40 text-center mt-1">
@@ -648,6 +660,18 @@ const ImageHalfPage: React.FC<{
           <p className="italic text-muted-foreground">
             {content.caption}
           </p>
+          {canEditImages && onManualSearch && (
+            <button
+              type="button"
+              className="print:hidden mt-2 text-[11px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onManualSearch();
+              }}
+            >
+              AI-selected image — click to swap
+            </button>
+          )}
           {attribution && (
             <p className="text-[9px] text-muted-foreground/50 mt-2">
               {attribution}

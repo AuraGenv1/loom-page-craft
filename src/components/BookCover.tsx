@@ -191,6 +191,10 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     useEffect(() => {
       // Only run once per mount/book
       if (hasFetchedFallbackRef.current) return;
+
+      // If the parent is already generating a cover (Index.tsx does this),
+      // do NOT run our legacy fallback fetch (prevents “plant -> mountain” flicker).
+      if (isLoadingImage) return;
       
       // If we already have a valid source URL, lock it and don't fetch
       const hasValidSource = allUrls.some(url => isValidSourceUrl(url));
@@ -209,15 +213,35 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         const fetchCoverImage = async () => {
           try {
-            const query = `${title} minimalist wallpaper`;
-            const { data, error } = await supabase.functions.invoke('fetch-book-images', {
-              body: { query, orientation: 'portrait' }
+            // Use the dedicated cover generator (topic-anchored, multi-retry)
+            // instead of the generic image fetcher.
+            let sessionId = localStorage.getItem('bookSessionId');
+            if (!sessionId) {
+              sessionId = crypto.randomUUID();
+              localStorage.setItem('bookSessionId', sessionId);
+            }
+
+            const { data, error } = await supabase.functions.invoke('generate-cover-image', {
+              body: {
+                title,
+                topic: topic || title,
+                sessionId,
+                variant: 'cover',
+              },
             });
             
             if (error) throw error;
-            if (data?.imageUrl) {
-              console.log('[BookCover] Auto-fetched cover:', data.imageUrl);
-              const newUrls = [data.imageUrl];
+
+            const urls: string[] =
+              (Array.isArray(data?.imageUrls) ? data.imageUrls : [])
+                .filter((u: unknown): u is string => typeof u === 'string' && u.length > 0);
+            if (urls.length === 0 && typeof data?.imageUrl === 'string' && data.imageUrl.length > 0) {
+              urls.push(data.imageUrl);
+            }
+
+            if (urls.length > 0) {
+              console.log('[BookCover] Auto-fetched cover:', urls[0]);
+              const newUrls = urls;
               setLocalFrontUrls(newUrls);
               setLockedUrls(newUrls);
               setCurrentUrlIndex(0);
@@ -237,7 +261,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         
         fetchCoverImage();
       }
-    }, [allUrls, title, bookId, isPlaceholderUrl, onCoverUpdate]);
+    }, [allUrls, title, topic, bookId, isLoadingImage, isPlaceholderUrl, isValidSourceUrl, onCoverUpdate]);
     
     // Update locked URLs when we get new ones
     // PROTECTION: Never downgrade from a valid image to a placeholder

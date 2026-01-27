@@ -47,6 +47,34 @@ function cleanQuery(rawQuery: string): string {
   return cleaned;
 }
 
+// If the query contains distinctive terms (e.g. "jerome" in "hotel jerome"),
+// prefer Unsplash results whose metadata actually mentions those terms.
+const UNSPLASH_GENERIC_TOKENS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'of', 'in', 'at', 'to', 'for',
+  // common location anchors
+  'aspen', 'colorado',
+  // generic scene words
+  'hotel', 'resort', 'restaurant', 'tavern', 'bistro',
+  'mountain', 'landscape', 'scenic', 'view', 'views',
+  'architecture', 'architectural', 'building', 'exterior', 'interior',
+  'downtown', 'street', 'patio', 'lobby', 'room',
+  'luxury', 'travel', 'guide', 'beautiful', 'elegant',
+]);
+
+function extractSignificantTokens(query: string): string[] {
+  const tokens = query
+    .toLowerCase()
+    // keep letters/numbers/spaces only
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(Boolean)
+    .filter(t => t.length >= 4)
+    .filter(t => !UNSPLASH_GENERIC_TOKENS.has(t));
+
+  return [...new Set(tokens)].slice(0, 6);
+}
+
 // Generate fallback queries by progressively simplifying
 function generateFallbackQueries(query: string): string[] {
   const words = query.split(' ').filter(w => w.length > 2);
@@ -85,11 +113,14 @@ async function searchUnsplash(
   }
 
   try {
+    const significantTokens = extractSignificantTokens(query);
+    const shouldFilterByTokens = significantTokens.length > 0;
+
     // Request multiple results so we can deduplicate
     const params = new URLSearchParams({
       query: query,
       orientation: orientation,
-      per_page: '10',
+      per_page: '20',
     });
 
     const response = await fetch(`https://api.unsplash.com/search/photos?${params}`, {
@@ -110,6 +141,18 @@ async function searchUnsplash(
       for (const photo of data.results) {
         const imageUrl = photo.urls?.regular || photo.urls?.full;
         if (!imageUrl) continue;
+
+        // If query has distinctive tokens (e.g. proper nouns), skip results that
+        // don't mention any of them in their metadata (reduces mismatches like
+        // caption says "Hotel Jerome" but image is generic).
+        if (shouldFilterByTokens) {
+          const haystack = `${photo.alt_description || ''} ${photo.description || ''} ${photo.slug || ''}`
+            .toLowerCase();
+          const matched = significantTokens.some(t => haystack.includes(t));
+          if (!matched) {
+            continue;
+          }
+        }
         
         // Check if this URL is already used (dedupe)
         if (excludeUrls.has(imageUrl)) {
@@ -139,12 +182,18 @@ async function searchUnsplashWithFallbacks(
   orientation: 'landscape' | 'portrait' = 'landscape',
   excludeUrls: Set<string> = new Set()
 ): Promise<ImageResult | null> {
+  const lockTokens = extractSignificantTokens(query);
+
   // Try the main query first
   let result = await searchUnsplash(query, orientation, excludeUrls);
   if (result) return result;
 
   // Try fallback queries
-  const fallbacks = generateFallbackQueries(query);
+  const fallbacks = generateFallbackQueries(query).filter((fallbackQuery: string) => {
+    if (lockTokens.length === 0) return true;
+    const lower = fallbackQuery.toLowerCase();
+    return lockTokens.some((t) => lower.includes(t));
+  });
   for (const fallbackQuery of fallbacks) {
     console.log(`[Unsplash] Trying fallback: "${fallbackQuery}"`);
     result = await searchUnsplash(fallbackQuery, orientation, excludeUrls);
@@ -230,12 +279,18 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
 
 // Try Wikimedia with fallback queries
 async function searchWikimediaWithFallbacks(query: string): Promise<ImageResult | null> {
+  const lockTokens = extractSignificantTokens(query);
+
   // Try the main query first
   let result = await searchWikimedia(query);
   if (result) return result;
 
   // Try fallback queries
-  const fallbacks = generateFallbackQueries(query);
+  const fallbacks = generateFallbackQueries(query).filter((fallbackQuery: string) => {
+    if (lockTokens.length === 0) return true;
+    const lower = fallbackQuery.toLowerCase();
+    return lockTokens.some((t) => lower.includes(t));
+  });
   for (const fallbackQuery of fallbacks) {
     console.log(`[Wikimedia] Trying fallback: "${fallbackQuery}"`);
     result = await searchWikimedia(fallbackQuery);
@@ -277,13 +332,13 @@ function extractTopicAnchor(topic: string | undefined): string | null {
 function anchorQueryToTopic(query: string, topic: string | undefined): string {
   const anchor = extractTopicAnchor(topic);
   if (!anchor) return query;
-  
-  // Check if query already contains the anchor (case-insensitive)
-  if (query.toLowerCase().includes(anchor.toLowerCase())) {
+
+  // Even if the query already contains the anchor, we still want it at the START
+  // so fallback shortening keeps the location/topic instead of drifting generic.
+  if (query.toLowerCase().startsWith(anchor.toLowerCase())) {
     return query;
   }
-  
-  // Prepend the anchor to ground the search
+
   console.log(`[TopicAnchor] Grounding query with "${anchor}": "${anchor} ${query}"`);
   return `${anchor} ${query}`;
 }
