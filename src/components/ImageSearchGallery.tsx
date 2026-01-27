@@ -70,7 +70,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
         body: { 
           query: query.trim(),
           orientation,
-          limit: 60, // Request more results
+          limit: 100, // Request more results for variety
         }
       });
 
@@ -105,27 +105,24 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   const handleCropComplete = useCallback(async (croppedBlob: Blob) => {
     if (!selectedImage) return;
     
+    // Always use onSelectBlob if available (it properly uploads cropped images)
     if (onSelectBlob) {
       await onSelectBlob(croppedBlob, selectedImage.attribution);
+      setShowCropper(false);
+      onOpenChange(false);
     } else {
-      // Fallback: convert blob to data URL
+      // Fallback: convert blob to data URL (for backwards compatibility)
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onloadend = () => {
         onSelect(reader.result as string, selectedImage.attribution);
+        setShowCropper(false);
+        onOpenChange(false);
       };
       reader.readAsDataURL(croppedBlob);
     }
-    setShowCropper(false);
-    onOpenChange(false);
   }, [selectedImage, onSelectBlob, onSelect, onOpenChange]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSearch();
-    }
-    // Allow space bar to work normally for typing
-  }, [handleSearch]);
+  // handleKeyDown moved inline to avoid any issues with event handling
 
   // Group images by source
   const unsplashImages = images.filter(img => img.source === 'unsplash');
@@ -146,12 +143,19 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
 
         {/* Search Bar */}
         <div className="flex gap-2">
-          <Input
+          <input
+            type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearch();
+              }
+              // All other keys (including space) work normally
+            }}
             placeholder="Search for images (e.g., London skyline sunset)..."
-            className="flex-1"
+            className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             autoFocus
           />
           <Button 

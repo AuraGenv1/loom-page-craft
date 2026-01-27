@@ -1275,6 +1275,75 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [uploadingBlockId, blocks, setBlocksAndPropagate]);
 
+  // Handle cropped image upload from gallery (when user crops before selecting)
+  const handleCroppedImageUpload = useCallback(async (croppedBlob: Blob, attribution?: string) => {
+    if (!searchingBlockId) return;
+
+    const block = blocks.find(b => b.id === searchingBlockId);
+    if (!block) return;
+
+    const key = getBlockKey(block);
+
+    try {
+      // Upload the cropped blob to Supabase Storage
+      const fileName = `${searchingBlockId}-cropped-${Date.now()}.jpg`;
+      const filePath = `user-uploads/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('book-images')
+        .upload(filePath, croppedBlob, { 
+          upsert: true,
+          contentType: 'image/jpeg'
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('book-images')
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update database with new image URL (best-effort)
+      const { error: updateError } = await supabase
+        .from('book_pages')
+        .update({ image_url: publicUrl })
+        .eq('id', searchingBlockId);
+
+      if (updateError) {
+        console.warn('[PageViewer] Failed to persist cropped image_url to DB (continuing locally):', updateError);
+      }
+
+      // Update local state - preserves current page position
+      setBlocksAndPropagate(block.chapter_number, (prev) =>
+        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
+      );
+
+      // Store attribution if present
+      if (attribution) {
+        setImageAttributions(prev => new Map(prev).set(key, attribution));
+      }
+
+      // Mark as fetched so loading state clears
+      attemptedFetchesRef.current.add(key);
+      setAttemptedFetches(prev => new Set(prev).add(key));
+      setLoadingImages(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+
+      toast.success('Cropped image uploaded!');
+    } catch (err) {
+      console.error('[PageViewer] Cropped upload error:', err);
+      toast.error('Failed to upload cropped image');
+    } finally {
+      setSearchingBlockId(null);
+      setSearchQuery('');
+    }
+  }, [searchingBlockId, blocks, setBlocksAndPropagate]);
+
   // Admin: Regenerate current chapter
   const handleRegenerateChapter = useCallback(async () => {
     if (!isAdmin) return;
@@ -1681,6 +1750,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         }}
         initialQuery={searchQuery}
         onSelect={handleImageSelect}
+        onSelectBlob={handleCroppedImageUpload}
         orientation="landscape"
         enableCrop={true} // Enable 6x9 crop feature
       />

@@ -165,7 +165,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 50 } = await req.json();
+    const { query, orientation = 'landscape', limit = 100 } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -186,16 +186,17 @@ serve(async (req) => {
     }
 
     // Search both sources in parallel - get more results from each
-    // Unsplash: 2 pages of 30 = 60 results max
-    // Wikimedia: 30 results
-    const [unsplashPage1, unsplashPage2, wikimediaResults] = await Promise.all([
+    // Unsplash: 3 pages of 30 = 90 results max
+    // Wikimedia: 40 results
+    const [unsplashPage1, unsplashPage2, unsplashPage3, wikimediaResults] = await Promise.all([
       searchUnsplashMultiple(cleanedQuery, orientation, 30, 1),
       searchUnsplashMultiple(cleanedQuery, orientation, 30, 2),
-      searchWikimediaMultiple(cleanedQuery, 30),
+      searchUnsplashMultiple(cleanedQuery, orientation, 30, 3),
+      searchWikimediaMultiple(cleanedQuery, 40),
     ]);
 
     // Combine results, prioritizing Unsplash but interleaving for variety
-    const unsplashResults = [...unsplashPage1, ...unsplashPage2];
+    const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3];
     
     // Interleave: 3 Unsplash, 1 Wikimedia pattern for variety
     const allResults: ImageResult[] = [];
