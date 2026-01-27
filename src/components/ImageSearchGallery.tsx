@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon } from 'lucide-react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -36,6 +38,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedImage, setSelectedImage] = useState<ImageResult | null>(null);
+  const [hasConsented, setHasConsented] = useState(false);
 
   // Reset state when dialog opens
   React.useEffect(() => {
@@ -44,6 +47,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
       setImages([]);
       setHasSearched(false);
       setSelectedImage(null);
+      setHasConsented(false);
     }
   }, [open, initialQuery]);
 
@@ -52,6 +56,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     
     setIsSearching(true);
     setSelectedImage(null);
+    setHasConsented(false);
     
     try {
       const { data, error } = await supabase.functions.invoke('search-book-images', {
@@ -80,10 +85,10 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   }, [query, orientation]);
 
   const handleSelect = useCallback(() => {
-    if (!selectedImage) return;
+    if (!selectedImage || !hasConsented) return;
     onSelect(selectedImage.imageUrl, selectedImage.attribution);
     onOpenChange(false);
-  }, [selectedImage, onSelect, onOpenChange]);
+  }, [selectedImage, hasConsented, onSelect, onOpenChange]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -195,28 +200,58 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           )}
         </div>
 
-        {/* Selection Preview & Confirm */}
+        {/* Selection Preview & Consent */}
         {selectedImage && (
-          <div className="flex items-center gap-4 pt-4 border-t">
-            <img 
-              src={selectedImage.thumbnailUrl} 
-              alt="Selected" 
-              className="w-16 h-12 object-cover rounded"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
-                Selected from {selectedImage.source === 'unsplash' ? 'Unsplash' : 'Wikimedia'}
-              </p>
-              {selectedImage.attribution && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {selectedImage.attribution}
+          <div className="pt-4 border-t space-y-4">
+            {/* Preview Row */}
+            <div className="flex items-center gap-4">
+              <img 
+                src={selectedImage.thumbnailUrl} 
+                alt="Selected" 
+                className="w-16 h-12 object-cover rounded"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  Selected from {selectedImage.source === 'unsplash' ? 'Unsplash' : 'Wikimedia'}
                 </p>
-              )}
+                {selectedImage.attribution && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {selectedImage.attribution}
+                  </p>
+                )}
+              </div>
             </div>
-            <Button onClick={handleSelect} className="gap-2">
-              <Check className="w-4 h-4" />
-              Use This Image
-            </Button>
+
+            {/* Consent Checkbox */}
+            <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <Checkbox
+                id="consent-checkbox"
+                checked={hasConsented}
+                onCheckedChange={(checked) => setHasConsented(checked === true)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <Label htmlFor="consent-checkbox" className="text-sm font-medium cursor-pointer">
+                  <AlertTriangle className="w-4 h-4 inline-block mr-1 text-amber-600" />
+                  I certify I have the rights to use this image.
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Loom & Page is not liable for copyright infringement or misuse of selected content.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleSelect} 
+                disabled={!hasConsented}
+                className="gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Use This Image
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
