@@ -538,8 +538,8 @@ const ImageFullPage: React.FC<{
           </div>
         </div>
       ) : imageUrl ? (
-        <div className="flex-1 flex items-start justify-center pt-10 pb-6 px-6 bg-muted/10">
-          <div className="relative w-full max-w-[520px] max-h-[55vh]">
+        <div className="flex-1 flex items-center justify-center py-8 px-6">
+          <div className="relative w-full max-w-[90%] max-h-[85%]">
             {canEditImages && blockId && onEditCaption && onRemove && onUpload && onManualSearch && (
               <AuthorImageToolbar
                 blockId={blockId}
@@ -550,14 +550,25 @@ const ImageFullPage: React.FC<{
                 onManualSearch={onManualSearch}
               />
             )}
-            <div className="w-full rounded-xl border border-border bg-background shadow-sm overflow-hidden">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg">
               <img
                 src={imageUrl}
                 alt={content.caption}
-                className="w-full max-h-[55vh] object-contain"
+                className="w-full h-auto max-h-[65vh] object-contain bg-muted/20"
                 loading="lazy"
               />
             </div>
+            {/* Compact caption below image */}
+            {content.caption && (
+              <p className="text-xs text-muted-foreground text-center mt-3 italic max-w-[80%] mx-auto">
+                {content.caption}
+              </p>
+            )}
+            {attribution && (
+              <p className="text-[8px] text-muted-foreground/40 text-center mt-1">
+                {attribution}
+              </p>
+            )}
           </div>
         </div>
       ) : showEmptyState ? (
@@ -571,16 +582,6 @@ const ImageFullPage: React.FC<{
           </div>
         </div>
       ) : null}
-      <div className="p-4 bg-card border-t">
-        <p className="text-sm italic text-muted-foreground text-center">
-          {content.caption}
-        </p>
-        {attribution && (
-          <p className="text-[9px] text-muted-foreground/50 text-center mt-1">
-            {attribution}
-          </p>
-        )}
-      </div>
     </div>
   );
 };
