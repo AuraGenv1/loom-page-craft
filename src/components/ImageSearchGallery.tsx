@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { ImageCropper } from '@/components/ImageCropper';
 
 interface ImageResult {
   id: string;
@@ -23,7 +24,9 @@ interface ImageSearchGalleryProps {
   onOpenChange: (open: boolean) => void;
   initialQuery: string;
   onSelect: (imageUrl: string, attribution?: string) => void;
+  onSelectBlob?: (blob: Blob, attribution?: string) => void; // For cropped images
   orientation?: 'landscape' | 'portrait';
+  enableCrop?: boolean; // Enable crop feature for 6x9 format
 }
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
@@ -31,7 +34,9 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   onOpenChange,
   initialQuery,
   onSelect,
+  onSelectBlob,
   orientation = 'landscape',
+  enableCrop = false,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [images, setImages] = useState<ImageResult[]>([]);
@@ -39,6 +44,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedImage, setSelectedImage] = useState<ImageResult | null>(null);
   const [hasConsented, setHasConsented] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
 
   // Reset state when dialog opens
   React.useEffect(() => {
@@ -48,6 +54,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
       setHasSearched(false);
       setSelectedImage(null);
       setHasConsented(false);
+      setShowCropper(false);
     }
   }, [open, initialQuery]);
 
@@ -63,7 +70,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
         body: { 
           query: query.trim(),
           orientation,
-          limit: 30,
+          limit: 60, // Request more results
         }
       });
 
@@ -90,11 +97,34 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     onOpenChange(false);
   }, [selectedImage, hasConsented, onSelect, onOpenChange]);
 
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+  const handleCropAndSelect = useCallback(() => {
+    if (!selectedImage || !hasConsented) return;
+    setShowCropper(true);
+  }, [selectedImage, hasConsented]);
+
+  const handleCropComplete = useCallback(async (croppedBlob: Blob) => {
+    if (!selectedImage) return;
+    
+    if (onSelectBlob) {
+      await onSelectBlob(croppedBlob, selectedImage.attribution);
+    } else {
+      // Fallback: convert blob to data URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        onSelect(reader.result as string, selectedImage.attribution);
+      };
+      reader.readAsDataURL(croppedBlob);
+    }
+    setShowCropper(false);
+    onOpenChange(false);
+  }, [selectedImage, onSelectBlob, onSelect, onOpenChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSearch();
     }
+    // Allow space bar to work normally for typing
   }, [handleSearch]);
 
   // Group images by source
@@ -119,8 +149,8 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Search for images..."
+            onKeyDown={handleKeyDown}
+            placeholder="Search for images (e.g., London skyline sunset)..."
             className="flex-1"
             autoFocus
           />
@@ -241,18 +271,40 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
               </div>
             </div>
 
-            {/* Action Button */}
-            <div className="flex justify-end">
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2">
+              {enableCrop && (
+                <Button 
+                  variant="outline"
+                  onClick={handleCropAndSelect} 
+                  disabled={!hasConsented}
+                  className="gap-2"
+                >
+                  <Crop className="w-4 h-4" />
+                  Crop for 6×9
+                </Button>
+              )}
               <Button 
                 onClick={handleSelect} 
                 disabled={!hasConsented}
                 className="gap-2"
               >
                 <Check className="w-4 h-4" />
-                Use This Image
+                Use As-Is
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Image Cropper Dialog */}
+        {selectedImage && (
+          <ImageCropper
+            open={showCropper}
+            onOpenChange={setShowCropper}
+            imageUrl={selectedImage.imageUrl}
+            onCropComplete={handleCropComplete}
+            aspectRatio={6 / 9}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -274,8 +326,8 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
   }, []);
 
   return (
-    <ScrollArea className="h-[350px]">
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 p-1">
+    <ScrollArea className="h-[400px]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-1">
         {images.map((image) => {
           const isSelected = selectedImage?.id === image.id;
           const isLoaded = loadedImages.has(image.id);
@@ -288,7 +340,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
                 onSelectImage(image);
               }}
               className={`
-                relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all
+                relative rounded-lg overflow-hidden border-2 transition-all
                 ${isSelected 
                   ? 'border-primary ring-2 ring-primary/30 scale-[1.02]' 
                   : 'border-transparent hover:border-muted-foreground/30'
@@ -297,13 +349,14 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
             >
               {/* Loading skeleton */}
               {!isLoaded && (
-                <div className="absolute inset-0 bg-muted animate-pulse" />
+                <div className="w-full h-32 bg-muted animate-pulse" />
               )}
               
+              {/* Full thumbnail - maintain aspect ratio, no cropping */}
               <img
                 src={image.thumbnailUrl}
                 alt=""
-                className={`w-full h-full object-cover transition-opacity ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`w-full h-auto max-h-40 object-contain bg-muted transition-opacity ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
                 onLoad={() => handleImageLoad(image.id)}
                 loading="lazy"
               />
@@ -311,13 +364,13 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
               {/* Source badge */}
               <div className="absolute bottom-1 left-1">
                 <span className={`
-                  text-[9px] px-1.5 py-0.5 rounded-full font-medium
+                  text-[10px] px-1.5 py-0.5 rounded-full font-medium
                   ${image.source === 'unsplash' 
-                    ? 'bg-black/60 text-white' 
-                    : 'bg-blue-600/80 text-white'
+                    ? 'bg-foreground/70 text-background' 
+                    : 'bg-primary/80 text-primary-foreground'
                   }
                 `}>
-                  {image.source === 'unsplash' ? 'U' : 'W'}
+                  {image.source === 'unsplash' ? 'Unsplash' : 'Wikimedia'}
                 </span>
               </div>
               

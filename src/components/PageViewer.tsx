@@ -167,7 +167,6 @@ interface AuthorImageToolbarProps {
   blockId: string;
   currentCaption: string;
   onEditCaption: (newCaption: string) => void;
-  onReroll: () => void;
   onRemove: () => void;
   onUpload: () => void;
   onManualSearch: () => void;
@@ -176,7 +175,6 @@ interface AuthorImageToolbarProps {
 const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
   currentCaption,
   onEditCaption,
-  onReroll,
   onRemove,
   onUpload,
   onManualSearch
@@ -195,9 +193,9 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         size="icon"
         className="h-8 w-8"
         onClick={(e) => { e.stopPropagation(); onManualSearch(); }}
-        title="Manual Search"
+        title="Search Gallery"
       >
-        <Pencil className="w-4 h-4" />
+        <Search className="w-4 h-4" />
       </Button>
       <Button
         variant="ghost"
@@ -216,15 +214,6 @@ const AuthorImageToolbar: React.FC<AuthorImageToolbarProps> = ({
         title="Edit Caption"
       >
         <Type className="w-4 h-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
-        onClick={(e) => { e.stopPropagation(); onReroll(); }}
-        title="Get New Image"
-      >
-        <RefreshCw className="w-4 h-4" />
       </Button>
       <Button
         variant="ghost"
@@ -522,11 +511,10 @@ const ImageFullPage: React.FC<{
   blockId?: string;
   fetchAttempted?: boolean;
   onEditCaption?: (newCaption: string) => void;
-  onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
   // Determine visual state
   const showLoading = isLoading || (!imageUrl && !fetchAttempted);
   const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
@@ -543,12 +531,11 @@ const ImageFullPage: React.FC<{
         </div>
       ) : imageUrl ? (
         <div className="flex-1 relative">
-          {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
+          {canEditImages && blockId && onEditCaption && onRemove && onUpload && onManualSearch && (
             <AuthorImageToolbar
               blockId={blockId}
               currentCaption={content.caption}
               onEditCaption={onEditCaption}
-              onReroll={onReroll}
               onRemove={onRemove}
               onUpload={onUpload}
               onManualSearch={onManualSearch}
@@ -594,11 +581,10 @@ const ImageHalfPage: React.FC<{
   blockId?: string;
   fetchAttempted?: boolean;
   onEditCaption?: (newCaption: string) => void;
-  onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
   // Determine visual state
   const showLoading = isLoading || (!imageUrl && !fetchAttempted);
   const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
@@ -615,12 +601,11 @@ const ImageHalfPage: React.FC<{
           </div>
         ) : imageUrl ? (
           <>
-            {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
+            {canEditImages && blockId && onEditCaption && onRemove && onUpload && onManualSearch && (
               <AuthorImageToolbar
                 blockId={blockId}
                 currentCaption={content.caption}
                 onEditCaption={onEditCaption}
-                onReroll={onReroll}
                 onRemove={onRemove}
                 onUpload={onUpload}
                 onManualSearch={onManualSearch}
@@ -758,11 +743,10 @@ const BlockRenderer: React.FC<{
   attemptedFetches: Set<string>;
   canEditImages?: boolean;
   onEditCaption?: (blockId: string, newCaption: string) => void;
-  onReroll?: (blockId: string) => void;
   onRemove?: (blockId: string) => void;
   onManualSearch?: (blockId: string) => void;
   onUpload?: (blockId: string) => void;
-}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onRemove, onManualSearch, onUpload }) => {
   const key = getBlockKey(block);
   const isLoading = loadingImages.has(key);
   const attribution = imageAttributions.get(key);
@@ -784,7 +768,6 @@ const BlockRenderer: React.FC<{
           canEditImages={canEditImages}
           blockId={block.id}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
-          onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
           onUpload={onUpload ? () => onUpload(block.id) : undefined}
@@ -801,7 +784,6 @@ const BlockRenderer: React.FC<{
           canEditImages={canEditImages}
           blockId={block.id}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
-          onReroll={onReroll ? () => onReroll(block.id) : undefined}
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
           onUpload={onUpload ? () => onUpload(block.id) : undefined}
@@ -1699,11 +1681,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         }}
         initialQuery={searchQuery}
         onSelect={handleImageSelect}
-        orientation={
-          blocks.find(b => b.id === searchingBlockId)?.block_type === 'image_full' 
-            ? 'landscape' 
-            : 'portrait'
-        }
+        orientation="landscape"
+        enableCrop={true} // Enable 6x9 crop feature
       />
       
       {/* Page Edit Modal (Admin only) */}
@@ -1748,7 +1727,6 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               attemptedFetches={attemptedFetches}
               canEditImages={canEditImages || isAdmin}
               onEditCaption={handleEditCaption}
-              onReroll={handleReroll}
               onRemove={handleRemoveImage}
               onManualSearch={handleOpenSearchDialog}
               onUpload={handleOpenUploadModal}
@@ -1851,15 +1829,6 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                     >
                       <Upload className="w-4 h-4" />
                       Upload Own Photo
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        if (currentBlock) handleReroll(currentBlock.id);
-                      }}
-                      className="gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Find New Image
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
