@@ -17,6 +17,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+// A stable key for a block that survives "preloaded" rehydration/replacement.
+// We cannot rely on `id` during generation because blocks may be replaced while
+// the DB is still syncing, which would reset loading/attempt state and wipe
+// locally-fetched images.
+const getBlockKey = (block: Pick<PageBlock, 'book_id' | 'chapter_number' | 'page_order' | 'block_type'>) => {
+  return `${block.book_id}:${block.chapter_number}:${block.page_order}:${block.block_type}`;
+};
+
 // Track which blocks are currently being fetched to prevent duplicates
 const fetchingImages = new Set<string>();
 
@@ -760,9 +768,10 @@ const BlockRenderer: React.FC<{
   onManualSearch?: (blockId: string) => void;
   onUpload?: (blockId: string) => void;
 }> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
-  const isLoading = loadingImages.has(block.id);
-  const attribution = imageAttributions.get(block.id);
-  const fetchAttempted = attemptedFetches.has(block.id);
+  const key = getBlockKey(block);
+  const isLoading = loadingImages.has(key);
+  const attribution = imageAttributions.get(key);
+  const fetchAttempted = attemptedFetches.has(key);
 
   switch (block.block_type) {
     case 'chapter_title':
@@ -909,14 +918,29 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     return titleIndex >= 0 ? titleIndex : 0;
   }, []);
 
+  // Keep parent `preloadedBlocks` in sync with local edits so generation-time
+  // rerenders don't wipe out image URLs (or other edits).
+  const setBlocksAndPropagate = useCallback(
+    (chapterNum: number, updater: (prev: PageBlock[]) => PageBlock[]) => {
+      setBlocks(prev => {
+        const next = updater(prev);
+        onBlocksUpdate?.(chapterNum, next);
+        return next;
+      });
+    },
+    [onBlocksUpdate]
+  );
+
   // Auto-fetch images for blocks without URLs using the hybrid engine
   const fetchImageForBlock = useCallback(async (block: PageBlock) => {
-    // During generation, preloaded blocks can be missing DB IDs; don't fetch until hydrated.
-    if (!hasValidDbId(block)) return;
-    if (fetchingImages.has(block.id)) return;
-    fetchingImages.add(block.id);
+    const key = getBlockKey(block);
+
+    // We still allow fetching during generation even if the DB row isn't visible yet.
+    // (Admin needs images immediately.) We'll best-effort persist to DB when possible.
+    if (fetchingImages.has(key)) return;
+    fetchingImages.add(key);
     
-    setLoadingImages(prev => new Set(prev).add(block.id));
+    setLoadingImages(prev => new Set(prev).add(key));
 
     const content = block.content as { query: string; caption: string };
     console.log('[PageViewer] Auto-fetching image via hybrid engine:', content.query);
@@ -932,35 +956,39 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       if (error) throw error;
 
       if (data?.imageUrl) {
-        // Update database with image URL
-        await supabase
-          .from('book_pages')
-          .update({ image_url: data.imageUrl })
-          .eq('id', block.id);
+        // Best-effort DB update (may fail while pages are still syncing/visible)
+        if (hasValidDbId(block)) {
+          const { error: updateError } = await supabase
+            .from('book_pages')
+            .update({ image_url: data.imageUrl })
+            .eq('id', block.id);
+
+          if (updateError) {
+            console.warn('[PageViewer] Failed to persist image_url to DB (continuing locally):', updateError);
+          }
+        }
 
         // Store attribution if present (from Wikimedia)
         if (data.attribution) {
-          setImageAttributions(prev => new Map(prev).set(block.id, data.attribution));
+          setImageAttributions(prev => new Map(prev).set(key, data.attribution));
         }
 
-        // Update local state
-        setBlocks(prevBlocks => 
-          prevBlocks.map(b => 
-            b.id === block.id ? { ...b, image_url: data.imageUrl } : b
-          )
+        // Update local state + parent cache using a stable match
+        setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
+          prevBlocks.map(b => (getBlockKey(b) === key ? { ...b, image_url: data.imageUrl } : b))
         );
       }
     } catch (err) {
       console.error('[PageViewer] Failed to fetch image:', err);
     } finally {
-      fetchingImages.delete(block.id);
+      fetchingImages.delete(key);
       setLoadingImages(prev => {
         const next = new Set(prev);
-        next.delete(block.id);
+        next.delete(key);
         return next;
       });
     }
-  }, []);
+  }, [setBlocksAndPropagate]);
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
@@ -1023,17 +1051,16 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
   useEffect(() => {
     blocks.forEach(block => {
-      // Skip until hydrated (preloaded blocks can briefly lack IDs)
-      if (!hasValidDbId(block)) return;
+      const key = getBlockKey(block);
       const isImageBlock = ['image_full', 'image_half'].includes(block.block_type);
       const hasNoImage = !block.image_url;
-      const notLoading = !loadingImages.has(block.id);
-      const notAttempted = !attemptedFetchesRef.current.has(block.id);
+      const notLoading = !loadingImages.has(key);
+      const notAttempted = !attemptedFetchesRef.current.has(key);
       
       if (isImageBlock && hasNoImage && notLoading && notAttempted) {
         // Mark as attempted to prevent duplicate fetches
-        attemptedFetchesRef.current.add(block.id);
-        setAttemptedFetches(prev => new Set(prev).add(block.id));
+        attemptedFetchesRef.current.add(key);
+        setAttemptedFetches(prev => new Set(prev).add(key));
         fetchImageForBlock(block);
       }
     });
@@ -1055,38 +1082,40 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       .eq('id', blockId);
 
     if (error) {
-      toast.error('Failed to update caption');
-      return;
+      // Still update locally so Admin flow works during generation/sync.
+      toast.error('Failed to save caption to the backend (showing locally).');
+    } else {
+      toast.success('Caption updated');
     }
 
-    // Update local state
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== blockId) return b;
-      return { ...b, content: updatedContent } as PageBlock;
-    }));
-
-    toast.success('Caption updated');
-  }, [blocks]);
+    // Update local state (and parent cache) regardless
+    setBlocksAndPropagate(block.chapter_number, (prev) =>
+      prev.map(b => (b.id !== blockId ? b : ({ ...b, content: updatedContent } as PageBlock)))
+    );
+  }, [blocks, setBlocksAndPropagate]);
 
   const handleReroll = useCallback(async (blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
 
-    // Clear current image and refetch
-    await supabase
+    // Clear current image and refetch (best-effort)
+    const { error: clearErr } = await supabase
       .from('book_pages')
       .update({ image_url: null })
       .eq('id', blockId);
 
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== blockId) return b;
-      return { ...b, image_url: undefined } as PageBlock;
-    }));
+    if (clearErr) {
+      console.warn('[PageViewer] Failed to clear image_url in DB (continuing locally):', clearErr);
+    }
+
+    setBlocksAndPropagate(block.chapter_number, (prev) =>
+      prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined } as PageBlock)))
+    );
 
     toast.info('Finding new image...');
     const updatedBlock = { ...block, image_url: undefined } as PageBlock;
     fetchImageForBlock(updatedBlock);
-  }, [blocks, fetchImageForBlock]);
+  }, [blocks, fetchImageForBlock, setBlocksAndPropagate]);
 
   const handleRemoveImage = useCallback(async (blockId: string) => {
     const { error } = await supabase
@@ -1095,17 +1124,16 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       .eq('id', blockId);
 
     if (error) {
-      toast.error('Failed to remove image');
-      return;
+      toast.error('Failed to remove image in the backend (removing locally).');
     }
 
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== blockId) return b;
-      return { ...b, image_url: undefined } as PageBlock;
-    }));
+    const block = blocks.find(b => b.id === blockId);
+    setBlocksAndPropagate(block?.chapter_number ?? currentChapter, (prev) =>
+      prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined } as PageBlock)))
+    );
 
-    toast.success('Image removed');
-  }, []);
+    if (!error) toast.success('Image removed');
+  }, [blocks, currentChapter, setBlocksAndPropagate]);
 
   // Open manual search dialog
   const handleOpenSearchDialog = useCallback((blockId: string) => {
@@ -1113,8 +1141,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
 
     if (!hasValidDbId(block)) {
-      toast.info('This page is still syncing—try again in a moment.');
-      return;
+      // Allow opening anyway (we'll still update locally even if DB isn't ready).
+      toast.info('This page is still syncing—changes may take a moment to persist.');
     }
     
     const currentContent = block.content as { query: string; caption: string };
@@ -1129,6 +1157,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     
     const block = blocks.find(b => b.id === searchingBlockId);
     if (!block) return;
+    const key = getBlockKey(block);
 
     setIsSearching(true);
     const currentContent = block.content as { query: string; caption: string };
@@ -1136,16 +1165,19 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
     try {
       // Update database
-      await supabase
+      const { error: updateErr } = await supabase
         .from('book_pages')
         .update({ content: updatedContent, image_url: null })
         .eq('id', searchingBlockId);
 
+      if (updateErr) {
+        console.warn('[PageViewer] Failed to persist manual search to DB (continuing locally):', updateErr);
+      }
+
       // Update local state
-      setBlocks(prev => prev.map(b => {
-        if (b.id !== searchingBlockId) return b;
-        return { ...b, content: updatedContent, image_url: undefined } as PageBlock;
-      }));
+      setBlocksAndPropagate(block.chapter_number, (prev) =>
+        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, content: updatedContent, image_url: undefined } as PageBlock)))
+      );
 
       // Close dialog
       setSearchDialogOpen(false);
@@ -1154,10 +1186,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
       
       // Remove from attempted fetches so we can fetch again
-      attemptedFetchesRef.current.delete(searchingBlockId);
+      attemptedFetchesRef.current.delete(key);
       setAttemptedFetches(prev => {
         const next = new Set(prev);
-        next.delete(searchingBlockId);
+        next.delete(key);
         return next;
       });
       fetchImageForBlock(updatedBlock);
@@ -1169,14 +1201,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setSearchingBlockId(null);
       setSearchQuery('');
     }
-  }, [searchingBlockId, searchQuery, blocks, fetchImageForBlock]);
+  }, [searchingBlockId, searchQuery, blocks, fetchImageForBlock, setBlocksAndPropagate]);
+
 
   // Handle opening upload modal
   const handleOpenUploadModal = useCallback((blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (block && !hasValidDbId(block)) {
-      toast.info('This page is still syncing—try again in a moment.');
-      return;
+      toast.info('This page is still syncing—uploads may take a moment to persist.');
     }
     setUploadingBlockId(blockId);
     setUploadModalOpen(true);
@@ -1206,19 +1238,21 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
       const publicUrl = urlData.publicUrl;
 
-      // Update database with new image URL
+      // Update database with new image URL (best-effort)
       const { error: updateError } = await supabase
         .from('book_pages')
         .update({ image_url: publicUrl })
         .eq('id', uploadingBlockId);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.warn('[PageViewer] Failed to persist uploaded image_url to DB (continuing locally):', updateError);
+      }
 
       // Update local state
-      setBlocks(prev => prev.map(b => {
-        if (b.id !== uploadingBlockId) return b;
-        return { ...b, image_url: publicUrl } as PageBlock;
-      }));
+      const block = blocks.find(b => b.id === uploadingBlockId);
+      setBlocksAndPropagate(block?.chapter_number ?? currentChapter, (prev) =>
+        prev.map(b => (b.id !== uploadingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
+      );
 
       toast.success('Image uploaded successfully!');
     } catch (err) {
@@ -1228,7 +1262,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setIsUploading(false);
       setUploadingBlockId(null);
     }
-  }, [uploadingBlockId]);
+  }, [uploadingBlockId, blocks, currentChapter, setBlocksAndPropagate]);
 
   // Admin: Regenerate current chapter
   const handleRegenerateChapter = useCallback(async () => {
