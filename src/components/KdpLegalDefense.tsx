@@ -121,8 +121,11 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     // 1. TEXT
     rtf += `\\b 1. TEXT GENERATION (AI ASSISTED): \\b0 The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
     
-    // 2. IMAGES (Approved "Significant Modification" wording)
-    rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from Unsplash.com (under an irrevocable Commercial License) or utilize Public Domain (CC0) assets from Wikimedia Commons. In compliance with the Unsplash "Significant Modification" requirement, all assets have been incorporated into a larger creative design (Book Cover/Interior) and are not being resold as standalone image files.\\par\\par`;
+    // 2. IMAGES (Unsplash, Pexels, Wikimedia)
+    rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from one of the following platforms with appropriate commercial licenses:\\par`;
+    rtf += `\\tab - \\b Unsplash: \\b0 Irrevocable Commercial License. Assets incorporated into creative design (Significant Modification).\\par`;
+    rtf += `\\tab - \\b Pexels: \\b0 Free Commercial License. All photos and videos are free to use, with no attribution required.\\par`;
+    rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par\\par`;
     
     // 3. TRADEMARKS
     // Add delimiter space after the final \\par so the next line doesn't get parsed as part of an RTF control word
@@ -194,7 +197,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     doc.setFontSize(10);
     y += 0.5;
 
-    // 2. IMAGES
+    // 2. IMAGES - UNSPLASH
     doc.setFont("times", "bold");
     doc.text("2. Image License (Unsplash)", 1, y);
     y += 0.2;
@@ -218,9 +221,33 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     doc.setFontSize(10);
     y += 0.5;
 
-    // 3. WIKIMEDIA
+    // 3. IMAGES - PEXELS
     doc.setFont("times", "bold");
-    doc.text("3. Public Domain (Wikimedia Commons)", 1, y);
+    doc.text("3. Image License (Pexels)", 1, y);
+    y += 0.2;
+    doc.setFont("times", "normal");
+    doc.text("Source: Pexels License", 1, y);
+    y += 0.2;
+    doc.setFont("times", "italic");
+    const pexelsQuote = "\"All photos and videos on Pexels are free to use. Attribution is not required. You can modify the photos and videos from Pexels.\"";
+    const splitPexels = doc.splitTextToSize(pexelsQuote, 6.5);
+    doc.text(splitPexels, 1, y);
+    y += (splitPexels.length * 0.2) + 0.1;
+
+    doc.setFont("times", "normal");
+    doc.text("Usage: Free for commercial use, no attribution required.", 1, y);
+    y += 0.2;
+
+    doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
+    doc.text("URL: https://www.pexels.com/license/", 1, y);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    y += 0.5;
+
+    // 4. WIKIMEDIA
+    doc.setFont("times", "bold");
+    doc.text("4. Public Domain (Wikimedia Commons)", 1, y);
     y += 0.2;
     doc.setFont("times", "normal");
     doc.text("Source: CreativeCommons.org (CC0 1.0 Universal)", 1, y);
