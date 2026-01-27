@@ -27,10 +27,8 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
     const [primaryImageGenerated, setPrimaryImageGenerated] = useState(false);
     const imageCountRef = useRef(0);
     
-    // Signal when Chapter 1 is finished rendering
     useEffect(() => {
       if (content && onChapterReady) {
-        // Small delay to ensure DOM is rendered
         const timer = setTimeout(() => {
           onChapterReady();
         }, 500);
@@ -40,7 +38,6 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
 
     // --- IMAGE GENERATOR ---
     const generateImage = async (id: string, description: string) => {
-      // Limit to ONE image per chapter for luxury aesthetic
       if (primaryImageGenerated || inlineImages[id] || loadingImages.has(id)) return;
       
       imageCountRef.current += 1;
@@ -64,30 +61,39 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       }
     };
 
-    // Extract first image from content for placement after title
     const extractPrimaryImage = (markdownContent: string) => {
       const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
       if (imageMatch) {
-        return { alt: imageMatch[1], src: imageMatch[2] };
+        return { alt: imageMatch[1], src: imageMatch[2], fullMatch: imageMatch[0] };
       }
       return null;
     };
 
-    // Remove images from content for separate placement
-    const contentWithoutImages = (content || "").replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
+    // FIX 1: Only strip the PRIMARY image, leave the rest for the body
     const primaryImage = extractPrimaryImage(content || "");
+    const cleanContent = primaryImage 
+      ? (content || "").replace(primaryImage.fullMatch, "").replace(/^⚠️.*$/m, "").trim()
+      : (content || "").replace(/^⚠️.*$/m, "").trim();
 
     // --- MARKDOWN COMPONENTS ---
     const MarkdownComponents = {
-      // IMAGE HANDLER - Now only handles inline images (primary image is separate)
+      // FIX 2: Enable Inline Images (Unsplash/Wikimedia support)
       img: ({ src, alt }: any) => {
-        // Skip - images are handled separately
-        return null;
+        if (!src) return null;
+        return (
+          <div className="my-8 flex flex-col items-center">
+            <img 
+              src={src} 
+              alt={alt || 'Chapter illustration'} 
+              className="max-w-full h-auto rounded-lg shadow-md object-cover"
+            />
+            {alt && <p className="text-sm text-muted-foreground mt-2 text-center italic">{alt}</p>}
+          </div>
+        );
       },
 
-      // PRO-TIP HANDLER - "The Onyx" Luxury Design Style
+      // PRO-TIP HANDLER
       blockquote: ({ children }: any) => {
-        // Extract text content recursively from React children
         const extractText = (node: any): string => {
           if (typeof node === 'string') return node;
           if (typeof node === 'number') return String(node);
@@ -125,7 +131,6 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
         );
       },
 
-      // TYPOGRAPHY
       h1: ({ children }: any) => <h1 className="text-4xl font-display font-bold text-foreground mt-10 mb-4">{children}</h1>,
       h2: ({ children }: any) => <h2 className="text-3xl font-display font-bold text-foreground mt-8 mb-3">{children}</h2>,
       h3: ({ children }: any) => <h3 className="text-2xl font-display font-semibold text-foreground mt-6 mb-2">{children}</h3>,
@@ -134,15 +139,11 @@ const ChapterContent = forwardRef<HTMLElement, ChapterContentProps>(
       li: ({ children }: any) => <li className="text-foreground/80 font-serif leading-relaxed">{children}</li>,
     };
 
-    const cleanContent = contentWithoutImages.replace(/^⚠️.*$/m, "").trim();
-
-    // Primary Image Component - Placed after title
     const PrimaryImageSection = () => {
       if (!primaryImage) return null;
       
       const imageId = `primary-img-${(primaryImage.alt || 'default').replace(/\s+/g, '-').substring(0, 20)}`;
       
-      // Trigger generation if not exists
       if (sessionId && !inlineImages[imageId] && !loadingImages.has(imageId) && !primaryImageGenerated) {
         setTimeout(() => generateImage(imageId, primaryImage.alt || topic), 100);
       }
