@@ -32,6 +32,7 @@ interface ImageSearchGalleryProps {
   enableCrop?: boolean; // Enable crop feature for 6x9 format
   cropAspectRatio?: number; // Defaults to 6/9 for book pages; use 1 for cover image box
   bookTopic?: string; // Book topic for anchoring searches geographically
+  forCover?: boolean; // Filter out restrictive licenses (CC BY-SA) for cover images
 }
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
@@ -44,6 +45,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   enableCrop = false,
   cropAspectRatio = 6 / 9,
   bookTopic,
+  forCover = false,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [images, setImages] = useState<ImageResult[]>([]);
@@ -79,6 +81,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           orientation,
           limit: 150, // More variety (server enforces print-quality + no-faces)
           bookTopic, // Anchor search to book's topic for relevance
+          forCover, // Filter restrictive licenses (CC BY-SA) for cover images
         }
       });
 
@@ -97,7 +100,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     } finally {
       setIsSearching(false);
     }
-  }, [query, orientation]);
+  }, [query, orientation, forCover]);
 
   const handleSelect = useCallback(() => {
     if (!selectedImage || !hasConsented) return;

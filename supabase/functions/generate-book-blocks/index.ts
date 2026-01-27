@@ -71,9 +71,10 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
     // STEP 1: Generate book outline and Chapter 1 blocks using Luxury Architect Rules
-    const pagesPerChapter = isVisual ? 12 : 8;
+    // Increased pages per chapter to hit 100+ page targets
+    const pagesPerChapter = isVisual ? 14 : 10;
     const minChapters = 10;
-    const targetTotalPages = 85; // Aim for 79+ to ensure spine compliance
+    const targetTotalPages = 120; // Aim for 100+ pages for professional-length books
     
     const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
 
