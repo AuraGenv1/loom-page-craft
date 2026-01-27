@@ -20,6 +20,12 @@ import {
 // Track which blocks are currently being fetched to prevent duplicates
 const fetchingImages = new Set<string>();
 
+// Preloaded blocks (during generation) may briefly lack DB IDs. We only enable
+// image fetching / editing once the chapter is hydrated from the database.
+const hasValidDbId = (block: Partial<PageBlock> | null | undefined): block is PageBlock => {
+  return !!block && typeof (block as any).id === 'string' && (block as any).id.length > 0;
+};
+
 interface PageViewerProps {
   bookId: string;
   initialChapter?: number;
@@ -875,6 +881,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // Track which blocks we've already attempted to fetch (to prevent infinite loops)
   const attemptedFetchesRef = useRef<Set<string>>(new Set());
   const [attemptedFetches, setAttemptedFetches] = useState<Set<string>>(new Set());
+
+  // Once a chapter is hydrated from DB (blocks have real IDs), ignore further preloaded overwrites.
+  const hydratedChaptersRef = useRef<Set<number>>(new Set());
   
   // Page edit modal state (Admin only)
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -902,6 +911,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   // Auto-fetch images for blocks without URLs using the hybrid engine
   const fetchImageForBlock = useCallback(async (block: PageBlock) => {
+    // During generation, preloaded blocks can be missing DB IDs; don't fetch until hydrated.
+    if (!hasValidDbId(block)) return;
     if (fetchingImages.has(block.id)) return;
     fetchingImages.add(block.id);
     
@@ -953,19 +964,22 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
-    // First, check if we have preloaded blocks from parent state
-    if (preloadedBlocks && preloadedBlocks[chapter] && preloadedBlocks[chapter].length > 0) {
-      console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloadedBlocks[chapter].length);
-      const loadedBlocks = preloadedBlocks[chapter];
-      setBlocks(loadedBlocks);
-      // Start on the chapter_title block, not a quote or divider
-      setCurrentIndex(findTitleBlockIndex(loadedBlocks));
+    // We may receive preloaded blocks first (fast), but we still need to hydrate from DB
+    // so blocks have real IDs (required for auto-fetch + manual image tools) and so
+    // subsequent preloaded updates don't wipe out hydrated state.
+    const preloaded = preloadedBlocks?.[chapter];
+    const hasPreloaded = !!preloaded && preloaded.length > 0;
+    const alreadyHydrated = hydratedChaptersRef.current.has(chapter);
+
+    if (hasPreloaded && !alreadyHydrated) {
+      console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloaded!.length);
+      setBlocks(preloaded!);
+      setCurrentIndex(findTitleBlockIndex(preloaded!));
       setLoading(false);
-      return;
+    } else if (!hasPreloaded) {
+      setLoading(true);
     }
 
-    // Fallback: fetch from database
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('book_pages')
@@ -989,9 +1003,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         updated_at: row.updated_at
       }));
       
-      setBlocks(mappedBlocks);
-      // Start on the chapter_title block
-      setCurrentIndex(findTitleBlockIndex(mappedBlocks));
+      // If DB has rows, prefer them (real IDs + freshest image_url)
+      if (mappedBlocks.length > 0) {
+        hydratedChaptersRef.current.add(chapter);
+        setBlocks(mappedBlocks);
+        setCurrentIndex(findTitleBlockIndex(mappedBlocks));
+      } else if (!hasPreloaded) {
+        // No DB rows and no preloaded blocks -> stay in loading state
+        setBlocks([]);
+      }
     } catch (err) {
       console.error('Error fetching blocks:', err);
     } finally {
@@ -1003,6 +1023,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
   useEffect(() => {
     blocks.forEach(block => {
+      // Skip until hydrated (preloaded blocks can briefly lack IDs)
+      if (!hasValidDbId(block)) return;
       const isImageBlock = ['image_full', 'image_half'].includes(block.block_type);
       const hasNoImage = !block.image_url;
       const notLoading = !loadingImages.has(block.id);
@@ -1089,6 +1111,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const handleOpenSearchDialog = useCallback((blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
+
+    if (!hasValidDbId(block)) {
+      toast.info('This page is still syncing—try again in a moment.');
+      return;
+    }
     
     const currentContent = block.content as { query: string; caption: string };
     setSearchingBlockId(blockId);
@@ -1146,9 +1173,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
   // Handle opening upload modal
   const handleOpenUploadModal = useCallback((blockId: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    if (block && !hasValidDbId(block)) {
+      toast.info('This page is still syncing—try again in a moment.');
+      return;
+    }
     setUploadingBlockId(blockId);
     setUploadModalOpen(true);
-  }, []);
+  }, [blocks]);
 
   // Handle image upload from modal
   const handleImageUpload = useCallback(async (file: File) => {
