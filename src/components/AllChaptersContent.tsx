@@ -336,20 +336,36 @@ const AllChaptersContent = forwardRef<AllChaptersContentHandle, AllChaptersConte
     const extractPrimaryImage = (markdownContent: string) => {
       const imageMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
       if (imageMatch) {
-        return { alt: imageMatch[1], src: imageMatch[2] };
+        return { alt: imageMatch[1], src: imageMatch[2], fullMatch: imageMatch[0] };
       }
       return null;
     };
 
-    // Remove images from content for separate placement
+    // FIX 1: Only strip the FIRST image (primary/hero), leave others for body
     const contentWithoutImages = (markdownContent: string) => {
-      return markdownContent.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '');
+      const primary = extractPrimaryImage(markdownContent);
+      if (primary) {
+        return markdownContent.replace(primary.fullMatch, '');
+      }
+      return markdownContent;
     };
 
     // SYNCED MARKDOWN COMPONENTS - Matches ChapterContent exactly
     const createMarkdownComponents = (chapterNum: number) => ({
-      // IMAGE HANDLER - Skip, images handled separately
-      img: () => null,
+      // FIX 2: Enable Inline Images (Unsplash/Wikimedia/AI support)
+      img: ({ src, alt }: any) => {
+        if (!src) return null;
+        return (
+          <div className="my-8 flex flex-col items-center">
+            <img 
+              src={src} 
+              alt={alt || 'Chapter illustration'} 
+              className="max-w-full h-auto rounded-lg shadow-md object-cover"
+            />
+            {alt && <p className="text-sm text-muted-foreground mt-2 text-center italic">{alt}</p>}
+          </div>
+        );
+      },
 
       // PRO-TIP HANDLER - "The Onyx" Luxury Design Style (EXACT match with ChapterContent)
       blockquote: ({ children }: any) => {
