@@ -113,7 +113,6 @@ Block types (ONLY use these four types - NO quote blocks!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
-- "image_half": { "query": "Literal visual description of scene", "caption": "Caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:
@@ -130,7 +129,7 @@ REQUIREMENTS:
 - Each "text" block: 300-320 words with inline markdown (target 310 words)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
-- NEVER use "heading", "list", "quote", or "key_takeaway" blocks! Only: chapter_title, text, image_full, image_half, pro_tip.
+- NEVER use "heading", "list", "quote", "key_takeaway", or "image_half" blocks! Only: chapter_title, text, image_full, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
@@ -262,31 +261,32 @@ Language: ${language}`;
       .eq('book_id', bookId)
       .eq('chapter_number', chapterNumber);
 
-    // Insert new blocks
-    const blocks = blocksData.map((block: any, index: number) => ({
+    // Insert new blocks (force image_half -> image_full)
+    const blocksToInsert = blocksData.map((block: any, index: number) => ({
       book_id: bookId,
       chapter_number: chapterNumber,
       page_order: index + 1,
-      block_type: block.block_type,
+      block_type: block.block_type === 'image_half' ? 'image_full' : block.block_type,
       content: block.content,
       image_url: null
     }));
 
-    const { error: insertError } = await supabase
+    const { data: insertedBlocks, error: insertError } = await supabase
       .from('book_pages')
-      .insert(blocks);
+      .insert(blocksToInsert)
+      .select('*');
 
     if (insertError) {
       console.error('Blocks insert error:', insertError);
       throw new Error(`Failed to save blocks: ${insertError.message}`);
     }
 
-    console.log(`[generate-chapter-blocks] Inserted ${blocks.length} blocks for chapter ${chapterNumber}`);
+    console.log(`[generate-chapter-blocks] Inserted ${blocksToInsert.length} blocks for chapter ${chapterNumber}`);
 
     return new Response(JSON.stringify({ 
       success: true,
       chapterNumber,
-      blocks 
+      blocks: insertedBlocks ?? []
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
