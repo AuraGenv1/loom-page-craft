@@ -153,7 +153,11 @@ Language: ${language}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, response_mime_type: "application/json" },
+          generationConfig: { 
+            temperature: 0.7, 
+            response_mime_type: "application/json",
+            maxOutputTokens: 8192, // Prevent truncation on longer chapters
+          },
         }),
       }
     );
