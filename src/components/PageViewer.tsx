@@ -1798,6 +1798,41 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                   Insert Page After
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                
+                {/* Image-specific options - only show for image pages */}
+                {currentBlock && ['image_full', 'image_half'].includes(currentBlock.block_type) && (
+                  <>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        if (currentBlock) handleOpenSearchDialog(currentBlock.id);
+                      }}
+                      className="gap-2"
+                    >
+                      <Search className="w-4 h-4" />
+                      Search Gallery
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        if (currentBlock) handleOpenUploadModal(currentBlock.id);
+                      }}
+                      className="gap-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Upload Own Photo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        if (currentBlock) handleReroll(currentBlock.id);
+                      }}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Find New Image
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                
                 <DropdownMenuItem 
                   onClick={handleRegenerateChapter}
                   disabled={isRegenerating}
