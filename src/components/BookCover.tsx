@@ -91,7 +91,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [spineText, setSpineText] = useState(initialSpineText || propTitle);
     const [spineColor, setSpineColor] = useState('#ffffff'); // Default to WHITE
     const [spineTextColor, setSpineTextColor] = useState('#000000'); // Default to BLACK
-    const [isRegeneratingFront, setIsRegeneratingFront] = useState(false);
     const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
     const [localBackCoverUrl, setLocalBackCoverUrl] = useState(backCoverUrl || '');
     const [localFrontUrls, setLocalFrontUrls] = useState<string[]>(coverImageUrls);
@@ -335,48 +334,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         localStorage.setItem('bookSessionId', sessionId);
       }
       return sessionId;
-    };
-
-    // Regenerate front cover with custom prompt
-    const handleRegenerateFront = async () => {
-      if (!frontPrompt.trim()) {
-        toast.error('Please enter a custom prompt for the front cover');
-        return;
-      }
-
-      setIsRegeneratingFront(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('generate-cover-image', {
-          body: {
-            topic: topic || title,
-            title: title,
-            sessionId: getSessionId(),
-            variant: 'cover',
-            customPrompt: frontPrompt.trim()
-          }
-        });
-
-        if (error) throw error;
-
-        const newUrls = data.imageUrls || [data.imageUrl];
-        setLocalFrontUrls(newUrls);
-        setLockedUrls(newUrls);
-        setCurrentUrlIndex(0);
-        setImageLoaded(false);
-
-        // Save to database if bookId exists
-        if (bookId) {
-          await supabase.from('books').update({ cover_image_url: newUrls }).eq('id', bookId);
-        }
-
-        onCoverUpdate?.({ coverImageUrls: newUrls });
-        toast.success('Front cover regenerated!');
-      } catch (err) {
-        console.error('Failed to regenerate front cover:', err);
-        toast.error('Failed to regenerate front cover');
-      } finally {
-        setIsRegeneratingFront(false);
-      }
     };
 
     // Generate back cover
@@ -2051,26 +2008,7 @@ p { margin-bottom: 1em; }`);
                         rows={4}
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        onClick={handleRegenerateFront} 
-                        disabled={isRegeneratingFront}
-                        className="flex-1"
-                        size="lg"
-                      >
-                        {isRegeneratingFront ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Regenerating...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Regenerate
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                    {/* Regenerate button removed per request */}
                     
                     {/* Upload Cover Image */}
                     <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">

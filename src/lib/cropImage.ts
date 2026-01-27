@@ -36,6 +36,14 @@ export async function cropImageToJpegBlob(
   ctx.scale(pixelRatio, pixelRatio);
   ctx.imageSmoothingQuality = "high";
 
+  // IMPORTANT: JPEG has no alpha channel.
+  // If any part of the canvas is left transparent (e.g., user zooms out), it will export as black.
+  // Fill with white to avoid black bars.
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
   const cropX = crop.x * scaleX;
   const cropY = crop.y * scaleY;
   const rotateRads = rotate * TO_RADIANS;
