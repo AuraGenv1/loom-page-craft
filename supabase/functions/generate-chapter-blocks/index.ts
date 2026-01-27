@@ -99,10 +99,15 @@ This chapter MUST follow this structure:
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
 RULE 6: LITERAL VISUAL QUERIES (Image Queries)
+- CRITICAL: Every image query MUST include the book's specific topic/location.
+- For a "London Travel Guide", use "London Big Ben at sunset" NOT just "Historic clock tower at sunset"
+- For an "Aspen Ski Guide", use "Aspen Colorado ski slopes" NOT just "Snowy mountain slopes"  
+- For a "Tokyo Food Guide", use "Tokyo ramen shop interior" NOT just "Asian noodle restaurant"
+- ALWAYS include the primary subject (city name, topic) at the START of the query.
 - Image queries must be physical descriptions of objects or places, NOT abstract concepts.
-- BAD: "The concept of freedom" → GOOD: "A soaring eagle against a blue sky"
-- BAD: "Business success" → GOOD: "A modern glass skyscraper from below"
-- BAD: "History forged in sand" → GOOD: "Ancient desert ruins at sunset"
+- BAD: "The concept of freedom" → GOOD: "London statue of Britannia with clear sky"
+- BAD: "Business success" → GOOD: "London Canary Wharf skyscraper from below"
+- BAD: "History forged in sand" → GOOD: "London Tower of London at sunset"
 - Do NOT append "no people" manually. Just describe a scene that naturally lacks people (e.g., "Empty desk", "Lonely road", "Abandoned building interior").
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}

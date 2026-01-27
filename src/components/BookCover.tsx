@@ -2065,6 +2065,7 @@ p { margin-bottom: 1em; }`);
                   cropAspectRatio={1}
                   onSelect={handleCoverSelectFromGallery}
                   onSelectBlob={async (blob) => handleCroppedCoverUpload(blob)}
+                  bookTopic={topic} // Anchor search to book's topic for relevance
                 />
               </TabsContent>
 

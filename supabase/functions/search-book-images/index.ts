@@ -191,13 +191,42 @@ async function searchWikimediaMultiple(query: string, limit: number = 20): Promi
   }
 }
 
+// Extract location/topic for grounding searches
+function extractTopicAnchor(topic: string | undefined): string | null {
+  if (!topic) return null;
+  
+  const skipWords = ['the', 'a', 'an', 'guide', 'to', 'of', 'comprehensive', 'ultimate', 'complete', 'exploring', 'travel', 'luxury', 'best', 'top'];
+  const words = topic.split(/[\s:,\-]+/).filter(w => w.length > 2);
+  
+  for (const word of words) {
+    if (!skipWords.includes(word.toLowerCase())) {
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }
+  }
+  
+  return null;
+}
+
+// Anchor the query to the book's topic for geographic/topical relevance
+function anchorQueryToTopic(query: string, topic: string | undefined): string {
+  const anchor = extractTopicAnchor(topic);
+  if (!anchor) return query;
+  
+  if (query.toLowerCase().includes(anchor.toLowerCase())) {
+    return query;
+  }
+  
+  console.log(`[TopicAnchor] Grounding query with "${anchor}": "${anchor} ${query}"`);
+  return `${anchor} ${query}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 100 } = await req.json();
+    const { query, orientation = 'landscape', limit = 100, bookTopic } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -206,7 +235,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}`);
+    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}, Topic: "${bookTopic || 'none'}"`);
 
     const cleanedQuery = cleanQuery(query);
     
@@ -216,15 +245,18 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // Anchor the query to the book's topic for relevance
+    const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
-    // Search both sources in parallel - get more results from each
+    // Search both sources in parallel - get more results from each (using anchored query)
     // Unsplash: 3 pages of 30 = 90 results max (before filtering)
     // Wikimedia: 50 results (before filtering)
     const [unsplashPage1, unsplashPage2, unsplashPage3, wikimediaResults] = await Promise.all([
-      searchUnsplashMultiple(cleanedQuery, orientation, 30, 1),
-      searchUnsplashMultiple(cleanedQuery, orientation, 30, 2),
-      searchUnsplashMultiple(cleanedQuery, orientation, 30, 3),
-      searchWikimediaMultiple(cleanedQuery, 50),
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
+      searchWikimediaMultiple(anchoredQuery, 50),
     ]);
 
     // Combine results, prioritizing Unsplash but interleaving for variety

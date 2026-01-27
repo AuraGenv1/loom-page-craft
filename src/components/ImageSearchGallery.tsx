@@ -31,6 +31,7 @@ interface ImageSearchGalleryProps {
   orientation?: 'landscape' | 'portrait';
   enableCrop?: boolean; // Enable crop feature for 6x9 format
   cropAspectRatio?: number; // Defaults to 6/9 for book pages; use 1 for cover image box
+  bookTopic?: string; // Book topic for anchoring searches geographically
 }
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
@@ -42,6 +43,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   orientation = 'landscape',
   enableCrop = false,
   cropAspectRatio = 6 / 9,
+  bookTopic,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [images, setImages] = useState<ImageResult[]>([]);
@@ -76,6 +78,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           query: query.trim(),
           orientation,
           limit: 150, // More variety (server enforces print-quality + no-faces)
+          bookTopic, // Anchor search to book's topic for relevance
         }
       });
 
