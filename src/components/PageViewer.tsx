@@ -1099,6 +1099,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     const block = blocks.find(b => b.id === blockId);
     if (!block || !['image_full', 'image_half'].includes(block.block_type)) return;
 
+    const key = getBlockKey(block);
+
     // Clear current image and refetch (best-effort)
     const { error: clearErr } = await supabase
       .from('book_pages')
@@ -1108,6 +1110,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (clearErr) {
       console.warn('[PageViewer] Failed to clear image_url in DB (continuing locally):', clearErr);
     }
+
+    // Reset attempted fetch flag so fetchImageForBlock will run again
+    attemptedFetchesRef.current.delete(key);
+    setAttemptedFetches(prev => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
 
     setBlocksAndPropagate(block.chapter_number, (prev) =>
       prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined } as PageBlock)))
@@ -1247,10 +1257,25 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
       // Update local state
       const block = blocks.find(b => b.id === uploadingBlockId);
-      setBlocksAndPropagate(block?.chapter_number ?? currentChapter, (prev) =>
-        prev.map(b => (b.id !== uploadingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
-      );
+      if (block) {
+        const key = getBlockKey(block);
+        
+        // Mark fetch as attempted so loading state clears
+        attemptedFetchesRef.current.add(key);
+        setAttemptedFetches(prev => new Set(prev).add(key));
+        setLoadingImages(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
 
+        setBlocksAndPropagate(block.chapter_number, (prev) =>
+          prev.map(b => (b.id !== uploadingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
+        );
+      }
+
+      // Close the modal
+      setUploadModalOpen(false);
       toast.success('Image uploaded successfully!');
     } catch (err) {
       console.error('[PageViewer] Upload error:', err);
@@ -1259,7 +1284,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setIsUploading(false);
       setUploadingBlockId(null);
     }
-  }, [uploadingBlockId, blocks, currentChapter, setBlocksAndPropagate]);
+  }, [uploadingBlockId, blocks, setBlocksAndPropagate]);
 
   // Admin: Regenerate current chapter
   const handleRegenerateChapter = useCallback(async () => {
