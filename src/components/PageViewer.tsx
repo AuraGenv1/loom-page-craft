@@ -511,93 +511,29 @@ const ImageFullPage: React.FC<{
   isLoading?: boolean;
   canEditImages?: boolean;
   blockId?: string;
+  fetchAttempted?: boolean;
   onEditCaption?: (newCaption: string) => void;
   onReroll?: () => void;
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
-  <div className="flex flex-col h-full group">
-    {isLoading ? (
-      <div className="flex-1 bg-muted flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
-          <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
-        </div>
-      </div>
-    ) : imageUrl ? (
-      <div className="flex-1 relative">
-        {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
-          <AuthorImageToolbar
-            blockId={blockId}
-            currentCaption={content.caption}
-            onEditCaption={onEditCaption}
-            onReroll={onReroll}
-            onRemove={onRemove}
-            onUpload={onUpload}
-            onManualSearch={onManualSearch}
-          />
-        )}
-        <img 
-          src={imageUrl} 
-          alt={content.caption}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      </div>
-    ) : (
-      // NO FALLBACK IMAGE - show skeleton instead
-      <div className="flex-1 bg-muted flex items-center justify-center">
-        <div className="text-center">
-          {canEditImages && onManualSearch ? (
-            <AddImageButton onSearch={onManualSearch} />
-          ) : (
-            <>
-              <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
-              <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
-            </>
-          )}
-        </div>
-      </div>
-    )}
-    <div className="p-4 bg-card border-t">
-      <p className="text-sm italic text-muted-foreground text-center">
-        {content.caption}
-      </p>
-      {attribution && (
-        <p className="text-[9px] text-muted-foreground/50 text-center mt-1">
-          {attribution}
-        </p>
-      )}
-    </div>
-  </div>
-);
-
-const ImageHalfPage: React.FC<{ 
-  content: { query: string; caption: string }; 
-  imageUrl?: string;
-  attribution?: string;
-  isLoading?: boolean;
-  canEditImages?: boolean;
-  blockId?: string;
-  onEditCaption?: (newCaption: string) => void;
-  onReroll?: () => void;
-  onRemove?: () => void;
-  onManualSearch?: () => void;
-  onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => (
-  <div className="h-full flex flex-col group">
-    <div className="h-1/2 relative">
-      {isLoading ? (
-        <div className="absolute inset-0 bg-muted flex items-center justify-center">
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+  // Determine visual state
+  const showLoading = isLoading || (!imageUrl && !fetchAttempted);
+  const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
+  
+  return (
+    <div className="flex flex-col h-full group">
+      {showLoading ? (
+        <div className="flex-1 bg-muted flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-            <p className="text-xs text-muted-foreground">Searching...</p>
+            <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
+            <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
           </div>
         </div>
       ) : imageUrl ? (
-        <>
+        <div className="flex-1 relative">
           {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
             <AuthorImageToolbar
               blockId={blockId}
@@ -614,37 +550,106 @@ const ImageHalfPage: React.FC<{
             alt={content.caption}
             className="absolute inset-0 w-full h-full object-cover"
           />
-        </>
-      ) : (
-        // NO FALLBACK IMAGE - show skeleton instead
-        <div className="absolute inset-0 bg-muted flex items-center justify-center">
+        </div>
+      ) : showEmptyState ? (
+        <div className="flex-1 bg-muted flex items-center justify-center">
           <div className="text-center">
             {canEditImages && onManualSearch ? (
               <AddImageButton onSearch={onManualSearch} />
             ) : (
-              <>
-                <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-                <p className="text-xs text-muted-foreground">Searching...</p>
-              </>
+              <p className="text-sm text-muted-foreground">Image not found</p>
             )}
           </div>
         </div>
-      )}
-    </div>
-    <div className="h-1/2 p-6 flex items-center justify-center">
-      <div className="text-center">
-        <p className="italic text-muted-foreground">
+      ) : null}
+      <div className="p-4 bg-card border-t">
+        <p className="text-sm italic text-muted-foreground text-center">
           {content.caption}
         </p>
         {attribution && (
-          <p className="text-[9px] text-muted-foreground/50 mt-2">
+          <p className="text-[9px] text-muted-foreground/50 text-center mt-1">
             {attribution}
           </p>
         )}
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+const ImageHalfPage: React.FC<{ 
+  content: { query: string; caption: string }; 
+  imageUrl?: string;
+  attribution?: string;
+  isLoading?: boolean;
+  canEditImages?: boolean;
+  blockId?: string;
+  fetchAttempted?: boolean;
+  onEditCaption?: (newCaption: string) => void;
+  onReroll?: () => void;
+  onRemove?: () => void;
+  onManualSearch?: () => void;
+  onUpload?: () => void;
+}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+  // Determine visual state
+  const showLoading = isLoading || (!imageUrl && !fetchAttempted);
+  const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
+
+  return (
+    <div className="h-full flex flex-col group">
+      <div className="h-1/2 relative">
+        {showLoading ? (
+          <div className="absolute inset-0 bg-muted flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+              <p className="text-xs text-muted-foreground">Searching...</p>
+            </div>
+          </div>
+        ) : imageUrl ? (
+          <>
+            {canEditImages && blockId && onEditCaption && onReroll && onRemove && onUpload && onManualSearch && (
+              <AuthorImageToolbar
+                blockId={blockId}
+                currentCaption={content.caption}
+                onEditCaption={onEditCaption}
+                onReroll={onReroll}
+                onRemove={onRemove}
+                onUpload={onUpload}
+                onManualSearch={onManualSearch}
+              />
+            )}
+            <img 
+              src={imageUrl} 
+              alt={content.caption}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </>
+        ) : showEmptyState ? (
+          <div className="absolute inset-0 bg-muted flex items-center justify-center">
+            <div className="text-center">
+              {canEditImages && onManualSearch ? (
+                <AddImageButton onSearch={onManualSearch} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Image not found</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div className="h-1/2 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <p className="italic text-muted-foreground">
+            {content.caption}
+          </p>
+          {attribution && (
+            <p className="text-[9px] text-muted-foreground/50 mt-2">
+              {attribution}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Pro Tip page - LEFT-ALIGNED style with subtle left border (NO ITALICS)
 const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
@@ -741,15 +746,17 @@ const BlockRenderer: React.FC<{
   block: PageBlock; 
   loadingImages: Set<string>;
   imageAttributions: Map<string, string>;
+  attemptedFetches: Set<string>;
   canEditImages?: boolean;
   onEditCaption?: (blockId: string, newCaption: string) => void;
   onReroll?: (blockId: string) => void;
   onRemove?: (blockId: string) => void;
   onManualSearch?: (blockId: string) => void;
   onUpload?: (blockId: string) => void;
-}> = ({ block, loadingImages, imageAttributions, canEditImages, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
+}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onReroll, onRemove, onManualSearch, onUpload }) => {
   const isLoading = loadingImages.has(block.id);
   const attribution = imageAttributions.get(block.id);
+  const fetchAttempted = attemptedFetches.has(block.id);
 
   switch (block.block_type) {
     case 'chapter_title':
@@ -763,6 +770,7 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
+          fetchAttempted={fetchAttempted}
           canEditImages={canEditImages}
           blockId={block.id}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
@@ -779,6 +787,7 @@ const BlockRenderer: React.FC<{
           imageUrl={block.image_url}
           attribution={attribution}
           isLoading={isLoading}
+          fetchAttempted={fetchAttempted}
           canEditImages={canEditImages}
           blockId={block.id}
           onEditCaption={onEditCaption ? (c) => onEditCaption(block.id, c) : undefined}
@@ -864,7 +873,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   
   // Track which blocks we've already attempted to fetch (to prevent infinite loops)
-  const attemptedFetches = useRef<Set<string>>(new Set());
+  const attemptedFetchesRef = useRef<Set<string>>(new Set());
+  const [attemptedFetches, setAttemptedFetches] = useState<Set<string>>(new Set());
   
   // Page edit modal state (Admin only)
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -990,23 +1000,22 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   }, [bookId, preloadedBlocks, findTitleBlockIndex]);
 
   // Auto-trigger image fetch for blocks without images on mount
-  // FIX: Check if block has no URL AND we haven't already attempted to fetch it
+  // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
   useEffect(() => {
-    if (isAdmin) return; // Admin can manually trigger searches
-    
     blocks.forEach(block => {
       const isImageBlock = ['image_full', 'image_half'].includes(block.block_type);
       const hasNoImage = !block.image_url;
       const notLoading = !loadingImages.has(block.id);
-      const notAttempted = !attemptedFetches.current.has(block.id);
+      const notAttempted = !attemptedFetchesRef.current.has(block.id);
       
       if (isImageBlock && hasNoImage && notLoading && notAttempted) {
         // Mark as attempted to prevent duplicate fetches
-        attemptedFetches.current.add(block.id);
+        attemptedFetchesRef.current.add(block.id);
+        setAttemptedFetches(prev => new Set(prev).add(block.id));
         fetchImageForBlock(block);
       }
     });
-  }, [blocks, fetchImageForBlock, isAdmin, loadingImages]);
+  }, [blocks, fetchImageForBlock, loadingImages]);
 
   // Admin image control handlers
 
@@ -1118,7 +1127,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       const updatedBlock = { ...block, content: updatedContent, image_url: undefined } as PageBlock;
       
       // Remove from attempted fetches so we can fetch again
-      attemptedFetches.current.delete(searchingBlockId);
+      attemptedFetchesRef.current.delete(searchingBlockId);
+      setAttemptedFetches(prev => {
+        const next = new Set(prev);
+        next.delete(searchingBlockId);
+        return next;
+      });
       fetchImageForBlock(updatedBlock);
     } catch (err) {
       console.error('Failed to update search query:', err);
@@ -1678,6 +1692,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               block={currentBlock} 
               loadingImages={loadingImages}
               imageAttributions={imageAttributions}
+              attemptedFetches={attemptedFetches}
               canEditImages={canEditImages || isAdmin}
               onEditCaption={handleEditCaption}
               onReroll={handleReroll}
