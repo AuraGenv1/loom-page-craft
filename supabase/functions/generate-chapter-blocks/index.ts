@@ -257,6 +257,40 @@ Language: ${language}`;
       throw new Error('AI returned empty or invalid blocks array');
     }
 
+    // Strengthen caption-to-query correlation for named places.
+    // If the caption contains a proper noun like "Hotel Jerome" but the query
+    // doesn't, prepend it so the image fetcher searches the literal subject.
+    const enforceCaptionEntitiesInQueries = (blocks: any[]) => {
+      const multiWordEntityRegex = /\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+      return blocks.map((block) => {
+        if (block?.block_type !== 'image_full') return block;
+        const content = block?.content ?? {};
+        const caption = typeof content.caption === 'string' ? content.caption : '';
+        const query = typeof content.query === 'string' ? content.query : '';
+        if (!caption || !query) return block;
+
+        const entities = (caption.match(multiWordEntityRegex) || [])
+          .map((e: string) => e.trim())
+          // avoid very short / generic phrases
+          .filter((e: string) => e.length >= 6)
+          .slice(0, 2);
+
+        if (entities.length === 0) return block;
+
+        let nextQuery = query;
+        for (const ent of entities) {
+          if (!nextQuery.toLowerCase().includes(ent.toLowerCase())) {
+            nextQuery = `${ent} ${nextQuery}`;
+          }
+        }
+
+        if (nextQuery === query) return block;
+        return { ...block, content: { ...content, query: nextQuery } };
+      });
+    };
+
+    blocksData = enforceCaptionEntitiesInQueries(blocksData);
+
     // Save to Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
