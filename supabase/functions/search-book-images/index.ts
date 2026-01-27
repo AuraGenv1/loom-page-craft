@@ -31,11 +31,12 @@ function cleanQuery(rawQuery: string): string {
   return cleaned;
 }
 
-// Search Unsplash and return multiple results
+// Search Unsplash and return multiple results (max 30 per request)
 async function searchUnsplashMultiple(
   query: string, 
   orientation: 'landscape' | 'portrait' = 'landscape',
-  perPage: number = 20
+  perPage: number = 30,
+  page: number = 1
 ): Promise<ImageResult[]> {
   const accessKey = Deno.env.get('UNSPLASH_ACCESS_KEY');
   if (!accessKey) {
@@ -47,7 +48,8 @@ async function searchUnsplashMultiple(
     const params = new URLSearchParams({
       query: query,
       orientation: orientation,
-      per_page: String(perPage),
+      per_page: String(Math.min(perPage, 30)), // Unsplash max is 30
+      page: String(page),
     });
 
     const response = await fetch(`https://api.unsplash.com/search/photos?${params}`, {
@@ -75,7 +77,7 @@ async function searchUnsplashMultiple(
       source: 'unsplash' as const,
     }));
 
-    console.log(`[Unsplash] Found ${results.length} images for query:`, query);
+    console.log(`[Unsplash] Found ${results.length} images for query (page ${page}):`, query);
     return results;
   } catch (error) {
     console.error('[Unsplash] Fetch error:', error);
@@ -83,36 +85,39 @@ async function searchUnsplashMultiple(
   }
 }
 
-// Search Wikimedia and return multiple results
-async function searchWikimediaMultiple(query: string, limit: number = 10): Promise<ImageResult[]> {
+// Search Wikimedia Commons and return multiple results
+async function searchWikimediaMultiple(query: string, limit: number = 20): Promise<ImageResult[]> {
   try {
+    // Use simpler search without filetype (filetype: syntax not supported in gsrsearch)
     const searchParams = new URLSearchParams({
       action: 'query',
       format: 'json',
       generator: 'search',
-      gsrnamespace: '6',
-      gsrsearch: `${query} filetype:jpg OR filetype:png`,
-      gsrlimit: String(limit),
+      gsrnamespace: '6', // File namespace
+      gsrsearch: query, // Plain query without filetype syntax
+      gsrlimit: String(Math.min(limit, 50)), // Wikimedia allows up to 50
       prop: 'imageinfo',
-      iiprop: 'url|extmetadata|size',
+      iiprop: 'url|extmetadata|size|mime',
       iiurlwidth: '1200',
+      origin: '*',
     });
 
     const searchUrl = `https://commons.wikimedia.org/w/api.php?${searchParams}`;
-    console.log('[Wikimedia] Searching:', query);
+    console.log('[Wikimedia] Searching:', query, 'URL:', searchUrl);
 
     const response = await fetch(searchUrl, {
       headers: {
-        'User-Agent': 'LovableBookGenerator/1.0 (https://lovable.dev; contact@lovable.dev)',
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app; contact@lovable.dev) Deno/1.0',
       },
     });
 
     if (!response.ok) {
-      console.error('[Wikimedia] API error:', response.status);
+      console.error('[Wikimedia] API error:', response.status, await response.text());
       return [];
     }
 
     const data = await response.json();
+    console.log('[Wikimedia] Raw response pages count:', data.query?.pages ? Object.keys(data.query.pages).length : 0);
     
     if (!data.query?.pages) {
       console.log('[Wikimedia] No results for query:', query);
@@ -125,6 +130,12 @@ async function searchWikimediaMultiple(query: string, limit: number = 10): Promi
     for (const page of pages) {
       const imageInfo = page.imageinfo?.[0];
       if (!imageInfo) continue;
+      
+      // Filter only image types
+      const mime = imageInfo.mime || '';
+      if (!mime.startsWith('image/')) continue;
+      
+      // Skip small images
       if (imageInfo.width < 600 || imageInfo.height < 400) continue;
 
       const metadata = imageInfo.extmetadata || {};
@@ -135,12 +146,12 @@ async function searchWikimediaMultiple(query: string, limit: number = 10): Promi
         id: `wikimedia-${page.pageid}`,
         imageUrl: imageInfo.thumburl || imageInfo.url,
         thumbnailUrl: imageInfo.thumburl || imageInfo.url,
-        attribution: `Photo: ${artist} / ${license}`,
+        attribution: `${artist} / ${license}`,
         source: 'wikimedia',
       });
     }
 
-    console.log(`[Wikimedia] Found ${results.length} images for query:`, query);
+    console.log(`[Wikimedia] Found ${results.length} valid images for query:`, query);
     return results;
   } catch (error) {
     console.error('[Wikimedia] Fetch error:', error);
@@ -154,7 +165,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 30 } = await req.json();
+    const { query, orientation = 'landscape', limit = 50 } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -174,21 +185,42 @@ serve(async (req) => {
       );
     }
 
-    // Search both sources in parallel
-    const [unsplashResults, wikimediaResults] = await Promise.all([
-      searchUnsplashMultiple(cleanedQuery, orientation, Math.min(limit, 20)),
-      searchWikimediaMultiple(cleanedQuery, Math.min(limit, 10)),
+    // Search both sources in parallel - get more results from each
+    // Unsplash: 2 pages of 30 = 60 results max
+    // Wikimedia: 30 results
+    const [unsplashPage1, unsplashPage2, wikimediaResults] = await Promise.all([
+      searchUnsplashMultiple(cleanedQuery, orientation, 30, 1),
+      searchUnsplashMultiple(cleanedQuery, orientation, 30, 2),
+      searchWikimediaMultiple(cleanedQuery, 30),
     ]);
 
-    // Combine results, prioritizing Unsplash
-    const allResults = [...unsplashResults, ...wikimediaResults].slice(0, limit);
+    // Combine results, prioritizing Unsplash but interleaving for variety
+    const unsplashResults = [...unsplashPage1, ...unsplashPage2];
+    
+    // Interleave: 3 Unsplash, 1 Wikimedia pattern for variety
+    const allResults: ImageResult[] = [];
+    let uIdx = 0, wIdx = 0;
+    while (allResults.length < limit && (uIdx < unsplashResults.length || wIdx < wikimediaResults.length)) {
+      // Add up to 3 Unsplash
+      for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
+        allResults.push(unsplashResults[uIdx++]);
+      }
+      // Add 1 Wikimedia
+      if (wIdx < wikimediaResults.length && allResults.length < limit) {
+        allResults.push(wikimediaResults[wIdx++]);
+      }
+    }
 
-    console.log(`[search-book-images] Total results: ${allResults.length}`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Wikimedia: ${wikimediaResults.length})`);
 
     return new Response(
       JSON.stringify({ 
         images: allResults,
         query: cleanedQuery,
+        sources: {
+          unsplash: unsplashResults.length,
+          wikimedia: wikimediaResults.length,
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
