@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck } from 'lucide-react';
+import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search } from 'lucide-react';
 import KdpFinanceCalculator from './KdpFinanceCalculator';
 import KdpLegalDefense from './KdpLegalDefense';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,8 @@ import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
 import { registerPlayfairFont, FONT_SIZES, CHAR_SPACING, LINE_HEIGHTS } from '@/lib/pdfFonts';
+import { ImageSearchGallery } from '@/components/ImageSearchGallery';
+import { uploadToBookImages } from '@/lib/bookImages';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -99,6 +101,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
     const [showKdpGuides, setShowKdpGuides] = useState(false);
     const coverUploadRef = useRef<HTMLInputElement>(null);
+    const [coverGalleryOpen, setCoverGalleryOpen] = useState(false);
     
     // Back Cover Text State
     const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
@@ -1011,6 +1014,61 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         }
       }
     };
+
+    const applyFrontCoverUrl = useCallback(
+      async (url: string) => {
+        const newUrls = [url];
+        setLocalFrontUrls(newUrls);
+        setLockedUrls(newUrls);
+        setCurrentUrlIndex(0);
+        setImageLoaded(false);
+
+        if (bookId) {
+          await supabase.from('books').update({ cover_image_url: newUrls }).eq('id', bookId);
+        }
+        onCoverUpdate?.({ coverImageUrls: newUrls });
+      },
+      [bookId, onCoverUpdate]
+    );
+
+    const handleCoverSelectFromGallery = useCallback(
+      async (imageUrl: string) => {
+        try {
+          await applyFrontCoverUrl(imageUrl);
+          setCoverGalleryOpen(false);
+          toast.success('Cover image updated!');
+        } catch (err) {
+          console.error('[BookCover] Failed to set cover image from gallery:', err);
+          toast.error('Failed to update cover image');
+        }
+      },
+      [applyFrontCoverUrl]
+    );
+
+    const handleCroppedCoverUpload = useCallback(
+      async (croppedBlob: Blob) => {
+        setIsUploadingCover(true);
+        try {
+          const fileName = `cover_${bookId || 'guest'}_${Date.now()}.jpg`;
+          const filePath = `covers/${fileName}`;
+          const publicUrl = await uploadToBookImages({
+            path: filePath,
+            data: croppedBlob,
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+          await applyFrontCoverUrl(publicUrl);
+          setCoverGalleryOpen(false);
+          toast.success('Cover image updated!');
+        } catch (err) {
+          console.error('[BookCover] Cropped cover upload failed:', err);
+          toast.error('Failed to upload cropped image');
+        } finally {
+          setIsUploadingCover(false);
+        }
+      },
+      [applyFrontCoverUrl, bookId]
+    );
 
     // ========== CANVAS-FIRST DRAWING HELPERS ==========
     
@@ -2020,6 +2078,17 @@ p { margin-bottom: 1em; }`);
                       <p className="text-xs text-muted-foreground mb-3">
                         Upload a custom cover image (JPG, PNG, max 5MB)
                       </p>
+
+                      <Button
+                        variant="outline"
+                        onClick={() => setCoverGalleryOpen(true)}
+                        disabled={isUploadingCover}
+                        className="w-full gap-2 mb-3"
+                      >
+                        <Search className="w-4 h-4" />
+                        Search Gallery
+                      </Button>
+
                       <input
                         ref={coverUploadRef}
                         type="file"
@@ -2048,6 +2117,17 @@ p { margin-bottom: 1em; }`);
                     </div>
                   </div>
                 </div>
+
+                <ImageSearchGallery
+                  open={coverGalleryOpen}
+                  onOpenChange={setCoverGalleryOpen}
+                  initialQuery={frontPrompt || title}
+                  orientation="portrait"
+                  enableCrop
+                  cropAspectRatio={1}
+                  onSelect={handleCoverSelectFromGallery}
+                  onSelectBlob={async (blob) => handleCroppedCoverUpload(blob)}
+                />
               </TabsContent>
 
               {/* TAB 2: Back Cover - Clean White Design */}

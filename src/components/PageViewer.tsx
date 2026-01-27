@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ImageSearchGallery } from '@/components/ImageSearchGallery';
+import { uploadToBookImages } from '@/lib/bookImages';
 
 // A stable key for a block that survives "preloaded" rehydration/replacement.
 // We cannot rely on `id` during generation because blocks may be replaced while
@@ -1223,23 +1224,17 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
     setIsUploading(true);
     try {
-      // Upload to Supabase Storage
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `${uploadingBlockId}-${Date.now()}.${fileExt}`;
       const filePath = `user-uploads/${fileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('book-images')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('book-images')
-        .getPublicUrl(filePath);
-
-      const publicUrl = urlData.publicUrl;
+      const publicUrl = await uploadToBookImages({
+        path: filePath,
+        data: file,
+        // Let the browser provide File.type when available.
+        contentType: file.type || undefined,
+        upsert: true,
+      });
 
       // Update database with new image URL (best-effort)
       const { error: updateError } = await supabase
@@ -1292,25 +1287,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     const key = getBlockKey(block);
 
     try {
-      // Upload the cropped blob to Supabase Storage
       const fileName = `${searchingBlockId}-cropped-${Date.now()}.jpg`;
       const filePath = `user-uploads/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('book-images')
-        .upload(filePath, croppedBlob, { 
-          upsert: true,
-          contentType: 'image/jpeg'
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('book-images')
-        .getPublicUrl(filePath);
-
-      const publicUrl = urlData.publicUrl;
+      const publicUrl = await uploadToBookImages({
+        path: filePath,
+        data: croppedBlob,
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
 
       // Update database with new image URL (best-effort)
       const { error: updateError } = await supabase
@@ -1627,6 +1612,16 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // IMPORTANT: don't hijack keyboard when user is typing in an input/textarea/search field.
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTypingTarget =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        (target ? (target as any).isContentEditable === true : false);
+
+      if (isTypingTarget) return;
+
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
         goNext();
