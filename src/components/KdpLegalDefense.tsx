@@ -383,6 +383,16 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       }
 
       const blocks = (allImageBlocks || []) as ImagePageData[];
+      
+      // Diagnostic logging for debugging RLS/permissions issues
+      console.log(`[ImageManifest] Found ${blocks.length} image blocks in DB for bookId=${bookId}`);
+      
+      // If no blocks found, this usually indicates an RLS policy issue
+      if (blocks.length === 0) {
+        console.warn('[ImageManifest] No image blocks returned - this may indicate an RLS policy issue where book_pages cannot be read');
+        toast.warning('No image blocks found in the database for this book. The manifest will be empty.');
+      }
+      
       const existingUrls = new Set<string>();
       for (const b of blocks) {
         if (b.image_url) existingUrls.add(b.image_url);
