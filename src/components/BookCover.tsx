@@ -19,6 +19,7 @@ import JSZip from 'jszip';
 // html2canvas removed - using Canvas-First approach for exports
 import { BookData } from '@/lib/bookTypes';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
+import { generateBlockBasedPDF } from '@/lib/generateBlockPDF';
 import { generateGuideEPUB } from '@/lib/generateEPUB';
 import { registerPlayfairFont, FONT_SIZES, CHAR_SPACING, LINE_HEIGHTS } from '@/lib/pdfFonts';
 import { ImageSearchGallery } from '@/components/ImageSearchGallery';
@@ -881,9 +882,25 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
+    // Helper: Extract cover attribution from URL pattern
+    const getCoverAttribution = (): string => {
+      if (!displayUrl) return '';
+      const lowerUrl = displayUrl.toLowerCase();
+      if (lowerUrl.includes('unsplash.com')) {
+        return 'Cover image via Unsplash';
+      } else if (lowerUrl.includes('wikimedia.org')) {
+        return 'Cover image via Wikimedia Commons';
+      } else if (lowerUrl.includes('pexels.com')) {
+        return 'Cover image via Pexels';
+      } else if (lowerUrl.includes('pixabay.com')) {
+        return 'Cover image via Pixabay';
+      }
+      return '';
+    };
+
     // Download manuscript PDF
     const handleDownloadManuscript = async () => {
-      if (!bookData) {
+      if (!bookData || !bookId) {
         toast.error('Book data not available for manuscript export');
         return;
       }
@@ -892,14 +909,15 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       toast.info(isGrayscale ? 'Generating B&W manuscript PDF...' : 'Generating manuscript PDF...');
 
       try {
-        // Check if displayUrl is valid before passing
-        const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
-        
-        await generateCleanPDF({
-          topic: topic || title,
-          bookData,
-          coverImageUrl: validCoverUrl,
-          isGrayscale // Pass B&W mode to PDF generator
+        // Use block-based PDF generator that fetches real content from database
+        await generateBlockBasedPDF({
+          title: topic || title,
+          displayTitle: bookData?.displayTitle || localTitle || title,
+          subtitle: bookData?.subtitle || localSubtitle || subtitle || '',
+          tableOfContents: bookData?.tableOfContents || [],
+          bookId: bookId,
+          coverAttribution: getCoverAttribution(),
+          returnBlob: false, // Direct download
         });
         toast.success('Manuscript PDF downloaded!');
       } catch (err) {
@@ -1674,18 +1692,22 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
     };
 
-    // Helper: Generate Manuscript PDF as Blob
+    // Helper: Generate Manuscript PDF as Blob (for KDP Package ZIP)
     const generateManuscriptPDFBlob = async (): Promise<Blob | null> => {
+      if (!bookId) {
+        console.error('[KDP] No bookId for manuscript generation');
+        return null;
+      }
+      
       try {
-        const validCoverUrl = displayUrl && displayUrl.trim().length > 0 ? displayUrl : undefined;
-        
-        const blob = await generateCleanPDF({
-          topic: topic || title,
-          bookData: bookData!,
-          coverImageUrl: validCoverUrl,
-          includeCoverPage: true,
-          returnBlob: true,
-          isGrayscale // Pass B&W mode to PDF generator
+        const blob = await generateBlockBasedPDF({
+          title: topic || title,
+          displayTitle: bookData?.displayTitle || localTitle || title,
+          subtitle: bookData?.subtitle || localSubtitle || subtitle || '',
+          tableOfContents: bookData?.tableOfContents || [],
+          bookId: bookId,
+          coverAttribution: getCoverAttribution(),
+          returnBlob: true, // Return blob for ZIP bundling
         });
         
         return blob as Blob;
