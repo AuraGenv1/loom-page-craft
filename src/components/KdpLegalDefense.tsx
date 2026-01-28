@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import JSZip from 'jszip';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import { archiveExternalImage, saveImageMetadata } from '@/lib/bookImages';
 
 // --- HELPER: Trigger Download (Hidden Anchor) ---
 const triggerDownload = (blob: Blob, filename: string) => {
@@ -25,6 +26,7 @@ const triggerDownload = (blob: Blob, filename: string) => {
 
 // Image metadata from book_pages table
 interface ImagePageData {
+  id?: string;
   page_order: number;
   chapter_number: number;
   content: { caption?: string; query?: string };
@@ -34,6 +36,35 @@ interface ImagePageData {
   image_license: string | null;
   image_attribution: string | null;
   archived_at: string | null;
+}
+
+async function asyncPool<T, R>(poolLimit: number, array: T[], iteratorFn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const ret: Promise<R>[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (let i = 0; i < array.length; i++) {
+    const item = array[i];
+    const p = Promise.resolve().then(() => iteratorFn(item, i));
+    ret.push(p);
+
+    if (poolLimit <= array.length) {
+      const e: Promise<void> = p.then(() => undefined, () => undefined);
+      executing.push(e);
+      if (executing.length >= poolLimit) {
+        await Promise.race(executing);
+        // prune settled
+        for (let j = executing.length - 1; j >= 0; j--) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const anyP: any = executing[j];
+          if (anyP?.status === 'fulfilled' || anyP?.status === 'rejected') executing.splice(j, 1);
+        }
+      }
+    }
+  }
+
+  return Promise.allSettled(ret).then((results) =>
+    results.map((r) => (r.status === 'fulfilled' ? r.value : (null as unknown as R)))
+  );
 }
 
 interface KdpLegalDefenseProps {
@@ -320,6 +351,110 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
   const generateImageManifestBlob = async (): Promise<Blob> => {
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
+
+    // Ensure images exist in DB before generating the manifest.
+    // Reason: images are lazily populated when viewing pages; if the user exports immediately
+    // after generation, image_url can still be null for all image blocks → empty manifest.
+    const ensureImagesForManifest = async () => {
+      // Fetch book topic for better search grounding
+      const { data: bookRow, error: bookErr } = await supabase
+        .from('books')
+        .select('topic')
+        .eq('id', bookId)
+        .maybeSingle();
+
+      if (bookErr) {
+        console.warn('[ImageManifest] Failed to fetch book topic:', bookErr);
+      }
+
+      const bookTopic = bookRow?.topic || title;
+
+      const { data: allImageBlocks, error: blocksErr } = await supabase
+        .from('book_pages')
+        .select('id, chapter_number, page_order, content, image_url')
+        .eq('book_id', bookId)
+        .in('block_type', ['image_full', 'image_half'])
+        .order('chapter_number', { ascending: true })
+        .order('page_order', { ascending: true });
+
+      if (blocksErr) {
+        console.error('[ImageManifest] Failed to fetch image blocks:', blocksErr);
+        return;
+      }
+
+      const blocks = (allImageBlocks || []) as Array<{
+        id: string;
+        chapter_number: number;
+        page_order: number;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        content: any;
+        image_url: string | null;
+      }>;
+
+      const existingUrls = blocks.map((b) => b.image_url).filter(Boolean) as string[];
+      const missing = blocks.filter((b) => !b.image_url);
+
+      // Nothing to do
+      if (missing.length === 0) return;
+
+      const toastId = toast.loading(`Finalizing images for manifest… (0/${missing.length})`);
+      let processed = 0;
+
+      // Conservative concurrency to avoid provider rate limits
+      await asyncPool(3, missing, async (block) => {
+        try {
+          const queryFromContent = typeof block.content?.query === 'string' ? block.content.query : '';
+          const captionFromContent = typeof block.content?.caption === 'string' ? block.content.caption : '';
+          const query = (queryFromContent || captionFromContent || '').trim();
+          if (!query) return;
+
+          const { data, error } = await supabase.functions.invoke('fetch-book-images', {
+            body: {
+              query,
+              orientation: 'landscape',
+              excludeUrls: existingUrls,
+              bookTopic,
+            },
+          });
+
+          if (error || !data?.imageUrl) {
+            console.warn('[ImageManifest] fetch-book-images returned no image:', error || data);
+            return;
+          }
+
+          const source = (data.source || 'none') as 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'none';
+          if (source === 'none') return;
+
+          const attribution = (data.attribution && String(data.attribution).trim()) || `Source: ${source === 'pixabay' ? 'Pixabay' : source}`;
+          const license = (data.license && String(data.license).trim()) || 'Unknown License';
+          const originalUrl = String(data.imageUrl);
+
+          // Archive for link-rot protection; if archive fails, still persist best-effort provenance.
+          const archiveResult = await archiveExternalImage(originalUrl, bookId, source as any, attribution);
+
+          if (archiveResult?.archivedUrl) {
+            existingUrls.push(archiveResult.archivedUrl);
+            await saveImageMetadata(block.id, archiveResult.archivedUrl, archiveResult.metadata);
+          } else {
+            existingUrls.push(originalUrl);
+            await saveImageMetadata(block.id, originalUrl, {
+              image_source: source as any,
+              original_url: originalUrl,
+              image_license: license,
+              image_attribution: attribution,
+              archived_at: new Date().toISOString(),
+            });
+          }
+        } finally {
+          processed++;
+          toast.loading(`Finalizing images for manifest… (${processed}/${missing.length})`, { id: toastId });
+        }
+      });
+
+      toast.dismiss(toastId);
+    };
+
+    await ensureImagesForManifest();
 
     // Fetch all image blocks with metadata
     const { data: imagePages, error } = await supabase
