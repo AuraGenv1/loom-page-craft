@@ -89,14 +89,17 @@ RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use italics or asterisks (*) for emphasis.
 - Do NOT use "heading", "list", "quote", or "key_takeaway" block types - STRICTLY FORBIDDEN.
 
-RULE 5: CHAPTER STRUCTURE (Strict Order)
+RULE 5: CHAPTER STRUCTURE (Strict Order with Image Spacing)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
-  2. 1-2x Hero Images (image_full blocks)
-  3. 6-8x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
-  4. Second-to-last text block: Contains the ### Key Takeaway section
-  5. Pro Tip Page (ALWAYS last block of the chapter)
+  2. 1x Hero Image (image_full block)
+  3. 2-3x Text Pages (text blocks)
+  4. 1x Image (if needed - NEVER consecutive with another image!)
+  5. 2-3x Text Pages
+  6. Second-to-last text block: Contains the ### Key Takeaway section
+  7. Pro Tip Page (ALWAYS last block of the chapter)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
+- **CRITICAL IMAGE SPACING RULE**: NEVER place two image blocks consecutively. There MUST be at least ONE text block between ANY two images.
 
 RULE 6: LITERAL VISUAL QUERIES - CAPTION-TO-QUERY MATCHING
 - CRITICAL: The image query MUST describe EXACTLY what the caption says. If the caption mentions "Hotel Jerome", the query MUST be "Hotel Jerome Aspen Colorado exterior" - not a generic "luxury hotel".
@@ -108,6 +111,12 @@ RULE 6: LITERAL VISUAL QUERIES - CAPTION-TO-QUERY MATCHING
 - Image queries must be specific physical descriptions that will return the EXACT subject mentioned in the caption.
 - BAD: Generic caption "Luxury accommodations" with query "hotel lobby" → GOOD: Specific caption "The Little Nell hotel lobby" with query "The Little Nell Aspen Colorado hotel lobby interior"
 - Do NOT write vague queries like "mountain scenery" or "fine dining restaurant" - ALWAYS include the specific name from the caption.
+
+RULE 7: NO BACK-TO-BACK IMAGES (MANDATORY LAYOUT RULE)
+- **ABSOLUTE RULE**: After any "image_full" block, the NEXT block MUST be a "text" block.
+- **NEVER** generate two consecutive "image_full" blocks.
+- If you want 2 images in a chapter, they MUST be separated by at least 1 text block.
+- This creates professional pacing and prevents visual overload.
 
 TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
@@ -133,6 +142,7 @@ REQUIREMENTS:
 - Each "text" block: 220-250 words MAX with inline markdown (target 235 words, NEVER over 250)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
+- **NO CONSECUTIVE IMAGES** - Always separate images with at least one text block
 - NEVER use "heading", "list", "quote", "key_takeaway", or "image_half" blocks! Only: chapter_title, text, image_full, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
@@ -140,7 +150,8 @@ Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE cont
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
   {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
   {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words MAX. Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
-  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
+  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]"}},
+  {"block_type": "text", "content": {"text": "## [Header]\\n\\n[Content...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
 
@@ -290,6 +301,30 @@ Language: ${language}`;
     };
 
     blocksData = enforceCaptionEntitiesInQueries(blocksData);
+
+    // ==== BUSINESS RULE 4: NO BACK-TO-BACK IMAGES ====
+    // Post-process to ensure no consecutive image blocks (safety net)
+    const enforceImageSpacing = (blocks: any[]) => {
+      const result: any[] = [];
+      let lastWasImage = false;
+      
+      for (const block of blocks) {
+        const isImage = block?.block_type === 'image_full' || block?.block_type === 'image_half';
+        
+        if (isImage && lastWasImage) {
+          // Skip this consecutive image - we'll keep the first one
+          console.log('[ImageSpacing] Removing consecutive image block to enforce spacing rule');
+          continue;
+        }
+        
+        result.push(block);
+        lastWasImage = isImage;
+      }
+      
+      return result;
+    };
+
+    blocksData = enforceImageSpacing(blocksData);
 
     // Save to Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
