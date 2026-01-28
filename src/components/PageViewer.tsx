@@ -1154,13 +1154,37 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     [enqueueImageFetch, getUsedImageUrls, normalizeUrlForCompare, setBlocksAndPropagate, topic]
   );
 
+  // Refs to track current state without causing re-renders in useCallback
+  const blocksRef = useRef<PageBlockMeta[]>([]);
+  const currentIndexRef = useRef(0);
+  const currentChapterRef = useRef(currentChapter);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    blocksRef.current = blocks;
+  }, [blocks]);
+  
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+  
+  useEffect(() => {
+    currentChapterRef.current = currentChapter;
+  }, [currentChapter]);
+
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
+  // IMPORTANT: This callback must NOT depend on blocks/currentIndex state to avoid infinite loops
   const fetchBlocks = useCallback(async (chapter: number) => {
+    // Use refs to read current state without creating circular dependency
+    const currentBlocks = blocksRef.current;
+    const currIdx = currentIndexRef.current;
+    const currChapter = currentChapterRef.current;
+    
     // Preserve the user's current page when we re-hydrate from the backend
     // (e.g., after image upload/select updates that sync parent state).
     const preserveKey =
-      chapter === currentChapter && blocks[currentIndex]
-        ? getBlockKey(blocks[currentIndex])
+      chapter === currChapter && currentBlocks[currIdx]
+        ? getBlockKey(currentBlocks[currIdx])
         : null;
 
     // We may receive preloaded blocks first (fast), but we still need to hydrate from DB
@@ -1231,7 +1255,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [bookId, preloadedBlocks, findTitleBlockIndex, blocks, currentIndex, currentChapter]);
+  }, [bookId, preloadedBlocks, findTitleBlockIndex]); // Removed blocks, currentIndex, currentChapter from deps
 
   // Auto-trigger image fetch for blocks without images on mount
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
@@ -1873,8 +1897,23 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setIsInserting(false);
     }
   }, [isAdmin, blocks, currentIndex, insertDirection, bookId, currentChapter, onBlocksUpdate]);
+  // Track preloaded blocks changes with a stable reference
+  const preloadedBlocksLengthRef = useRef<Record<number, number>>({});
+  
   useEffect(() => {
-    fetchBlocks(currentChapter);
+    // Only re-fetch if the chapter changes OR if preloaded blocks for this chapter
+    // have newly arrived (length changed from 0 to >0)
+    const prevLength = preloadedBlocksLengthRef.current[currentChapter] || 0;
+    const newLength = preloadedBlocks?.[currentChapter]?.length || 0;
+    const hasNewPreloadedData = prevLength === 0 && newLength > 0;
+    
+    // Update the ref
+    preloadedBlocksLengthRef.current[currentChapter] = newLength;
+    
+    // Only fetch if this is a new chapter or we just got preloaded data
+    if (hasNewPreloadedData || !hydratedChaptersRef.current.has(currentChapter)) {
+      fetchBlocks(currentChapter);
+    }
   }, [currentChapter, fetchBlocks, preloadedBlocks]);
 
   // Keyboard navigation
