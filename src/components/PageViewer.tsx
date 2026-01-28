@@ -1080,11 +1080,13 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               continue;
             }
 
-            // Persist best-effort (with basic provenance fields for later dedupe)
+            // Persist best-effort (with full provenance fields for manifest tracking)
             if (hasValidDbId(block)) {
               const updatePayload: any = {
                 image_url: candidateUrl,
                 image_source: data?.source || null,
+                image_license: data?.license || null,
+                image_attribution: data?.attribution || null,
                 original_url: candidateUrl,
                 archived_at: new Date().toISOString(),
               };
@@ -1107,6 +1109,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             const localPatch: any = {
               image_url: candidateUrl,
               image_source: data?.source,
+              image_license: data?.license,
               original_url: candidateUrl,
               image_attribution: data?.attribution,
               archived_at: new Date().toISOString(),
