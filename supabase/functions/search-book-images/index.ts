@@ -99,10 +99,14 @@ async function searchUnsplashMultiple(
         imageUrl = photo.urls?.full || photo.urls?.regular;
       }
       
+      // Capture photographer name for attribution
+      const photographerName = photo.user?.name || photo.user?.username || 'Unknown';
+      
       results.push({
         id: `unsplash-${photo.id}`,
         imageUrl: imageUrl || photo.urls?.regular,
         thumbnailUrl: photo.urls?.small || photo.urls?.thumb,
+        attribution: `Photo by ${photographerName} on Unsplash`,
         source: 'unsplash' as const,
         width,
         height,
