@@ -148,6 +148,17 @@ Book Title: "${title}"
 ${subtitle ? `Subtitle: "${subtitle}"` : ''}
 ${topic ? `Topic: "${topic}"` : ''}
 
+CRITICAL CONSTRAINT - THE "NO-REPEAT" RULE:
+You are STRICTLY FORBIDDEN from using any major words that already appear in the Book Title: "${title}"
+
+Amazon penalizes repetitive keywords. Extract the main words from the title above and ensure NONE of them appear in your keywords.
+
+Example:
+- Title: "The Art of Digital Photography"
+- BANNED words: art, digital, photography
+- GOOD keyword: "beginner camera techniques"
+- BAD keyword: "digital photography tips" (uses banned words)
+
 REQUIREMENTS:
 1. Generate exactly 7 keywords
 2. Each keyword should be 3-5 words (long-tail phrases)
@@ -159,6 +170,7 @@ REQUIREMENTS:
    - Audience-specific keywords
 5. Avoid single words or very generic phrases
 6. No trademark or competitor names
+7. NEVER use words from the book title
 
 Return ONLY valid JSON:
 {

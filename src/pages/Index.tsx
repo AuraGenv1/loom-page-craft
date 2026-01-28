@@ -98,6 +98,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const isGeneratingRef = useRef(false);
+  const isInitialMount = useRef(true);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGrayscaleMode, setIsGrayscaleMode] = useState(false); // Ink Saver / B&W print mode
@@ -224,20 +225,33 @@ const Index = () => {
         }
       }
       
-      // Guest users should always see the landing page on fresh load
-      // Clear any stale session data to prevent "Groundhog Day" effect
+      // "Once Generated, Stay Generated" - preserve book view during auth changes
+      // Only reset to landing on INITIAL page load when no book context exists
       if (!user) {
-        setViewState('landing');
-        setBookData(null);
-        setBookId(null);
-        setCoverImageUrls([]);
-        setIsPurchased(false);
+        // If user is already viewing a book, keep them there regardless of auth state
+        if (viewState === 'book' && bookId) {
+          isInitialMount.current = false;
+          return;
+        }
+        
+        // Only reset on fresh loads (initial mount with no active book)
+        if (isInitialMount.current) {
+          setViewState('landing');
+          setBookData(null);
+          setBookId(null);
+          setCoverImageUrls([]);
+          setIsPurchased(false);
+        }
+        isInitialMount.current = false;
         return;
       }
 
       // No specific book requested - show landing for fresh start
       // Remove auto-loading last book to avoid confusion
-      setViewState('landing');
+      if (isInitialMount.current) {
+        setViewState('landing');
+      }
+      isInitialMount.current = false;
     };
 
     loadBook();
