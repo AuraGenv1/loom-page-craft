@@ -14,7 +14,7 @@ interface ImageResult {
   imageUrl: string;        // Full/Regular resolution for database
   thumbnailUrl: string;    // Small version for preview
   attribution?: string;
-  source: 'unsplash' | 'wikimedia' | 'pexels';
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay';
   id: string;
   width: number;           // Image width for quality filtering
   height: number;          // Image height
@@ -201,6 +201,85 @@ function isCoverSafeLicense(license: string): boolean {
   return !UNSAFE_COVER_LICENSES.some(unsafe => lowerLicense.includes(unsafe));
 }
 
+// Search Pixabay and return multiple results
+async function searchPixabayMultiple(
+  query: string,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  perPage: number = 40,
+  page: number = 1
+): Promise<ImageResult[]> {
+  const apiKey = Deno.env.get('PIXABAY_API_KEY');
+  if (!apiKey) {
+    console.log('[Pixabay] No API key configured');
+    return [];
+  }
+
+  try {
+    // Pixabay orientation mapping
+    const pixabayOrientation = orientation === 'portrait' ? 'vertical' : 'horizontal';
+    
+    const params = new URLSearchParams({
+      key: apiKey,
+      q: query,
+      orientation: pixabayOrientation,
+      per_page: String(Math.min(perPage, 200)), // Pixabay max is 200
+      page: String(page),
+      image_type: 'photo',
+      safesearch: 'true',
+    });
+
+    const response = await fetch(`https://pixabay.com/api/?${params}`);
+
+    if (!response.ok) {
+      console.error('[Pixabay] API error:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+
+    if (!data.hits || data.hits.length === 0) {
+      console.log('[Pixabay] No results for query:', query);
+      return [];
+    }
+
+    const results: ImageResult[] = [];
+
+    for (const photo of data.hits) {
+      // Pixabay provides webformatWidth for the web-sized image
+      const width = photo.imageWidth || photo.webformatWidth || 0;
+      const height = photo.imageHeight || photo.webformatHeight || 0;
+
+      // HIDDEN FILTER: Skip images below minimum print quality (1200px)
+      if (photo.webformatWidth < MIN_WIDTH_FILTER) {
+        continue;
+      }
+
+      // Use largeImageURL for high-res, webformatURL for thumbnail
+      const imageUrl = photo.largeImageURL || photo.webformatURL;
+      const thumbnailUrl = photo.webformatURL || photo.previewURL;
+
+      if (!imageUrl) continue;
+
+      results.push({
+        id: `pixabay-${photo.id}`,
+        imageUrl,
+        thumbnailUrl: thumbnailUrl || imageUrl,
+        attribution: photo.user ? `Photo by ${photo.user} on Pixabay` : 'Pixabay',
+        source: 'pixabay' as const,
+        width,
+        height,
+        isPrintReady: width >= PRINT_READY_WIDTH,
+      });
+    }
+
+    console.log(`[Pixabay] Found ${results.length} high-res images for query (page ${page}, filtered from ${data.hits.length}):`, query);
+    return results;
+  } catch (error) {
+    console.error('[Pixabay] Fetch error:', error);
+    return [];
+  }
+}
+
 // Search Wikimedia Commons and return multiple results
 async function searchWikimediaMultiple(query: string, limit: number = 20, filterForCover: boolean = false): Promise<ImageResult[]> {
   try {
@@ -349,24 +428,28 @@ serve(async (req) => {
     // Search all sources in parallel
     // Unsplash: 3 pages of 30 = 90 results max (before filtering)
     // Pexels: 2 pages of 40 = 80 results max (before filtering)
+    // Pixabay: 2 pages of 40 = 80 results max (before filtering)
     // Wikimedia: 50 results (before filtering) - apply cover license filter if needed
-    const [unsplashPage1, unsplashPage2, unsplashPage3, pexelsPage1, pexelsPage2, wikimediaResults] = await Promise.all([
+    const [unsplashPage1, unsplashPage2, unsplashPage3, pexelsPage1, pexelsPage2, pixabayPage1, pixabayPage2, wikimediaResults] = await Promise.all([
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
       searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
       searchPexelsMultiple(anchoredQuery, orientation, 40, 2),
+      searchPixabayMultiple(anchoredQuery, orientation, 40, 1),
+      searchPixabayMultiple(anchoredQuery, orientation, 40, 2),
       searchWikimediaMultiple(anchoredQuery, 50, forCover), // Pass forCover to filter licenses
     ]);
 
     // Combine results
     const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3];
     const pexelsResults = [...pexelsPage1, ...pexelsPage2];
+    const pixabayResults = [...pixabayPage1, ...pixabayPage2];
     
-    // Interleave: 3 Unsplash, 2 Pexels, 1 Wikimedia pattern for variety
+    // Interleave: 3 Unsplash, 2 Pexels, 2 Pixabay, 1 Wikimedia pattern for variety
     const allResults: ImageResult[] = [];
-    let uIdx = 0, pIdx = 0, wIdx = 0;
-    while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || wIdx < wikimediaResults.length)) {
+    let uIdx = 0, pIdx = 0, xIdx = 0, wIdx = 0;
+    while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
       // Add up to 3 Unsplash
       for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
         allResults.push(unsplashResults[uIdx++]);
@@ -374,6 +457,10 @@ serve(async (req) => {
       // Add up to 2 Pexels
       for (let i = 0; i < 2 && pIdx < pexelsResults.length && allResults.length < limit; i++) {
         allResults.push(pexelsResults[pIdx++]);
+      }
+      // Add up to 2 Pixabay
+      for (let i = 0; i < 2 && xIdx < pixabayResults.length && allResults.length < limit; i++) {
+        allResults.push(pixabayResults[xIdx++]);
       }
       // Add 1 Wikimedia
       if (wIdx < wikimediaResults.length && allResults.length < limit) {
@@ -384,7 +471,7 @@ serve(async (req) => {
     // Count print-ready images
     const printReadyCount = allResults.filter(img => img.isPrintReady).length;
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
@@ -393,6 +480,7 @@ serve(async (req) => {
         sources: {
           unsplash: unsplashResults.length,
           pexels: pexelsResults.length,
+          pixabay: pixabayResults.length,
           wikimedia: wikimediaResults.length,
         },
         printReadyCount,

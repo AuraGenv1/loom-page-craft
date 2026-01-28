@@ -151,6 +151,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from one of the following platforms with appropriate commercial licenses:\\par`;
     rtf += `\\tab - \\b Unsplash: \\b0 Irrevocable Commercial License. Assets incorporated into creative design (Significant Modification).\\par`;
     rtf += `\\tab - \\b Pexels: \\b0 Free Commercial License. All photos and videos are free to use, with no attribution required.\\par`;
+    rtf += `\\tab - \\b Pixabay: \\b0 Pixabay License (Free for Commercial Use). No attribution required.\\par`;
     rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par`;
     rtf += `\\tab - \\b User Uploads: \\b0 Rights certified by publisher at time of upload.\\par\\par`;
     rtf += `A complete Image Licensing Manifest (03_Image_Manifest.pdf) is included in this Defense Kit with detailed provenance for every image.\\par\\par`;
@@ -271,9 +272,33 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     doc.setFontSize(10);
     y += 0.5;
 
-    // 4. WIKIMEDIA
+    // 4. IMAGES - PIXABAY
     doc.setFont("times", "bold");
-    doc.text("4. Public Domain (Wikimedia Commons)", 1, y);
+    doc.text("4. Image License (Pixabay)", 1, y);
+    y += 0.2;
+    doc.setFont("times", "normal");
+    doc.text("Source: Pixabay License", 1, y);
+    y += 0.2;
+    doc.setFont("times", "italic");
+    const pixabayQuote = "\"Content on Pixabay is made available for use under the Pixabay Content License. You may use Content for free without purchasing credits or subscriptions for commercial and non-commercial purposes.\"";
+    const splitPixabay = doc.splitTextToSize(pixabayQuote, 6.5);
+    doc.text(splitPixabay, 1, y);
+    y += (splitPixabay.length * 0.2) + 0.1;
+
+    doc.setFont("times", "normal");
+    doc.text("Usage: Free for commercial use, no attribution required.", 1, y);
+    y += 0.2;
+
+    doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
+    doc.text("URL: https://pixabay.com/service/license-summary/", 1, y);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    y += 0.5;
+
+    // 5. WIKIMEDIA
+    doc.setFont("times", "bold");
+    doc.text("5. Public Domain (Wikimedia Commons)", 1, y);
     y += 0.2;
     doc.setFont("times", "normal");
     doc.text("Source: CreativeCommons.org (CC0 1.0 Universal)", 1, y);
@@ -387,6 +412,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       const sourceDisplay = source === 'upload' ? 'Upload' : 
                            source === 'unsplash' ? 'Unsplash' :
                            source === 'pexels' ? 'Pexels' :
+                           source === 'pixabay' ? 'Pixabay' :
                            source === 'wikimedia' ? 'Wikimedia' : source;
 
       // Truncate URL for display
