@@ -569,16 +569,20 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
       doc.text(String(img.page_order), startX, y);
       doc.text(String(img.chapter_number), startX + colWidths.page, y);
+      
+      // Caption on its own line - prevent overlap with source
       doc.text(truncatedCaption, startX + colWidths.page + colWidths.chapter, y);
-      doc.text(sourceDisplay, startX + colWidths.page + colWidths.chapter + colWidths.caption, y);
-      doc.text(truncatedLicense, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source, y);
+      
+      // Source and License on the same line but properly spaced
+      doc.text(sourceDisplay, startX + colWidths.page + colWidths.chapter + colWidths.caption + 0.1, y);
+      doc.text(truncatedLicense, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + 0.1, y);
       
       // URL as link
       doc.setTextColor(0, 0, 255);
-      doc.text(truncatedUrl, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license, y);
+      doc.text(truncatedUrl, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license + 0.1, y);
       doc.setTextColor(0, 0, 0);
 
-      y += 0.25;
+      y += 0.28; // Slightly more row spacing
 
       // Add original URL on next line if different from archived
       if (img.original_url && img.original_url !== img.image_url) {
@@ -588,7 +592,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
         doc.text(`Original: ${truncatedOriginal}`, startX + colWidths.page + colWidths.chapter, y);
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(7);
-        y += 0.2;
+        y += 0.22;
       }
     }
 

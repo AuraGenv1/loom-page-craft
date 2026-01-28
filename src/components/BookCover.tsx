@@ -2525,7 +2525,7 @@ p { margin-bottom: 1em; }`);
                       )}
                       
                       {/* Back Cover Preview (Scaled Replica of Tab 2) */}
-                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex-shrink-0 border-r border-gray-200">
+                      <div className="w-[100px] sm:w-[130px] aspect-[3/4] bg-white relative overflow-hidden flex-shrink-0">
                         
                         {/* Scaling Container: We render the layout at 300px width (same as Tab 2) and scale it down */}
                         <div className="origin-top-left scale-[0.33] sm:scale-[0.433] w-[300px] h-[400px]">
@@ -2562,9 +2562,9 @@ p { margin-bottom: 1em; }`);
                           
                         </div>
                       </div>
-                      {/* Spine - Smaller text */}
+                      {/* Spine - Smaller text - borders on both sides for guide lines */}
                       <div 
-                        className="w-4 sm:w-5 flex flex-col items-center justify-between py-2 flex-shrink-0"
+                        className="w-4 sm:w-5 flex flex-col items-center justify-between py-2 flex-shrink-0 border-l border-r border-gray-300"
                         style={{ backgroundColor: spineColor }}
                       >
                         {/* Edition Text at TOP */}
