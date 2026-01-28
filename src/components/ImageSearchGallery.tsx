@@ -20,7 +20,7 @@ interface ImageResult {
   width?: number;
   height?: number;
   isPrintReady?: boolean;
-  license?: string; // License type for metadata tracking
+  license?: string; // License type from API for metadata tracking
 }
 
 // Extended metadata passed to handlers for provenance tracking
@@ -134,6 +134,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   };
 
   // Create metadata object from selected image
+  // Uses API-provided license when available, falls back to source-based license
   const createMetadata = (image: ImageResult): ImageSelectMetadata => ({
     source: image.source,
     originalUrl: image.imageUrl,

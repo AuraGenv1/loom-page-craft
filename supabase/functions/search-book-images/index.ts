@@ -19,6 +19,7 @@ interface ImageResult {
   width: number;           // Image width for quality filtering
   height: number;          // Image height
   isPrintReady: boolean;   // True if width >= 1800px
+  license?: string;        // License type for metadata tracking
 }
 
 // AI-generated negative prompts to remove
@@ -28,6 +29,44 @@ const NOISE_PHRASES = [
   'no humans',
   'without people',
 ];
+
+// SMART SEARCH: Keywords that indicate abstract/symbolic content (prefer vectors/illustrations)
+const ABSTRACT_KEYWORDS = [
+  'astrology', 'zodiac', 'horoscope', 'tarot', 'chakra', 'spiritual', 'mystical',
+  'psychology', 'mindset', 'meditation', 'wellness', 'self-help', 'mental health',
+  'symbol', 'icon', 'diagram', 'chart', 'infographic', 'concept', 'abstract',
+  'geometric', 'mandala', 'sacred geometry', 'esoteric', 'metaphysical',
+  'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio',
+  'sagittarius', 'capricorn', 'aquarius', 'pisces', 'constellation',
+];
+
+// REALISTIC: Keywords that indicate photo-based content (prefer Unsplash/Pexels)
+const REALISTIC_KEYWORDS = [
+  'travel', 'city', 'landmark', 'hotel', 'restaurant', 'beach', 'mountain',
+  'architecture', 'building', 'street', 'landscape', 'nature', 'food', 'cuisine',
+  'portrait', 'people', 'lifestyle', 'interior', 'exterior', 'skyline', 'view',
+  'history', 'historical', 'biography', 'person', 'place', 'destination',
+];
+
+type SearchMode = 'abstract' | 'realistic' | 'mixed';
+
+// Determine search mode based on query content
+function detectSearchMode(query: string, bookTopic?: string): SearchMode {
+  const combined = `${query} ${bookTopic || ''}`.toLowerCase();
+  
+  const abstractScore = ABSTRACT_KEYWORDS.filter(kw => combined.includes(kw)).length;
+  const realisticScore = REALISTIC_KEYWORDS.filter(kw => combined.includes(kw)).length;
+  
+  console.log(`[SearchMode] Abstract score: ${abstractScore}, Realistic score: ${realisticScore}`);
+  
+  if (abstractScore > realisticScore && abstractScore >= 1) {
+    return 'abstract';
+  }
+  if (realisticScore > abstractScore && realisticScore >= 1) {
+    return 'realistic';
+  }
+  return 'mixed';
+}
 
 function cleanQuery(rawQuery: string): string {
   let cleaned = rawQuery.toLowerCase();
@@ -214,11 +253,13 @@ function isCoverSafeLicense(license: string): boolean {
 }
 
 // Search Pixabay and return multiple results
+// Supports both 'photo' and 'vector'/'illustration' image types for context-aware search
 async function searchPixabayMultiple(
   query: string,
   orientation: 'landscape' | 'portrait' = 'landscape',
   perPage: number = 40,
-  page: number = 1
+  page: number = 1,
+  imageType: 'photo' | 'vector' | 'illustration' | 'all' = 'photo'
 ): Promise<ImageResult[]> {
   const apiKey = Deno.env.get('PIXABAY_API_KEY');
   if (!apiKey) {
@@ -236,7 +277,7 @@ async function searchPixabayMultiple(
       orientation: pixabayOrientation,
       per_page: String(Math.min(perPage, 200)), // Pixabay max is 200
       page: String(page),
-      image_type: 'photo',
+      image_type: imageType,
       safesearch: 'true',
     });
 
@@ -250,7 +291,7 @@ async function searchPixabayMultiple(
     const data = await response.json();
 
     if (!data.hits || data.hits.length === 0) {
-      console.log('[Pixabay] No results for query:', query);
+      console.log(`[Pixabay] No ${imageType} results for query:`, query);
       return [];
     }
 
@@ -262,7 +303,9 @@ async function searchPixabayMultiple(
       const height = photo.imageHeight || 0;
 
       // HIDDEN FILTER: Skip images below minimum print quality (1200px) based on ORIGINAL size
-      if (width < MIN_WIDTH_FILTER) {
+      // Exception: Vector images are resolution-independent, so allow smaller sizes
+      const isVector = imageType === 'vector' || photo.type === 'vector/svg';
+      if (width < MIN_WIDTH_FILTER && !isVector) {
         continue;
       }
 
@@ -272,19 +315,35 @@ async function searchPixabayMultiple(
 
       if (!imageUrl) continue;
 
+      // SAFETY NET: Always have attribution - never blank
+      // photo.user = username, photo.pageURL = source link
+      const artistName = photo.user || null;
+      const sourceUrl = photo.pageURL || null;
+      const typeLabel = isVector ? 'Vector' : 'Image';
+      
+      // Build attribution string - NEVER blank
+      let attribution: string;
+      if (artistName) {
+        attribution = `${typeLabel} by ${artistName} on Pixabay`;
+      } else {
+        attribution = `Source: Pixabay`; // Fallback for null artist
+      }
+
       results.push({
         id: `pixabay-${photo.id}`,
         imageUrl,
         thumbnailUrl: thumbnailUrl || imageUrl,
-        attribution: photo.user ? `Photo by ${photo.user} on Pixabay` : 'Pixabay',
+        attribution, // VERIFIED: Never blank
         source: 'pixabay' as const,
         width,
         height,
-        isPrintReady: width >= PRINT_READY_WIDTH,
+        isPrintReady: width >= PRINT_READY_WIDTH || isVector, // Vectors are always print-ready
+        // Extended metadata for data mapping verification
+        license: 'Pixabay License', // All Pixabay images use the same license
       });
     }
 
-    console.log(`[Pixabay] Found ${results.length} high-res images for query (page ${page}, filtered from ${data.hits.length}):`, query);
+    console.log(`[Pixabay] Found ${results.length} high-res ${imageType} images for query (page ${page}, filtered from ${data.hits.length}):`, query);
     return results;
   } catch (error) {
     console.error('[Pixabay] Fetch error:', error);
@@ -600,75 +659,162 @@ serve(async (req) => {
     // Anchor the query to the book's topic for relevance
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
-    // SMART WIKIPEDIA ARTICLE SEARCH: Try to find the verified main image first
+    // SMART SEARCH MODE DETECTION: Categorize as abstract vs realistic
+    const searchMode = detectSearchMode(cleanedQuery, bookTopic);
+    console.log(`[search-book-images] Detected search mode: ${searchMode}`);
+
+    // COVER SAFETY: Explicitly block Wikimedia for covers due to complex attribution requirements
+    const skipWikimedia = forCover;
+    if (skipWikimedia) {
+      console.log(`[search-book-images] COVER MODE: Wikimedia blocked for cover safety`);
+    }
+
+    // SMART WIKIPEDIA ARTICLE SEARCH: Only for realistic mode and non-cover
     // This works best for specific locations, landmarks, hotels, etc.
-    const wikipediaArticleResult = await searchWikipediaArticleImage(cleanedQuery, forCover);
+    let wikipediaArticleResult = null;
+    if (searchMode === 'realistic' && !skipWikimedia) {
+      wikipediaArticleResult = await searchWikipediaArticleImage(cleanedQuery, forCover);
+    }
 
-    // Search all sources in parallel - OPTIMIZED for rate limits
-    // Unsplash: 2 pages of 30 = 60 results max (reduced from 4 to stay within 50 req/hr limit)
-    // Pexels: 2 pages of 80 = 160 results max (before filtering)
-    // Pixabay: 1 page of 200 = 200 results max (before filtering)
-    // Wikimedia: 2 queries of 50 = 100 results max (before filtering) - apply cover license filter if needed
-    const [
-      unsplashPage1, unsplashPage2,
-      pexelsPage1, pexelsPage2,
-      pixabayPage1,
-      wikimediaResults1, wikimediaResults2
-    ] = await Promise.all([
-      searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
-      searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
-      searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
-      searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
-      searchPixabayMultiple(anchoredQuery, orientation, 200, 1),
-      searchWikimediaMultiple(anchoredQuery, 50, forCover),
-      searchWikimediaMultiple(`${anchoredQuery} scenic`, 50, forCover),
-    ]);
+    // Build search promises based on mode
+    const searchPromises: Promise<ImageResult[]>[] = [];
+    
+    if (searchMode === 'abstract') {
+      // ABSTRACT MODE: Prioritize Pixabay vectors/illustrations
+      console.log(`[search-book-images] ABSTRACT MODE: Prioritizing Pixabay vectors and illustrations`);
+      searchPromises.push(
+        // Pixabay vectors (primary for abstract)
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'vector'),
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 2, 'vector'),
+        // Pixabay illustrations (secondary for abstract)
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'illustration'),
+        // Still include some photos as fallback
+        searchPixabayMultiple(anchoredQuery, orientation, 50, 1, 'photo'),
+        searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+        searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
+      );
+    } else if (searchMode === 'realistic') {
+      // REALISTIC MODE: Prioritize Unsplash/Pexels photos
+      console.log(`[search-book-images] REALISTIC MODE: Prioritizing Unsplash and Pexels photos`);
+      searchPromises.push(
+        searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+        searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+        searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
+        searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
+      );
+      // Add Wikimedia only if not cover mode
+      if (!skipWikimedia) {
+        searchPromises.push(
+          searchWikimediaMultiple(anchoredQuery, 50, forCover),
+          searchWikimediaMultiple(`${anchoredQuery} scenic`, 50, forCover),
+        );
+      }
+    } else {
+      // MIXED MODE: Balanced approach
+      console.log(`[search-book-images] MIXED MODE: Balanced source distribution`);
+      searchPromises.push(
+        searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+        searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+        searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
+        searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'vector'),
+      );
+      // Add Wikimedia only if not cover mode
+      if (!skipWikimedia) {
+        searchPromises.push(
+          searchWikimediaMultiple(anchoredQuery, 50, forCover),
+        );
+      }
+    }
 
-    // Combine results
-    const unsplashResults = [...unsplashPage1, ...unsplashPage2];
-    const pexelsResults = [...pexelsPage1, ...pexelsPage2];
-    const pixabayResults = [...pixabayPage1];
-    const wikimediaResults = [...wikimediaResults1, ...wikimediaResults2];
+    // Execute all searches in parallel
+    const searchResults = await Promise.all(searchPromises);
+    
+    // Categorize results by source
+    const unsplashResults: ImageResult[] = [];
+    const pexelsResults: ImageResult[] = [];
+    const pixabayResults: ImageResult[] = [];
+    const wikimediaResults: ImageResult[] = [];
+    
+    for (const results of searchResults) {
+      for (const img of results) {
+        // COVER SAFETY: Double-check no Wikimedia images slip through for covers
+        if (forCover && img.source === 'wikimedia') {
+          console.log(`[search-book-images] BLOCKED Wikimedia image for cover: ${img.id}`);
+          continue;
+        }
+        
+        switch (img.source) {
+          case 'unsplash': unsplashResults.push(img); break;
+          case 'pexels': pexelsResults.push(img); break;
+          case 'pixabay': pixabayResults.push(img); break;
+          case 'wikimedia': wikimediaResults.push(img); break;
+        }
+      }
+    }
     
     // Build final results array
     const allResults: ImageResult[] = [];
     
-    // PRIORITY: If Wikipedia article image found and is high-quality, add it FIRST
-    if (wikipediaArticleResult) {
+    // PRIORITY: If Wikipedia article image found and is high-quality, add it FIRST (non-cover only)
+    if (wikipediaArticleResult && !forCover) {
       allResults.push(wikipediaArticleResult);
       console.log(`[search-book-images] Added verified Wikipedia article image as first result`);
     }
     
-    // Interleave remaining sources: 3 Unsplash, 2 Pexels, 2 Pixabay, 1 Wikimedia pattern for variety
+    // Interleave based on search mode
     let uIdx = 0, pIdx = 0, xIdx = 0, wIdx = 0;
-    while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
-      // Add up to 3 Unsplash
-      for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
-        allResults.push(unsplashResults[uIdx++]);
+    
+    if (searchMode === 'abstract') {
+      // ABSTRACT MODE: Pixabay first, then photos
+      while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length)) {
+        // Add up to 4 Pixabay (vectors/illustrations prioritized)
+        for (let i = 0; i < 4 && xIdx < pixabayResults.length && allResults.length < limit; i++) {
+          allResults.push(pixabayResults[xIdx++]);
+        }
+        // Add 1 Unsplash
+        if (uIdx < unsplashResults.length && allResults.length < limit) {
+          allResults.push(unsplashResults[uIdx++]);
+        }
+        // Add 1 Pexels
+        if (pIdx < pexelsResults.length && allResults.length < limit) {
+          allResults.push(pexelsResults[pIdx++]);
+        }
       }
-      // Add up to 2 Pexels
-      for (let i = 0; i < 2 && pIdx < pexelsResults.length && allResults.length < limit; i++) {
-        allResults.push(pexelsResults[pIdx++]);
-      }
-      // Add up to 2 Pixabay
-      for (let i = 0; i < 2 && xIdx < pixabayResults.length && allResults.length < limit; i++) {
-        allResults.push(pixabayResults[xIdx++]);
-      }
-      // Add 1 Wikimedia
-      if (wIdx < wikimediaResults.length && allResults.length < limit) {
-        allResults.push(wikimediaResults[wIdx++]);
+    } else {
+      // REALISTIC/MIXED MODE: Photos first
+      while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
+        // Add up to 3 Unsplash
+        for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
+          allResults.push(unsplashResults[uIdx++]);
+        }
+        // Add up to 2 Pexels
+        for (let i = 0; i < 2 && pIdx < pexelsResults.length && allResults.length < limit; i++) {
+          allResults.push(pexelsResults[pIdx++]);
+        }
+        // Add up to 2 Pixabay
+        for (let i = 0; i < 2 && xIdx < pixabayResults.length && allResults.length < limit; i++) {
+          allResults.push(pixabayResults[xIdx++]);
+        }
+        // Add 1 Wikimedia (only if not cover mode)
+        if (!forCover && wIdx < wikimediaResults.length && allResults.length < limit) {
+          allResults.push(wikimediaResults[wIdx++]);
+        }
       }
     }
 
     // Count print-ready images
     const printReadyCount = allResults.filter(img => img.isPrintReady).length;
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (WikiArticle: ${wikipediaArticleResult ? 1 : 0}, Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (Mode: ${searchMode}, WikiArticle: ${wikipediaArticleResult ? 1 : 0}, Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
         images: allResults,
         query: cleanedQuery,
+        searchMode, // Expose detected mode for debugging
         sources: {
           unsplash: unsplashResults.length,
           pexels: pexelsResults.length,
@@ -677,6 +823,7 @@ serve(async (req) => {
         },
         printReadyCount,
         hasVerifiedArticleImage: !!wikipediaArticleResult,
+        coverSafe: forCover, // Confirm cover-safe filtering was applied
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
