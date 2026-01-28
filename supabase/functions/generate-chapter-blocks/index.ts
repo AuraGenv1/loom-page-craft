@@ -87,29 +87,36 @@ RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
 RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
 - Do NOT use italics or asterisks (*) for emphasis.
-- Do NOT use "heading", "list", "quote", "key_takeaway", "image_full", or "image_half" block types - STRICTLY FORBIDDEN.
-- IMAGES ARE DISABLED: Do NOT generate any image blocks. This book uses TEXT ONLY.
+- Do NOT use "heading", "list", "quote", "key_takeaway", or "image_full" block types - STRICTLY FORBIDDEN.
+- FULL PAGE IMAGES ARE DISABLED: Do NOT generate any "image_full" blocks.
 
-RULE 5: CHAPTER STRUCTURE (Strict Order - TEXT ONLY!)
+RULE 5: CHAPTER STRUCTURE (Strict Order - WITH HALF-PAGE IMAGES!)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
   2. 8-10x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
-  3. Second-to-last text block: Contains the ### Key Takeaway section
-  4. Pro Tip Page (ALWAYS last block of the chapter)
-- NO IMAGE BLOCKS. 100% text content.
+  3. 2-3x Half-Page Images (image_half blocks scattered between text blocks for visual interest)
+  4. Second-to-last text block: Contains the ### Key Takeaway section
+  5. Pro Tip Page (ALWAYS last block of the chapter)
+- Use "image_half" blocks to add visual interest. Place them BETWEEN text blocks, never back-to-back.
 
 RULE 6: LITERAL DESCRIPTIONS IN TEXT
 - When describing places, hotels, restaurants, or landmarks, use their EXACT names.
 - Example: "The Hotel Jerome stands as a beacon of Victorian elegance..." rather than "A luxury hotel graces the street..."
 - Be specific and vivid in your descriptions.
 
-TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - Rich descriptive text' : 'INFORMATIONAL (Business/Science/History) - Deep analytical text'}
+RULE 7: IMAGE PLACEMENT (NO BACK-TO-BACK!)
+- NEVER place two image blocks consecutively. Always have at least one text block between images.
+- Each image_half block needs a "query" (search terms) and "caption" (descriptive text).
+- Use literal, specific queries that match the chapter topic (e.g., "${topic} scenic landscape").
+
+TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - Include 3 image_half blocks' : 'INFORMATIONAL (Business/Science/History) - Include 2 image_half blocks'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these THREE types - NO image blocks!):
+Block types (ONLY use these types - NO image_full!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
+- "image_half": { "query": "${topic} specific search terms", "caption": "Descriptive caption for the image" } - Half-page images with text
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:
@@ -117,7 +124,7 @@ FORMATTING BANS:
 - Do NOT generate "quote" blocks. AI quotes are often inaccurate.
 - Do NOT copy example placeholder text. Generate UNIQUE content for every block.
 - JSON SAFETY RULE: You MUST escape all double quotes inside string values. Example: write \\"quote\\" instead of "quote". Do NOT use unescaped double quotes inside text fields.
-- ABSOLUTELY NO image_full or image_half blocks!
+- ABSOLUTELY NO image_full blocks! Only use image_half for images.
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
@@ -125,13 +132,15 @@ REQUIREMENTS:
 - Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
 - Each "text" block: 220-250 words MAX with inline markdown (target 235 words, NEVER over 250)
+- Include 2-3 "image_half" blocks scattered between text blocks (NEVER back-to-back)
 - Total blocks: ${targetPagesPerChapter}
-- NEVER use "heading", "list", "quote", "key_takeaway", "image_full", or "image_half" blocks! Only: chapter_title, text, pro_tip.
+- NEVER use "heading", "list", "quote", "key_takeaway", or "image_full" blocks! Only: chapter_title, text, image_half, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
   {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words MAX. Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
+  {"block_type": "image_half", "content": {"query": "${topic} [specific visual element]", "caption": "[Descriptive caption for this half-page image]"}},
   {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
@@ -283,13 +292,28 @@ Language: ${language}`;
 
     blocksData = enforceCaptionEntitiesInQueries(blocksData);
 
-    // POST-PROCESSING: Remove any image blocks (full-page images disabled)
+    // POST-PROCESSING: Remove full-page images only, keep half-page images
     // Also ensures no two image blocks appear consecutively
-    const filteredBlocks = blocksData.filter((block: any) => {
+    let filteredBlocks = blocksData.filter((block: any) => {
       const type = block?.block_type;
-      // Remove image_full and image_half blocks entirely
-      return type !== 'image_full' && type !== 'image_half';
+      // Remove only image_full blocks, keep image_half
+      return type !== 'image_full';
     });
+
+    // Ensure no back-to-back image blocks
+    const finalBlocks: any[] = [];
+    for (let i = 0; i < filteredBlocks.length; i++) {
+      const current = filteredBlocks[i];
+      const prev = finalBlocks[finalBlocks.length - 1];
+      
+      // If current is an image and previous was also an image, skip this one
+      if (current?.block_type === 'image_half' && prev?.block_type === 'image_half') {
+        console.log(`[generate-chapter-blocks] Skipping back-to-back image at index ${i}`);
+        continue;
+      }
+      finalBlocks.push(current);
+    }
+    filteredBlocks = finalBlocks;
 
     // Save to Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
