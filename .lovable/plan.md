@@ -1,203 +1,84 @@
 
-# Image Manifest with Permanent Archive System
+
+# Increase Image Search Results
 
 ## Overview
 
-This plan implements a bulletproof image tracking and archiving system that:
-1. **Permanently archives** all images to your Supabase storage (eliminating "link rot")
-2. **Tracks metadata** for every image (source, license, original URL, attribution)
-3. **Generates a legal manifest** (03_Image_Manifest.pdf) with embedded thumbnails
-
-This ensures KDP defense remains valid even if original images are removed from Unsplash/Pexels/Wikimedia years later.
+Increase the maximum images fetched from each source to provide more variety and reduce the chance of duplicates across books.
 
 ---
 
-## Phase 1: Database Schema Update
+## Current vs. Proposed Limits
 
-Add new metadata columns to the `book_pages` table to track image provenance:
-
-| Column | Type | Purpose |
-|--------|------|---------|
-| `image_source` | TEXT | 'unsplash', 'pexels', 'wikimedia', or 'upload' |
-| `original_url` | TEXT | The original external URL (before archiving) |
-| `image_license` | TEXT | 'Unsplash License', 'Pexels License', 'CC0', 'Rights Certified' |
-| `image_attribution` | TEXT | 'Photo by John Doe on Pexels' or artist string |
-| `archived_at` | TIMESTAMP | When the image was archived to our storage |
-
-**User Upload Handling:**
-- `image_source`: "upload"
-- `image_license`: "Rights Certified by Publisher"
-- `image_attribution`: "Uploaded by [Publisher Name]"
-- `original_url`: NULL (not applicable)
+| Source | Current Total | Proposed Total | Change |
+|--------|---------------|----------------|--------|
+| **Unsplash** | 90 (3×30) | 120 (4×30) | +30 |
+| **Pexels** | 80 (2×40) | 160 (2×80) | +80 |
+| **Pixabay** | 80 (2×40) | 200 (1×200) | +120 |
+| **Wikimedia** | 50 (1×50) | 100 (2×50) | +50 |
+| **TOTAL** | ~300 max | ~580 max | +280 |
 
 ---
 
-## Phase 2: Image Archive Pipeline
+## Implementation Details
 
-### New Edge Function: `archive-image`
+### Update `supabase/functions/search-book-images/index.ts`
 
-Creates a dedicated function that:
-1. Downloads image bytes from external URL (Unsplash/Pexels/Wikimedia)
-2. Uploads to Supabase storage under `archived/{book_id}/{timestamp}.jpg`
-3. Returns the permanent Supabase URL
-
-```text
-External URL (Unsplash/Pexels)
-        |
-        v
-+------------------+
-| archive-image    |
-| Edge Function    |
-+------------------+
-        |
-        v
-Download image bytes
-        |
-        v
-Upload to Supabase Storage
-(archived/{book_id}/{timestamp}.jpg)
-        |
-        v
-Return permanent URL + metadata
+**1. Unsplash** - Add a 4th page:
+```typescript
+// Change from 3 pages to 4 pages
+searchUnsplashMultiple(anchoredQuery, orientation, 30, 4)
 ```
 
-### Updated Image Selection Flow
+**2. Pexels** - Increase per_page from 40 to 80:
+```typescript
+// Pexels allows 80 per request
+searchPexelsMultiple(anchoredQuery, orientation, 80, 1)
+searchPexelsMultiple(anchoredQuery, orientation, 80, 2)
+```
 
-When a user selects an image (via Search Gallery or auto-fetch):
+**3. Pixabay** - Single request at 200:
+```typescript
+// Pixabay allows 200 per request - use it!
+searchPixabayMultiple(anchoredQuery, orientation, 200, 1)
+// Remove the second page (no longer needed)
+```
 
-1. Call `archive-image` with the external URL
-2. Receive permanent Supabase URL + original URL
-3. Store both URLs + metadata in `book_pages`
-
----
-
-## Phase 3: Frontend Updates
-
-### ImageSearchGallery.tsx
-- Pass source metadata (`source`, `attribution`, `license`) to selection handlers
-- Include original URL in callback data
-
-### PageViewer.tsx
-- Update `handleImageSelect` to save metadata columns
-- Update `handleCroppedImageUpload` to save metadata columns
-- Update `fetchImageForBlock` to archive images and save metadata
-- Update `handleImageUpload` to mark as "upload" source with "Rights Certified" license
-
-### bookImages.ts
-- Add `archiveExternalImage()` helper function
-- Add `saveImageMetadata()` helper for consistent DB updates
-
----
-
-## Phase 4: Image Manifest Generator
-
-### Update KdpLegalDefense.tsx
-
-Add a third document to the Defense Kit ZIP:
-
-**03_Image_Manifest.pdf**
-
-Contents:
-- Header: "IMAGE LICENSING MANIFEST"
-- Book title, publisher, date
-- Table with columns:
-
-| Page | Chapter | Caption | Source | License | Archived URL | Original URL |
-|------|---------|---------|--------|---------|--------------|--------------|
-
-**Special Features:**
-- Embedded 50x50px thumbnails for visual proof
-- User uploads marked as "Rights Certified by Publisher"
-- Clickable URLs for both archived and original locations
-
-### Sample Row Examples:
-
-**Unsplash Image:**
-| 3 | 1 | Aspen mountain at sunset | Unsplash | Unsplash License | https://[supabase]/archived/... | https://unsplash.com/photos/abc123 |
-
-**Pexels Image:**
-| 7 | 2 | Hotel Jerome lobby | Pexels | Pexels License | https://[supabase]/archived/... | https://pexels.com/photo/456 |
-
-**User Upload:**
-| 12 | 4 | Custom restaurant photo | User Upload | Rights Certified by Publisher | https://[supabase]/user-uploads/... | N/A |
-
----
-
-## Files to Create/Modify
-
-| File | Action | Description |
-|------|--------|-------------|
-| `supabase/migrations/add_image_metadata.sql` | CREATE | Add 5 columns to book_pages |
-| `supabase/functions/archive-image/index.ts` | CREATE | Download + reupload images |
-| `supabase/config.toml` | UPDATE | Add archive-image function config |
-| `src/lib/bookImages.ts` | UPDATE | Add archiveExternalImage helper |
-| `src/components/ImageSearchGallery.tsx` | UPDATE | Pass metadata to handlers |
-| `src/components/PageViewer.tsx` | UPDATE | Save metadata on image selection |
-| `src/components/KdpLegalDefense.tsx` | UPDATE | Generate 03_Image_Manifest.pdf |
-
----
-
-## Data Flow Summary
-
-```text
-+-------------------+     +------------------+     +-------------------+
-| User selects      | --> | archive-image    | --> | Supabase Storage  |
-| image from        |     | Edge Function    |     | archived/{id}/    |
-| Unsplash/Pexels   |     | (downloads +     |     | timestamp.jpg     |
-| OR uploads own    |     | reuploads)       |     +-------------------+
-+-------------------+     +------------------+              |
-                                                           v
-+-----------------------------------------------------------+
-| book_pages table                                          |
-|-----------------------------------------------------------|
-| image_url        = Supabase archived URL (permanent)      |
-| original_url     = External URL (provenance)              |
-| image_source     = 'unsplash' | 'pexels' | 'upload'       |
-| image_license    = 'Unsplash License' | 'Rights Certified'|
-| image_attribution= 'Photo by X on Pexels'                 |
-| archived_at      = timestamp                              |
-+-----------------------------------------------------------+
-                                |
-                                v
-+-----------------------------------------------------------+
-| 03_Image_Manifest.pdf (in Defense Kit ZIP)                |
-|-----------------------------------------------------------|
-| Table of all images with:                                 |
-| - Page/Chapter location                                   |
-| - 50x50 thumbnail (embedded)                              |
-| - Source + License                                        |
-| - Archived URL (permanent, your control)                  |
-| - Original URL (provenance proof)                         |
-+-----------------------------------------------------------+
+**4. Wikimedia** - Add a second page:
+```typescript
+searchWikimediaMultiple(anchoredQuery, 50, forCover)  // Page 1
+searchWikimediaMultiple(anchoredQuery + " scenic", 50, forCover)  // Variant query
 ```
 
 ---
 
-## Benefits
+## Updated Default Limit
 
-1. **Link Rot Immunity**: Your Supabase storage URL is permanent and under your control
-2. **Complete Audit Trail**: Original URLs documented for legal provenance
-3. **Visual Proof**: Embedded thumbnails in PDF survive even if all URLs die
-4. **User Upload Coverage**: Uploads marked with "Rights Certified by Publisher"
-5. **KDP Defensible**: Demonstrates clear ownership, licensing, and archive chain
+Increase the default `limit` parameter from 150 to 300 to display more results in the gallery:
 
----
-
-## Technical Notes
-
-- The archive-image Edge Function uses the existing `book-images` storage bucket
-- Images are stored under `archived/{book_id}/{timestamp}.ext` path
-- Original resolution is preserved (uses full/large2x URLs)
-- Metadata is saved atomically with the image_url update
-- The manifest PDF uses jsPDF for generation (same as Evidence Dossier)
-- Thumbnail embedding uses base64 data URLs in the PDF
+```typescript
+const { query, orientation = 'landscape', limit = 300, bookTopic, forCover = false } = await req.json();
+```
 
 ---
 
-## Estimated Implementation Steps
+## Performance Considerations
 
-1. **Database Migration** - Add 5 columns to book_pages (simple ALTER TABLE)
-2. **Archive Edge Function** - Create download/upload pipeline
-3. **Frontend Handlers** - Update selection/upload flows to save metadata
-4. **Manifest Generator** - Add PDF table with embedded thumbnails
-5. **Testing** - Verify metadata persists and manifest generates correctly
+- All API calls are made in parallel (`Promise.all`), so additional pages add minimal latency
+- Each source has generous rate limits for free tiers
+- Filtering still applies (1200px minimum width), so actual results will be fewer than raw fetched
+
+---
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `supabase/functions/search-book-images/index.ts` | Update page counts and per_page values |
+
+---
+
+## Summary
+
+This change nearly doubles the available image pool (from ~300 to ~580 pre-filtered), which significantly reduces the chance of duplicate images being selected across chapters and books.
+
