@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import {
@@ -68,6 +69,8 @@ interface PageViewerProps {
   onBlocksUpdate?: (chapter: number, blocks: PageBlock[]) => void;
   /** Enable grayscale/B&W mode for PDF exports */
   isGrayscale?: boolean;
+  /** Callback to toggle grayscale mode */
+  onGrayscaleChange?: (value: boolean) => void;
 }
 
 // Loading state component
@@ -898,7 +901,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   topic = '',
   tableOfContents = [],
   onBlocksUpdate,
-  isGrayscale = false
+  isGrayscale = false,
+  onGrayscaleChange
 }) => {
   const [blocks, setBlocks] = useState<PageBlockMeta[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -2112,92 +2116,111 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         </Button>
 
         <div className="flex items-center gap-4">
-          {/* Admin Page Tools Menu */}
-          {isAdmin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-                  <Wrench className="w-4 h-4" />
-                  <span className="hidden sm:inline">Page Tools</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-56">
-                {/* Insert Page Options - at the top */}
-                <DropdownMenuItem 
-                  onClick={() => {
-                    setInsertDirection('before');
-                    setInsertDialogOpen(true);
-                  }}
-                  disabled={isInserting}
-                  className="gap-2"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  Insert Page Before
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => {
-                    setInsertDirection('after');
-                    setInsertDialogOpen(true);
-                  }}
-                  disabled={isInserting}
-                  className="gap-2"
-                >
-                  <PlusSquare className="w-4 h-4" />
-                  Insert Page After
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                
-                {/* Image-specific options - only show for image pages */}
-                {currentBlock && ['image_full', 'image_half'].includes(currentBlock.block_type) && (
-                  <>
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        if (currentBlock) handleOpenSearchDialog(currentBlock.id);
-                      }}
-                      className="gap-2"
-                    >
-                      <Search className="w-4 h-4" />
-                      Search Gallery
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        if (currentBlock) handleOpenUploadModal(currentBlock.id);
-                      }}
-                      className="gap-2"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload Own Photo
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                
-                <DropdownMenuItem 
-                  onClick={handleRegenerateChapter}
-                  disabled={isRegenerating}
-                  className="gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
-                  Regenerate Chapter {currentChapter}
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={handleOpenEditModal}
-                  className="gap-2"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Edit Page Content
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={handleDeletePage}
-                  className="gap-2 text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete This Page
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          {/* Page Tools Menu - Visible to all users, admin tools conditionally shown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+                <Wrench className="w-4 h-4" />
+                <span className="hidden sm:inline">Page Tools</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-56">
+              {/* Admin-only tools */}
+              {isAdmin && (
+                <>
+                  {/* Insert Page Options - at the top */}
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      setInsertDirection('before');
+                      setInsertDialogOpen(true);
+                    }}
+                    disabled={isInserting}
+                    className="gap-2"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Insert Page Before
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      setInsertDirection('after');
+                      setInsertDialogOpen(true);
+                    }}
+                    disabled={isInserting}
+                    className="gap-2"
+                  >
+                    <PlusSquare className="w-4 h-4" />
+                    Insert Page After
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  
+                  {/* Image-specific options - only show for image pages */}
+                  {currentBlock && ['image_full', 'image_half'].includes(currentBlock.block_type) && (
+                    <>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          if (currentBlock) handleOpenSearchDialog(currentBlock.id);
+                        }}
+                        className="gap-2"
+                      >
+                        <Search className="w-4 h-4" />
+                        Search Gallery
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          if (currentBlock) handleOpenUploadModal(currentBlock.id);
+                        }}
+                        className="gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload Own Photo
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  
+                  <DropdownMenuItem 
+                    onClick={handleRegenerateChapter}
+                    disabled={isRegenerating}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                    Regenerate Chapter {currentChapter}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleOpenEditModal}
+                    className="gap-2"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Edit Page Content
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={handleDeletePage}
+                    className="gap-2 text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete This Page
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              
+              {/* View Settings - Available to all users */}
+              <div className="flex items-center justify-between px-2 py-2">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-4 h-4" />
+                  <Label className="text-sm font-normal">B&W Print Mode</Label>
+                </div>
+                <Switch
+                  checked={isGrayscale}
+                  onCheckedChange={onGrayscaleChange}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground px-2 pb-2">
+                Optimizes for Amazon's cheaper B&W printing
+              </p>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           {/* Zoom Toggle Button */}
           <Button

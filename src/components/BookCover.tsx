@@ -2014,7 +2014,7 @@ p { margin-bottom: 1em; }`);
                           {/* Custom or Default Logo */}
                           {showBrandLogo && (
                             customLogoUrl ? (
-                              <img src={customLogoUrl} alt="Brand Logo" className="w-6 h-6 object-contain opacity-60" />
+                              <img src={customLogoUrl} alt="Brand Logo" className="object-contain opacity-60" style={{ width: `${1.5 * customLogoScale}rem`, height: `${1.5 * customLogoScale}rem` }} />
                             ) : (
                               <div className="relative w-6 h-6 opacity-60">
                                 <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
@@ -2119,97 +2119,82 @@ p { margin-bottom: 1em; }`);
                       </Button>
                     </div>
                     
-                    {/* Cover Branding Section */}
-                    <div className="p-4 border rounded-lg bg-secondary/10">
-                      <h4 className="font-medium text-sm mb-3">Cover Branding</h4>
-                      <div className="space-y-3">
-                        <div>
-                          <Label htmlFor="brand-name" className="text-sm">Brand Name</Label>
-                          <Input
-                            id="brand-name"
-                            value={customBrandName}
-                            onChange={(e) => setCustomBrandName(e.target.value)}
-                            placeholder="Your brand name..."
-                            className="mt-1"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">Leave blank to hide</p>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="show-logo" className="text-sm">Show Logo</Label>
-                          <input
-                            id="show-logo"
-                            type="checkbox"
-                            checked={showBrandLogo}
-                            onChange={(e) => setShowBrandLogo(e.target.checked)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </div>
-                        
-                        {showBrandLogo && (
-                          <div>
-                            <input
-                              ref={logoUploadRef}
-                              type="file"
-                              accept="image/*"
-                              onChange={handleLogoUpload}
-                              className="hidden"
-                            />
-                            <Button
-                              variant="outline"
-                              onClick={() => logoUploadRef.current?.click()}
-                              disabled={isUploadingLogo}
-                              className="w-full"
-                              size="sm"
-                            >
-                              {isUploadingLogo ? (
-                                <>
-                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                  Uploading...
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="w-4 h-4 mr-2" />
-                                  {customLogoUrl ? 'Change Logo' : 'Upload Custom Logo'}
-                                </>
-                              )}
-                            </Button>
-                            {customLogoUrl && (
-                              <div className="mt-2 flex items-center gap-2">
-                                <img src={customLogoUrl} alt="Custom Logo" className="w-8 h-8 object-contain border rounded" />
-                                <span className="text-xs text-muted-foreground">Current logo</span>
-                              </div>
-                            )}
-                            {customLogoUrl && (
-                              <div className="mt-3">
-                                <Label className="text-sm">Logo Size</Label>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className="text-xs text-muted-foreground">S</span>
-                                  <Slider
-                                    value={[customLogoScale]}
-                                    onValueChange={([val]) => setCustomLogoScale(val)}
-                                    min={0.5}
-                                    max={2}
-                                    step={0.1}
-                                    className="flex-1"
-                                  />
-                                  <span className="text-xs text-muted-foreground">L</span>
-                                </div>
-                              </div>
-                            )}
+                  </div>
+                </div>
+
+                {/* Cover Branding - Compact Row Below Grid */}
+                <div className="mt-6 pt-4 border-t">
+                  <h4 className="font-medium text-sm mb-3 text-center">Cover Branding</h4>
+                  <div className="flex flex-wrap items-center justify-center gap-4">
+                    {/* Brand Name */}
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="brand-name" className="text-sm whitespace-nowrap">Brand:</Label>
+                      <Input
+                        id="brand-name"
+                        value={customBrandName}
+                        onChange={(e) => setCustomBrandName(e.target.value)}
+                        placeholder="Your brand..."
+                        className="w-32 h-8"
+                      />
+                    </div>
+                    
+                    {/* Show Logo Toggle */}
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="show-logo" className="text-sm">Logo</Label>
+                      <input
+                        id="show-logo"
+                        type="checkbox"
+                        checked={showBrandLogo}
+                        onChange={(e) => setShowBrandLogo(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                    </div>
+                    
+                    {/* Upload Logo Button */}
+                    {showBrandLogo && (
+                      <>
+                        <input
+                          ref={logoUploadRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => logoUploadRef.current?.click()}
+                          disabled={isUploadingLogo}
+                        >
+                          {isUploadingLogo ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            customLogoUrl ? 'Change Logo' : 'Upload Logo'
+                          )}
+                        </Button>
+                        {customLogoUrl && (
+                          <div className="flex items-center gap-2">
+                            <img src={customLogoUrl} alt="Logo" className="w-6 h-6 object-contain border rounded" />
+                            <div className="flex items-center gap-1 w-24">
+                              <span className="text-xs">S</span>
+                              <Slider 
+                                value={[customLogoScale]} 
+                                onValueChange={([v]) => setCustomLogoScale(v)} 
+                                min={0.5} 
+                                max={2} 
+                                step={0.1} 
+                              />
+                              <span className="text-xs">L</span>
+                            </div>
                           </div>
                         )}
-                        
-                        <Button
-                          variant="ghost"
-                          onClick={handleResetBranding}
-                          className="w-full text-xs"
-                          size="sm"
-                        >
-                          Reset to Default
-                        </Button>
-                      </div>
-                    </div>
+                      </>
+                    )}
+                    
+                    {/* Reset Button */}
+                    <Button variant="ghost" size="sm" onClick={handleResetBranding}>
+                      Reset
+                    </Button>
                   </div>
                 </div>
 
@@ -2631,7 +2616,7 @@ p { margin-bottom: 1em; }`);
                             <div className="mt-auto text-center flex flex-col items-center gap-2 pt-3 pb-1">
                               {showBrandLogo && (
                                 customLogoUrl ? (
-                                  <img src={customLogoUrl} alt="Brand Logo" className="w-6 h-6 object-contain opacity-60" />
+                                  <img src={customLogoUrl} alt="Brand Logo" className="object-contain opacity-60" style={{ width: `${1.5 * customLogoScale}rem`, height: `${1.5 * customLogoScale}rem` }} />
                                 ) : (
                                   <div className="relative w-6 h-6 opacity-60">
                                     <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
@@ -2798,9 +2783,6 @@ p { margin-bottom: 1em; }`);
                     </div>
                   </div>
 
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p><strong>Tip:</strong> For Amazon KDP, select 6" × 9" trim size.</p>
-                  </div>
                 </div>
               </TabsContent>
             </Tabs>
