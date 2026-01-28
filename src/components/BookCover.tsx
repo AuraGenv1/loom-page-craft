@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
 import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search } from 'lucide-react';
 import KdpFinanceCalculator from './KdpFinanceCalculator';
 import KdpLegalDefense from './KdpLegalDefense';
@@ -103,6 +104,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [customBrandName, setCustomBrandName] = useState("Loom & Page");
     const [showBrandLogo, setShowBrandLogo] = useState(true);
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+    const [customLogoScale, setCustomLogoScale] = useState(1.0); // 0.5 to 2.0
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [coverGalleryOpen, setCoverGalleryOpen] = useState(false);
     
@@ -1072,6 +1074,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       setCustomBrandName("Loom & Page");
       setShowBrandLogo(true);
       setCustomLogoUrl(null);
+      setCustomLogoScale(1.0);
       toast.success('Branding reset to default');
     };
 
@@ -1298,8 +1301,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const bottomMargin = height * 0.05; // 5% padding from bottom
       const anchorY = yOffset + height - bottomMargin;
 
-      // Logo dimensions
-      const logoSize = width * 0.085; 
+      // Logo dimensions - apply custom scale for uploaded logos
+      const baseLogoSize = width * 0.085;
+      const logoSize = customLogoUrl ? baseLogoSize * customLogoScale : baseLogoSize;
       const logoH = logoSize;
       const logoW = logoSize;
       const logoX = centerX - (logoW / 2);
@@ -1904,7 +1908,12 @@ p { margin-bottom: 1em; }`);
             {/* Custom or Default Logo */}
             {showBrandLogo && (
               customLogoUrl ? (
-                <img src={customLogoUrl} alt="Brand Logo" className="w-8 h-8 object-contain opacity-60" />
+                <img 
+                  src={customLogoUrl} 
+                  alt="Brand Logo" 
+                  className="object-contain opacity-60" 
+                  style={{ width: `${2 * customLogoScale}rem`, height: `${2 * customLogoScale}rem` }}
+                />
               ) : (
                 <div className="relative w-8 h-8 opacity-60">
                   {/* Vertical loom lines */}
@@ -2169,6 +2178,23 @@ p { margin-bottom: 1em; }`);
                               <div className="mt-2 flex items-center gap-2">
                                 <img src={customLogoUrl} alt="Custom Logo" className="w-8 h-8 object-contain border rounded" />
                                 <span className="text-xs text-muted-foreground">Current logo</span>
+                              </div>
+                            )}
+                            {customLogoUrl && (
+                              <div className="mt-3">
+                                <Label className="text-sm">Logo Size</Label>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className="text-xs text-muted-foreground">S</span>
+                                  <Slider
+                                    value={[customLogoScale]}
+                                    onValueChange={([val]) => setCustomLogoScale(val)}
+                                    min={0.5}
+                                    max={2}
+                                    step={0.1}
+                                    className="flex-1"
+                                  />
+                                  <span className="text-xs text-muted-foreground">L</span>
+                                </div>
                               </div>
                             )}
                           </div>
