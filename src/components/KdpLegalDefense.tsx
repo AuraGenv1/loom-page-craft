@@ -296,12 +296,11 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
 
-    // Fetch ALL image blocks that have an image_url (regardless of metadata columns)
+    // Fetch ALL blocks that have an image_url (any block type - text blocks can have inline images too)
     const { data: imagePages, error } = await supabase
       .from('book_pages')
-      .select('page_order, chapter_number, content, image_url, image_source, original_url, image_license, image_attribution, archived_at')
+      .select('page_order, chapter_number, content, image_url, image_source, original_url, image_license, image_attribution, archived_at, block_type')
       .eq('book_id', bookId)
-      .in('block_type', ['image_full', 'image_half'])
       .not('image_url', 'is', null)
       .order('chapter_number', { ascending: true })
       .order('page_order', { ascending: true });
@@ -311,8 +310,8 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       throw new Error('Failed to fetch image data');
     }
 
-    const images = (imagePages || []) as ImagePageData[];
-    console.log('[ImageManifest] Found images:', images.length);
+    const images = (imagePages || []) as (ImagePageData & { block_type?: string })[];
+    console.log('[ImageManifest] Found images:', images.length, 'from bookId:', bookId);
 
     // Header
     doc.setFont("times", "bold");

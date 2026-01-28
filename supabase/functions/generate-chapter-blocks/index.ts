@@ -87,36 +87,29 @@ RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
 RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
 - Do NOT use italics or asterisks (*) for emphasis.
-- Do NOT use "heading", "list", "quote", or "key_takeaway" block types - STRICTLY FORBIDDEN.
+- Do NOT use "heading", "list", "quote", "key_takeaway", "image_full", or "image_half" block types - STRICTLY FORBIDDEN.
+- IMAGES ARE DISABLED: Do NOT generate any image blocks. This book uses TEXT ONLY.
 
-RULE 5: CHAPTER STRUCTURE (Strict Order)
+RULE 5: CHAPTER STRUCTURE (Strict Order - TEXT ONLY!)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
-  2. 1-2x Hero Images (image_full blocks)
-  3. 6-8x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
-  4. Second-to-last text block: Contains the ### Key Takeaway section
-  5. Pro Tip Page (ALWAYS last block of the chapter)
-- BALANCE: Images must NOT exceed 30% of chapter pages.
+  2. 8-10x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
+  3. Second-to-last text block: Contains the ### Key Takeaway section
+  4. Pro Tip Page (ALWAYS last block of the chapter)
+- NO IMAGE BLOCKS. 100% text content.
 
-RULE 6: LITERAL VISUAL QUERIES - CAPTION-TO-QUERY MATCHING
-- CRITICAL: The image query MUST describe EXACTLY what the caption says. If the caption mentions "Hotel Jerome", the query MUST be "Hotel Jerome Aspen Colorado exterior" - not a generic "luxury hotel".
-- NEVER use a generic building/scene when the caption references a specific named place, hotel, restaurant, or landmark.
-- ALWAYS include the book's primary location (city/region) at the START of the query.
-- For a caption "Hotel Jerome, a landmark of luxury", use query: "Hotel Jerome Aspen Colorado historic hotel exterior"
-- For a caption "The Shard towers over the Thames", use query: "The Shard London skyscraper Thames river view"
-- For a caption "Maroon Bells at sunrise", use query: "Maroon Bells Aspen Colorado mountain lake reflection sunrise"
-- Image queries must be specific physical descriptions that will return the EXACT subject mentioned in the caption.
-- BAD: Generic caption "Luxury accommodations" with query "hotel lobby" → GOOD: Specific caption "The Little Nell hotel lobby" with query "The Little Nell Aspen Colorado hotel lobby interior"
-- Do NOT write vague queries like "mountain scenery" or "fine dining restaurant" - ALWAYS include the specific name from the caption.
+RULE 6: LITERAL DESCRIPTIONS IN TEXT
+- When describing places, hotels, restaurants, or landmarks, use their EXACT names.
+- Example: "The Hotel Jerome stands as a beacon of Victorian elegance..." rather than "A luxury hotel graces the street..."
+- Be specific and vivid in your descriptions.
 
-TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
+TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - Rich descriptive text' : 'INFORMATIONAL (Business/Science/History) - Deep analytical text'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these four types - NO quote blocks!):
+Block types (ONLY use these THREE types - NO image blocks!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
-- "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:
@@ -124,6 +117,7 @@ FORMATTING BANS:
 - Do NOT generate "quote" blocks. AI quotes are often inaccurate.
 - Do NOT copy example placeholder text. Generate UNIQUE content for every block.
 - JSON SAFETY RULE: You MUST escape all double quotes inside string values. Example: write \\"quote\\" instead of "quote". Do NOT use unescaped double quotes inside text fields.
+- ABSOLUTELY NO image_full or image_half blocks!
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
@@ -132,13 +126,11 @@ REQUIREMENTS:
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
 - Each "text" block: 220-250 words MAX with inline markdown (target 235 words, NEVER over 250)
 - Total blocks: ${targetPagesPerChapter}
-- Images ≤30% of blocks
-- NEVER use "heading", "list", "quote", "key_takeaway", or "image_half" blocks! Only: chapter_title, text, image_full, pro_tip.
+- NEVER use "heading", "list", "quote", "key_takeaway", "image_full", or "image_half" blocks! Only: chapter_title, text, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
-  {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
   {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words MAX. Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
   {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
@@ -291,6 +283,14 @@ Language: ${language}`;
 
     blocksData = enforceCaptionEntitiesInQueries(blocksData);
 
+    // POST-PROCESSING: Remove any image blocks (full-page images disabled)
+    // Also ensures no two image blocks appear consecutively
+    const filteredBlocks = blocksData.filter((block: any) => {
+      const type = block?.block_type;
+      // Remove image_full and image_half blocks entirely
+      return type !== 'image_full' && type !== 'image_half';
+    });
+
     // Save to Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -303,12 +303,12 @@ Language: ${language}`;
       .eq('book_id', bookId)
       .eq('chapter_number', chapterNumber);
 
-    // Insert new blocks (force image_half -> image_full)
-    const blocksToInsert = blocksData.map((block: any, index: number) => ({
+    // Insert new blocks (no image blocks)
+    const blocksToInsert = filteredBlocks.map((block: any, index: number) => ({
       book_id: bookId,
       chapter_number: chapterNumber,
       page_order: index + 1,
-      block_type: block.block_type === 'image_half' ? 'image_full' : block.block_type,
+      block_type: block.block_type,
       content: block.content,
       image_url: null
     }));
