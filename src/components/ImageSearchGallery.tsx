@@ -321,7 +321,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
                   I certify I have the rights to use this image.
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Loom & Page is not liable for copyright infringement or misuse of selected content.
+                  <strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of selected content.
                 </p>
               </div>
             </div>
