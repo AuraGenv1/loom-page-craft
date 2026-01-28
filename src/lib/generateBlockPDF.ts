@@ -2,6 +2,7 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { PageBlock } from './pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Register fonts
 (pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs || pdfFonts;
@@ -12,10 +13,24 @@ interface GenerateBlockPDFOptions {
   subtitle: string;
   tableOfContents: Array<{ chapter: number; title: string }>;
   bookId: string;
+  coverAttribution?: string;  // "Photo by X via Unsplash"
+  returnBlob?: boolean;       // For ZIP bundling
 }
 
 // Transparent pixel for missing images
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+// Loom & Page logo as SVG (matches the CSS version in Logo.tsx)
+const LOOM_LOGO_SVG = `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Vertical loom lines -->
+  <rect x="5" y="4" width="2" height="24" rx="1" fill="#333333"/>
+  <rect x="15" y="4" width="2" height="24" rx="1" fill="#333333"/>
+  <rect x="25" y="4" width="2" height="24" rx="1" fill="#333333"/>
+  <!-- Horizontal page fold -->
+  <rect x="2" y="15" width="28" height="2" rx="1" fill="#333333"/>
+  <!-- Corner fold detail -->
+  <path d="M26 4 L30 4 L30 8" stroke="#333333" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+</svg>`;
 
 // Fetch image as base64
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
@@ -85,7 +100,35 @@ const blockToPdfContent = async (
     
     case 'text': {
       const c = block.content as { text: string };
-      content.push({ text: c.text, style: 'body', margin: [0, 0, 0, 0] });
+      // Parse markdown-style headers and render appropriately
+      const lines = c.text.split('\n');
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        if (trimmedLine.startsWith('### ')) {
+          // H3 heading
+          content.push({ 
+            text: trimmedLine.replace('### ', ''), 
+            style: 'h3', 
+            margin: [0, 15, 0, 8] 
+          });
+        } else if (trimmedLine.startsWith('## ')) {
+          // H2 heading
+          content.push({ 
+            text: trimmedLine.replace('## ', ''), 
+            style: 'h2', 
+            margin: [0, 20, 0, 10] 
+          });
+        } else if (trimmedLine.length > 0) {
+          // Regular paragraph
+          content.push({ 
+            text: trimmedLine, 
+            style: 'body', 
+            margin: [0, 0, 0, 10] 
+          });
+        }
+      }
       break;
     }
     
@@ -186,11 +229,13 @@ const blockToPdfContent = async (
       if (c.ordered) {
         content.push({
           ol: c.items,
+          style: 'body',
           margin: [0, 10, 0, 10]
         });
       } else {
         content.push({
           ul: c.items,
+          style: 'body',
           margin: [0, 10, 0, 10]
         });
       }
@@ -203,7 +248,7 @@ const blockToPdfContent = async (
         { text: '', margin: [0, 100, 0, 0] },
         { 
           text: `"${c.text}"`, 
-          fontSize: 16, 
+          fontSize: 14, 
           italics: true, 
           alignment: 'center',
           margin: [30, 0, 30, 15]
@@ -224,7 +269,7 @@ const blockToPdfContent = async (
     case 'divider': {
       const c = block.content as { style?: 'minimal' | 'ornate' | 'line' };
       content.push(
-        { text: '', margin: [0, 200, 0, 0] },
+        { text: '', margin: [0, 80, 0, 0] },
         { 
           text: c.style === 'ornate' ? '❧' : '• • •', 
           fontSize: c.style === 'ornate' ? 24 : 14, 
@@ -239,16 +284,17 @@ const blockToPdfContent = async (
   return content;
 };
 
-export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): Promise<void> => {
-  const { title, displayTitle, subtitle, tableOfContents, bookId } = options;
+export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): Promise<Blob | void> => {
+  const { title, displayTitle, subtitle, tableOfContents, bookId, coverAttribution, returnBlob } = options;
   
-  console.log('[BlockPDF] Starting generation...');
+  console.log('[BlockPDF] Starting generation for bookId:', bookId);
   
   // Fetch all blocks for this book
   const { data: blocks, error } = await supabase
     .from('book_pages')
     .select('*')
     .eq('book_id', bookId)
+    .is('archived_at', null) // Only non-archived blocks
     .order('chapter_number', { ascending: true })
     .order('page_order', { ascending: true });
   
@@ -258,6 +304,10 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
   }
   
   console.log(`[BlockPDF] Fetched ${blocks?.length || 0} blocks`);
+  
+  if ((blocks?.length || 0) === 0) {
+    toast.warning('No content blocks found. The PDF may be empty.');
+  }
   
   // Pre-fetch all images
   const imageUrls = (blocks || [])
@@ -272,20 +322,22 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
     imageMap.set(url, b64);
   }));
   
-  // Define styles
+  // Define styles - using Times-like serif for professional book look
   const styles: Record<string, any> = {
     h1: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 20, 0, 10] },
-    h2: { fontSize: 16, bold: true, margin: [0, 15, 0, 8] },
-    h3: { fontSize: 13, bold: true, margin: [0, 10, 0, 5] },
-    body: { fontSize: 11, lineHeight: 1.5, margin: [0, 0, 0, 8], alignment: 'left' },
-    titlePageTitle: { fontSize: 28, bold: true, alignment: 'center' },
-    titlePageSubtitle: { fontSize: 14, italics: true, alignment: 'center', color: '#555555' },
-    branding: { fontSize: 9, alignment: 'center', color: '#888888' },
-    chapterNum: { fontSize: 10, alignment: 'center', color: '#666666' },
+    h2: { fontSize: 15, bold: true, margin: [0, 15, 0, 8] },
+    h3: { fontSize: 12, bold: true, margin: [0, 10, 0, 5] },
+    body: { fontSize: 11, lineHeight: 1.6, margin: [0, 0, 0, 8], alignment: 'justify' },
+    titlePageTitle: { fontSize: 26, bold: true, alignment: 'center' },
+    titlePageSubtitle: { fontSize: 13, italics: true, alignment: 'center', color: '#555555' },
+    branding: { fontSize: 10, alignment: 'center', color: '#888888' },
+    chapterNum: { fontSize: 10, alignment: 'center', color: '#666666', characterSpacing: 2 },
     chapterTitle: { fontSize: 20, bold: true, alignment: 'center', margin: [0, 10, 0, 0] },
     caption: { fontSize: 10, italics: true, color: '#666666' },
     proTipLabel: { fontSize: 9, bold: true, characterSpacing: 1.5, margin: [0, 0, 0, 4] },
-    proTipBody: { fontSize: 10, italics: true, color: '#333333', lineHeight: 1.4 }
+    proTipBody: { fontSize: 10, italics: true, color: '#333333', lineHeight: 1.4 },
+    tocEntry: { fontSize: 11, margin: [0, 4, 0, 4] },
+    copyright: { fontSize: 9, color: '#555555', lineHeight: 1.5 }
   };
   
   // Build content array
@@ -293,41 +345,65 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
   
   // --- 1. TITLE PAGE ---
   contentArray.push(
-    { text: '', margin: [0, 120, 0, 0] },
+    { text: '', margin: [0, 140, 0, 0] },
     { text: (displayTitle || title).toUpperCase(), style: 'titlePageTitle' },
-    { text: '', margin: [0, 15, 0, 0] },
+    // Decorative separator line
+    { 
+      canvas: [{ 
+        type: 'line', 
+        x1: 145, y1: 0, x2: 215, y2: 0, 
+        lineWidth: 0.75, 
+        lineColor: '#cccccc' 
+      }],
+      margin: [0, 20, 0, 20],
+      alignment: 'center'
+    },
     { text: subtitle || '', style: 'titlePageSubtitle' },
-    { text: '', margin: [0, 200, 0, 0] },
-    { text: 'LOOM & PAGE', style: 'branding', pageBreak: 'after' }
+    { text: '', margin: [0, 220, 0, 0] },
+    // Logo SVG
+    { 
+      svg: LOOM_LOGO_SVG, 
+      width: 28, 
+      alignment: 'center',
+      margin: [0, 0, 0, 8]
+    },
+    { text: 'Loom & Page', style: 'branding' },
+    { text: '', pageBreak: 'after' }
   );
   
   // --- 2. COPYRIGHT PAGE ---
+  // Push content to bottom of page using margin
+  contentArray.push({ text: '', margin: [0, 380, 0, 0] });
+  
+  // Copyright content stack (no absolutePosition to avoid overlap)
   contentArray.push({
     stack: [
-      { text: 'Copyright © 2026 by Larvotto Ventures LLC', fontSize: 10, bold: true, color: '#333333' },
-      { text: 'DBA Loom & Page', fontSize: 10, color: '#555555', margin: [0, 0, 0, 10] },
-      { text: 'All rights reserved.', fontSize: 9, color: '#555555' },
-      { text: 'No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.', fontSize: 9, color: '#666666', margin: [0, 5, 0, 10] },
-      { text: 'Disclaimer', fontSize: 9, bold: true, color: '#444444' },
-      { text: 'AI-generated content for creative inspiration only.', fontSize: 8, color: '#666666', margin: [0, 2, 0, 10] },
-      { text: 'Visit us online at:', fontSize: 9, bold: true, color: '#444444' },
-      { text: 'www.LoomandPage.com', fontSize: 9, color: '#555555', decoration: 'underline', margin: [0, 0, 0, 10] },
-      { text: 'First Edition: January 2026', fontSize: 9, color: '#777777' }
-    ],
-    absolutePosition: { x: 63, y: 420 }
+      { text: 'Copyright © 2026 by Larvotto Ventures LLC', style: 'copyright', bold: true },
+      { text: 'DBA Loom & Page', style: 'copyright', margin: [0, 0, 0, 12] },
+      { text: 'All rights reserved. No part of this book may be reproduced in any form or by any electronic or mechanical means, including information storage and retrieval systems, without written permission from the author, except for the use of brief quotations in a book review.', style: 'copyright', margin: [0, 0, 0, 12] },
+      { text: 'Disclaimer', style: 'copyright', bold: true },
+      { text: 'AI-generated content for creative inspiration only. Not professional advice.', style: 'copyright', margin: [0, 0, 0, 12] },
+      // Cover attribution
+      { text: 'Cover design by Loom & Page', style: 'copyright' },
+      { text: coverAttribution || '', style: 'copyright', margin: [0, 0, 0, 12] },
+      { text: 'Visit us online at: www.LoomandPage.com', style: 'copyright', margin: [0, 0, 0, 12] },
+      { text: 'First Edition: January 2026', style: 'copyright', color: '#777777' }
+    ]
   });
-  contentArray.push({ text: ' ', fontSize: 1, pageBreak: 'after' });
+  
+  // Force page break for ToC
+  contentArray.push({ text: '', pageBreak: 'after' });
   
   // --- 3. TABLE OF CONTENTS ---
-  contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 30, 0, 30] });
+  contentArray.push({ text: 'Table of Contents', style: 'h1', margin: [0, 50, 0, 40] });
   
   tableOfContents.forEach((ch) => {
     contentArray.push({
       columns: [
-        { text: `Chapter ${ch.chapter}:`, width: 80, fontSize: 11 },
-        { text: ch.title, width: '*', fontSize: 11, bold: true }
+        { text: `Chapter ${ch.chapter}:`, width: 80, style: 'tocEntry' },
+        { text: ch.title, width: '*', style: 'tocEntry', bold: true }
       ],
-      margin: [0, 5, 0, 5]
+      margin: [20, 6, 20, 6]
     });
   });
   
@@ -344,10 +420,13 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
   
   // Process each chapter
   const chapters = Array.from(blocksByChapter.keys()).sort((a, b) => a - b);
+  console.log(`[BlockPDF] Processing ${chapters.length} chapters`);
   
   for (let i = 0; i < chapters.length; i++) {
     const chapterNum = chapters[i];
     const chapterBlocks = blocksByChapter.get(chapterNum) || [];
+    
+    console.log(`[BlockPDF] Chapter ${chapterNum}: ${chapterBlocks.length} blocks`);
     
     // Process each block
     for (const block of chapterBlocks) {
@@ -364,8 +443,8 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
       const blockContent = await blockToPdfContent(typedBlock, imageMap);
       contentArray.push(...blockContent);
       
-      // Add page break after certain block types for clean layout
-      if (['chapter_title', 'image_full'].includes(block.block_type)) {
+      // Add page break after chapter_title for clean layout
+      if (block.block_type === 'chapter_title') {
         contentArray.push({ text: '', pageBreak: 'after' });
       }
     }
@@ -381,11 +460,13 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
     info: {
       title: displayTitle || title,
       author: 'Loom & Page',
+      creator: 'Loom & Page - www.LoomandPage.com',
     },
-    pageSize: { width: 432, height: 648 }, // 6x9 inches
-    pageMargins: [63, 54, 45, 54], // 0.875" gutter
+    pageSize: { width: 432, height: 648 }, // 6x9 inches at 72 DPI
+    pageMargins: [63, 54, 45, 54], // 0.875" gutter, 0.625" other margins
     
     footer: (currentPage: number) => {
+      // No footer on title page or copyright page
       if (currentPage <= 2) return null;
       return { 
         text: `${currentPage}`, 
@@ -400,8 +481,30 @@ export const generateBlockBasedPDF = async (options: GenerateBlockPDFOptions): P
     styles
   };
   
-  // Generate and download
+  // Generate PDF
   console.log('[BlockPDF] Creating document...');
-  pdfMake.createPdf(docDefinition).download(`${title.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
-  console.log('[BlockPDF] Download initiated.');
+  
+  if (returnBlob) {
+    // Return as Blob for ZIP bundling
+    return new Promise<Blob>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('PDF generation timed out after 120 seconds'));
+      }, 120000);
+      
+      try {
+        pdfMake.createPdf(docDefinition).getBlob((blob: Blob) => {
+          clearTimeout(timeout);
+          console.log('[BlockPDF] Blob generated:', blob.size, 'bytes');
+          resolve(blob);
+        });
+      } catch (err) {
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+  } else {
+    // Download directly
+    pdfMake.createPdf(docDefinition).download(`${title.replace(/[^a-z0-9]/gi, '_')}_Manuscript.pdf`);
+    console.log('[BlockPDF] Download initiated.');
+  }
 };
