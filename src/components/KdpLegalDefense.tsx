@@ -355,7 +355,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     // Ensure images exist in DB before generating the manifest.
     // Reason: images are lazily populated when viewing pages; if the user exports immediately
     // after generation, image_url can still be null for all image blocks → empty manifest.
-    const ensureImagesForManifest = async () => {
+    const ensureImagesForManifest = async (): Promise<ImagePageData[]> => {
       // Fetch book topic for better search grounding
       const { data: bookRow, error: bookErr } = await supabase
         .from('books')
@@ -371,7 +371,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
       const { data: allImageBlocks, error: blocksErr } = await supabase
         .from('book_pages')
-        .select('id, chapter_number, page_order, content, image_url')
+        .select('id, chapter_number, page_order, content, image_url, image_source, original_url, image_license, image_attribution, archived_at')
         .eq('book_id', bookId)
         .in('block_type', ['image_full', 'image_half'])
         .order('chapter_number', { ascending: true })
@@ -379,23 +379,20 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
       if (blocksErr) {
         console.error('[ImageManifest] Failed to fetch image blocks:', blocksErr);
-        return;
+        throw new Error('Failed to fetch image blocks for manifest');
       }
 
-      const blocks = (allImageBlocks || []) as Array<{
-        id: string;
-        chapter_number: number;
-        page_order: number;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        content: any;
-        image_url: string | null;
-      }>;
+      const blocks = (allImageBlocks || []) as ImagePageData[];
+      const existingUrls = new Set<string>();
+      for (const b of blocks) {
+        if (b.image_url) existingUrls.add(b.image_url);
+        if (b.original_url) existingUrls.add(b.original_url);
+      }
 
-      const existingUrls = blocks.map((b) => b.image_url).filter(Boolean) as string[];
       const missing = blocks.filter((b) => !b.image_url);
 
       // Nothing to do
-      if (missing.length === 0) return;
+      if (missing.length === 0) return blocks;
 
       const toastId = toast.loading(`Finalizing images for manifest… (0/${missing.length})`);
       let processed = 0;
@@ -412,7 +409,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
             body: {
               query,
               orientation: 'landscape',
-              excludeUrls: existingUrls,
+              excludeUrls: Array.from(existingUrls),
               bookTopic,
             },
           });
@@ -432,19 +429,39 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
           // Archive for link-rot protection; if archive fails, still persist best-effort provenance.
           const archiveResult = await archiveExternalImage(originalUrl, bookId, source as any, attribution);
 
-          if (archiveResult?.archivedUrl) {
-            existingUrls.push(archiveResult.archivedUrl);
-            await saveImageMetadata(block.id, archiveResult.archivedUrl, archiveResult.metadata);
-          } else {
-            existingUrls.push(originalUrl);
-            await saveImageMetadata(block.id, originalUrl, {
-              image_source: source as any,
-              original_url: originalUrl,
-              image_license: license,
-              image_attribution: attribution,
-              archived_at: new Date().toISOString(),
-            });
+          const archivedUrl = archiveResult?.archivedUrl || originalUrl;
+          const metadata = archiveResult?.metadata
+            ? {
+                ...archiveResult.metadata,
+                // Ensure the manifest uses our computed values (Pixabay support, fallbacks, etc.)
+                original_url: originalUrl,
+                image_license: license,
+                image_attribution: attribution,
+              }
+            : {
+                image_source: source as any,
+                original_url: originalUrl,
+                image_license: license,
+                image_attribution: attribution,
+                archived_at: new Date().toISOString(),
+              };
+
+          existingUrls.add(archivedUrl);
+
+          // Best-effort persistence: guest books may not have UPDATE permission.
+          try {
+            await saveImageMetadata(block.id as string, archivedUrl, metadata);
+          } catch (persistErr) {
+            console.warn('[ImageManifest] saveImageMetadata failed (continuing):', persistErr);
           }
+
+          // Always hydrate in-memory for this manifest run.
+          block.image_url = archivedUrl;
+          block.image_source = metadata.image_source;
+          block.original_url = metadata.original_url;
+          block.image_license = metadata.image_license;
+          block.image_attribution = metadata.image_attribution;
+          block.archived_at = metadata.archived_at;
         } finally {
           processed++;
           toast.loading(`Finalizing images for manifest… (${processed}/${missing.length})`, { id: toastId });
@@ -452,26 +469,12 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       });
 
       toast.dismiss(toastId);
+
+      return blocks;
     };
 
-    await ensureImagesForManifest();
-
-    // Fetch all image blocks with metadata
-    const { data: imagePages, error } = await supabase
-      .from('book_pages')
-      .select('page_order, chapter_number, content, image_url, image_source, original_url, image_license, image_attribution, archived_at')
-      .eq('book_id', bookId)
-      .in('block_type', ['image_full', 'image_half'])
-      .not('image_url', 'is', null)
-      .order('chapter_number', { ascending: true })
-      .order('page_order', { ascending: true });
-
-    if (error) {
-      console.error('Failed to fetch image pages:', error);
-      throw new Error('Failed to fetch image data');
-    }
-
-    const images = (imagePages || []) as ImagePageData[];
+    const hydratedBlocks = await ensureImagesForManifest();
+    const images = hydratedBlocks.filter((b) => !!b.image_url);
 
     // Header
     doc.setFont("times", "bold");
