@@ -40,8 +40,8 @@ const KdpPrepDashboard = ({
   const [description, setDescription] = useState('');
   const [keywords, setKeywords] = useState<string[]>(Array(7).fill(''));
   
-  // View mode for description (preview vs edit) - default to edit for easy copy/paste
-  const [descriptionViewMode, setDescriptionViewMode] = useState<'preview' | 'edit'>('edit');
+  // View mode for description (preview vs edit) - default to preview for better readability
+  const [descriptionViewMode, setDescriptionViewMode] = useState<'preview' | 'edit'>('preview');
   
   // Loading states
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
