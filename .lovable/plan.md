@@ -1,84 +1,85 @@
 
 
-# Increase Image Search Results
+# Reduce Unsplash Pages from 4 to 2
 
 ## Overview
 
-Increase the maximum images fetched from each source to provide more variety and reduce the chance of duplicates across books.
+Reduce Unsplash API requests from 4 to 2 pages to stay within the free tier rate limit (50 requests/hour).
 
 ---
 
-## Current vs. Proposed Limits
+## The Problem
 
-| Source | Current Total | Proposed Total | Change |
-|--------|---------------|----------------|--------|
-| **Unsplash** | 90 (3×30) | 120 (4×30) | +30 |
-| **Pexels** | 80 (2×40) | 160 (2×80) | +80 |
-| **Pixabay** | 80 (2×40) | 200 (1×200) | +120 |
-| **Wikimedia** | 50 (1×50) | 100 (2×50) | +50 |
-| **TOTAL** | ~300 max | ~580 max | +280 |
+Unsplash free tier allows **50 requests per hour**. With 4 pages per search, you can only do ~12 searches before hitting the limit.
 
 ---
 
-## Implementation Details
+## Changes to `supabase/functions/search-book-images/index.ts`
 
-### Update `supabase/functions/search-book-images/index.ts`
+### 1. Update the Promise.all calls (lines 608-623)
 
-**1. Unsplash** - Add a 4th page:
+**Before:**
 ```typescript
-// Change from 3 pages to 4 pages
-searchUnsplashMultiple(anchoredQuery, orientation, 30, 4)
+const [
+  unsplashPage1, unsplashPage2, unsplashPage3, unsplashPage4,
+  pexelsPage1, pexelsPage2,
+  ...
+] = await Promise.all([
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 4),
+  ...
+]);
 ```
 
-**2. Pexels** - Increase per_page from 40 to 80:
+**After:**
 ```typescript
-// Pexels allows 80 per request
-searchPexelsMultiple(anchoredQuery, orientation, 80, 1)
-searchPexelsMultiple(anchoredQuery, orientation, 80, 2)
+const [
+  unsplashPage1, unsplashPage2,
+  pexelsPage1, pexelsPage2,
+  ...
+] = await Promise.all([
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+  searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+  // Removed pages 3 & 4 to stay within rate limits
+  ...
+]);
 ```
 
-**3. Pixabay** - Single request at 200:
+### 2. Update the results combination (line 626)
+
+**Before:**
 ```typescript
-// Pixabay allows 200 per request - use it!
-searchPixabayMultiple(anchoredQuery, orientation, 200, 1)
-// Remove the second page (no longer needed)
+const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3, ...unsplashPage4];
 ```
 
-**4. Wikimedia** - Add a second page:
+**After:**
 ```typescript
-searchWikimediaMultiple(anchoredQuery, 50, forCover)  // Page 1
-searchWikimediaMultiple(anchoredQuery + " scenic", 50, forCover)  // Variant query
+const unsplashResults = [...unsplashPage1, ...unsplashPage2];
 ```
+
+### 3. Update the comment (lines 603-607)
+
+Change `4 pages of 30 = 120` to `2 pages of 30 = 60`
 
 ---
 
-## Updated Default Limit
+## Updated Totals
 
-Increase the default `limit` parameter from 150 to 300 to display more results in the gallery:
-
-```typescript
-const { query, orientation = 'landscape', limit = 300, bookTopic, forCover = false } = await req.json();
-```
-
----
-
-## Performance Considerations
-
-- All API calls are made in parallel (`Promise.all`), so additional pages add minimal latency
-- Each source has generous rate limits for free tiers
-- Filtering still applies (1200px minimum width), so actual results will be fewer than raw fetched
+| Source | Before | After |
+|--------|--------|-------|
+| **Unsplash** | 120 (4×30) | 60 (2×30) |
+| **Pexels** | 160 (2×80) | 160 (2×80) |
+| **Pixabay** | 200 (1×200) | 200 (1×200) |
+| **Wikimedia** | 100 (2×50) | 100 (2×50) |
+| **TOTAL** | ~580 max | ~520 max |
 
 ---
 
-## Files to Modify
+## Benefit
 
-| File | Change |
-|------|--------|
-| `supabase/functions/search-book-images/index.ts` | Update page counts and per_page values |
-
----
-
-## Summary
-
-This change nearly doubles the available image pool (from ~300 to ~580 pre-filtered), which significantly reduces the chance of duplicate images being selected across chapters and books.
+- Cuts Unsplash API usage in half (from 4 to 2 requests per search)
+- Allows ~25 searches per hour instead of ~12
+- Still provides 520+ images per search (plenty of variety)
 
