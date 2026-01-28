@@ -11,6 +11,7 @@ import Footer from '@/components/Footer';
 import SaveToCloudBanner from '@/components/SaveToCloudBanner';
 import AuthModal from '@/components/AuthModal';
 import LanguageSelector from '@/components/LanguageSelector';
+import PremiumFeatureModal from '@/components/PremiumFeatureModal';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -26,9 +27,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookData } from '@/lib/bookTypes';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAccess } from '@/contexts/AccessContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { generateBlockBasedPDF } from '@/lib/generateBlockPDF';
-import { Download, Sparkles, FlaskConical, BookmarkPlus, Printer } from 'lucide-react';
+import { Download, Sparkles, FlaskConical, BookmarkPlus, Printer, Eye } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import ProgressDownloadButton from '@/components/ProgressDownloadButton';
@@ -94,9 +96,9 @@ const Index = () => {
   const [coverImageUrls, setCoverImageUrls] = useState<string[]>([]);
   const [isLoadingCoverImage, setIsLoadingCoverImage] = useState(false);
   const { user, profile, loading: authLoading, isAuthenticating, signInWithGoogle, signOut } = useAuth();
+  const { isAdmin, hasFullAccess, simulateGuest, setSimulateGuest, setBookIsPurchased } = useAccess();
   const { language, t } = useLanguage();
   const navigate = useNavigate();
-  const [isAdmin, setIsAdmin] = useState(false);
   const isGeneratingRef = useRef(false);
   const isInitialMount = useRef(true);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
@@ -106,38 +108,18 @@ const Index = () => {
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
   const [isOfficial, setIsOfficial] = useState(false);
+  const [premiumModalOpen, setPremiumModalOpen] = useState(false);
+  const [premiumFeatureName, setPremiumFeatureName] = useState('');
   
   // Block-based architecture state
   const [chapterBlocks, setChapterBlocks] = useState<Record<number, PageBlock[]>>({});
   const [isVisualTopic, setIsVisualTopic] = useState(false);
   const [targetPagesPerChapter, setTargetPagesPerChapter] = useState(10); // Increased for 100+ page books
 
-  // Check if user is admin via database role - run immediately when user changes
+  // Sync isPurchased with AccessContext
   useEffect(() => {
-    const checkAdminRole = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-      try {
-        const { data } = await supabase.rpc('has_role', {
-          _user_id: user.id,
-          _role: 'admin',
-        });
-        setIsAdmin(data === true);
-      } catch (err) {
-        console.error('Admin check failed:', err);
-        setIsAdmin(false);
-      }
-    };
-    
-    // Run immediately without waiting for authLoading
-    if (user) {
-      checkAdminRole();
-    } else {
-      setIsAdmin(false);
-    }
-  }, [user]);
+    setBookIsPurchased(isPurchased);
+  }, [isPurchased, setBookIsPurchased]);
 
   // Test mode: ONLY enabled for verified admin users (from database role check)
   // URL parameter ?test=true is only allowed in development environment for testing
@@ -151,8 +133,18 @@ const Index = () => {
     return isAdmin;
   }, [searchParams, isAdmin]);
 
-  // Content is unlocked for admins, paid users, or if book is purchased
-  const isPaid = true;
+  // Content is unlocked based on access context
+  const isPaid = hasFullAccess;
+
+  // Intercept premium feature attempts for guests
+  const handlePremiumFeatureAttempt = useCallback((featureName: string) => {
+    if (!hasFullAccess) {
+      setPremiumFeatureName(featureName);
+      setPremiumModalOpen(true);
+      return false;
+    }
+    return true;
+  }, [hasFullAccess]);
 
   // Handle chapter click from TOC - navigate to chapter in PageViewer
   const handleChapterClick = useCallback((chapterNumber: number) => {
@@ -747,6 +739,18 @@ const Index = () => {
                       <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                         {t('dashboard')}
                       </DropdownMenuItem>
+                      {isAdmin && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => setSimulateGuest(!simulateGuest)}
+                            className="gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            {simulateGuest ? 'Exit Guest View' : 'Dev: Simulate Guest'}
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleSignOut} className="text-muted-foreground">
                         {t('signOut')}
@@ -806,8 +810,25 @@ const Index = () => {
               />
             )}
             
+            {/* Guest Simulation Mode Indicator (Admin Only) */}
+            {simulateGuest && isAdmin && (
+              <div className="mb-6 flex items-center justify-center gap-2 py-2 px-4 bg-purple-100 dark:bg-purple-900/30 border border-purple-300 dark:border-purple-700 rounded-lg text-purple-800 dark:text-purple-200 text-sm">
+                <Eye className="w-4 h-4" />
+                <span className="font-medium">Guest Simulation Active</span>
+                <span className="text-purple-600 dark:text-purple-400">— Viewing as unpaid user</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSimulateGuest(false)}
+                  className="ml-2 h-6 px-2 text-xs"
+                >
+                  Exit
+                </Button>
+              </div>
+            )}
+            
             {/* Test Mode Indicator */}
-            {isTestMode && (
+            {isTestMode && !simulateGuest && (
               <div className="mb-6 flex items-center justify-center gap-2 py-2 px-4 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
                 <FlaskConical className="w-4 h-4" />
                 <span className="font-medium">Test Mode Active</span>
@@ -994,14 +1015,16 @@ const Index = () => {
                     onChapterChange={(chapter) => setActiveChapter(chapter)}
                     preloadedBlocks={chapterBlocks}
                     totalPageCount={totalPageCount > 0 ? totalPageCount : undefined}
-                    isAdmin={isAdmin}
-                    canEditImages={isAdmin || isPurchased}
+                    isAdmin={isAdmin && !simulateGuest}
+                    canEditImages={hasFullAccess}
                     isOfficial={isOfficial}
                     topic={topic}
                     tableOfContents={bookData?.tableOfContents}
                     onBlocksUpdate={(chapter, blocks) => setChapterBlocks(prev => ({ ...prev, [chapter]: blocks }))}
                     isGrayscale={isGrayscaleMode}
                     onGrayscaleChange={setIsGrayscaleMode}
+                    hasFullAccess={hasFullAccess}
+                    onPremiumFeatureAttempt={handlePremiumFeatureAttempt}
                   />
                 </section>
               ) : bookId && (
@@ -1034,6 +1057,13 @@ const Index = () => {
         onOpenChange={setAuthModalOpen}
         onGoogleSignIn={signInWithGoogle}
         isAuthenticating={isAuthenticating}
+      />
+
+      {/* Premium Feature Modal */}
+      <PremiumFeatureModal
+        open={premiumModalOpen}
+        onOpenChange={setPremiumModalOpen}
+        featureName={premiumFeatureName}
       />
     </div>
   );

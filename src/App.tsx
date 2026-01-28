@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AccessProvider } from "@/contexts/AccessContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -65,11 +66,13 @@ const App = () => (
     <BrowserRouter>
       <LanguageProvider>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <AppRoutes />
-          </TooltipProvider>
+          <AccessProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <AppRoutes />
+            </TooltipProvider>
+          </AccessProvider>
         </AuthProvider>
       </LanguageProvider>
     </BrowserRouter>
