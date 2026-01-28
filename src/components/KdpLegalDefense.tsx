@@ -296,7 +296,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
 
-    // Fetch all image blocks with metadata
+    // Fetch ALL image blocks that have an image_url (regardless of metadata columns)
     const { data: imagePages, error } = await supabase
       .from('book_pages')
       .select('page_order, chapter_number, content, image_url, image_source, original_url, image_license, image_attribution, archived_at')
@@ -312,6 +312,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     }
 
     const images = (imagePages || []) as ImagePageData[];
+    console.log('[ImageManifest] Found images:', images.length);
 
     // Header
     doc.setFont("times", "bold");
@@ -379,15 +380,25 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       const caption = content?.caption || content?.query || 'No caption';
       const truncatedCaption = caption.length > 50 ? caption.substring(0, 47) + '...' : caption;
       
-      const source = img.image_source || 'Unknown';
-      const license = img.image_license || 'Unknown';
+      // Determine source - default to "Legacy" for older images without metadata
+      const source = img.image_source || 'Legacy';
+      // Determine license - default based on URL patterns for older images
+      let license = img.image_license || 'Unknown';
+      if (!img.image_license && img.image_url) {
+        // Infer license from URL for legacy images
+        if (img.image_url.includes('unsplash')) license = 'Unsplash License';
+        else if (img.image_url.includes('pexels')) license = 'Pexels License';
+        else if (img.image_url.includes('wikimedia') || img.image_url.includes('wikipedia')) license = 'CC0/Public Domain';
+        else if (img.image_url.includes('supabase')) license = 'Archived/Upload';
+      }
       const truncatedLicense = license.length > 20 ? license.substring(0, 17) + '...' : license;
       
       // Format source display
       const sourceDisplay = source === 'upload' ? 'Upload' : 
                            source === 'unsplash' ? 'Unsplash' :
                            source === 'pexels' ? 'Pexels' :
-                           source === 'wikimedia' ? 'Wikimedia' : source;
+                           source === 'wikimedia' ? 'Wikimedia' : 
+                           source === 'Legacy' ? 'Legacy' : source;
 
       // Truncate URL for display
       const archivedUrl = img.image_url || '';
@@ -422,7 +433,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     y += 0.3;
     doc.setFontSize(8);
     doc.setFont("times", "italic");
-    const footerNote = "This manifest documents the provenance of all images used in this publication. Archived URLs point to permanent copies stored in our secure infrastructure. Original URLs document the source for legal verification.";
+    const footerNote = images.length > 0 
+      ? "This manifest documents the provenance of all images used in this publication. Archived URLs point to permanent copies stored in our secure infrastructure. Original URLs document the source for legal verification."
+      : "No images found in book_pages table. Images may not have been selected or archived yet.";
     const splitFooter = doc.splitTextToSize(footerNote, 7);
     doc.text(splitFooter, 0.75, y);
 
