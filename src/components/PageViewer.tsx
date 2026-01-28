@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ImageSearchGallery, ImageSelectMetadata } from '@/components/ImageSearchGallery';
+import ChapterPaywall from '@/components/ChapterPaywall';
 import { uploadToBookImages, archiveExternalImage, saveImageMetadata, createUploadMetadata } from '@/lib/bookImages';
 
 type PageBlockMeta = PageBlock & Partial<{
@@ -71,6 +72,10 @@ interface PageViewerProps {
   isGrayscale?: boolean;
   /** Callback to toggle grayscale mode */
   onGrayscaleChange?: (value: boolean) => void;
+  /** User has full access (admin or paid) */
+  hasFullAccess?: boolean;
+  /** Callback when guest tries to use premium feature */
+  onPremiumFeatureAttempt?: (featureName: string) => boolean;
 }
 
 // Loading state component
@@ -902,7 +907,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   tableOfContents = [],
   onBlocksUpdate,
   isGrayscale = false,
-  onGrayscaleChange
+  onGrayscaleChange,
+  hasFullAccess = true,
+  onPremiumFeatureAttempt
 }) => {
   const [blocks, setBlocks] = useState<PageBlockMeta[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -2064,6 +2071,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           {/* CRASH FIX: Wrap in null check */}
           {!currentBlock ? (
             <LoadingState />
+          ) : /* Show paywall for chapters 2+ when user doesn't have full access */
+            !hasFullAccess && currentChapter > 1 ? (
+            <ChapterPaywall
+              chapterNumber={currentChapter}
+              chapterTitle={tableOfContents.find(c => c.chapter === currentChapter)?.title || `Chapter ${currentChapter}`}
+            />
           ) : (
             <BlockRenderer 
               block={currentBlock} 
@@ -2071,10 +2084,38 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               imageAttributions={imageAttributions}
               attemptedFetches={attemptedFetches}
               canEditImages={canEditImages || isAdmin}
-              onEditCaption={handleEditCaption}
-              onRemove={handleRemoveImage}
-              onManualSearch={handleOpenSearchDialog}
-              onUpload={handleOpenUploadModal}
+              onEditCaption={(blockId, newCaption) => {
+                // Intercept if guest tries to edit
+                if (!hasFullAccess && onPremiumFeatureAttempt) {
+                  onPremiumFeatureAttempt('Edit Caption');
+                  return;
+                }
+                handleEditCaption(blockId, newCaption);
+              }}
+              onRemove={(blockId) => {
+                // Intercept if guest tries to remove
+                if (!hasFullAccess && onPremiumFeatureAttempt) {
+                  onPremiumFeatureAttempt('Remove Image');
+                  return;
+                }
+                handleRemoveImage(blockId);
+              }}
+              onManualSearch={(blockId) => {
+                // Intercept if guest tries to search
+                if (!hasFullAccess && onPremiumFeatureAttempt) {
+                  onPremiumFeatureAttempt('Search Gallery');
+                  return;
+                }
+                handleOpenSearchDialog(blockId);
+              }}
+              onUpload={(blockId) => {
+                // Intercept if guest tries to upload
+                if (!hasFullAccess && onPremiumFeatureAttempt) {
+                  onPremiumFeatureAttempt('Upload Photo');
+                  return;
+                }
+                handleOpenUploadModal(blockId);
+              }}
             />
           )}
         </div>
