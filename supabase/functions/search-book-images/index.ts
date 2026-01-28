@@ -402,7 +402,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 150, bookTopic, forCover = false } = await req.json();
+    const { query, orientation = 'landscape', limit = 300, bookTopic, forCover = false } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -425,26 +425,33 @@ serve(async (req) => {
     // Anchor the query to the book's topic for relevance
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
-    // Search all sources in parallel
-    // Unsplash: 3 pages of 30 = 90 results max (before filtering)
-    // Pexels: 2 pages of 40 = 80 results max (before filtering)
-    // Pixabay: 2 pages of 40 = 80 results max (before filtering)
-    // Wikimedia: 50 results (before filtering) - apply cover license filter if needed
-    const [unsplashPage1, unsplashPage2, unsplashPage3, pexelsPage1, pexelsPage2, pixabayPage1, pixabayPage2, wikimediaResults] = await Promise.all([
+    // Search all sources in parallel - INCREASED LIMITS for more variety
+    // Unsplash: 4 pages of 30 = 120 results max (before filtering)
+    // Pexels: 2 pages of 80 = 160 results max (before filtering)
+    // Pixabay: 1 page of 200 = 200 results max (before filtering)
+    // Wikimedia: 2 queries of 50 = 100 results max (before filtering) - apply cover license filter if needed
+    const [
+      unsplashPage1, unsplashPage2, unsplashPage3, unsplashPage4,
+      pexelsPage1, pexelsPage2,
+      pixabayPage1,
+      wikimediaResults1, wikimediaResults2
+    ] = await Promise.all([
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
-      searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
-      searchPexelsMultiple(anchoredQuery, orientation, 40, 2),
-      searchPixabayMultiple(anchoredQuery, orientation, 40, 1),
-      searchPixabayMultiple(anchoredQuery, orientation, 40, 2),
-      searchWikimediaMultiple(anchoredQuery, 50, forCover), // Pass forCover to filter licenses
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 4),
+      searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
+      searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
+      searchPixabayMultiple(anchoredQuery, orientation, 200, 1),
+      searchWikimediaMultiple(anchoredQuery, 50, forCover),
+      searchWikimediaMultiple(`${anchoredQuery} scenic`, 50, forCover),
     ]);
 
     // Combine results
-    const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3];
+    const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3, ...unsplashPage4];
     const pexelsResults = [...pexelsPage1, ...pexelsPage2];
-    const pixabayResults = [...pixabayPage1, ...pixabayPage2];
+    const pixabayResults = [...pixabayPage1];
+    const wikimediaResults = [...wikimediaResults1, ...wikimediaResults2];
     
     // Interleave: 3 Unsplash, 2 Pexels, 2 Pixabay, 1 Wikimedia pattern for variety
     const allResults: ImageResult[] = [];
