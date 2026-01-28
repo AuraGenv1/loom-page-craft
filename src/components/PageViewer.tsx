@@ -477,7 +477,7 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onOpenChange,
                 I certify I have the rights to use this image.
               </Label>
               <p className="text-xs text-muted-foreground mt-1">
-                Loom & Page is not liable for copyright infringement or misuse of uploaded content.
+                <strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of uploaded content.
               </p>
             </div>
           </div>
@@ -523,9 +523,12 @@ const ImageFullPage: React.FC<{
   onManualSearch?: () => void;
   onUpload?: () => void;
 }> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
-  // Determine visual state
-  const showLoading = isLoading || (!imageUrl && !fetchAttempted);
-  const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
+  // Determine visual state:
+  // - Show loading only when isLoading is explicitly true
+  // - Show empty state (Add Image button) when: not loading, no image, AND fetch was attempted (or is manual)
+  // - If fetchAttempted is false and not loading, still show the Add Image button so users can manually add
+  const showLoading = isLoading === true;
+  const showEmptyState = !isLoading && !imageUrl;
   
   return (
     <div className="flex flex-col h-full group">
@@ -611,9 +614,11 @@ const ImageHalfPage: React.FC<{
   onManualSearch?: () => void;
   onUpload?: () => void;
 }> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
-  // Determine visual state
-  const showLoading = isLoading || (!imageUrl && !fetchAttempted);
-  const showEmptyState = !isLoading && !imageUrl && fetchAttempted;
+  // Determine visual state:
+  // - Show loading only when isLoading is explicitly true
+  // - Show empty state (Add Image button) when: not loading and no image
+  const showLoading = isLoading === true;
+  const showEmptyState = !isLoading && !imageUrl;
 
   return (
     <div className="h-full flex flex-col group">
