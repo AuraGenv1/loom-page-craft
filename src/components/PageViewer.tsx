@@ -474,10 +474,10 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onOpenChange,
             <div className="flex-1">
               <Label htmlFor="rights-checkbox" className="text-sm font-medium cursor-pointer">
                 <AlertTriangle className="w-4 h-4 inline-block mr-1 text-amber-600" />
-                I certify I have the rights to use this image and it contains no human faces.
+                I certify I have the rights to use this image.
               </Label>
               <p className="text-xs text-muted-foreground mt-1">
-                <strong>Images with visible human faces are prohibited</strong> (KDP model release requirements). Loom & Page is not liable for copyright infringement, misuse of uploaded content, or use of images containing faces.
+                <strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of uploaded content.
               </p>
             </div>
           </div>

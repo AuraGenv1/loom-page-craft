@@ -178,9 +178,8 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             <ImageIcon className="w-5 h-5" />
             Search Images
           </DialogTitle>
-          <DialogDescription className="space-y-1">
-            <span>Search Unsplash, Pexels, and Wikimedia for the perfect image. Click to select, then confirm.</span>
-            <span className="block text-amber-600 dark:text-amber-400 font-medium">⚠️ Images with human faces are prohibited for KDP compliance.</span>
+          <DialogDescription>
+            Search Unsplash, Pexels, and Wikimedia for the perfect image. Click to select, then confirm.
           </DialogDescription>
         </DialogHeader>
 
@@ -319,10 +318,10 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
               <div className="flex-1">
                 <Label htmlFor="consent-checkbox" className="text-sm font-medium cursor-pointer">
                   <AlertTriangle className="w-4 h-4 inline-block mr-1 text-amber-600" />
-                  I certify I have the rights to use this image and it contains no human faces.
+                  I certify I have the rights to use this image.
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  <strong>Images with visible human faces are prohibited</strong> (KDP model release requirements). Loom & Page is not liable for copyright infringement, misuse of selected content, or use of images containing faces.
+                  <strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of selected content.
                 </p>
               </div>
             </div>
