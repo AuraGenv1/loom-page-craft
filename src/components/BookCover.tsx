@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
-import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search } from 'lucide-react';
+import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search, ClipboardList } from 'lucide-react';
 import KdpFinanceCalculator from './KdpFinanceCalculator';
 import KdpLegalDefense from './KdpLegalDefense';
+import KdpPrepDashboard from './KdpPrepDashboard';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -22,6 +23,7 @@ import { generateGuideEPUB } from '@/lib/generateEPUB';
 import { registerPlayfairFont, FONT_SIZES, CHAR_SPACING, LINE_HEIGHTS } from '@/lib/pdfFonts';
 import { ImageSearchGallery } from '@/components/ImageSearchGallery';
 import { uploadToBookImages } from '@/lib/bookImages';
+import { getKdpCoverDimensions, shouldShowSpineText, TRIM_SIZE } from '@/lib/kdpUtils';
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -42,6 +44,8 @@ interface BookCoverProps {
   estimatedPageCount?: number;
   /** Is this an official Loom & Page Original? */
   isOfficial?: boolean;
+  /** B&W Print Mode - applies grayscale filter to PDF exports */
+  isGrayscale?: boolean;
   onCoverUpdate?: (updates: { coverImageUrls?: string[]; backCoverUrl?: string; spineText?: string }) => void;
 }
 
@@ -61,6 +65,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     isGenerationComplete = false,
     estimatedPageCount: propEstimatedPageCount,
     isOfficial = false,
+    isGrayscale = false,
     onCoverUpdate
   }, ref) => {
     const TopicIcon = getTopicIcon(topic || propTitle);
@@ -136,17 +141,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     }, [bookData, propEstimatedPageCount]);
     
     const estimatedPages = calculateEstimatedPages();
-    const showSpineText = estimatedPages >= 80;
     
-    // Dynamic spine width based on KDP White Paper calculation
+    // Dynamic spine width using centralized KDP utility
     const getSpineWidth = useCallback(() => {
-      const pages = calculateEstimatedPages();
-      // KDP White Paper: pages * 0.002252 inches
-      // Minimum spine ~0.15" for safety
-      return Math.max(0.15, pages * 0.002252);
-    }, [calculateEstimatedPages]);
+      const contentPages = propEstimatedPageCount || calculateEstimatedPages();
+      const kdpDims = getKdpCoverDimensions(contentPages);
+      return kdpDims.spineWidth;
+    }, [calculateEstimatedPages, propEstimatedPageCount]);
     
     const spineWidthInches = getSpineWidth();
+    const kdpDimensions = getKdpCoverDimensions(propEstimatedPageCount || estimatedPages);
+    const showSpineText = shouldShowSpineText(kdpDimensions.finalPageCount);
     
     // Merge legacy coverImageUrl prop with coverImageUrls array
     const allUrls = localFrontUrls.length > 0 
@@ -400,20 +405,23 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     };
 
     // --- KDP COVER PDF RENDERING ---
-    // NOTE: jsPDF custom `format` array order is easy to get wrong; always read width/height from pageSize.
+    // Uses dynamic dimensions based on actual page count for correct spine width
     const createKdpCoverPdf = () => {
-      // KDP full-wrap dimensions (includes bleed) for current preset:
-      // 12.485" (W) × 9.25" (H)
-      const desiredW = 12.485;
-      const desiredH = 9.25;
+      // Get dynamic dimensions based on actual content page count
+      const kdpDims = getKdpCoverDimensions(propEstimatedPageCount || estimatedPages);
+      
+      // Full wrap dimensions: Back Cover + Spine + Front Cover (+ bleed)
+      const desiredW = kdpDims.fullWrapWidth;
+      const desiredH = kdpDims.fullWrapHeight;
+
+      console.log(`[KDP Cover] Dynamic dimensions: ${desiredW.toFixed(3)}" × ${desiredH.toFixed(2)}" (${kdpDims.finalPageCount} pages, spine: ${kdpDims.spineWidth.toFixed(3)}")`);
 
       // jsPDF custom format + orientation can be inconsistent; always verify actual page size.
       let pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [desiredW, desiredH] });
       let pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
       let pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
 
-      // If jsPDF produced a swapped page (9.25 × 12.485), recreate with swapped format
-      // but keep LANDSCAPE orientation so the final result is still 12.485 × 9.25.
+      // If jsPDF produced a swapped page, recreate with swapped format
       const isCorrect =
         Math.abs(pageWidth - desiredW) < 0.02 && Math.abs(pageHeight - desiredH) < 0.02;
       if (!isCorrect) {
@@ -422,7 +430,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
       }
 
-      return { pdf, pageWidth, pageHeight };
+      return { pdf, pageWidth, pageHeight, spineWidth: kdpDims.spineWidth };
     };
 
     const TRANSPARENT_PIXEL =
@@ -512,7 +520,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       return canvas.toDataURL('image/jpeg', 0.95);
     };
 
-    const renderKdpCoverToPdf = async (pdf: jsPDF, includeGuides = false) => {
+    const renderKdpCoverToPdf = async (pdf: jsPDF, includeGuides = false, dynamicSpineWidth?: number) => {
       const pageWidth = (pdf as any).internal.pageSize.getWidth() as number;
       const pageHeight = (pdf as any).internal.pageSize.getHeight() as number;
 
@@ -520,8 +528,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       const hasPlayfair = await registerPlayfairFont(pdf);
       const fontName = hasPlayfair ? 'PlayfairDisplay' : 'times';
 
-      // KDP spine width currently fixed for ~200 pages
-      const spineWidth = 0.485;
+      // Use dynamic spine width from createKdpCoverPdf or fall back to calculated value
+      const spineWidth = dynamicSpineWidth || getKdpCoverDimensions(propEstimatedPageCount || estimatedPages).spineWidth;
       const coverWidth = (pageWidth - spineWidth) / 2;
 
       const hexToRgb = (hex: string) => {
@@ -881,7 +889,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
 
       setIsDownloadingManuscript(true);
-      toast.info('Generating manuscript PDF...');
+      toast.info(isGrayscale ? 'Generating B&W manuscript PDF...' : 'Generating manuscript PDF...');
 
       try {
         // Check if displayUrl is valid before passing
@@ -890,7 +898,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         await generateCleanPDF({
           topic: topic || title,
           bookData,
-          coverImageUrl: validCoverUrl
+          coverImageUrl: validCoverUrl,
+          isGrayscale // Pass B&W mode to PDF generator
         });
         toast.success('Manuscript PDF downloaded!');
       } catch (err) {
@@ -1675,7 +1684,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
           bookData: bookData!,
           coverImageUrl: validCoverUrl,
           includeCoverPage: true,
-          returnBlob: true
+          returnBlob: true,
+          isGrayscale // Pass B&W mode to PDF generator
         });
         
         return blob as Blob;
@@ -1959,11 +1969,12 @@ p { margin-bottom: 1em; }`);
             </DialogHeader>
 
             <Tabs defaultValue="front" className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-7">
-                <TabsTrigger value="front" className="text-xs sm:text-sm">Front Cover</TabsTrigger>
-                <TabsTrigger value="back" className="text-xs sm:text-sm">Back Cover</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-8">
+                <TabsTrigger value="front" className="text-xs sm:text-sm">Front</TabsTrigger>
+                <TabsTrigger value="back" className="text-xs sm:text-sm">Back</TabsTrigger>
                 <TabsTrigger value="spine" className="text-xs sm:text-sm">Spine</TabsTrigger>
-                <TabsTrigger value="wrap" className="text-xs sm:text-sm">Full Wrap</TabsTrigger>
+                <TabsTrigger value="wrap" className="text-xs sm:text-sm">Wrap</TabsTrigger>
+                <TabsTrigger value="kdp-prep" className="gap-1 text-xs sm:text-sm"><ClipboardList className="w-3 h-3"/> Prep</TabsTrigger>
                 <TabsTrigger value="finance" className="gap-1 text-xs sm:text-sm"><DollarSign className="w-3 h-3"/> $$$</TabsTrigger>
                 <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm"><ShieldCheck className="w-3 h-3"/> Legal</TabsTrigger>
                 <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Export</TabsTrigger>
@@ -2650,9 +2661,21 @@ p { margin-bottom: 1em; }`);
                   )}
 
                   <p className="text-xs text-muted-foreground text-center">
-                    PDF dimensions: 12.485" × 9.25" (optimized for 6×9" trim with ~200 page spine)
+                    PDF dimensions: {kdpDimensions.fullWrapWidth.toFixed(3)}" × {kdpDimensions.fullWrapHeight.toFixed(2)}" ({kdpDimensions.finalPageCount} pages, spine: {kdpDimensions.spineWidth.toFixed(3)}")
                   </p>
                 </div>
+              </TabsContent>
+
+              {/* TAB 5: KDP Prep - Amazon Metadata Dashboard */}
+              <TabsContent value="kdp-prep" className="pt-4">
+                <KdpPrepDashboard
+                  title={title}
+                  topic={topic}
+                  subtitle={subtitle}
+                  authorName={customBrandName || 'Loom & Page'}
+                  contentPageCount={propEstimatedPageCount || estimatedPages}
+                  bookData={bookData}
+                />
               </TabsContent>
 
               {/* TAB 5: Finance - KDP Profit Calculator */}
