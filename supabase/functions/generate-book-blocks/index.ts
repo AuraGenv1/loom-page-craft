@@ -90,12 +90,14 @@ RULE 1: GOLDILOCKS DENSITY (300-320 Words)
 - Target exactly 310 words per text block to perfectly fill the layout without overflow.
 - Be substantive. Every paragraph must add value and depth.
 
-RULE 2: TEXT-ONLY CONTENT (NO IMAGES!)
-- DO NOT generate any "image_full" or "image_half" blocks.
-- This book is TEXT ONLY.
+RULE 2: HALF-PAGE IMAGES ONLY (NO FULL-PAGE!)
+- Use "image_half" blocks to add visual interest scattered between text blocks.
+- DO NOT generate any "image_full" blocks - they are FORBIDDEN.
+- NEVER place two image blocks consecutively. Always have at least one text block between images.
 - Each chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first)
-  8-10x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
+  6-8x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
+  2-3x Half-Page Images (image_half blocks scattered between text blocks)
   1x Pro Tip Page (ALWAYS last block)
 
 RULE 3: STRUCTURAL DEPTH (Spine Compliance)
@@ -104,22 +106,26 @@ RULE 3: STRUCTURAL DEPTH (Spine Compliance)
 - If the topic is NARROW: Use ${minChapters} chapters but include "Deep Dive" sub-pages.
 - CONSTRAINT: NEVER repeat facts, paragraphs, or filler content.
 
-TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - Rich descriptive prose' : 'INFORMATIONAL (Business/Science/History) - Analytical text depth'}
+TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - Rich descriptive prose, 3 images per chapter' : 'INFORMATIONAL (Business/Science/History) - Analytical text depth, 2 images per chapter'}
 TARGET PAGES PER CHAPTER: ${pagesPerChapter}
 MINIMUM CHAPTERS: ${minChapters}
 
-Block types available (ONLY use these THREE - NO image blocks!):
+Block types available (ONLY use these FOUR - NO image_full!):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
 - "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
+- "image_half": { "query": "${cleanTopic} specific search terms", "caption": "Descriptive caption" } - Half-page images
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 ABSOLUTELY FORBIDDEN BLOCK TYPES:
-- "image_full" - DO NOT USE
-- "image_half" - DO NOT USE
+- "image_full" - DO NOT USE (full-page images are disabled)
 - "heading" - DO NOT USE
 - "list" - DO NOT USE
 - "quote" - DO NOT USE
 - "divider" - DO NOT USE
+
+IMPORTANT IMAGE RULES:
+- Use literal, specific queries matching the topic (e.g., "${cleanTopic} scenic view", "${cleanTopic} landmark").
+- NEVER place two image_half blocks back-to-back. Always separate with text.
 
 Return ONLY valid JSON:
 {
@@ -135,8 +141,11 @@ Return ONLY valid JSON:
   "chapter_1_blocks": [
     {"block_type": "chapter_title", "content": {"chapter_number": 1, "title": "Introduction"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of opening content...]"}},
+    {"block_type": "image_half", "content": {"query": "${cleanTopic} scenic landscape", "caption": "A breathtaking view of..."}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of continued content...]"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of content...]"}},
+    {"block_type": "image_half", "content": {"query": "${cleanTopic} landmark architecture", "caption": "The iconic..."}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[Final section with Key Takeaway...]"}},
     {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
 }
@@ -226,11 +235,25 @@ Language: ${language}`;
 
     console.log(`[generate-book-blocks] Created book: ${book.id}`);
 
-    // Filter out any image blocks (full-page images disabled)
-    const filteredBlocks = (aiData.chapter_1_blocks || []).filter((block: any) => {
+    // Filter out full-page images only, keep half-page images
+    // Also ensure no back-to-back image blocks
+    let tempBlocks = (aiData.chapter_1_blocks || []).filter((block: any) => {
       const type = block?.block_type;
-      return type !== 'image_full' && type !== 'image_half';
+      return type !== 'image_full'; // Only remove full-page, keep image_half
     });
+
+    // Ensure no back-to-back image blocks
+    const filteredBlocks: any[] = [];
+    for (let i = 0; i < tempBlocks.length; i++) {
+      const current = tempBlocks[i];
+      const prev = filteredBlocks[filteredBlocks.length - 1];
+      
+      if (current?.block_type === 'image_half' && prev?.block_type === 'image_half') {
+        console.log(`[generate-book-blocks] Skipping back-to-back image at index ${i}`);
+        continue;
+      }
+      filteredBlocks.push(current);
+    }
 
     // Insert page blocks for Chapter 1 (no image blocks)
     const blocksToInsert = filteredBlocks.map((block: any, index: number) => ({
