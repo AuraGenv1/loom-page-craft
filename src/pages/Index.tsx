@@ -834,6 +834,7 @@ const Index = () => {
                     isGenerationComplete={isGenerationComplete}
                     estimatedPageCount={realPageCount}
                     isOfficial={isOfficial}
+                    isGrayscale={isGrayscaleMode}
                     onCoverUpdate={(updates) => {
                       // Update local state immediately when Cover Studio makes changes
                       if (updates.coverImageUrls) setCoverImageUrls(updates.coverImageUrls);
