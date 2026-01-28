@@ -1,148 +1,92 @@
 
-# Customizable Cover Branding & UI Cleanup ✅ COMPLETED
+# Add Logo Size Control
 
 ## Overview
 
-This plan implements three changes to the KDP Cover Studio:
-1. Remove "Back Cover Image (Optional)" section from Back Cover tab
-2. Remove "Custom Image Prompt" section from Front Cover tab
-3. Add customizable logo and brand name for all users
+Add a slider to let users resize their custom logo on book covers. The scale will apply to both web previews and PDF/JPG exports.
 
 ---
 
-## Changes Summary
+## Changes to `src/components/BookCover.tsx`
 
-### 1. Remove Back Cover Image Section (Back Cover Tab)
-
-**File:** `src/components/BookCover.tsx`
-
-Remove lines 2177-2207 which contain:
-- "Back Cover Image (Optional)" label and description
-- `backPrompt` textarea
-- "Generate Back Cover" button
-
-The back cover will remain a clean white design with editable text only.
-
----
-
-### 2. Remove Custom Image Prompt Section (Front Cover Tab)
-
-**File:** `src/components/BookCover.tsx`
-
-Remove lines 2022-2034 which contain:
-- "Custom Image Prompt" label and description
-- `frontPrompt` textarea
-
-Users can still customize cover images via "Search Gallery" and "Upload Cover Image" buttons.
-
----
-
-### 3. Add Customizable Logo & Brand Name
-
-This is the most significant change. All users (guests, paid, admin) will be able to customize the branding that appears on covers.
-
-#### 3.1 New State Variables (lines ~88-110)
+### 1. Add New State Variable (after line 105)
 
 ```typescript
-// Custom branding state (defaults to Loom & Page)
-const [customBrandName, setCustomBrandName] = useState("Loom & Page");
-const [showBrandLogo, setShowBrandLogo] = useState(true);
-const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+const [customLogoScale, setCustomLogoScale] = useState(1.0); // 0.5 to 2.0
 ```
 
-#### 3.2 New UI in Front Cover Tab
+### 2. Add Slider UI in Cover Branding Section (after line 2173)
 
-Add a "Cover Branding" section after the image upload area:
-
-```text
-┌────────────────────────────────────────┐
-│  Cover Branding                        │
-│  ─────────────────────                 │
-│  Brand Name:  [ Loom & Page      ]     │
-│                                        │
-│  ☑ Show Logo                           │
-│  [ Upload Custom Logo ]                │
-│                                        │
-│  [ Reset to Default ]                  │
-└────────────────────────────────────────┘
-```
-
-#### 3.3 Update Render Locations
-
-**Web Preview (BookCover main component, lines 1868-1895):**
-- Conditionally render logo based on `showBrandLogo`
-- Display `customBrandName` instead of hardcoded "Loom & Page"
-- If `customLogoUrl` exists, show uploaded image; otherwise show default CSS logo
-
-**Front Cover Tab Preview (lines 1960-1977):**
-- Same conditional rendering as above
-
-**Full Wrap Preview (lines 2529-2541):**
-- Same conditional rendering as above
-
-**Canvas Exports - CRITICAL (lines 1269-1340):**
-- `drawFrontCoverToCanvas` must use custom branding
-- If `showBrandLogo` is false, skip logo drawing
-- If `customBrandName` is empty, skip brand name
-- If `customLogoUrl` exists, load and draw that image instead of the vector logo
-
----
-
-## Technical Details
-
-### Canvas Logo Drawing Updates
-
-The `drawFrontCoverToCanvas` function (starting line 1155) currently draws a hardcoded vector logo. It needs to be updated to:
-
-1. Check if `showBrandLogo` is true
-2. If `customLogoUrl` exists, load and draw that image
-3. Otherwise, draw the default vector logo (or skip if logo is hidden)
-4. Draw `customBrandName` instead of "Loom & Page"
+Add a slider that only appears when a custom logo is uploaded:
 
 ```typescript
-// Updated logo section in drawFrontCoverToCanvas
-if (showBrandLogo) {
-  if (customLogoUrl) {
-    // Load and draw custom logo image
-    const logoImg = await loadCanvasImage(customLogoUrl);
-    if (logoImg) {
-      ctx.drawImage(logoImg, logoX, logoTopY, logoW, logoH);
-    }
-  } else {
-    // Draw default vector logo (existing code)
-    // ... vertical lines, horizontal crossbar, corner fold
-  }
-}
-
-// Draw brand name (only if not empty)
-if (customBrandName) {
-  ctx.fillText(customBrandName, centerX, anchorY);
-}
+{customLogoUrl && (
+  <div className="mt-3">
+    <Label className="text-sm">Logo Size</Label>
+    <div className="flex items-center gap-3 mt-1">
+      <span className="text-xs text-muted-foreground">S</span>
+      <Slider
+        value={[customLogoScale]}
+        onValueChange={([val]) => setCustomLogoScale(val)}
+        min={0.5}
+        max={2}
+        step={0.1}
+        className="flex-1"
+      />
+      <span className="text-xs text-muted-foreground">L</span>
+    </div>
+  </div>
+)}
 ```
 
-### Files to Modify
+### 3. Update Web Preview Logo (line ~1907)
 
-| File | Changes |
-|------|---------|
-| `src/components/BookCover.tsx` | All changes above |
+**Before:**
+```tsx
+<img src={customLogoUrl} alt="Brand Logo" className="w-8 h-8 object-contain opacity-60" />
+```
+
+**After:**
+```tsx
+<img 
+  src={customLogoUrl} 
+  alt="Brand Logo" 
+  className="object-contain opacity-60" 
+  style={{ width: `${2 * customLogoScale}rem`, height: `${2 * customLogoScale}rem` }}
+/>
+```
+
+### 4. Update Canvas Export Logo (line ~1302)
+
+**Before:**
+```typescript
+const logoSize = width * 0.085;
+```
+
+**After:**
+```typescript
+// Apply custom scale only if user has uploaded a custom logo
+const baseLogoSize = width * 0.085;
+const logoSize = customLogoUrl ? baseLogoSize * customLogoScale : baseLogoSize;
+```
+
+### 5. Reset Function - Include Scale (line ~275)
+
+Update `handleResetBranding` to reset the scale:
+```typescript
+setCustomLogoScale(1.0);
+```
 
 ---
 
-## User Experience
+## Expected Result
 
-### Default Behavior
-- Brand name defaults to "Loom & Page"
-- Logo is shown by default
-- No setup required for existing workflow
+| Control | Range | Default |
+|---------|-------|---------|
+| Logo Size Slider | 0.5x to 2x | 1.0x |
 
-### Customization Flow
-1. User opens KDP Cover Studio (Edit Cover / Export KDP button)
-2. In Front Cover tab, scrolls to "Cover Branding" section
-3. Can type custom brand name or leave blank for no text
-4. Can toggle logo visibility
-5. Can upload custom logo image
-6. Changes immediately reflect in all previews
-7. When downloading PDF or JPG, exports use custom branding
+- Small (0.5x): ~16px preview / 4.25% canvas width
+- Medium (1.0x): ~32px preview / 8.5% canvas width (current)
+- Large (2.0x): ~64px preview / 17% canvas width
 
-### Reset Option
-- "Reset to Default" button restores "Loom & Page" branding with default logo
+The slider only appears after uploading a custom logo (default Loom & Page logo stays fixed size).
