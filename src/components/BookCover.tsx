@@ -86,12 +86,9 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     
     // Cover Studio state
     const [studioOpen, setStudioOpen] = useState(false);
-    const [frontPrompt, setFrontPrompt] = useState('');
-    const [backPrompt, setBackPrompt] = useState('');
     const [spineText, setSpineText] = useState(initialSpineText || propTitle);
     const [spineColor, setSpineColor] = useState('#ffffff'); // Default to WHITE
     const [spineTextColor, setSpineTextColor] = useState('#000000'); // Default to BLACK
-    const [isRegeneratingBack, setIsRegeneratingBack] = useState(false);
     const [localBackCoverUrl, setLocalBackCoverUrl] = useState(backCoverUrl || '');
     const [localFrontUrls, setLocalFrontUrls] = useState<string[]>(coverImageUrls);
     const [isDownloadingManuscript, setIsDownloadingManuscript] = useState(false);
@@ -100,6 +97,13 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
     const [showKdpGuides, setShowKdpGuides] = useState(false);
     const coverUploadRef = useRef<HTMLInputElement>(null);
+    const logoUploadRef = useRef<HTMLInputElement>(null);
+    
+    // Custom Branding State (defaults to Loom & Page)
+    const [customBrandName, setCustomBrandName] = useState("Loom & Page");
+    const [showBrandLogo, setShowBrandLogo] = useState(true);
+    const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [coverGalleryOpen, setCoverGalleryOpen] = useState(false);
     
     // Back Cover Text State
@@ -303,13 +307,7 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       if (coverImageUrls.length > 0) setLocalFrontUrls(coverImageUrls);
     }, [coverImageUrls]);
 
-    // Initialize prompts when studio opens
-    useEffect(() => {
-      if (studioOpen) {
-        setFrontPrompt(topic || title);
-        setBackPrompt(`abstract texture background ${topic || 'elegant'}`);
-      }
-    }, [studioOpen, topic, title]);
+    // No longer needed - prompts removed
     
     // Current display URL with fallback cycling
     const displayUrl = lockedUrls[currentUrlIndex] || null;
@@ -358,35 +356,6 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
         localStorage.setItem('bookSessionId', sessionId);
       }
       return sessionId;
-    };
-
-    // Generate back cover
-    const handleGenerateBack = async () => {
-      setIsRegeneratingBack(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('generate-cover-image', {
-          body: {
-            topic: topic || title,
-            title: title,
-            sessionId: getSessionId(),
-            variant: 'back-cover',
-            customPrompt: backPrompt.trim() || undefined
-          }
-        });
-
-        if (error) throw error;
-
-        const newUrl = data.imageUrl;
-        setLocalBackCoverUrl(newUrl);
-
-        onCoverUpdate?.({ backCoverUrl: newUrl });
-        toast.success('Back cover generated!');
-      } catch (err) {
-        console.error('Failed to generate back cover:', err);
-        toast.error('Failed to generate back cover');
-      } finally {
-        setIsRegeneratingBack(false);
-      }
     };
 
     // Save spine settings
@@ -1051,6 +1020,61 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       [applyFrontCoverUrl, bookId]
     );
 
+    // Handle custom logo upload
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Logo must be smaller than 2MB');
+        return;
+      }
+
+      setIsUploadingLogo(true);
+      try {
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const fileName = `logo_${bookId || Date.now()}_${Date.now()}.${fileExt}`;
+        const filePath = `logos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('book-images')
+          .upload(filePath, file, { 
+            cacheControl: '3600',
+            upsert: true 
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('book-images')
+          .getPublicUrl(filePath);
+
+        setCustomLogoUrl(publicUrlData.publicUrl);
+        toast.success('Custom logo uploaded!');
+      } catch (err) {
+        console.error('Failed to upload logo:', err);
+        toast.error('Failed to upload logo');
+      } finally {
+        setIsUploadingLogo(false);
+        if (logoUploadRef.current) {
+          logoUploadRef.current.value = '';
+        }
+      }
+    };
+
+    // Reset branding to defaults
+    const handleResetBranding = () => {
+      setCustomBrandName("Loom & Page");
+      setShowBrandLogo(true);
+      setCustomLogoUrl(null);
+      toast.success('Branding reset to default');
+    };
+
     // ========== CANVAS-FIRST DRAWING HELPERS ==========
     
     // Helper: Load image for canvas (handles CORS)
@@ -1267,14 +1291,14 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       }
       
       // ---------------------------------------------------------
-      // 6. BOTTOM BRANDING (Final: Shades, Rounding, Center)
+      // 6. BOTTOM BRANDING (Customizable: Logo + Brand Name)
       // ---------------------------------------------------------
       
       // ANCHOR: Work upwards from the bottom
       const bottomMargin = height * 0.05; // 5% padding from bottom
       const anchorY = yOffset + height - bottomMargin;
 
-      // 1. LOGO (Now positioned at bottom where disclaimer used to be)
+      // Logo dimensions
       const logoSize = width * 0.085; 
       const logoH = logoSize;
       const logoW = logoSize;
@@ -1282,62 +1306,73 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
       
       // Position logo so its bottom is near the anchor point (with room for brand name below)
       const brandFontSize = width * 0.022;
-      const brandTextHeight = brandFontSize * 1.5;
+      const brandTextHeight = customBrandName ? brandFontSize * 1.5 : 0;
       const logoBottomY = anchorY - brandTextHeight - (height * 0.02);
       const logoTopY = logoBottomY - logoH;
 
-      // 2. DRAW LOGO (Main Body - Darker)
-      ctx.strokeStyle = '#000000'; 
-      ctx.globalAlpha = 0.6;       
-      ctx.lineWidth = logoSize * 0.06; 
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      // Draw Logo (if showBrandLogo is true)
+      if (showBrandLogo) {
+        if (customLogoUrl) {
+          // Draw custom uploaded logo
+          const logoImg = await loadCanvasImage(customLogoUrl);
+          if (logoImg) {
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            ctx.drawImage(logoImg, logoX, logoTopY, logoW, logoH);
+            ctx.restore();
+          }
+        } else {
+          // Draw default vector logo
+          ctx.strokeStyle = '#000000'; 
+          ctx.globalAlpha = 0.6;       
+          ctx.lineWidth = logoSize * 0.06; 
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
 
-      const insetX = logoSize * 0.125; 
-      const insetY = logoSize * 0.125; 
+          const insetX = logoSize * 0.125; 
+          const insetY = logoSize * 0.125; 
 
-      // A. Vertical Lines
-      ctx.beginPath();
-      // Left
-      ctx.moveTo(logoX + insetX, logoTopY + insetY);
-      ctx.lineTo(logoX + insetX, logoBottomY - insetY);
-      // Center
-      ctx.moveTo(centerX, logoTopY + insetY);
-      ctx.lineTo(centerX, logoBottomY - insetY);
-      // Right
-      ctx.moveTo(logoX + logoW - insetX, logoTopY + insetY);
-      ctx.lineTo(logoX + logoW - insetX, logoBottomY - insetY);
-      ctx.stroke();
+          // A. Vertical Lines
+          ctx.beginPath();
+          ctx.moveTo(logoX + insetX, logoTopY + insetY);
+          ctx.lineTo(logoX + insetX, logoBottomY - insetY);
+          ctx.moveTo(centerX, logoTopY + insetY);
+          ctx.lineTo(centerX, logoBottomY - insetY);
+          ctx.moveTo(logoX + logoW - insetX, logoTopY + insetY);
+          ctx.lineTo(logoX + logoW - insetX, logoBottomY - insetY);
+          ctx.stroke();
 
-      // B. Horizontal Crossbar
-      ctx.beginPath();
-      ctx.moveTo(logoX, logoTopY + (logoH / 2));
-      ctx.lineTo(logoX + logoW, logoTopY + (logoH / 2));
-      ctx.stroke();
+          // B. Horizontal Crossbar
+          ctx.beginPath();
+          ctx.moveTo(logoX, logoTopY + (logoH / 2));
+          ctx.lineTo(logoX + logoW, logoTopY + (logoH / 2));
+          ctx.stroke();
 
-      // 3. DRAW CORNER FOLD (Lighter Shade & Rounded)
-      ctx.globalAlpha = 0.36; 
-      
-      const cornerSize = logoSize * 0.25;
-      const cornerRadius = logoSize * 0.06;
-      const cornerX = logoX + logoW;       
-      const cornerY = logoTopY;               
-      
-      ctx.beginPath();
-      ctx.moveTo(cornerX - cornerSize, cornerY); 
-      ctx.arcTo(cornerX, cornerY, cornerX, cornerY + cornerSize, cornerRadius);
-      ctx.lineTo(cornerX, cornerY + cornerSize);
-      ctx.stroke();
-      
-      // Reset Alpha
-      ctx.globalAlpha = 1.0;
+          // C. Corner Fold (Lighter)
+          ctx.globalAlpha = 0.36; 
+          const cornerSize = logoSize * 0.25;
+          const cornerRadius = logoSize * 0.06;
+          const cornerX = logoX + logoW;       
+          const cornerY = logoTopY;               
+          
+          ctx.beginPath();
+          ctx.moveTo(cornerX - cornerSize, cornerY); 
+          ctx.arcTo(cornerX, cornerY, cornerX, cornerY + cornerSize, cornerRadius);
+          ctx.lineTo(cornerX, cornerY + cornerSize);
+          ctx.stroke();
+          
+          ctx.globalAlpha = 1.0;
+        }
+      }
 
-      // 4. BRAND NAME "Loom & Page" (Positioned below logo at bottom)
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText("Loom & Page", centerX, anchorY);
+      // Draw Brand Name (if not empty)
+      if (customBrandName) {
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.font = `400 ${brandFontSize}px "Playfair Display", serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(customBrandName, centerX, anchorY);
+      }
     };
     
     // ========== CANVAS-BASED Kindle JPG Generator ==========
@@ -1866,21 +1901,29 @@ p { margin-bottom: 1em; }`);
 
           {/* Bottom branding - matches header logo exactly, positioned at bottom */}
           <div className="mt-auto text-center flex flex-col items-center gap-3 pb-4">
-            {/* Logo icon matching Logo.tsx */}
-            <div className="relative w-8 h-8 opacity-60">
-              {/* Vertical loom lines */}
-              <div className="absolute left-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
-              <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
-              <div className="absolute right-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
-              {/* Horizontal page fold */}
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-foreground rounded-full" />
-              {/* Corner fold detail */}
-              <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
-            </div>
-            {/* Brand name */}
-            <span className="font-serif text-sm font-normal tracking-tight text-muted-foreground/50">
-              Loom & Page
-            </span>
+            {/* Custom or Default Logo */}
+            {showBrandLogo && (
+              customLogoUrl ? (
+                <img src={customLogoUrl} alt="Brand Logo" className="w-8 h-8 object-contain opacity-60" />
+              ) : (
+                <div className="relative w-8 h-8 opacity-60">
+                  {/* Vertical loom lines */}
+                  <div className="absolute left-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                  <div className="absolute left-1/2 -translate-x-1/2 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                  <div className="absolute right-1 top-1 bottom-1 w-[2px] bg-foreground rounded-full" />
+                  {/* Horizontal page fold */}
+                  <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-foreground rounded-full" />
+                  {/* Corner fold detail */}
+                  <div className="absolute right-0 top-0 w-2 h-2 border-r-2 border-t-2 border-foreground rounded-tr-sm opacity-60" />
+                </div>
+              )
+            )}
+            {/* Custom or Default Brand name */}
+            {customBrandName && (
+              <span className="font-serif text-sm font-normal tracking-tight text-muted-foreground/50">
+                {customBrandName}
+              </span>
+            )}
             
             {/* Official Badge - only show for official books */}
             {isOfficial && (
@@ -1959,21 +2002,25 @@ p { margin-bottom: 1em; }`);
 
                         {/* Bottom branding - scaled proportionally */}
                         <div className="mt-auto text-center flex flex-col items-center gap-2 pt-3 pb-1">
-                          {/* Logo icon - scaled to ~6px to match proportion */}
-                          <div className="relative w-6 h-6 opacity-60">
-                            {/* Vertical loom lines */}
-                            <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute left-1/2 -translate-x-1/2 top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                            <div className="absolute right-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                            {/* Horizontal page fold */}
-                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
-                            {/* Corner fold detail */}
-                            <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
-                          </div>
-
-                          <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
-                            Loom & Page
-                          </span>
+                          {/* Custom or Default Logo */}
+                          {showBrandLogo && (
+                            customLogoUrl ? (
+                              <img src={customLogoUrl} alt="Brand Logo" className="w-6 h-6 object-contain opacity-60" />
+                            ) : (
+                              <div className="relative w-6 h-6 opacity-60">
+                                <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute left-1/2 -translate-x-1/2 top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute right-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
+                                <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
+                              </div>
+                            )
+                          )}
+                          {customBrandName && (
+                            <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
+                              {customBrandName}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2019,21 +2066,6 @@ p { margin-bottom: 1em; }`);
                       </Button>
                     </div>
                     
-                    <div>
-                      <Label htmlFor="front-prompt" className="text-base font-medium">Custom Image Prompt</Label>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Describe the exact image you want (e.g., "Rush hour crowds in Times Square at sunset")
-                      </p>
-                      <Textarea
-                        id="front-prompt"
-                        value={frontPrompt}
-                        onChange={(e) => setFrontPrompt(e.target.value)}
-                        placeholder="Enter a detailed description of the image you want..."
-                        rows={4}
-                      />
-                    </div>
-                    {/* Regenerate button removed per request */}
-                    
                     {/* Upload Cover Image */}
                     <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">
                       <h4 className="font-medium text-sm mb-2">Or Upload Your Own Image</h4>
@@ -2077,13 +2109,88 @@ p { margin-bottom: 1em; }`);
                         )}
                       </Button>
                     </div>
+                    
+                    {/* Cover Branding Section */}
+                    <div className="p-4 border rounded-lg bg-secondary/10">
+                      <h4 className="font-medium text-sm mb-3">Cover Branding</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="brand-name" className="text-sm">Brand Name</Label>
+                          <Input
+                            id="brand-name"
+                            value={customBrandName}
+                            onChange={(e) => setCustomBrandName(e.target.value)}
+                            placeholder="Your brand name..."
+                            className="mt-1"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Leave blank to hide</p>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="show-logo" className="text-sm">Show Logo</Label>
+                          <input
+                            id="show-logo"
+                            type="checkbox"
+                            checked={showBrandLogo}
+                            onChange={(e) => setShowBrandLogo(e.target.checked)}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                        </div>
+                        
+                        {showBrandLogo && (
+                          <div>
+                            <input
+                              ref={logoUploadRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleLogoUpload}
+                              className="hidden"
+                            />
+                            <Button
+                              variant="outline"
+                              onClick={() => logoUploadRef.current?.click()}
+                              disabled={isUploadingLogo}
+                              className="w-full"
+                              size="sm"
+                            >
+                              {isUploadingLogo ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  {customLogoUrl ? 'Change Logo' : 'Upload Custom Logo'}
+                                </>
+                              )}
+                            </Button>
+                            {customLogoUrl && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <img src={customLogoUrl} alt="Custom Logo" className="w-8 h-8 object-contain border rounded" />
+                                <span className="text-xs text-muted-foreground">Current logo</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <Button
+                          variant="ghost"
+                          onClick={handleResetBranding}
+                          className="w-full text-xs"
+                          size="sm"
+                        >
+                          Reset to Default
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <ImageSearchGallery
                   open={coverGalleryOpen}
                   onOpenChange={setCoverGalleryOpen}
-                  initialQuery={frontPrompt || title}
+                  initialQuery={title}
                   orientation="portrait"
                   enableCrop
                   cropAspectRatio={1}
@@ -2173,38 +2280,6 @@ p { margin-bottom: 1em; }`);
                         />
                       </div>
                     </div>
-                    
-                    <div className="border-t pt-4">
-                      <Label htmlFor="back-prompt" className="text-base font-medium">Back Cover Image (Optional)</Label>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Generate a background image if desired
-                      </p>
-                      <Textarea
-                        id="back-prompt"
-                        value={backPrompt}
-                        onChange={(e) => setBackPrompt(e.target.value)}
-                        placeholder="Enter a texture or abstract background description..."
-                        rows={3}
-                      />
-                    </div>
-                    <Button 
-                      onClick={handleGenerateBack}
-                      disabled={isRegeneratingBack}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {isRegeneratingBack ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Generate Back Cover
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
               </TabsContent>
@@ -2528,17 +2603,24 @@ p { margin-bottom: 1em; }`);
 
                             {/* BOTTOM BRANDING */}
                             <div className="mt-auto text-center flex flex-col items-center gap-2 pt-3 pb-1">
-                              <div className="relative w-6 h-6 opacity-60">
-                                <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                                <div className="absolute left-1/2 -translate-x-1/2 top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                                <div className="absolute right-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
-                                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
-                                <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
-                              </div>
-
-                              <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
-                                Loom & Page
-                              </span>
+                              {showBrandLogo && (
+                                customLogoUrl ? (
+                                  <img src={customLogoUrl} alt="Brand Logo" className="w-6 h-6 object-contain opacity-60" />
+                                ) : (
+                                  <div className="relative w-6 h-6 opacity-60">
+                                    <div className="absolute left-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                    <div className="absolute right-[3px] top-[3px] bottom-[3px] w-[1.5px] bg-foreground rounded-full" />
+                                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[1.5px] bg-foreground rounded-full" />
+                                    <div className="absolute right-0 top-0 w-1.5 h-1.5 border-r-[1.5px] border-t-[1.5px] border-foreground rounded-tr-sm opacity-60" />
+                                  </div>
+                                )
+                              )}
+                              {customBrandName && (
+                                <span className="font-serif text-[10px] font-normal tracking-tight text-muted-foreground/50">
+                                  {customBrandName}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
