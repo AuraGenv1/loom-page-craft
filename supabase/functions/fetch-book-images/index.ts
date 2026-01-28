@@ -9,6 +9,18 @@ interface ImageResult {
   imageUrl: string | null;
   attribution: string;
   source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'none';
+  license: string;
+}
+
+// Helper to get license string for a source
+function getLicenseForSource(source: string): string {
+  switch (source) {
+    case 'unsplash': return 'Unsplash License';
+    case 'pexels': return 'Pexels License';
+    case 'pixabay': return 'Pixabay License';
+    case 'wikimedia': return 'CC0 Public Domain';
+    default: return 'Unknown License';
+  }
 }
 
 // ==== BUSINESS RULE 2: Universal Credit Format ====
@@ -177,7 +189,7 @@ async function searchUnsplash(
         const attribution = formatAttribution(photographerName, 'Unsplash');
         
         console.log(`[Unsplash] Found high-res image (${width}px):`, imageUrl.substring(0, 80));
-        return { imageUrl, attribution, source: 'unsplash' };
+        return { imageUrl, attribution, source: 'unsplash', license: getLicenseForSource('unsplash') };
       }
       
       console.log('[Unsplash] All results were duplicates or too low-res');
@@ -249,7 +261,7 @@ async function searchPixabay(
       const attribution = formatAttribution(photographerName, 'Pixabay');
       
       console.log(`[Pixabay] Found high-res image (${width}px):`, imageUrl.substring(0, 60));
-      return { imageUrl, attribution, source: 'pixabay' };
+      return { imageUrl, attribution, source: 'pixabay', license: getLicenseForSource('pixabay') };
     }
 
     console.log('[Pixabay] All results were duplicates or too low-res');
@@ -317,7 +329,7 @@ async function searchPexels(
       const attribution = formatAttribution(photographerName, 'Pexels');
       
       console.log(`[Pexels] Found high-res image (${width}px):`, imageUrl.substring(0, 60));
-      return { imageUrl, attribution, source: 'pexels' };
+      return { imageUrl, attribution, source: 'pexels', license: getLicenseForSource('pexels') };
     }
 
     console.log('[Pexels] All results were duplicates or too low-res');
@@ -399,7 +411,7 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
 
       console.log(`[Wikimedia] Found high-res image (${width}x${height}px):`, imageUrl.substring(0, 80));
 
-      return { imageUrl, attribution, source: 'wikimedia' };
+      return { imageUrl, attribution, source: 'wikimedia', license: license || 'CC0 Public Domain' };
     }
 
     console.log('[Wikimedia] No suitable high-res images found (all below 1800px)');
