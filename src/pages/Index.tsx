@@ -28,7 +28,9 @@ import { PageBlock } from '@/lib/pageBlockTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { generateBlockBasedPDF } from '@/lib/generateBlockPDF';
-import { Download, Sparkles, FlaskConical, BookmarkPlus } from 'lucide-react';
+import { Download, Sparkles, FlaskConical, BookmarkPlus, Printer } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import ProgressDownloadButton from '@/components/ProgressDownloadButton';
 
 type ViewState = 'landing' | 'loading' | 'book';
@@ -98,6 +100,7 @@ const Index = () => {
   const isGeneratingRef = useRef(false);
   const [isSavedToLibrary, setIsSavedToLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGrayscaleMode, setIsGrayscaleMode] = useState(false); // Ink Saver / B&W print mode
   const [isPurchased, setIsPurchased] = useState(false);
   const [activeChapter, setActiveChapter] = useState(1);
   const [loadingChapter, setLoadingChapter] = useState<number | null>(null);
@@ -860,6 +863,7 @@ const Index = () => {
                       coverImageUrls={coverImageUrls}
                       isAdmin={isAdmin}
                       totalPageCount={Object.values(chapterBlocks).reduce((sum, blocks) => sum + blocks.length, 0)}
+                      isGrayscale={isGrayscaleMode}
                     />
                   ) : (
                     <>
@@ -910,6 +914,26 @@ const Index = () => {
                   <p className="text-xs text-accent font-medium">✓ {t('saved')}</p>
                 )}
               </div>
+            </section>
+
+            {/* Ink Saver Toggle (Print Mode: Black & White) */}
+            <section className="mb-6">
+              <div className="flex items-center justify-center gap-3 py-3 px-4 bg-muted/50 rounded-lg border border-border max-w-md mx-auto">
+                <Printer className="w-4 h-4 text-muted-foreground" />
+                <Label htmlFor="grayscale-mode" className="text-sm font-medium cursor-pointer">
+                  Print Mode: Black & White
+                </Label>
+                <Switch
+                  id="grayscale-mode"
+                  checked={isGrayscaleMode}
+                  onCheckedChange={setIsGrayscaleMode}
+                />
+              </div>
+              {isGrayscaleMode && (
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Ink Saver enabled — PDFs will export in grayscale for Amazon's cheaper B&W printing
+                </p>
+              )}
             </section>
 
             {/* Table of Contents - pass chapter statuses and content for realtime sync */}
@@ -965,7 +989,7 @@ const Index = () => {
               const totalPageCount = Object.values(chapterBlocks).reduce((sum, blocks) => sum + blocks.length, 0);
               
               return bookId && chapterBlocks[1] && chapterBlocks[1].length > 0 ? (
-                <section className="max-w-2xl mx-auto">
+                <section className="max-w-2xl mx-auto" style={isGrayscaleMode ? { filter: 'grayscale(100%)' } : undefined}>
                   <PageViewer 
                     bookId={bookId}
                     initialChapter={activeChapter}
@@ -980,6 +1004,7 @@ const Index = () => {
                     topic={topic}
                     tableOfContents={bookData?.tableOfContents}
                     onBlocksUpdate={(chapter, blocks) => setChapterBlocks(prev => ({ ...prev, [chapter]: blocks }))}
+                    isGrayscale={isGrayscaleMode}
                   />
                 </section>
               ) : bookId && (

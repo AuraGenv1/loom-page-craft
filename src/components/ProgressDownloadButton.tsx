@@ -18,6 +18,8 @@ interface ProgressDownloadButtonProps {
   isAdmin?: boolean;
   /** Actual total page count from blocks (for UI display) */
   totalPageCount?: number;
+  /** Enable grayscale/B&W mode for PDF exports */
+  isGrayscale?: boolean;
 }
 
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -94,6 +96,7 @@ const ProgressDownloadButton = ({
   coverImageUrls = [],
   isAdmin = false,
   totalPageCount,
+  isGrayscale = false,
 }: ProgressDownloadButtonProps) => {
   const [isConverting, setIsConverting] = useState(false);
   
@@ -129,12 +132,13 @@ const ProgressDownloadButton = ({
 
       const { processedBookData, base64CoverUrl } = await processBookImages(bookData, coverImageUrls || []);
       
-      // NEW: Pass includeCoverPage: true
+      // NEW: Pass includeCoverPage: true and isGrayscale
       await generateCleanPDF({
         topic,
         bookData: processedBookData,
         coverImageUrl: base64CoverUrl !== TRANSPARENT_PIXEL ? base64CoverUrl : undefined,
-        includeCoverPage: true
+        includeCoverPage: true,
+        isGrayscale
       });
 
       toast.success('Downloaded!', { id: 'pdf-gen' });

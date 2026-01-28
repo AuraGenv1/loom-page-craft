@@ -12,13 +12,49 @@ interface GeneratePDFOptions {
   coverImageUrl?: string;
   includeCoverPage?: boolean;
   returnBlob?: boolean;
+  /** Enable grayscale/B&W mode for cheaper Amazon printing */
+  isGrayscale?: boolean;
 }
 
 // 1. ASSETS
 const TRANSPARENT_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
+// 1b. HELPER: Convert image to grayscale
+const convertToGrayscale = async (base64Image: string): Promise<string> => {
+  if (base64Image === TRANSPARENT_PIXEL) return base64Image;
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(base64Image); return; }
+      
+      // Draw original image
+      ctx.drawImage(img, 0, 0);
+      
+      // Apply grayscale filter
+      ctx.filter = 'grayscale(100%)';
+      ctx.drawImage(img, 0, 0);
+      
+      // Convert back to base64
+      try {
+        const grayscaleBase64 = canvas.toDataURL('image/jpeg', 0.9);
+        resolve(grayscaleBase64);
+      } catch {
+        resolve(base64Image);
+      }
+    };
+    img.onerror = () => resolve(base64Image);
+    img.src = base64Image;
+  });
+};
+
 // 2. HELPER: Image Fetcher (with robust error handling)
-const fetchImageAsBase64 = async (url: string): Promise<string> => {
+const fetchImageAsBase64 = async (url: string, isGrayscale = false): Promise<string> => {
   // Skip invalid URLs entirely
   if (!url || typeof url !== 'string') return TRANSPARENT_PIXEL;
   if (url.startsWith('data:')) return url;
@@ -51,12 +87,15 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
       return TRANSPARENT_PIXEL;
     }
 
-    return new Promise((resolve) => {
+    const result = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
       reader.onerror = () => resolve(TRANSPARENT_PIXEL);
       reader.readAsDataURL(blob);
     });
+    
+    // Apply grayscale if requested
+    return isGrayscale ? await convertToGrayscale(result) : result;
   } catch (e) {
     console.warn('[PDF] Direct fetch failed, trying proxy:', url);
   }
@@ -66,7 +105,10 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
     const { data, error } = await supabase.functions.invoke('fetch-image-data-url', {
       body: { url },
     });
-    if (!error && data?.dataUrl) return data.dataUrl;
+    if (!error && data?.dataUrl) {
+      // Apply grayscale if requested
+      return isGrayscale ? await convertToGrayscale(data.dataUrl) : data.dataUrl;
+    }
     // Log but don't throw - just use transparent pixel
     if (error) console.warn('[PDF] Edge function error for:', url, error);
   } catch (e) {
@@ -178,8 +220,8 @@ const parseMarkdownToPdfMake = (text: string, imageMap: Map<string, string>): an
   return content;
 };
 
-export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, includeCoverPage, returnBlob }: GeneratePDFOptions): Promise<void | Blob> => {
-  console.log('[PDF] Starting pdfmake generation...');
+export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, includeCoverPage, returnBlob, isGrayscale = false }: GeneratePDFOptions): Promise<void | Blob> => {
+  console.log('[PDF] Starting pdfmake generation...', { isGrayscale });
 
   // A. Pre-fetch Images
   const chapterKeys = Object.keys(bookData).filter(k => k.startsWith('chapter') && k.endsWith('Content'));
@@ -196,10 +238,10 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
     if (match[1]) urls.push(match[1]);
   }
 
-  console.log(`[PDF] Pre-fetching ${urls.length} images...`);
+  console.log(`[PDF] Pre-fetching ${urls.length} images...${isGrayscale ? ' (Grayscale mode)' : ''}`);
   const imageMap = new Map<string, string>();
   await Promise.all(urls.map(async (url) => {
-    const b64 = await fetchImageAsBase64(url);
+    const b64 = await fetchImageAsBase64(url, isGrayscale);
     imageMap.set(url, b64);
   }));
 
@@ -302,8 +344,8 @@ export const generateCleanPDF = async ({ topic, bookData, coverImageUrl, include
       title: bookData.displayTitle || topic,
       author: 'Loom & Page',
     },
-    pageSize: { width: 432, height: 648 }, // 6x9 inches in points (72 per inch)
-    pageMargins: [63, 54, 45, 54], // 0.875" gutter for binding
+    pageSize: { width: 432, height: 648 }, // 6x9 inches in points (72 per inch) - KDP No Bleed
+    pageMargins: [63, 54, 45, 54], // L:0.875" gutter (binding), T:0.75", R:0.625", B:0.75" - all exceed 0.5" minimum
     
     footer: (currentPage: number, pageCount: number) => {
       if (currentPage <= 2) return null; // Skip title & copyright

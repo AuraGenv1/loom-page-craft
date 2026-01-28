@@ -66,6 +66,8 @@ interface PageViewerProps {
   tableOfContents?: Array<{ chapter: number; title: string }>;
   /** Callback when blocks are updated (for parent state sync) */
   onBlocksUpdate?: (chapter: number, blocks: PageBlock[]) => void;
+  /** Enable grayscale/B&W mode for PDF exports */
+  isGrayscale?: boolean;
 }
 
 // Loading state component
@@ -895,7 +897,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   isOfficial = false,
   topic = '',
   tableOfContents = [],
-  onBlocksUpdate
+  onBlocksUpdate,
+  isGrayscale = false
 }) => {
   const [blocks, setBlocks] = useState<PageBlockMeta[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
