@@ -20,14 +20,23 @@ interface ImageResult {
   width?: number;
   height?: number;
   isPrintReady?: boolean;
+  license?: string; // License type for metadata tracking
+}
+
+// Extended metadata passed to handlers for provenance tracking
+export interface ImageSelectMetadata {
+  source: 'unsplash' | 'pexels' | 'wikimedia';
+  originalUrl: string;
+  license: string;
+  attribution: string;
 }
 
 interface ImageSearchGalleryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialQuery: string;
-  onSelect: (imageUrl: string, attribution?: string) => void;
-  onSelectBlob?: (blob: Blob, attribution?: string) => void; // For cropped images
+  onSelect: (imageUrl: string, attribution?: string, metadata?: ImageSelectMetadata) => void;
+  onSelectBlob?: (blob: Blob, attribution?: string, metadata?: ImageSelectMetadata) => void; // For cropped images
   orientation?: 'landscape' | 'portrait';
   enableCrop?: boolean; // Enable crop feature for 6x9 format
   cropAspectRatio?: number; // Defaults to 6/9 for book pages; use 1 for cover image box
@@ -102,9 +111,28 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     }
   }, [query, orientation, forCover]);
 
+  // Helper to get license string for a source
+  const getLicenseForSource = (source: 'unsplash' | 'pexels' | 'wikimedia'): string => {
+    switch (source) {
+      case 'unsplash': return 'Unsplash License';
+      case 'pexels': return 'Pexels License';
+      case 'wikimedia': return 'CC0 Public Domain';
+      default: return 'Unknown License';
+    }
+  };
+
+  // Create metadata object from selected image
+  const createMetadata = (image: ImageResult): ImageSelectMetadata => ({
+    source: image.source,
+    originalUrl: image.imageUrl,
+    license: image.license || getLicenseForSource(image.source),
+    attribution: image.attribution || `Photo from ${image.source === 'unsplash' ? 'Unsplash' : image.source === 'pexels' ? 'Pexels' : 'Wikimedia Commons'}`,
+  });
+
   const handleSelect = useCallback(() => {
     if (!selectedImage || !hasConsented) return;
-    onSelect(selectedImage.imageUrl, selectedImage.attribution);
+    const metadata = createMetadata(selectedImage);
+    onSelect(selectedImage.imageUrl, selectedImage.attribution, metadata);
     onOpenChange(false);
   }, [selectedImage, hasConsented, onSelect, onOpenChange]);
 
@@ -116,16 +144,18 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   const handleCropComplete = useCallback(async (croppedBlob: Blob) => {
     if (!selectedImage) return;
     
+    const metadata = createMetadata(selectedImage);
+    
     // Always use onSelectBlob if available (it properly uploads cropped images)
     if (onSelectBlob) {
-      await onSelectBlob(croppedBlob, selectedImage.attribution);
+      await onSelectBlob(croppedBlob, selectedImage.attribution, metadata);
       setShowCropper(false);
       onOpenChange(false);
     } else {
       // Fallback: convert blob to data URL (for backwards compatibility)
       const reader = new FileReader();
       reader.onloadend = () => {
-        onSelect(reader.result as string, selectedImage.attribution);
+        onSelect(reader.result as string, selectedImage.attribution, metadata);
         setShowCropper(false);
         onOpenChange(false);
       };

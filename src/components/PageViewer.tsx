@@ -16,8 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ImageSearchGallery } from '@/components/ImageSearchGallery';
-import { uploadToBookImages } from '@/lib/bookImages';
+import { ImageSearchGallery, ImageSelectMetadata } from '@/components/ImageSearchGallery';
+import { uploadToBookImages, archiveExternalImage, saveImageMetadata, createUploadMetadata } from '@/lib/bookImages';
 
 // A stable key for a block that survives "preloaded" rehydration/replacement.
 // We cannot rely on `id` during generation because blocks may be replaced while
@@ -1210,8 +1210,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     setSearchDialogOpen(true);
   }, [blocks]);
 
-  // Handle image selection from gallery
-  const handleImageSelect = useCallback(async (imageUrl: string, attribution?: string) => {
+  // Handle image selection from gallery (with archiving for provenance)
+  const handleImageSelect = useCallback(async (imageUrl: string, attribution?: string, metadata?: ImageSelectMetadata) => {
     if (!searchingBlockId) return;
     
     const block = blocks.find(b => b.id === searchingBlockId);
@@ -1219,19 +1219,55 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     const key = getBlockKey(block);
 
     try {
-      // Update database with selected image
-      const { error: updateErr } = await supabase
-        .from('book_pages')
-        .update({ image_url: imageUrl })
-        .eq('id', searchingBlockId);
+      let finalImageUrl = imageUrl;
+      let imageMetadata = metadata;
 
-      if (updateErr) {
-        console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
+      // Archive the image to permanent storage if metadata is provided
+      if (metadata && hasValidDbId(block)) {
+        const archiveResult = await archiveExternalImage(
+          imageUrl,
+          block.book_id,
+          metadata.source,
+          metadata.attribution
+        );
+
+        if (archiveResult) {
+          finalImageUrl = archiveResult.archivedUrl;
+          // Save with full metadata
+          await saveImageMetadata(block.id, archiveResult.archivedUrl, archiveResult.metadata);
+        } else {
+          // Fallback: just save the URL without archiving
+          const { error: updateErr } = await supabase
+            .from('book_pages')
+            .update({ 
+              image_url: imageUrl,
+              image_source: metadata.source,
+              original_url: metadata.originalUrl,
+              image_license: metadata.license,
+              image_attribution: metadata.attribution,
+              archived_at: new Date().toISOString(),
+            })
+            .eq('id', searchingBlockId);
+
+          if (updateErr) {
+            console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
+          }
+        }
+      } else {
+        // No metadata - just update the URL
+        const { error: updateErr } = await supabase
+          .from('book_pages')
+          .update({ image_url: imageUrl })
+          .eq('id', searchingBlockId);
+
+        if (updateErr) {
+          console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
+        }
       }
 
       // Update local state
       setBlocksAndPropagate(block.chapter_number, (prev) =>
-        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: imageUrl } as PageBlock)))
+        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: finalImageUrl } as PageBlock)))
       );
 
       // Store attribution if present
@@ -1266,7 +1302,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     setUploadModalOpen(true);
   }, []);
 
-  // Handle image upload from modal
+  // Handle image upload from modal (with "Rights Certified" metadata)
   const handleImageUpload = useCallback(async (file: File) => {
     if (!uploadingBlockId) return;
 
@@ -1284,10 +1320,20 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         upsert: true,
       });
 
-      // Update database with new image URL (best-effort)
+      // Create metadata for user upload
+      const uploadMetadata = createUploadMetadata('Loom & Page Publisher');
+
+      // Update database with new image URL and metadata
       const { error: updateError } = await supabase
         .from('book_pages')
-        .update({ image_url: publicUrl })
+        .update({ 
+          image_url: publicUrl,
+          image_source: uploadMetadata.image_source,
+          original_url: uploadMetadata.original_url,
+          image_license: uploadMetadata.image_license,
+          image_attribution: uploadMetadata.image_attribution,
+          archived_at: uploadMetadata.archived_at,
+        })
         .eq('id', uploadingBlockId);
 
       if (updateError) {
@@ -1325,8 +1371,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, [uploadingBlockId, blocks, setBlocksAndPropagate]);
 
-  // Handle cropped image upload from gallery (when user crops before selecting)
-  const handleCroppedImageUpload = useCallback(async (croppedBlob: Blob, attribution?: string) => {
+  // Handle cropped image upload from gallery (with archiving for provenance)
+  const handleCroppedImageUpload = useCallback(async (croppedBlob: Blob, attribution?: string, metadata?: ImageSelectMetadata) => {
     if (!searchingBlockId) return;
 
     const block = blocks.find(b => b.id === searchingBlockId);
@@ -1345,14 +1391,29 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         upsert: true,
       });
 
-      // Update database with new image URL (best-effort)
-      const { error: updateError } = await supabase
-        .from('book_pages')
-        .update({ image_url: publicUrl })
-        .eq('id', searchingBlockId);
+      // Save with metadata if provided (from gallery selection before cropping)
+      if (metadata && hasValidDbId(block)) {
+        await supabase
+          .from('book_pages')
+          .update({ 
+            image_url: publicUrl,
+            image_source: metadata.source,
+            original_url: metadata.originalUrl, // Original URL before crop
+            image_license: metadata.license,
+            image_attribution: metadata.attribution,
+            archived_at: new Date().toISOString(),
+          })
+          .eq('id', searchingBlockId);
+      } else {
+        // Fallback: just update the URL
+        const { error: updateError } = await supabase
+          .from('book_pages')
+          .update({ image_url: publicUrl })
+          .eq('id', searchingBlockId);
 
-      if (updateError) {
-        console.warn('[PageViewer] Failed to persist cropped image_url to DB (continuing locally):', updateError);
+        if (updateError) {
+          console.warn('[PageViewer] Failed to persist cropped image_url to DB (continuing locally):', updateError);
+        }
       }
 
       // Update local state - preserves current page position

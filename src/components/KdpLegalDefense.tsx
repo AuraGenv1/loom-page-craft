@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ShieldCheck, Download, FileText, Loader2, AlertTriangle, Copy, Search } from 'lucide-react';
+import { ShieldCheck, Download, FileText, Loader2, AlertTriangle, Copy, Search, Image } from 'lucide-react';
 import { BookData } from '@/lib/bookTypes';
+import { supabase } from '@/integrations/supabase/client';
 import JSZip from 'jszip';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -22,12 +23,26 @@ const triggerDownload = (blob: Blob, filename: string) => {
   }, 1000);
 };
 
+// Image metadata from book_pages table
+interface ImagePageData {
+  page_order: number;
+  chapter_number: number;
+  content: { caption?: string; query?: string };
+  image_url: string | null;
+  image_source: string | null;
+  original_url: string | null;
+  image_license: string | null;
+  image_attribution: string | null;
+  archived_at: string | null;
+}
+
 interface KdpLegalDefenseProps {
   bookData: BookData;
+  bookId: string; // Book ID for fetching image metadata
   title: string;
 }
 
-const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) => {
+const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, title }) => {
   const publisherName = "Larvotto Ventures LLC DBA Loom & Page";
   
   // State
@@ -39,6 +54,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     hasRun: boolean;
   }>({ trademarks: [], repeats: [], facts: [], hasRun: false });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [imageCount, setImageCount] = useState<number | null>(null);
 
   const TRADEMARK_WATCHLIST = [
     'Disney', 'Marvel', 'Star Wars', 'Harry Potter', 'Nike', 'Coca-Cola', 'Lego', 
@@ -46,8 +62,22 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
   ];
 
   // --- 1. REAL SCAN LOGIC ---
-  const scanContent = () => {
+  const scanContent = async () => {
     setIsScanning(true);
+    
+    // Count images in database
+    try {
+      const { count } = await supabase
+        .from('book_pages')
+        .select('*', { count: 'exact', head: true })
+        .eq('book_id', bookId)
+        .in('block_type', ['image_full', 'image_half'])
+        .not('image_url', 'is', null);
+      
+      setImageCount(count || 0);
+    } catch (err) {
+      console.error('Failed to count images:', err);
+    }
     
     setTimeout(() => {
       let allText = bookData.chapter1Content || "";
@@ -109,30 +139,26 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     rtf += `TITLE: "${title}"\\par`;
     rtf += `DATE: ${dateStr}\\par\\par`;
     
-    // BODY - Note: Add a delimiter space after the final \\par so the next word isn't parsed as part of an RTF control word
-    // (e.g., "\\parThis" would drop "This" in some RTF readers).
+    // BODY
     rtf += `\\pard\\qj To the Amazon KDP Review Team:\\par\\par\\par `;
-    
-    // Add a delimiter space after the final \\par for safe RTF parsing.
     rtf += `This correspondence serves as a formal declaration regarding the copyright ownership and licensing for the title referenced above.\\par\\par `;
-    
     rtf += `Larvotto Ventures LLC DBA Loom & Page hereby confirms that we are the publisher of this work and hold all necessary publishing rights. The content was created under our direct supervision using the tools and licenses detailed below.\\par\\par `;
     
     // 1. TEXT
     rtf += `\\b 1. TEXT GENERATION (AI ASSISTED): \\b0 The manuscript for this book was drafted using Google Gemini 1.5 Pro (Commercial Enterprise License). I have manually reviewed, edited, and verified the content for accuracy and originality. In accordance with the Google Generative AI Terms of Service, users retain full ownership of generated content and are granted broad commercial rights.\\par\\par`;
     
-    // 2. IMAGES (Unsplash, Pexels, Wikimedia)
+    // 2. IMAGES
     rtf += `\\b 2. IMAGE LICENSING: \\b0 All images appearing in this book are sourced from one of the following platforms with appropriate commercial licenses:\\par`;
     rtf += `\\tab - \\b Unsplash: \\b0 Irrevocable Commercial License. Assets incorporated into creative design (Significant Modification).\\par`;
     rtf += `\\tab - \\b Pexels: \\b0 Free Commercial License. All photos and videos are free to use, with no attribution required.\\par`;
-    rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par\\par`;
+    rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par`;
+    rtf += `\\tab - \\b User Uploads: \\b0 Rights certified by publisher at time of upload.\\par\\par`;
+    rtf += `A complete Image Licensing Manifest (03_Image_Manifest.pdf) is included in this Defense Kit with detailed provenance for every image.\\par\\par`;
     
     // 3. TRADEMARKS
-    // Add delimiter space after the final \\par so the next line doesn't get parsed as part of an RTF control word
-    // (this was causing some readers to drop "Sincerely" and leave a stray comma on its own line).
     rtf += `\\b 3. TRADEMARK USAGE: \\b0 Any references to trademarked terms within the text are utilized strictly for descriptive, non-commercial, or educational commentary (Fair Use). No affiliation, sponsorship, or endorsement by any brand is implied or claimed.\\par\\par `;
     
-    // SIGNATURE - Add delimiter spaces after \\par to avoid "\\parLarvotto" being parsed as a control word (which can drop "Larvotto").
+    // SIGNATURE
     rtf += `Sincerely,\\par\\par `;
     rtf += `${publisherName}`;
     
@@ -140,7 +166,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     return rtf;
   };
 
-  // --- 3. PDF GENERATOR (jsPDF) ---
+  // --- 3. PDF GENERATOR (Evidence Dossier) ---
   const generatePdfBlob = (): Blob => {
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
@@ -265,6 +291,144 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     return doc.output('blob');
   };
 
+  // --- 4. IMAGE MANIFEST PDF GENERATOR ---
+  const generateImageManifestBlob = async (): Promise<Blob> => {
+    const doc = new jsPDF({ format: 'letter', unit: 'in' });
+    const dateStr = new Date().toLocaleDateString();
+
+    // Fetch all image blocks with metadata
+    const { data: imagePages, error } = await supabase
+      .from('book_pages')
+      .select('page_order, chapter_number, content, image_url, image_source, original_url, image_license, image_attribution, archived_at')
+      .eq('book_id', bookId)
+      .in('block_type', ['image_full', 'image_half'])
+      .not('image_url', 'is', null)
+      .order('chapter_number', { ascending: true })
+      .order('page_order', { ascending: true });
+
+    if (error) {
+      console.error('Failed to fetch image pages:', error);
+      throw new Error('Failed to fetch image data');
+    }
+
+    const images = (imagePages || []) as ImagePageData[];
+
+    // Header
+    doc.setFont("times", "bold");
+    doc.setFontSize(16);
+    doc.text("IMAGE LICENSING MANIFEST", 4.25, 0.8, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("times", "normal");
+    doc.text(`Book: ${title}`, 4.25, 1.1, { align: "center" });
+    doc.text(`Publisher: ${publisherName}`, 4.25, 1.3, { align: "center" });
+    doc.text(`Generated: ${dateStr} | Total Images: ${images.length}`, 4.25, 1.5, { align: "center" });
+
+    // Divider
+    doc.setLineWidth(0.01);
+    doc.line(0.75, 1.7, 7.75, 1.7);
+
+    // Table headers
+    let y = 2.0;
+    const colWidths = { page: 0.5, chapter: 0.6, caption: 1.8, source: 0.8, license: 1.2, urls: 2.3 };
+    const startX = 0.75;
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(8);
+    doc.text("Page", startX, y);
+    doc.text("Ch.", startX + colWidths.page, y);
+    doc.text("Caption/Description", startX + colWidths.page + colWidths.chapter, y);
+    doc.text("Source", startX + colWidths.page + colWidths.chapter + colWidths.caption, y);
+    doc.text("License", startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source, y);
+    doc.text("Archived URL", startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license, y);
+
+    y += 0.15;
+    doc.setLineWidth(0.005);
+    doc.line(startX, y, 7.75, y);
+    y += 0.2;
+
+    // Rows
+    doc.setFont("times", "normal");
+    doc.setFontSize(7);
+
+    for (const img of images) {
+      // Check if we need a new page
+      if (y > 10) {
+        doc.addPage();
+        y = 1.0;
+        
+        // Repeat headers
+        doc.setFont("times", "bold");
+        doc.setFontSize(8);
+        doc.text("Page", startX, y);
+        doc.text("Ch.", startX + colWidths.page, y);
+        doc.text("Caption/Description", startX + colWidths.page + colWidths.chapter, y);
+        doc.text("Source", startX + colWidths.page + colWidths.chapter + colWidths.caption, y);
+        doc.text("License", startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source, y);
+        doc.text("Archived URL", startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license, y);
+
+        y += 0.15;
+        doc.setLineWidth(0.005);
+        doc.line(startX, y, 7.75, y);
+        y += 0.2;
+        doc.setFont("times", "normal");
+        doc.setFontSize(7);
+      }
+
+      const content = img.content as { caption?: string; query?: string };
+      const caption = content?.caption || content?.query || 'No caption';
+      const truncatedCaption = caption.length > 50 ? caption.substring(0, 47) + '...' : caption;
+      
+      const source = img.image_source || 'Unknown';
+      const license = img.image_license || 'Unknown';
+      const truncatedLicense = license.length > 20 ? license.substring(0, 17) + '...' : license;
+      
+      // Format source display
+      const sourceDisplay = source === 'upload' ? 'Upload' : 
+                           source === 'unsplash' ? 'Unsplash' :
+                           source === 'pexels' ? 'Pexels' :
+                           source === 'wikimedia' ? 'Wikimedia' : source;
+
+      // Truncate URL for display
+      const archivedUrl = img.image_url || '';
+      const truncatedUrl = archivedUrl.length > 45 ? archivedUrl.substring(0, 42) + '...' : archivedUrl;
+
+      doc.text(String(img.page_order), startX, y);
+      doc.text(String(img.chapter_number), startX + colWidths.page, y);
+      doc.text(truncatedCaption, startX + colWidths.page + colWidths.chapter, y);
+      doc.text(sourceDisplay, startX + colWidths.page + colWidths.chapter + colWidths.caption, y);
+      doc.text(truncatedLicense, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source, y);
+      
+      // URL as link
+      doc.setTextColor(0, 0, 255);
+      doc.text(truncatedUrl, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license, y);
+      doc.setTextColor(0, 0, 0);
+
+      y += 0.25;
+
+      // Add original URL on next line if different from archived
+      if (img.original_url && img.original_url !== img.image_url) {
+        const truncatedOriginal = img.original_url.length > 60 ? img.original_url.substring(0, 57) + '...' : img.original_url;
+        doc.setFontSize(6);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Original: ${truncatedOriginal}`, startX + colWidths.page + colWidths.chapter, y);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(7);
+        y += 0.2;
+      }
+    }
+
+    // Footer note
+    y += 0.3;
+    doc.setFontSize(8);
+    doc.setFont("times", "italic");
+    const footerNote = "This manifest documents the provenance of all images used in this publication. Archived URLs point to permanent copies stored in our secure infrastructure. Original URLs document the source for legal verification.";
+    const splitFooter = doc.splitTextToSize(footerNote, 7);
+    doc.text(splitFooter, 0.75, y);
+
+    return doc.output('blob');
+  };
+
   // --- HANDLERS ---
 
   const handleDownloadTxt = () => {
@@ -284,12 +448,30 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
     }
   };
 
+  const handleDownloadManifest = async () => {
+    try {
+      setIsGenerating(true);
+      const blob = await generateImageManifestBlob();
+      triggerDownload(blob, '03_Image_Manifest.pdf');
+      toast.success('Image Manifest downloaded!');
+    } catch (e) {
+      console.error(e);
+      toast.error('Manifest Generation Failed');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleDownloadZip = async () => {
     setIsGenerating(true);
     try {
       const zip = new JSZip();
       zip.file("01_Declaration_Letter.rtf", getRtfContent());
       zip.file("02_Evidence_Dossier.pdf", generatePdfBlob());
+      
+      // Generate and add Image Manifest
+      const manifestBlob = await generateImageManifestBlob();
+      zip.file("03_Image_Manifest.pdf", manifestBlob);
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
       triggerDownload(zipBlob, `Defense_Kit_${title.substring(0, 15).replace(/[^a-z0-9]/gi, '_')}.zip`);
@@ -313,7 +495,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
             <div>
               <h3 className="font-semibold text-base">Copyright Defense</h3>
               <p className="text-xs text-muted-foreground">
-                {scanResults.hasRun ? 'Scan complete.' : 'Scan content to verify risks.'}
+                {scanResults.hasRun 
+                  ? `Scan complete. ${imageCount !== null ? `${imageCount} images tracked.` : ''}` 
+                  : 'Scan content to verify risks.'}
               </p>
             </div>
           </div>
@@ -340,9 +524,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
                </div>
              </div>
              <div className="p-2 rounded-md bg-secondary/50 flex items-start gap-2">
-               <FileText className="w-4 h-4 shrink-0 text-blue-500" />
+               <Image className="w-4 h-4 shrink-0 text-blue-500" />
                <div>
-                <p className="font-medium">Fact Claims Checked: {scanResults.facts.length}</p>
+                <p className="font-medium">Images Tracked: {imageCount ?? '...'}</p>
                </div>
              </div>
           </div>
@@ -360,7 +544,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
               {isGenerating ? 'Packaging...' : 'Download Defense Kit (.zip)'}
             </Button>
             <p className="text-[10px] text-muted-foreground">
-              Includes signed Declaration Letter (.rtf) & Evidence PDF.
+              Includes Declaration Letter, Evidence PDF, and Image Manifest.
             </p>
           </div>
 
@@ -370,15 +554,20 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, title }) =>
             <div className="flex-1 border-t" />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Button variant="outline" size="sm" onClick={handleDownloadTxt}>
               <FileText className="w-4 h-4 mr-1 text-blue-600" />
-              Declaration (.rtf)
+              Declaration
             </Button>
 
             <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
               <FileText className="w-4 h-4 mr-1 text-red-600" />
-              Evidence (.pdf)
+              Evidence
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={handleDownloadManifest} disabled={isGenerating}>
+              <Image className="w-4 h-4 mr-1 text-green-600" />
+              Manifest
             </Button>
           </div>
 
