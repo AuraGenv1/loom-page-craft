@@ -1,156 +1,130 @@
 
-# Plan: Preserve Book View & Upgrade KDP Prep Tab
+## What’s actually happening (root cause)
 
-This plan addresses two related issues:
-1. **Session Persistence Bug**: Books disappear when auth state changes
-2. **KDP Prep Tab Enhancements**: Auto-generation, rich text preview, smart keywords
+Your “Image Manifest” generator (`src/components/KdpLegalDefense.tsx`) is doing the right thing logically:
+- it queries `book_pages` for image blocks
+- if `image_url` is missing, it fetches an image and hydrates metadata
+- then it prints the manifest table
+
+But in your environment, this query is returning **zero rows**:
+
+```ts
+supabase
+  .from('book_pages')
+  .select(...)
+  .eq('book_id', bookId)
+  .in('block_type', ['image_full', 'image_half'])
+```
+
+It’s not returning an error — it’s returning `[]`, which makes the manifest “empty.”
+
+### Why the query returns `[]` even though rows exist
+
+Your `book_pages` RLS policies check access by doing:
+
+```sql
+EXISTS (SELECT 1 FROM books WHERE books.id = book_pages.book_id AND ...)
+```
+
+However, your `books` table does **not** allow guest/anon reads. That means inside the policy, the `books` table appears “invisible,” so the `EXISTS (...)` check evaluates to false, and Postgres filters out every `book_pages` row.
+
+This also explains the network logs you saw earlier: repeated `GET /book_pages ... Response Body: []` even right after insertion.
+
+So the manifest isn’t empty because images are missing; it’s empty because the frontend can’t read the image-block rows at all.
 
 ---
 
-## Part 1: Preserve Book View During Session Changes
+## Fix strategy (what we will change)
 
-### Problem Summary
-Once a book is generated, the application unexpectedly returns to the landing page when:
-- A Supabase auth session times out or fails to refresh
-- The browser regains focus and triggers an auth state re-check
-- Any re-render causes the effect at lines 227-236 to detect `user === null`
+### A) Backend (database policy fix): allow reading “guest books” rows so `book_pages` RLS can evaluate
 
-### Root Cause
-The code at lines 227-236 in `src/pages/Index.tsx` treats "no authenticated user" as a signal to reset the entire UI:
+We will add a **new SELECT policy** on `books` that allows reads when `books.user_id IS NULL`.
 
-```typescript
-if (!user) {
-  setViewState('landing');  // Forces home page
-  setBookData(null);        // Clears book
-  setBookId(null);          // Clears ID
-  // ...
-}
-```
+This is the minimal fix that:
+- makes `books` visible to the `book_pages` policy’s `EXISTS` subquery
+- immediately makes `book_pages` readable again for guest books
+- unblocks the manifest generator (and also unblocks chapter hydration reads in `Index.tsx` / `PageViewer.tsx`)
 
-This runs on **every** change to `user` or `authLoading`, not just on initial mount.
+**Important note (security trade-off):**
+This makes all “guest books” (books with `user_id = NULL`) readable by the public role. If you want guest books to be private-per-device, we’ll do the stronger solution afterward (see “Hardening option” below).
 
-### Solution: "Once Generated, Stay Generated"
+### B) Frontend (better diagnostics): if the DB returns 0 blocks, show a clear error and guidance
 
-Add an `isInitialMount` ref to distinguish first load from subsequent auth state changes. Only reset to landing on fresh page loads, not when the user is already viewing content.
+Right now, the manifest can silently produce a 0-image PDF with no explanation.
 
-### Technical Changes
+We will update `generateImageManifestBlob()` to:
+- detect `blocks.length === 0`
+- show a toast like:
+  - “No image blocks found in the database for this book. This usually indicates a permissions/policy issue.”
+- include a small “debug line” in the PDF header (optional) indicating `Blocks Found: 0`
 
-**File: `src/pages/Index.tsx`**
-
-| Change | Description |
-|--------|-------------|
-| Add `isInitialMount` ref | Track whether component is mounting for first time |
-| Guard the reset logic | Check if `viewState === 'book'` before resetting |
-| Mark initial mount complete | Set ref to `false` after first load completes |
+This makes future failures obvious instead of feeling like the AI “did nothing.”
 
 ---
 
-## Part 2: Upgrade KDP Prep Tab
+## Implementation steps (exact changes)
 
-### Feature 1: Auto-Generate on Load (Zero-Click)
+### 1) Create a database migration (Lovable Cloud backend)
+Add a new RLS policy to `public.books`:
 
-When the KDP Prep tab opens, if Description, Subtitle, or Keywords are empty, automatically trigger AI generation for all of them.
+- Policy name: `Guests can view guest books`
+- Command: `SELECT`
+- Condition: `user_id IS NULL`
+- Target roles: `public` (or `anon, authenticated` depending on your preference; we’ll pick the safest option compatible with your current UX)
 
-**Implementation:**
-- Add a `useEffect` with an `hasInitialized` ref to prevent duplicate calls
-- Check if fields are empty on mount
-- If empty, call all three generation functions in parallel
-- Show `WeavingLoader` component with "Preparing Amazon metadata..." text
+This should make:
+- `book_pages` SELECT start returning rows (because its policy’s `EXISTS (SELECT 1 FROM books …)` can finally “see” the books row)
+- the Image Manifest query return image blocks
+- the manifest hydration step run and populate rows
 
-**File: `src/components/KdpPrepDashboard.tsx`**
+### 2) Update `src/components/KdpLegalDefense.tsx`
+In `ensureImagesForManifest()`:
+- after fetching `allImageBlocks`, if `blocks.length === 0`, show a toast warning/error (and optionally throw a friendly error so the download doesn’t proceed).
 
-```text
-Current State:
-- User must manually click 3 buttons to populate fields
+Also, add a console log:
+- `[ImageManifest] Found X image blocks in DB for bookId=...`
 
-After Change:
-- On tab open: check empty fields
-- If empty: show WeavingLoader, call all 3 APIs in parallel
-- When complete: hide loader, show populated fields
-```
+This is purely to stop “silent empty manifest” outcomes.
 
-### Feature 2: Rich Text Description Mode (WYSIWYG Preview)
-
-Replace the raw HTML textarea with a dual-mode view: users see formatted text but copy raw HTML.
-
-**Implementation Approach:**
-- Use `dangerouslySetInnerHTML` for the preview (the content is AI-generated, not user-input)
-- Add a toggle between "Preview" and "Edit" modes
-- Create a styled container that renders `<b>`, `<i>`, `<ul>`, `<li>` tags correctly
-- Keep the "Copy to Clipboard" button copying the raw HTML string
-
-**UI Layout:**
-
-```text
-┌─────────────────────────────────────────────────┐
-│  Book Description                    [Preview ▼]│
-├─────────────────────────────────────────────────┤
-│                                                 │
-│  Are you ready to transform your life?          │
-│                                                 │
-│  • Discover the secrets of success              │
-│  • Learn step-by-step techniques                │
-│  • Master the art of productivity               │
-│                                                 │
-│  This book will change everything...            │
-│                                                 │
-├─────────────────────────────────────────────────┤
-│  [✨ Write Description]  [📋 Copy HTML to Clipboard] │
-└─────────────────────────────────────────────────┘
-```
-
-**File: `src/components/KdpPrepDashboard.tsx`**
-
-| Change | Description |
-|--------|-------------|
-| Add `viewMode` state | Toggle between `'preview'` and `'edit'` |
-| Add preview container | Styled div with `dangerouslySetInnerHTML` |
-| Update Copy button | Label clarifies it copies HTML code |
-| Add mode toggle | Dropdown or tabs for Preview/Edit |
-
-### Feature 3: Advanced Keyword Logic (No-Repeat Rule)
-
-Update the AI prompt to forbid using words from the book title in keywords.
-
-**Implementation:**
-- Modify the `kdp-keywords` prompt in the edge function
-- Add explicit instruction: "Do NOT use any major words from the title"
-- Include the title words in the prompt for the AI to reference
-
-**File: `supabase/functions/generate-book-v2/index.ts`**
-
-**Updated Prompt:**
-```text
-CRITICAL CONSTRAINT - THE "NO-REPEAT" RULE:
-You are STRICTLY FORBIDDEN from using any major words that already 
-appear in the Book Title: "${title}"
-
-Amazon penalizes repetitive keywords. Extract the main words from 
-the title above and ensure NONE of them appear in your keywords.
-
-Example:
-- Title: "The Art of Digital Photography"
-- BANNED words: art, digital, photography
-- GOOD keyword: "beginner camera techniques"
-- BAD keyword: "digital photography tips" (uses banned words)
-```
+### 3) Validate end-to-end
+Test flow:
+1. Hard refresh
+2. Generate a brand-new book
+3. Without clicking through chapters, immediately download the Defense Kit / Image Manifest
+4. Confirm:
+   - DB query returns blocks
+   - manifest includes rows (and not just header with Total Images: 0)
 
 ---
 
-## Summary of All Changes
+## Hardening option (recommended next, if you don’t want guest books publicly readable)
 
-| File | Changes |
-|------|---------|
-| `src/pages/Index.tsx` | Add `isInitialMount` ref, guard reset logic to preserve book view during auth changes |
-| `src/components/KdpPrepDashboard.tsx` | Add auto-generation on mount, add rich text preview mode, update copy button label |
-| `supabase/functions/generate-book-v2/index.ts` | Update `kdp-keywords` prompt with "No-Repeat Rule" constraint |
+If you want “guest books are only visible to the device/session that created them,” RLS alone can’t see localStorage — so we’d implement a small backend function:
 
-## Behavior Summary
+- A backend function (server-side) `get-manifest-image-blocks` (or `get-book-pages`) that accepts `{ bookId, sessionId }`
+- It verifies:
+  - If logged in: `books.user_id === auth.uid()`
+  - Else: `books.session_id === sessionId AND books.user_id IS NULL`
+- Then returns image blocks using service-level access
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| Guest generates book, waits 5 min | Resets to landing | Stays on book |
-| User opens KDP Prep tab | Empty fields, manual clicks | Auto-populates with WeavingLoader |
-| User views description | Sees raw `<b>`, `<li>` tags | Sees formatted bold, bullets |
-| User clicks Copy | Copies raw HTML | Copies raw HTML (labeled clearly) |
-| AI generates keywords for "Digital Photography" | May include "photography tips" | Never includes title words |
+Then the frontend manifest generator uses that function instead of direct `.from('book_pages').select(...)`.
+
+This avoids making guest books globally readable and is the “proper” privacy-preserving architecture.
+
+---
+
+## Files involved
+
+**Backend migration**
+- New migration SQL for RLS policy on `public.books`
+
+**Frontend**
+- `src/components/KdpLegalDefense.tsx` (add guardrails + clear error reporting)
+
+---
+
+## Why this will finally fix the “empty manifest”
+Because it addresses the actual failure point:
+- currently: `book_pages` rows exist, but are filtered to `[]` due to `books` being unreadable under RLS
+- after fix: `books` becomes readable for guest books → `book_pages` policy can evaluate → image blocks return → hydration runs → manifest fills
+
