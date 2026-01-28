@@ -9,7 +9,7 @@ const corsHeaders = {
 interface ArchiveRequest {
   imageUrl: string;
   bookId: string;
-  source: 'unsplash' | 'pexels' | 'wikimedia';
+  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia';
   license?: string;
   attribution?: string;
 }
@@ -136,6 +136,8 @@ function getLicenseForSource(source: string): string {
       return 'Unsplash License';
     case 'pexels':
       return 'Pexels License';
+    case 'pixabay':
+      return 'Pixabay License';
     case 'wikimedia':
       return 'CC0 Public Domain';
     default:
@@ -149,6 +151,8 @@ function getDefaultAttribution(source: string): string {
       return 'Photo from Unsplash';
     case 'pexels':
       return 'Photo from Pexels';
+    case 'pixabay':
+      return 'Image from Pixabay';
     case 'wikimedia':
       return 'Image from Wikimedia Commons';
     default:
