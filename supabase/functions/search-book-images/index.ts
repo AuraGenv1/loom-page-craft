@@ -40,6 +40,7 @@ function cleanQuery(rawQuery: string): string {
 }
 
 // Search Unsplash and return multiple results (max 30 per request)
+// Now uses raw URL with high-res params for KDP print quality
 async function searchUnsplashMultiple(
   query: string, 
   orientation: 'landscape' | 'portrait' = 'landscape',
@@ -67,7 +68,8 @@ async function searchUnsplashMultiple(
     });
 
     if (!response.ok) {
-      console.error('[Unsplash] API error:', response.status);
+      const errorText = await response.text();
+      console.error('[Unsplash] API error:', response.status, errorText);
       return [];
     }
 
@@ -89,11 +91,17 @@ async function searchUnsplashMultiple(
         continue;
       }
       
+      // HIGH-RES: Use raw URL with explicit 2000px width and 80% quality for KDP
+      let imageUrl = photo.urls?.raw;
+      if (imageUrl) {
+        imageUrl = `${imageUrl}&w=2000&q=80&fm=jpg`;
+      } else {
+        imageUrl = photo.urls?.full || photo.urls?.regular;
+      }
+      
       results.push({
         id: `unsplash-${photo.id}`,
-        // IMPORTANT: Use 'regular' or 'full' for database storage (high-res)
-        imageUrl: photo.urls?.regular || photo.urls?.full,
-        // Use 'small' for thumbnail preview only
+        imageUrl: imageUrl || photo.urls?.regular,
         thumbnailUrl: photo.urls?.small || photo.urls?.thumb,
         source: 'unsplash' as const,
         width,
@@ -367,6 +375,169 @@ async function searchWikimediaMultiple(query: string, limit: number = 20, filter
   }
 }
 
+// SMART WIKIPEDIA SEARCH: Find the main image from a Wikipedia article
+// This is for specific locations/landmarks (e.g., "The Ritz London", "Hotel Jerome")
+// Returns the verified, official photo with proper licensing
+async function searchWikipediaArticleImage(query: string, filterForCover: boolean = false): Promise<ImageResult | null> {
+  try {
+    console.log(`[WikipediaArticle] Searching for article: "${query}"`);
+    
+    // Step 1: Search for the Wikipedia article
+    const searchParams = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      list: 'search',
+      srsearch: query,
+      srlimit: '3', // Get top 3 matches
+      origin: '*',
+    });
+
+    const searchUrl = `https://en.wikipedia.org/w/api.php?${searchParams}`;
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app; contact@lovable.dev)',
+      },
+    });
+
+    if (!searchResponse.ok) {
+      console.error('[WikipediaArticle] Search API error:', searchResponse.status);
+      return null;
+    }
+
+    const searchData = await searchResponse.json();
+    const articles = searchData.query?.search || [];
+    
+    if (articles.length === 0) {
+      console.log('[WikipediaArticle] No articles found for:', query);
+      return null;
+    }
+
+    // Step 2: Get the page images for the best matching article
+    const articleTitle = articles[0].title;
+    console.log(`[WikipediaArticle] Found article: "${articleTitle}"`);
+
+    const imageParams = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      titles: articleTitle,
+      prop: 'pageimages|images',
+      piprop: 'original', // Get original (full-res) image
+      pithumbsize: '2000', // Request high-res thumbnail as fallback
+      imlimit: '10',
+      origin: '*',
+    });
+
+    const imageUrl = `https://en.wikipedia.org/w/api.php?${imageParams}`;
+    const imageResponse = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app; contact@lovable.dev)',
+      },
+    });
+
+    if (!imageResponse.ok) {
+      console.error('[WikipediaArticle] Image API error:', imageResponse.status);
+      return null;
+    }
+
+    const imageData = await imageResponse.json();
+    const pages = imageData.query?.pages;
+    
+    if (!pages) {
+      console.log('[WikipediaArticle] No pages returned for:', articleTitle);
+      return null;
+    }
+
+    const page = Object.values(pages)[0] as any;
+    const originalImage = page?.original;
+    
+    if (!originalImage?.source) {
+      console.log('[WikipediaArticle] No main image for article:', articleTitle);
+      return null;
+    }
+
+    // Step 3: Get detailed image info from Wikimedia Commons for licensing
+    const imageName = originalImage.source.split('/').pop()?.split('?')[0];
+    if (!imageName) {
+      console.log('[WikipediaArticle] Could not extract image name');
+      return null;
+    }
+
+    // Decode the filename for the API query
+    const decodedName = decodeURIComponent(imageName);
+    
+    const infoParams = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      titles: `File:${decodedName}`,
+      prop: 'imageinfo',
+      iiprop: 'url|extmetadata|size',
+      origin: '*',
+    });
+
+    const infoUrl = `https://commons.wikimedia.org/w/api.php?${infoParams}`;
+    const infoResponse = await fetch(infoUrl, {
+      headers: {
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app; contact@lovable.dev)',
+      },
+    });
+
+    let width = originalImage.width || 0;
+    let height = originalImage.height || 0;
+    let artist = 'Wikipedia';
+    let license = 'Wikipedia License';
+    let finalImageUrl = originalImage.source;
+
+    if (infoResponse.ok) {
+      const infoData = await infoResponse.json();
+      const infoPages = infoData.query?.pages;
+      
+      if (infoPages) {
+        const infoPage = Object.values(infoPages)[0] as any;
+        const imageInfo = infoPage?.imageinfo?.[0];
+        
+        if (imageInfo) {
+          // Use Commons metadata for proper licensing
+          width = imageInfo.width || width;
+          height = imageInfo.height || height;
+          finalImageUrl = imageInfo.url || finalImageUrl;
+          
+          const metadata = imageInfo.extmetadata || {};
+          artist = metadata.Artist?.value?.replace(/<[^>]*>/g, '').trim() || 'Wikipedia';
+          license = metadata.LicenseShortName?.value || metadata.License?.value || 'Wikipedia';
+        }
+      }
+    }
+
+    // KDP QUALITY GATE: Must be 1800px+ for print
+    if (width < PRINT_READY_WIDTH) {
+      console.log(`[WikipediaArticle] Image too small for print (${width}px < ${PRINT_READY_WIDTH}px), discarding`);
+      return null;
+    }
+
+    // COVER LICENSE FILTER
+    if (filterForCover && !isCoverSafeLicense(license)) {
+      console.log(`[WikipediaArticle] License not safe for cover: ${license}`);
+      return null;
+    }
+
+    console.log(`[WikipediaArticle] SUCCESS: Found verified image for "${articleTitle}" (${width}x${height}px, ${license})`);
+
+    return {
+      id: `wikipedia-article-${articleTitle.replace(/\s+/g, '-').toLowerCase()}`,
+      imageUrl: finalImageUrl,
+      thumbnailUrl: originalImage.source, // Use the Wikipedia-provided URL for thumbnail
+      attribution: `${artist} / ${license}`,
+      source: 'wikimedia', // Use wikimedia source type for consistency
+      width,
+      height,
+      isPrintReady: width >= PRINT_READY_WIDTH,
+    };
+  } catch (error) {
+    console.error('[WikipediaArticle] Fetch error:', error);
+    return null;
+  }
+}
+
 // Extract location/topic for grounding searches
 function extractTopicAnchor(topic: string | undefined): string | null {
   if (!topic) return null;
@@ -425,6 +596,10 @@ serve(async (req) => {
     // Anchor the query to the book's topic for relevance
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
+    // SMART WIKIPEDIA ARTICLE SEARCH: Try to find the verified main image first
+    // This works best for specific locations, landmarks, hotels, etc.
+    const wikipediaArticleResult = await searchWikipediaArticleImage(cleanedQuery, forCover);
+
     // Search all sources in parallel - INCREASED LIMITS for more variety
     // Unsplash: 4 pages of 30 = 120 results max (before filtering)
     // Pexels: 2 pages of 80 = 160 results max (before filtering)
@@ -453,8 +628,16 @@ serve(async (req) => {
     const pixabayResults = [...pixabayPage1];
     const wikimediaResults = [...wikimediaResults1, ...wikimediaResults2];
     
-    // Interleave: 3 Unsplash, 2 Pexels, 2 Pixabay, 1 Wikimedia pattern for variety
+    // Build final results array
     const allResults: ImageResult[] = [];
+    
+    // PRIORITY: If Wikipedia article image found and is high-quality, add it FIRST
+    if (wikipediaArticleResult) {
+      allResults.push(wikipediaArticleResult);
+      console.log(`[search-book-images] Added verified Wikipedia article image as first result`);
+    }
+    
+    // Interleave remaining sources: 3 Unsplash, 2 Pexels, 2 Pixabay, 1 Wikimedia pattern for variety
     let uIdx = 0, pIdx = 0, xIdx = 0, wIdx = 0;
     while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
       // Add up to 3 Unsplash
@@ -478,7 +661,7 @@ serve(async (req) => {
     // Count print-ready images
     const printReadyCount = allResults.filter(img => img.isPrintReady).length;
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (WikiArticle: ${wikipediaArticleResult ? 1 : 0}, Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
@@ -488,9 +671,10 @@ serve(async (req) => {
           unsplash: unsplashResults.length,
           pexels: pexelsResults.length,
           pixabay: pixabayResults.length,
-          wikimedia: wikimediaResults.length,
+          wikimedia: wikimediaResults.length + (wikipediaArticleResult ? 1 : 0),
         },
         printReadyCount,
+        hasVerifiedArticleImage: !!wikipediaArticleResult,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
