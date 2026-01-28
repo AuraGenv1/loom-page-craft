@@ -90,42 +90,37 @@ RULE 1: GOLDILOCKS DENSITY (300-320 Words)
 - Target exactly 310 words per text block to perfectly fill the layout without overflow.
 - Be substantive. Every paragraph must add value and depth.
 
-RULE 2: HALF-PAGE IMAGES ONLY (NO FULL-PAGE!)
-- Use "image_half" blocks to add visual interest scattered between text blocks.
-- DO NOT generate any "image_full" blocks - they are FORBIDDEN.
-- NEVER place two image blocks consecutively. Always have at least one text block between images.
-- Each chapter MUST follow this rhythm:
+RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
+Each chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first)
-  6-8x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
-  2-3x Half-Page Images (image_half blocks scattered between text blocks)
+  1-2x Full-Page "Hero" Images (image_full blocks)
+  4-6x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
   1x Pro Tip Page (ALWAYS last block)
+- BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 3: STRUCTURAL DEPTH (Spine Compliance)
+RULE 3: NO FACES & HIGH AESTHETIC (Image Queries)
+- For ALL image queries, prioritize: "Architecture," "Atmosphere," "Texture," "Macro," "Landscape," "Still Life."
+- STRICTLY FORBIDDEN in image queries: human faces, people, portraits, crowds, selfies.
+- Do NOT append "no people" manually. Just describe a scene that naturally lacks people.
+
+RULE 4: STRUCTURAL DEPTH (Spine Compliance)
 - TARGET: ${targetTotalPages}+ total pages across all chapters.
 - If the topic is COMPLEX: Use 12-15 chapters with focused subtopics.
 - If the topic is NARROW: Use ${minChapters} chapters but include "Deep Dive" sub-pages.
 - CONSTRAINT: NEVER repeat facts, paragraphs, or filler content.
 
-TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - Rich descriptive prose, 3 images per chapter' : 'INFORMATIONAL (Business/Science/History) - Analytical text depth, 2 images per chapter'}
+TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - More hero images, atmospheric' : 'INFORMATIONAL (Business/Science/History) - More text depth, fewer images'}
 TARGET PAGES PER CHAPTER: ${pagesPerChapter}
 MINIMUM CHAPTERS: ${minChapters}
 
-Block types available (ONLY use these FOUR - NO image_full!):
+Block types available (ONLY use these - NO quote blocks!):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
 - "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
-- "image_half": { "query": "${cleanTopic} specific search terms", "caption": "Descriptive caption" } - Half-page images
+- "image_full": { "query": "Literal visual description (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
-
-ABSOLUTELY FORBIDDEN BLOCK TYPES:
-- "image_full" - DO NOT USE (full-page images are disabled)
-- "heading" - DO NOT USE
-- "list" - DO NOT USE
-- "quote" - DO NOT USE
-- "divider" - DO NOT USE
-
-IMPORTANT IMAGE RULES:
-- Use literal, specific queries matching the topic (e.g., "${cleanTopic} scenic view", "${cleanTopic} landmark").
-- NEVER place two image_half blocks back-to-back. Always separate with text.
+- "heading": { "level": 2, "text": "Section heading" }
+- "list": { "items": ["item 1", "item 2", "item 3"] }
+- "divider": { "style": "minimal" } - Use for visual breaks
 
 Return ONLY valid JSON:
 {
@@ -140,12 +135,11 @@ Return ONLY valid JSON:
   ],
   "chapter_1_blocks": [
     {"block_type": "chapter_title", "content": {"chapter_number": 1, "title": "Introduction"}},
+    {"block_type": "image_full", "content": {"query": "atmospheric landscape scene", "caption": "Setting the scene"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of opening content...]"}},
-    {"block_type": "image_half", "content": {"query": "${cleanTopic} scenic landscape", "caption": "A breathtaking view of..."}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of continued content...]"}},
+    {"block_type": "image_full", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of content...]"}},
-    {"block_type": "image_half", "content": {"query": "${cleanTopic} landmark architecture", "caption": "The iconic..."}},
-    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[Final section with Key Takeaway...]"}},
     {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
 }
@@ -235,32 +229,12 @@ Language: ${language}`;
 
     console.log(`[generate-book-blocks] Created book: ${book.id}`);
 
-    // Filter out full-page images only, keep half-page images
-    // Also ensure no back-to-back image blocks
-    let tempBlocks = (aiData.chapter_1_blocks || []).filter((block: any) => {
-      const type = block?.block_type;
-      return type !== 'image_full'; // Only remove full-page, keep image_half
-    });
-
-    // Ensure no back-to-back image blocks
-    const filteredBlocks: any[] = [];
-    for (let i = 0; i < tempBlocks.length; i++) {
-      const current = tempBlocks[i];
-      const prev = filteredBlocks[filteredBlocks.length - 1];
-      
-      if (current?.block_type === 'image_half' && prev?.block_type === 'image_half') {
-        console.log(`[generate-book-blocks] Skipping back-to-back image at index ${i}`);
-        continue;
-      }
-      filteredBlocks.push(current);
-    }
-
-    // Insert page blocks for Chapter 1 (no image blocks)
-    const blocksToInsert = filteredBlocks.map((block: any, index: number) => ({
+    // Insert page blocks for Chapter 1 (force image_half -> image_full)
+    const blocksToInsert = (aiData.chapter_1_blocks || []).map((block: any, index: number) => ({
       book_id: book.id,
       chapter_number: 1,
       page_order: index + 1,
-      block_type: block.block_type,
+      block_type: block.block_type === 'image_half' ? 'image_full' : block.block_type,
       content: block.content,
       image_url: null
     }));

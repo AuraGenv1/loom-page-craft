@@ -29,9 +29,6 @@ const NOISE_PHRASES = [
   'without people',
 ];
 
-// Safety suffix to append to queries for face-free results
-const FACE_SAFETY_SUFFIX = ' architecture landscape nature -people -face -portrait -crowd -person';
-
 function cleanQuery(rawQuery: string): string {
   let cleaned = rawQuery.toLowerCase();
   for (const phrase of NOISE_PHRASES) {
@@ -348,22 +345,18 @@ serve(async (req) => {
     
     // Anchor the query to the book's topic for relevance
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
-    
-    // Add face safety suffix for Unsplash/Pexels (they support negative keywords)
-    const safeQuery = anchoredQuery + FACE_SAFETY_SUFFIX;
-    console.log(`[search-book-images] Safe query for search: "${safeQuery}"`);
 
     // Search all sources in parallel
     // Unsplash: 3 pages of 30 = 90 results max (before filtering)
     // Pexels: 2 pages of 40 = 80 results max (before filtering)
     // Wikimedia: 50 results (before filtering) - apply cover license filter if needed
     const [unsplashPage1, unsplashPage2, unsplashPage3, pexelsPage1, pexelsPage2, wikimediaResults] = await Promise.all([
-      searchUnsplashMultiple(safeQuery, orientation, 30, 1),
-      searchUnsplashMultiple(safeQuery, orientation, 30, 2),
-      searchUnsplashMultiple(safeQuery, orientation, 30, 3),
-      searchPexelsMultiple(safeQuery, orientation, 40, 1),
-      searchPexelsMultiple(safeQuery, orientation, 40, 2),
-      searchWikimediaMultiple(anchoredQuery, 50, forCover), // Wikimedia doesn't support negative keywords well
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+      searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
+      searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
+      searchPexelsMultiple(anchoredQuery, orientation, 40, 2),
+      searchWikimediaMultiple(anchoredQuery, 50, forCover), // Pass forCover to filter licenses
     ]);
 
     // Combine results

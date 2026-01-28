@@ -87,36 +87,36 @@ RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
 RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
 - Do NOT use italics or asterisks (*) for emphasis.
-- Do NOT use "heading", "list", "quote", "key_takeaway", or "image_full" block types - STRICTLY FORBIDDEN.
-- FULL PAGE IMAGES ARE DISABLED: Do NOT generate any "image_full" blocks.
+- Do NOT use "heading", "list", "quote", or "key_takeaway" block types - STRICTLY FORBIDDEN.
 
-RULE 5: CHAPTER STRUCTURE (Strict Order - WITH HALF-PAGE IMAGES!)
+RULE 5: CHAPTER STRUCTURE (Strict Order)
 This chapter MUST follow this structure:
   1. Chapter Title Page (ALWAYS first block)
-  2. 8-10x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
-  3. 2-3x Half-Page Images (image_half blocks scattered between text blocks for visual interest)
+  2. 1-2x Hero Images (image_full blocks)
+  3. 6-8x Text Pages (text blocks, 220-250 words MAX each, EACH starts with ## Header)
   4. Second-to-last text block: Contains the ### Key Takeaway section
   5. Pro Tip Page (ALWAYS last block of the chapter)
-- Use "image_half" blocks to add visual interest. Place them BETWEEN text blocks, never back-to-back.
+- BALANCE: Images must NOT exceed 30% of chapter pages.
 
-RULE 6: LITERAL DESCRIPTIONS IN TEXT
-- When describing places, hotels, restaurants, or landmarks, use their EXACT names.
-- Example: "The Hotel Jerome stands as a beacon of Victorian elegance..." rather than "A luxury hotel graces the street..."
-- Be specific and vivid in your descriptions.
+RULE 6: LITERAL VISUAL QUERIES - CAPTION-TO-QUERY MATCHING
+- CRITICAL: The image query MUST describe EXACTLY what the caption says. If the caption mentions "Hotel Jerome", the query MUST be "Hotel Jerome Aspen Colorado exterior" - not a generic "luxury hotel".
+- NEVER use a generic building/scene when the caption references a specific named place, hotel, restaurant, or landmark.
+- ALWAYS include the book's primary location (city/region) at the START of the query.
+- For a caption "Hotel Jerome, a landmark of luxury", use query: "Hotel Jerome Aspen Colorado historic hotel exterior"
+- For a caption "The Shard towers over the Thames", use query: "The Shard London skyscraper Thames river view"
+- For a caption "Maroon Bells at sunrise", use query: "Maroon Bells Aspen Colorado mountain lake reflection sunrise"
+- Image queries must be specific physical descriptions that will return the EXACT subject mentioned in the caption.
+- BAD: Generic caption "Luxury accommodations" with query "hotel lobby" → GOOD: Specific caption "The Little Nell hotel lobby" with query "The Little Nell Aspen Colorado hotel lobby interior"
+- Do NOT write vague queries like "mountain scenery" or "fine dining restaurant" - ALWAYS include the specific name from the caption.
 
-RULE 7: IMAGE PLACEMENT (NO BACK-TO-BACK!)
-- NEVER place two image blocks consecutively. Always have at least one text block between images.
-- Each image_half block needs a "query" (search terms) and "caption" (descriptive text).
-- Use literal, specific queries that match the chapter topic (e.g., "${topic} scenic landscape").
-
-TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - Include 3 image_half blocks' : 'INFORMATIONAL (Business/Science/History) - Include 2 image_half blocks'}
+TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images' : 'INFORMATIONAL (Business/Science/History) - More text depth'}
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these types - NO image_full!):
+Block types (ONLY use these four types - NO quote blocks!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
-- "image_half": { "query": "${topic} specific search terms", "caption": "Descriptive caption for the image" } - Half-page images with text
+- "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:
@@ -124,7 +124,6 @@ FORMATTING BANS:
 - Do NOT generate "quote" blocks. AI quotes are often inaccurate.
 - Do NOT copy example placeholder text. Generate UNIQUE content for every block.
 - JSON SAFETY RULE: You MUST escape all double quotes inside string values. Example: write \\"quote\\" instead of "quote". Do NOT use unescaped double quotes inside text fields.
-- ABSOLUTELY NO image_full blocks! Only use image_half for images.
 
 REQUIREMENTS:
 - First block MUST be "chapter_title"
@@ -132,15 +131,15 @@ REQUIREMENTS:
 - Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
 - Each "text" block: 220-250 words MAX with inline markdown (target 235 words, NEVER over 250)
-- Include 2-3 "image_half" blocks scattered between text blocks (NEVER back-to-back)
 - Total blocks: ${targetPagesPerChapter}
-- NEVER use "heading", "list", "quote", "key_takeaway", or "image_full" blocks! Only: chapter_title, text, image_half, pro_tip.
+- Images ≤30% of blocks
+- NEVER use "heading", "list", "quote", "key_takeaway", or "image_half" blocks! Only: chapter_title, text, image_full, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
+  {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
   {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words MAX. Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
-  {"block_type": "image_half", "content": {"query": "${topic} [specific visual element]", "caption": "[Descriptive caption for this half-page image]"}},
   {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
@@ -292,29 +291,6 @@ Language: ${language}`;
 
     blocksData = enforceCaptionEntitiesInQueries(blocksData);
 
-    // POST-PROCESSING: Remove full-page images only, keep half-page images
-    // Also ensures no two image blocks appear consecutively
-    let filteredBlocks = blocksData.filter((block: any) => {
-      const type = block?.block_type;
-      // Remove only image_full blocks, keep image_half
-      return type !== 'image_full';
-    });
-
-    // Ensure no back-to-back image blocks
-    const finalBlocks: any[] = [];
-    for (let i = 0; i < filteredBlocks.length; i++) {
-      const current = filteredBlocks[i];
-      const prev = finalBlocks[finalBlocks.length - 1];
-      
-      // If current is an image and previous was also an image, skip this one
-      if (current?.block_type === 'image_half' && prev?.block_type === 'image_half') {
-        console.log(`[generate-chapter-blocks] Skipping back-to-back image at index ${i}`);
-        continue;
-      }
-      finalBlocks.push(current);
-    }
-    filteredBlocks = finalBlocks;
-
     // Save to Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -327,12 +303,12 @@ Language: ${language}`;
       .eq('book_id', bookId)
       .eq('chapter_number', chapterNumber);
 
-    // Insert new blocks (no image blocks)
-    const blocksToInsert = filteredBlocks.map((block: any, index: number) => ({
+    // Insert new blocks (force image_half -> image_full)
+    const blocksToInsert = blocksData.map((block: any, index: number) => ({
       book_id: bookId,
       chapter_number: chapterNumber,
       page_order: index + 1,
-      block_type: block.block_type,
+      block_type: block.block_type === 'image_half' ? 'image_full' : block.block_type,
       content: block.content,
       image_url: null
     }));
