@@ -916,25 +916,6 @@ const Index = () => {
               </div>
             </section>
 
-            {/* Ink Saver Toggle (Print Mode: Black & White) */}
-            <section className="mb-6">
-              <div className="flex items-center justify-center gap-3 py-3 px-4 bg-muted/50 rounded-lg border border-border max-w-md mx-auto">
-                <Printer className="w-4 h-4 text-muted-foreground" />
-                <Label htmlFor="grayscale-mode" className="text-sm font-medium cursor-pointer">
-                  Print Mode: Black & White
-                </Label>
-                <Switch
-                  id="grayscale-mode"
-                  checked={isGrayscaleMode}
-                  onCheckedChange={setIsGrayscaleMode}
-                />
-              </div>
-              {isGrayscaleMode && (
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  Ink Saver enabled — PDFs will export in grayscale for Amazon's cheaper B&W printing
-                </p>
-              )}
-            </section>
 
             {/* Table of Contents - pass chapter statuses and content for realtime sync */}
             <section className="mb-8">
@@ -1005,6 +986,7 @@ const Index = () => {
                     tableOfContents={bookData?.tableOfContents}
                     onBlocksUpdate={(chapter, blocks) => setChapterBlocks(prev => ({ ...prev, [chapter]: blocks }))}
                     isGrayscale={isGrayscaleMode}
+                    onGrayscaleChange={setIsGrayscaleMode}
                   />
                 </section>
               ) : bookId && (
