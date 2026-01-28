@@ -600,21 +600,19 @@ serve(async (req) => {
     // This works best for specific locations, landmarks, hotels, etc.
     const wikipediaArticleResult = await searchWikipediaArticleImage(cleanedQuery, forCover);
 
-    // Search all sources in parallel - INCREASED LIMITS for more variety
-    // Unsplash: 4 pages of 30 = 120 results max (before filtering)
+    // Search all sources in parallel - OPTIMIZED for rate limits
+    // Unsplash: 2 pages of 30 = 60 results max (reduced from 4 to stay within 50 req/hr limit)
     // Pexels: 2 pages of 80 = 160 results max (before filtering)
     // Pixabay: 1 page of 200 = 200 results max (before filtering)
     // Wikimedia: 2 queries of 50 = 100 results max (before filtering) - apply cover license filter if needed
     const [
-      unsplashPage1, unsplashPage2, unsplashPage3, unsplashPage4,
+      unsplashPage1, unsplashPage2,
       pexelsPage1, pexelsPage2,
       pixabayPage1,
       wikimediaResults1, wikimediaResults2
     ] = await Promise.all([
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
       searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
-      searchUnsplashMultiple(anchoredQuery, orientation, 30, 3),
-      searchUnsplashMultiple(anchoredQuery, orientation, 30, 4),
       searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
       searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
       searchPixabayMultiple(anchoredQuery, orientation, 200, 1),
@@ -623,7 +621,7 @@ serve(async (req) => {
     ]);
 
     // Combine results
-    const unsplashResults = [...unsplashPage1, ...unsplashPage2, ...unsplashPage3, ...unsplashPage4];
+    const unsplashResults = [...unsplashPage1, ...unsplashPage2];
     const pexelsResults = [...pexelsPage1, ...pexelsPage2];
     const pixabayResults = [...pixabayPage1];
     const wikimediaResults = [...wikimediaResults1, ...wikimediaResults2];
