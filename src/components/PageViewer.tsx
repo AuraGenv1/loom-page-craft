@@ -19,6 +19,14 @@ import {
 import { ImageSearchGallery, ImageSelectMetadata } from '@/components/ImageSearchGallery';
 import { uploadToBookImages, archiveExternalImage, saveImageMetadata, createUploadMetadata } from '@/lib/bookImages';
 
+type PageBlockMeta = PageBlock & Partial<{
+  original_url: string;
+  image_source: string;
+  image_license: string;
+  image_attribution: string;
+  archived_at: string;
+}>;
+
 // A stable key for a block that survives "preloaded" rehydration/replacement.
 // We cannot rely on `id` during generation because blocks may be replaced while
 // the DB is still syncing, which would reset loading/attempt state and wipe
@@ -889,7 +897,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   tableOfContents = [],
   onBlocksUpdate
 }) => {
-  const [blocks, setBlocks] = useState<PageBlock[]>([]);
+  const [blocks, setBlocks] = useState<PageBlockMeta[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
@@ -951,85 +959,183 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     [onBlocksUpdate]
   );
 
+  const normalizeUrlForCompare = useCallback((url: string): string => {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return url;
+    }
+  }, []);
+
+  const getBlockExclusionUrl = useCallback(
+    (b: Partial<PageBlockMeta> | null | undefined): string | null => {
+      if (!b) return null;
+      const original = (b as any).original_url as string | undefined;
+      const imageUrl = (b as any).image_url as string | undefined;
+      const picked = original || imageUrl;
+      if (!picked || typeof picked !== 'string') return null;
+      if (!picked.startsWith('http://') && !picked.startsWith('https://')) return null;
+      return normalizeUrlForCompare(picked);
+    },
+    [normalizeUrlForCompare]
+  );
+
   // Collect already-used image URLs for deduplication
   const getUsedImageUrls = useCallback((): string[] => {
     const urls: string[] = [];
-    blocks.forEach(b => {
-      if (b.image_url) urls.push(b.image_url);
-    });
-    // Also check parent preloadedBlocks for this chapter
-    const preloaded = preloadedBlocks?.[currentChapter];
-    if (preloaded) {
-      preloaded.forEach(b => {
-        if ((b as any).image_url) urls.push((b as any).image_url);
-      });
+    const add = (b: any) => {
+      const u = getBlockExclusionUrl(b);
+      if (u) urls.push(u);
+    };
+
+    // Current chapter blocks
+    blocks.forEach(add);
+
+    // Also include ALL preloaded blocks (book-level dedupe when available)
+    if (preloadedBlocks) {
+      Object.values(preloadedBlocks).forEach((chapterBlocks) => chapterBlocks?.forEach(add));
     }
-    return [...new Set(urls)]; // Unique
-  }, [blocks, preloadedBlocks, currentChapter]);
+
+    return [...new Set(urls)];
+  }, [blocks, preloadedBlocks, getBlockExclusionUrl]);
+
+  // Serialize auto-fetches to avoid race-condition duplicates (two blocks grabbing the same image at once)
+  const imageFetchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const enqueueImageFetch = useCallback((task: () => Promise<void>) => {
+    imageFetchQueueRef.current = imageFetchQueueRef.current.then(task).catch(() => {});
+    return imageFetchQueueRef.current;
+  }, []);
 
   // Auto-fetch images for blocks without URLs using the hybrid engine
-  const fetchImageForBlock = useCallback(async (block: PageBlock) => {
-    const key = getBlockKey(block);
+  const fetchImageForBlock = useCallback(
+    async (block: PageBlockMeta) => {
+      const key = getBlockKey(block);
 
-    // We still allow fetching during generation even if the DB row isn't visible yet.
-    // (Admin needs images immediately.) We'll best-effort persist to DB when possible.
-    if (fetchingImages.has(key)) return;
-    fetchingImages.add(key);
-    
-    setLoadingImages(prev => new Set(prev).add(key));
+      // Queue all fetches to avoid race duplicates.
+      return enqueueImageFetch(async () => {
+        // We still allow fetching during generation even if the DB row isn't visible yet.
+        // We'll best-effort persist to DB when possible.
+        if (fetchingImages.has(key)) return;
+        fetchingImages.add(key);
 
-    const content = block.content as { query: string; caption: string };
-    console.log('[PageViewer] Auto-fetching image via hybrid engine:', content.query);
+        setLoadingImages(prev => new Set(prev).add(key));
 
-    try {
-      // Pass already-used URLs for deduplication
-      const excludeUrls = getUsedImageUrls();
-      
-      const { data, error } = await supabase.functions.invoke('fetch-book-images', {
-        body: { 
-          query: content.query,
-          orientation: 'landscape', // Always landscape now (no image_half)
-          excludeUrls,
-          bookTopic: topic, // Anchor search to book's topic for relevance
+        const content = block.content as { query: string; caption: string };
+        const baseQuery = (content?.query || '').trim();
+        if (!baseQuery) {
+          fetchingImages.delete(key);
+          setLoadingImages(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+          return;
         }
-      });
 
-      if (error) throw error;
+        // Try a few times to guarantee: (1) we get an image, and (2) it's not a duplicate.
+        const MAX_ATTEMPTS = 5;
+        const excludeSet = new Set(getUsedImageUrls());
 
-      if (data?.imageUrl) {
-        // Best-effort DB update (may fail while pages are still syncing/visible)
-        if (hasValidDbId(block)) {
-          const { error: updateError } = await supabase
-            .from('book_pages')
-            .update({ image_url: data.imageUrl })
-            .eq('id', block.id);
+        const fallbackQueries: string[] = [
+          baseQuery,
+          topic ? `${topic} ${baseQuery}` : baseQuery,
+          topic ? `${topic} landscape` : `${baseQuery.split(' ').slice(0, 2).join(' ')} landscape`,
+          topic ? `${topic} scenic landscape` : 'luxury travel landscape',
+        ];
 
-          if (updateError) {
-            console.warn('[PageViewer] Failed to persist image_url to DB (continuing locally):', updateError);
+        console.log('[PageViewer] Auto-fetching image via hybrid engine:', baseQuery);
+
+        try {
+          for (let i = 0; i < MAX_ATTEMPTS; i++) {
+            const queryToUse = fallbackQueries[Math.min(i, fallbackQueries.length - 1)];
+
+            const { data, error } = await supabase.functions.invoke('fetch-book-images', {
+              body: {
+                query: queryToUse,
+                orientation: 'landscape',
+                excludeUrls: [...excludeSet],
+                bookTopic: topic,
+              }
+            });
+
+            if (error) throw error;
+
+            const candidateUrl = (data?.imageUrl as string | null) || null;
+            if (!candidateUrl) {
+              continue;
+            }
+
+            const candidateKey = normalizeUrlForCompare(candidateUrl);
+            if (excludeSet.has(candidateKey)) {
+              // Defensive: if backend returns something already used, add & retry.
+              excludeSet.add(candidateKey);
+              continue;
+            }
+
+            // Persist best-effort (with basic provenance fields for later dedupe)
+            if (hasValidDbId(block)) {
+              const updatePayload: any = {
+                image_url: candidateUrl,
+                image_source: data?.source || null,
+                original_url: candidateUrl,
+                archived_at: new Date().toISOString(),
+              };
+              const { error: updateError } = await supabase
+                .from('book_pages')
+                .update(updatePayload)
+                .eq('id', block.id);
+
+              if (updateError) {
+                console.warn('[PageViewer] Failed to persist image_url to DB (continuing locally):', updateError);
+              }
+            }
+
+            // Store attribution if present
+            if (data?.attribution) {
+              setImageAttributions(prev => new Map(prev).set(key, data.attribution));
+            }
+
+            // Update local state (+ parent cache) including original_url so dedupe works even after archiving.
+            const localPatch: any = {
+              image_url: candidateUrl,
+              image_source: data?.source,
+              original_url: candidateUrl,
+              image_attribution: data?.attribution,
+              archived_at: new Date().toISOString(),
+            };
+
+            setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
+              prevBlocks.map(b => (getBlockKey(b) === key ? ({ ...b, ...localPatch } as any) : b))
+            );
+
+            return;
           }
-        }
 
-        // Store attribution if present (from Wikimedia)
-        if (data.attribution) {
-          setImageAttributions(prev => new Map(prev).set(key, data.attribution));
+          // Last resort: ensure we always show *something* instead of leaving the page blank.
+          const placeholderUrl = '/placeholder.svg';
+          setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
+            prevBlocks.map(b => (getBlockKey(b) === key ? ({ ...b, image_url: placeholderUrl } as any) : b))
+          );
+        } catch (err) {
+          console.error('[PageViewer] Failed to fetch image:', err);
+          // Ensure the user isn't stuck with a blank image forever.
+          const placeholderUrl = '/placeholder.svg';
+          setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
+            prevBlocks.map(b => (getBlockKey(b) === key ? ({ ...b, image_url: placeholderUrl } as any) : b))
+          );
+        } finally {
+          fetchingImages.delete(key);
+          setLoadingImages(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
         }
-
-        // Update local state + parent cache using a stable match
-        setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
-          prevBlocks.map(b => (getBlockKey(b) === key ? { ...b, image_url: data.imageUrl } : b))
-        );
-      }
-    } catch (err) {
-      console.error('[PageViewer] Failed to fetch image:', err);
-    } finally {
-      fetchingImages.delete(key);
-      setLoadingImages(prev => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
       });
-    }
-  }, [setBlocksAndPropagate, getUsedImageUrls]);
+    },
+    [enqueueImageFetch, getUsedImageUrls, normalizeUrlForCompare, setBlocksAndPropagate, topic]
+  );
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   const fetchBlocks = useCallback(async (chapter: number) => {
@@ -1072,7 +1178,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       if (error) throw error;
       
       // Map database rows to PageBlock type
-      const mappedBlocks: PageBlock[] = (data || []).map(row => ({
+      const mappedBlocks: PageBlockMeta[] = (data || []).map(row => ({
         id: row.id,
         book_id: row.book_id,
         chapter_number: row.chapter_number,
@@ -1080,6 +1186,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         block_type: row.block_type as PageBlock['block_type'],
         content: row.content as any,
         image_url: row.image_url || undefined,
+        original_url: (row as any).original_url || undefined,
+        image_source: (row as any).image_source || undefined,
+        image_license: (row as any).image_license || undefined,
+        image_attribution: (row as any).image_attribution || undefined,
+        archived_at: (row as any).archived_at || undefined,
         created_at: row.created_at,
         updated_at: row.updated_at
       }));
@@ -1176,12 +1287,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       return next;
     });
 
-    setBlocksAndPropagate(block.chapter_number, (prev) =>
-      prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined } as PageBlock)))
+      setBlocksAndPropagate(block.chapter_number, (prev) =>
+        prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined, original_url: undefined } as any)))
     );
 
     toast.info('Finding new image...');
-    const updatedBlock = { ...block, image_url: undefined } as PageBlock;
+    const updatedBlock = { ...block, image_url: undefined, original_url: undefined } as any;
     fetchImageForBlock(updatedBlock);
   }, [blocks, fetchImageForBlock, setBlocksAndPropagate]);
 
@@ -1271,8 +1382,18 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       }
 
       // Update local state
+      const localMetaPatch: any = {
+        image_url: finalImageUrl,
+        image_source: metadata?.source,
+        // If we archived, the archive result includes the original URL; otherwise use the provided metadata.
+        original_url: (metadata?.originalUrl || (metadata as any)?.original_url) ?? imageUrl,
+        image_license: metadata?.license,
+        image_attribution: metadata?.attribution,
+        archived_at: new Date().toISOString(),
+      };
+
       setBlocksAndPropagate(block.chapter_number, (prev) =>
-        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: finalImageUrl } as PageBlock)))
+        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, ...localMetaPatch } as any)))
       );
 
       // Store attribution if present
@@ -1360,7 +1481,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         });
 
         setBlocksAndPropagate(block.chapter_number, (prev) =>
-          prev.map(b => (b.id !== uploadingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
+          prev.map(b => (b.id !== uploadingBlockId ? b : ({
+            ...b,
+            image_url: publicUrl,
+            image_source: uploadMetadata.image_source,
+            original_url: uploadMetadata.original_url ?? undefined,
+            image_license: uploadMetadata.image_license,
+            image_attribution: uploadMetadata.image_attribution,
+            archived_at: uploadMetadata.archived_at,
+          } as any)))
         );
       }
 
@@ -1423,7 +1552,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
       // Update local state - preserves current page position
       setBlocksAndPropagate(block.chapter_number, (prev) =>
-        prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, image_url: publicUrl } as PageBlock)))
+        prev.map(b => (b.id !== searchingBlockId ? b : ({
+          ...b,
+          image_url: publicUrl,
+          image_source: metadata?.source,
+          original_url: metadata?.originalUrl,
+          image_license: metadata?.license,
+          image_attribution: metadata?.attribution,
+          archived_at: new Date().toISOString(),
+        } as any)))
       );
 
       // Store attribution if present

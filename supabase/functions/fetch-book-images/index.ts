@@ -8,7 +8,16 @@ const corsHeaders = {
 interface ImageResult {
   imageUrl: string | null;
   attribution?: string;
-  source: 'unsplash' | 'wikimedia' | 'none';
+  source: 'unsplash' | 'pexels' | 'wikimedia' | 'none';
+}
+
+function normalizeUrlForCompare(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return url;
+  }
 }
 
 // AI-generated negative prompts AND face/people keywords to remove
@@ -138,7 +147,7 @@ async function searchUnsplash(
     
     if (data.results && data.results.length > 0) {
       // Find first result that isn't in excludeUrls
-      for (const photo of data.results) {
+       for (const photo of data.results) {
         const imageUrl = photo.urls?.regular || photo.urls?.full;
         if (!imageUrl) continue;
 
@@ -154,8 +163,9 @@ async function searchUnsplash(
           }
         }
         
-        // Check if this URL is already used (dedupe)
-        if (excludeUrls.has(imageUrl)) {
+         // Check if this URL is already used (dedupe) - compare normalized (strip query params)
+         const candidateKey = normalizeUrlForCompare(imageUrl);
+         if (excludeUrls.has(candidateKey) || excludeUrls.has(imageUrl)) {
           console.log('[Unsplash] Skipping duplicate:', imageUrl.substring(0, 60));
           continue;
         }
@@ -174,6 +184,91 @@ async function searchUnsplash(
     console.error('[Unsplash] Fetch error:', error);
     return null;
   }
+}
+
+// Attempt 1.5: Pexels - additional free source to reduce blanks
+async function searchPexels(
+  query: string,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
+  const apiKey = Deno.env.get('PEXELS_API_KEY');
+  if (!apiKey) {
+    console.log('[Pexels] No API key configured');
+    return null;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      query,
+      per_page: '30',
+      orientation,
+    });
+
+    const response = await fetch(`https://api.pexels.com/v1/search?${params}`, {
+      headers: {
+        'Authorization': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('[Pexels] API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const photos: any[] = data?.photos || [];
+    if (photos.length === 0) {
+      console.log('[Pexels] No results for query:', query);
+      return null;
+    }
+
+    for (const photo of photos) {
+      const imageUrl = photo?.src?.large2x || photo?.src?.original;
+      if (!imageUrl) continue;
+
+      const candidateKey = normalizeUrlForCompare(imageUrl);
+      if (excludeUrls.has(candidateKey) || excludeUrls.has(imageUrl)) {
+        continue;
+      }
+
+      const photographer = photo?.photographer || 'Pexels contributor';
+      const attribution = `Photo: ${photographer} / Pexels License`;
+      console.log('[Pexels] Found unique image:', imageUrl.substring(0, 60));
+      return { imageUrl, attribution, source: 'pexels' };
+    }
+
+    console.log('[Pexels] All results were duplicates');
+    return null;
+  } catch (error) {
+    console.error('[Pexels] Fetch error:', error);
+    return null;
+  }
+}
+
+async function searchPexelsWithFallbacks(
+  query: string,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
+  const lockTokens = extractSignificantTokens(query);
+
+  let result = await searchPexels(query, orientation, excludeUrls);
+  if (result) return result;
+
+  const fallbacks = generateFallbackQueries(query).filter((fallbackQuery: string) => {
+    if (lockTokens.length === 0) return true;
+    const lower = fallbackQuery.toLowerCase();
+    return lockTokens.some((t) => lower.includes(t));
+  });
+
+  for (const fallbackQuery of fallbacks) {
+    console.log(`[Pexels] Trying fallback: "${fallbackQuery}"`);
+    result = await searchPexels(fallbackQuery, orientation, excludeUrls);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 // Try Unsplash with fallback queries + deduplication
@@ -361,8 +456,8 @@ serve(async (req) => {
 
     console.log(`[fetch-book-images] Raw query: "${query}", Orientation: ${orientation}, Exclude: ${excludeUrls.length} URLs, Topic: "${bookTopic || 'none'}"`);
 
-    // Build exclusion set for deduplication
-    const excludeSet = new Set<string>(excludeUrls);
+    // Build exclusion set for deduplication (normalized to ignore query params)
+    const excludeSet = new Set<string>((excludeUrls || []).map((u: string) => normalizeUrlForCompare(u)));
 
     // STEP 1: Clean the query by removing AI noise phrases AND face/people keywords
     const cleanedQuery = cleanQuery(query);
@@ -402,13 +497,32 @@ serve(async (req) => {
       }
     }
 
-    // STEP 5: Try Wikimedia with fallbacks as last resort (use anchored query)
+    // STEP 5: Try Pexels with fallbacks as additional source
     if (!result) {
-      console.log('[fetch-book-images] Unsplash exhausted, trying Wikimedia...');
+      console.log('[fetch-book-images] Unsplash exhausted, trying Pexels...');
+      result = await searchPexelsWithFallbacks(anchoredQuery, orientation, excludeSet);
+    }
+
+    // STEP 6: Try Wikimedia with fallbacks as last resort (use anchored query)
+    if (!result) {
+      console.log('[fetch-book-images] Image APIs exhausted, trying Wikimedia...');
       result = await searchWikimediaWithFallbacks(anchoredQuery);
     }
 
-    // STEP 6: Return gracefully even if no images found (NO 404!)
+    // STEP 7: Final safety fallback - anchor-only landscape queries (prevents blank pages)
+    if (!result) {
+      const anchor = extractTopicAnchor(bookTopic);
+      if (anchor) {
+        const broad = `${anchor} landscape`;
+        console.log(`[fetch-book-images] Final fallback with broad anchor query: "${broad}"`);
+        result =
+          (await searchUnsplashWithFallbacks(broad, orientation, excludeSet)) ||
+          (await searchPexelsWithFallbacks(broad, orientation, excludeSet)) ||
+          (await searchWikimediaWithFallbacks(broad));
+      }
+    }
+
+    // STEP 8: Return gracefully even if no images found (NO 404!)
     if (!result) {
       console.log('[fetch-book-images] No images found from any source, returning null gracefully');
       return new Response(
