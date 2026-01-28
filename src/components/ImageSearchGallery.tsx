@@ -192,7 +192,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             Search Images
           </DialogTitle>
           <DialogDescription>
-            Search Unsplash, Pexels, and Wikimedia for the perfect image. Click to select, then confirm.
+            Search Unsplash, Pexels, Pixabay, and Wikimedia for the perfect image. Click to select, then confirm.
           </DialogDescription>
         </DialogHeader>
 

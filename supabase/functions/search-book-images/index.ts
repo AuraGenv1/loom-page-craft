@@ -245,12 +245,12 @@ async function searchPixabayMultiple(
     const results: ImageResult[] = [];
 
     for (const photo of data.hits) {
-      // Pixabay provides webformatWidth for the web-sized image
-      const width = photo.imageWidth || photo.webformatWidth || 0;
-      const height = photo.imageHeight || photo.webformatHeight || 0;
+      // Pixabay: use imageWidth (original) for quality check, not webformatWidth (resized)
+      const width = photo.imageWidth || 0;
+      const height = photo.imageHeight || 0;
 
-      // HIDDEN FILTER: Skip images below minimum print quality (1200px)
-      if (photo.webformatWidth < MIN_WIDTH_FILTER) {
+      // HIDDEN FILTER: Skip images below minimum print quality (1200px) based on ORIGINAL size
+      if (width < MIN_WIDTH_FILTER) {
         continue;
       }
 
