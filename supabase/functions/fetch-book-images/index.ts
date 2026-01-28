@@ -108,7 +108,11 @@ function generateFallbackQueries(query: string): string[] {
   return fallbacks;
 }
 
-// Attempt 1: Unsplash - The "Luxury" Layer
+// KDP Print Quality Requirements (300 DPI for 6x9 book = 1800px+ width)
+const KDP_MIN_WIDTH = 1600; // Minimum for print quality
+const KDP_PREFERRED_WIDTH = 1800; // Preferred for 6x9 book at 300 DPI
+
+// Attempt 1: Unsplash - The "Luxury" Layer (HIGH-RES: append &w=2000&q=80)
 // excludeUrls: list of already-used image URLs to skip (deduplication)
 async function searchUnsplash(
   query: string, 
@@ -148,7 +152,22 @@ async function searchUnsplash(
     if (data.results && data.results.length > 0) {
       // Find first result that isn't in excludeUrls
        for (const photo of data.results) {
-        const imageUrl = photo.urls?.regular || photo.urls?.full;
+        // KDP QUALITY: Skip images below minimum print width
+        const width = photo.width || 0;
+        if (width < KDP_MIN_WIDTH) {
+          console.log(`[Unsplash] Skipping low-res image (${width}px):`, photo.id);
+          continue;
+        }
+
+        // HIGH-RES: Use raw URL with explicit 2000px width and 80% quality
+        let imageUrl = photo.urls?.raw;
+        if (imageUrl) {
+          // Append high-res parameters for KDP print quality
+          imageUrl = `${imageUrl}&w=2000&q=80&fm=jpg`;
+        } else {
+          // Fallback to full if raw not available
+          imageUrl = photo.urls?.full || photo.urls?.regular;
+        }
         if (!imageUrl) continue;
 
         // If query has distinctive tokens (e.g. proper nouns), skip results that
@@ -170,11 +189,11 @@ async function searchUnsplash(
           continue;
         }
         
-        console.log('[Unsplash] Found unique image:', imageUrl.substring(0, 60));
+        console.log(`[Unsplash] Found high-res image (${width}px):`, imageUrl.substring(0, 80));
         return { imageUrl, source: 'unsplash' };
       }
       
-      console.log('[Unsplash] All results were duplicates');
+      console.log('[Unsplash] All results were duplicates or too low-res');
       return null;
     }
 
@@ -186,7 +205,7 @@ async function searchUnsplash(
   }
 }
 
-// Attempt 1.5: Pexels - additional free source to reduce blanks
+// Attempt 1.5: Pexels - additional free source (HIGH-RES: use original, filter 1600px+)
 async function searchPexels(
   query: string,
   orientation: 'landscape' | 'portrait' = 'landscape',
@@ -224,7 +243,15 @@ async function searchPexels(
     }
 
     for (const photo of photos) {
-      const imageUrl = photo?.src?.large2x || photo?.src?.original;
+      // KDP QUALITY: Filter by original width (not preview width)
+      const width = photo.width || 0;
+      if (width < KDP_MIN_WIDTH) {
+        console.log(`[Pexels] Skipping low-res image (${width}px):`, photo.id);
+        continue;
+      }
+
+      // HIGH-RES: Prefer original, then large2x (avoid small previews)
+      const imageUrl = photo?.src?.original || photo?.src?.large2x;
       if (!imageUrl) continue;
 
       const candidateKey = normalizeUrlForCompare(imageUrl);
@@ -234,11 +261,11 @@ async function searchPexels(
 
       const photographer = photo?.photographer || 'Pexels contributor';
       const attribution = `Photo: ${photographer} / Pexels License`;
-      console.log('[Pexels] Found unique image:', imageUrl.substring(0, 60));
+      console.log(`[Pexels] Found high-res image (${width}px):`, imageUrl.substring(0, 60));
       return { imageUrl, attribution, source: 'pexels' };
     }
 
-    console.log('[Pexels] All results were duplicates');
+    console.log('[Pexels] All results were duplicates or too low-res');
     return null;
   } catch (error) {
     console.error('[Pexels] Fetch error:', error);
@@ -298,28 +325,28 @@ async function searchUnsplashWithFallbacks(
   return null;
 }
 
-// Attempt 2: Wikimedia Commons - The "Fact" Layer
+// Attempt 2: Wikimedia Commons - The "Fact" Layer (HIGH-RES: use original URL, filter 1500px+)
 async function searchWikimedia(query: string): Promise<ImageResult | null> {
   try {
-    // Step 1: Search for images
+    // HIGH-RES: Request original URL and size metadata (NOT pithumbsize)
     const searchParams = new URLSearchParams({
       action: 'query',
       format: 'json',
       generator: 'search',
       gsrnamespace: '6', // File namespace
-      gsrsearch: `${query} filetype:jpg OR filetype:png`,
-      gsrlimit: '5',
+      gsrsearch: query, // Plain query without filetype syntax (not supported)
+      gsrlimit: '10', // Get more results to filter
       prop: 'imageinfo',
-      iiprop: 'url|extmetadata|size',
-      iiurlwidth: '1200',
+      iiprop: 'url|extmetadata|size', // Get original URL and dimensions
+      origin: '*',
     });
 
     const searchUrl = `https://commons.wikimedia.org/w/api.php?${searchParams}`;
-    console.log('[Wikimedia] Searching:', query);
+    console.log('[Wikimedia] Searching (high-res):', query);
 
     const response = await fetch(searchUrl, {
       headers: {
-        'User-Agent': 'LovableBookGenerator/1.0 (https://lovable.dev; contact@lovable.dev)',
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app; contact@lovable.dev)',
       },
     });
 
@@ -335,17 +362,32 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
       return null;
     }
 
-    // Find the best image (prefer larger, landscape images)
+    // Find the best image (KDP QUALITY: require 1500px+ width)
     const pages = Object.values(data.query.pages) as any[];
     
     for (const page of pages) {
       const imageInfo = page.imageinfo?.[0];
       if (!imageInfo) continue;
 
-      // Skip small images
-      if (imageInfo.width < 800 || imageInfo.height < 600) continue;
+      const width = imageInfo.width || 0;
+      const height = imageInfo.height || 0;
 
-      const imageUrl = imageInfo.thumburl || imageInfo.url;
+      // KDP QUALITY: Skip images below 1500px (insufficient for 300 DPI print)
+      if (width < 1500) {
+        console.log(`[Wikimedia] Skipping low-res image (${width}px):`, page.title);
+        continue;
+      }
+
+      // Skip non-landscape images for book pages
+      if (height > width) {
+        console.log(`[Wikimedia] Skipping portrait image:`, page.title);
+        continue;
+      }
+
+      // HIGH-RES: Use the ORIGINAL URL (not thumburl)
+      const imageUrl = imageInfo.url;
+      if (!imageUrl) continue;
+
       const metadata = imageInfo.extmetadata || {};
 
       // Extract attribution info
@@ -355,7 +397,7 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
       // Format clean attribution
       const attribution = `Photo: ${artist} / ${license}`;
 
-      console.log('[Wikimedia] Found image:', imageUrl, 'Attribution:', attribution);
+      console.log(`[Wikimedia] Found high-res image (${width}x${height}px):`, imageUrl.substring(0, 80), 'Attribution:', attribution);
 
       return {
         imageUrl,
@@ -364,7 +406,7 @@ async function searchWikimedia(query: string): Promise<ImageResult | null> {
       };
     }
 
-    console.log('[Wikimedia] No suitable images found');
+    console.log('[Wikimedia] No suitable high-res images found');
     return null;
   } catch (error) {
     console.error('[Wikimedia] Fetch error:', error);
