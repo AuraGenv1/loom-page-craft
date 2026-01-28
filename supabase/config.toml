@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.fetch-book-images]
 verify_jwt = false
+
+[functions.archive-image]
+verify_jwt = false

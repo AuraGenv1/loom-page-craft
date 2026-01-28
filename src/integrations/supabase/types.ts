@@ -16,35 +16,50 @@ export type Database = {
     Tables: {
       book_pages: {
         Row: {
+          archived_at: string | null
           block_type: Database["public"]["Enums"]["page_block_type"]
           book_id: string
           chapter_number: number
           content: Json
           created_at: string
           id: string
+          image_attribution: string | null
+          image_license: string | null
+          image_source: string | null
           image_url: string | null
+          original_url: string | null
           page_order: number
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           block_type: Database["public"]["Enums"]["page_block_type"]
           book_id: string
           chapter_number: number
           content?: Json
           created_at?: string
           id?: string
+          image_attribution?: string | null
+          image_license?: string | null
+          image_source?: string | null
           image_url?: string | null
+          original_url?: string | null
           page_order: number
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           block_type?: Database["public"]["Enums"]["page_block_type"]
           book_id?: string
           chapter_number?: number
           content?: Json
           created_at?: string
           id?: string
+          image_attribution?: string | null
+          image_license?: string | null
+          image_source?: string | null
           image_url?: string | null
+          original_url?: string | null
           page_order?: number
           updated_at?: string
         }

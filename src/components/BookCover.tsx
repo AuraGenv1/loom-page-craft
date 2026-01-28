@@ -2574,7 +2574,7 @@ p { margin-bottom: 1em; }`);
               <TabsContent value="legal" className="pt-4 h-[500px]">
                 <div className="max-w-2xl mx-auto h-full">
                   <h3 className="font-medium mb-4 text-center">Copyright & Hallucination Defense</h3>
-                  {bookData && <KdpLegalDefense bookData={bookData} title={title} />}
+                  {bookData && bookId && <KdpLegalDefense bookData={bookData} bookId={bookId} title={title} />}
                 </div>
               </TabsContent>
 
