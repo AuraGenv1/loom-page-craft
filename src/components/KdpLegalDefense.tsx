@@ -348,6 +348,12 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     doc.setFontSize(10);
     y += 0.5;
 
+    // Check if we need a new page for Openverse section
+    if (y > 9.5) {
+      doc.addPage();
+      y = 1.0;
+    }
+
     // 6. OPENVERSE (CC Licensed Content)
     doc.setFont("times", "bold");
     doc.text("6. Image License (Openverse)", 1, y);
@@ -526,9 +532,9 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     doc.setLineWidth(0.01);
     doc.line(0.75, 1.7, 7.75, 1.7);
 
-    // Table headers
+    // Table headers - Adjusted column widths to prevent caption/source overlap
     let y = 2.0;
-    const colWidths = { page: 0.5, chapter: 0.6, caption: 1.8, source: 0.8, license: 1.2, urls: 2.3 };
+    const colWidths = { page: 0.4, chapter: 0.4, caption: 1.4, source: 0.9, license: 1.1, urls: 2.6 };
     const startX = 0.75;
 
     doc.setFont("times", "bold");
