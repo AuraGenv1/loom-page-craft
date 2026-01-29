@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
-import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search, ClipboardList } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Pencil, RefreshCw, Download, Palette, BookOpen, FileText, Upload, Package, DollarSign, ShieldCheck, Search, ClipboardList, Lock, Sparkles, Calculator } from 'lucide-react';
 import KdpFinanceCalculator from './KdpFinanceCalculator';
 import KdpLegalDefense from './KdpLegalDefense';
 import KdpPrepDashboard from './KdpPrepDashboard';
@@ -35,6 +36,10 @@ interface BookCoverProps {
   coverImageUrl?: string | null;
   isLoadingImage?: boolean;
   isAdmin?: boolean;
+  /** Full access (admin OR paid) - controls editing vs view-only */
+  hasFullAccess?: boolean;
+  /** Callback when guest attempts a premium feature */
+  onPremiumFeatureAttempt?: (featureName: string) => void;
   bookId?: string;
   backCoverUrl?: string;
   spineText?: string;
@@ -50,6 +55,39 @@ interface BookCoverProps {
   onCoverUpdate?: (updates: { coverImageUrls?: string[]; backCoverUrl?: string; spineText?: string }) => void;
 }
 
+// Locked Tab Content component for premium feature teasing
+const LockedTabContent: React.FC<{
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  onUnlockClick?: () => void;
+}> = ({ title, description, icon: Icon, onUnlockClick }) => (
+  <div className="relative min-h-[300px] pt-4">
+    {/* Blurred content preview */}
+    <div className="blur-sm pointer-events-none opacity-50">
+      <div className="h-[280px] bg-secondary/20 rounded-lg flex flex-col items-center justify-center gap-4">
+        <Icon className="w-16 h-16 text-muted-foreground/30" />
+        <div className="w-48 h-4 bg-muted-foreground/10 rounded" />
+        <div className="w-32 h-3 bg-muted-foreground/10 rounded" />
+        <div className="w-40 h-3 bg-muted-foreground/10 rounded" />
+      </div>
+    </div>
+    
+    {/* Premium overlay */}
+    <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+      <div className="text-center p-8 max-w-sm">
+        <Lock className="w-12 h-12 mx-auto mb-4 text-primary/60" />
+        <h3 className="text-lg font-semibold mb-2">{title}</h3>
+        <p className="text-sm text-muted-foreground mb-6">{description}</p>
+        <Button onClick={onUnlockClick} className="gap-2">
+          <Sparkles className="w-4 h-4" />
+          Unlock Full Guide
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
 const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
   ({ 
     title: propTitle, 
@@ -59,6 +97,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     coverImageUrl, 
     isLoadingImage,
     isAdmin = false,
+    hasFullAccess = false,
+    onPremiumFeatureAttempt,
     bookId,
     backCoverUrl,
     spineText: initialSpineText,
@@ -1856,18 +1896,17 @@ p { margin-bottom: 1em; }`);
           ref={ref}
           className="w-full max-w-md mx-auto aspect-[3/4] gradient-paper rounded-sm shadow-book p-10 md:p-12 flex flex-col justify-between animate-page-turn relative overflow-hidden border border-border/30"
         >
-          {/* Admin Edit Button - Locked while generating */}
-          {isAdmin && (
+          {/* KDP Studio Button - Visible to ALL users when book is complete */}
+          {isGenerationComplete && (
             <Button
               id="kdp-studio-trigger"
               onClick={() => setStudioOpen(true)}
               variant="secondary"
               size="sm"
-              disabled={!isGenerationComplete}
-              className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md disabled:opacity-50"
+              className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md"
             >
               <Pencil className="w-4 h-4 mr-1" />
-              {isGenerationComplete ? 'Edit Cover / Export KDP' : 'Generating Book...'}
+              {hasFullAccess ? 'Edit Cover / Export KDP' : 'View Export Options'}
             </Button>
           )}
 
@@ -1996,10 +2035,26 @@ p { margin-bottom: 1em; }`);
                 <TabsTrigger value="back" className="text-xs sm:text-sm">Back</TabsTrigger>
                 <TabsTrigger value="spine" className="text-xs sm:text-sm">Spine</TabsTrigger>
                 <TabsTrigger value="wrap" className="text-xs sm:text-sm">Wrap</TabsTrigger>
-                <TabsTrigger value="kdp-prep" className="gap-1 text-xs sm:text-sm"><ClipboardList className="w-3 h-3"/> Prep</TabsTrigger>
-                <TabsTrigger value="finance" className="gap-1 text-xs sm:text-sm"><DollarSign className="w-3 h-3"/> $$$</TabsTrigger>
-                <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm"><ShieldCheck className="w-3 h-3"/> Legal</TabsTrigger>
-                <TabsTrigger value="manuscript" className="text-xs sm:text-sm">Export</TabsTrigger>
+                <TabsTrigger value="kdp-prep" className="gap-1 text-xs sm:text-sm">
+                  {!hasFullAccess && <Lock className="w-3 h-3" />}
+                  {hasFullAccess && <ClipboardList className="w-3 h-3" />}
+                  Prep
+                </TabsTrigger>
+                <TabsTrigger value="finance" className="gap-1 text-xs sm:text-sm">
+                  {!hasFullAccess && <Lock className="w-3 h-3" />}
+                  {hasFullAccess && <DollarSign className="w-3 h-3" />}
+                  $$$
+                </TabsTrigger>
+                <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
+                  {!hasFullAccess && <Lock className="w-3 h-3" />}
+                  {hasFullAccess && <ShieldCheck className="w-3 h-3" />}
+                  Legal
+                </TabsTrigger>
+                <TabsTrigger value="manuscript" className="gap-1 text-xs sm:text-sm">
+                  {!hasFullAccess && <Lock className="w-3 h-3" />}
+                  {hasFullAccess && <Package className="w-3 h-3" />}
+                  Export
+                </TabsTrigger>
               </TabsList>
 
               {/* TAB 1: Front Cover - Full Layout Preview with Editable Title/Subtitle */}
@@ -2070,7 +2125,15 @@ p { margin-bottom: 1em; }`);
                   <div className="space-y-4">
                     {/* Editable Title/Subtitle Fields */}
                     <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
-                      <h4 className="font-medium text-sm">Edit Cover Text</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-sm">Edit Cover Text</h4>
+                        {!hasFullAccess && (
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Lock className="w-3 h-3" />
+                            View Only
+                          </Badge>
+                        )}
+                      </div>
                       <div>
                         <Label htmlFor="cover-title" className="text-sm">Title</Label>
                         <Input
@@ -2079,6 +2142,7 @@ p { margin-bottom: 1em; }`);
                           onChange={(e) => setLocalTitle(e.target.value)}
                           placeholder="Book title..."
                           className="mt-1"
+                          disabled={!hasFullAccess}
                         />
                       </div>
                       <div>
@@ -2089,75 +2153,109 @@ p { margin-bottom: 1em; }`);
                           onChange={(e) => setLocalSubtitle(e.target.value)}
                           placeholder="Subtitle..."
                           className="mt-1"
+                          disabled={!hasFullAccess}
                         />
                       </div>
-                      <Button 
-                        onClick={handleSaveTextChanges} 
-                        disabled={isSavingText}
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        {isSavingText ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Text Changes'
-                        )}
-                      </Button>
+                      {hasFullAccess && (
+                        <Button 
+                          onClick={handleSaveTextChanges} 
+                          disabled={isSavingText}
+                          variant="secondary"
+                          className="w-full"
+                        >
+                          {isSavingText ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            'Save Text Changes'
+                          )}
+                        </Button>
+                      )}
                     </div>
                     
-                    {/* Upload Cover Image */}
-                    <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">
-                      <h4 className="font-medium text-sm mb-2">Or Upload Your Own Image</h4>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Upload a custom cover image (JPG, PNG, max 5MB)
-                      </p>
+                    {/* Upload Cover Image - Only for paid users */}
+                    {hasFullAccess ? (
+                      <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">
+                        <h4 className="font-medium text-sm mb-2">Or Upload Your Own Image</h4>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Upload a custom cover image (JPG, PNG, max 5MB)
+                        </p>
 
-                      <Button
-                        variant="outline"
-                        onClick={() => setCoverGalleryOpen(true)}
-                        disabled={isUploadingCover}
-                        className="w-full gap-2 mb-3"
-                      >
-                        <Search className="w-4 h-4" />
-                        Search Gallery
-                      </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setCoverGalleryOpen(true)}
+                          disabled={isUploadingCover}
+                          className="w-full gap-2 mb-3"
+                        >
+                          <Search className="w-4 h-4" />
+                          Search Gallery
+                        </Button>
 
-                      <input
-                        ref={coverUploadRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverUpload}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => coverUploadRef.current?.click()}
-                        disabled={isUploadingCover}
-                        className="w-full"
-                      >
-                        {isUploadingCover ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Upload Cover Image
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                        <input
+                          ref={coverUploadRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCoverUpload}
+                          className="hidden"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => coverUploadRef.current?.click()}
+                          disabled={isUploadingCover}
+                          className="w-full"
+                        >
+                          {isUploadingCover ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Upload Cover Image
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5 opacity-60">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">Custom Cover Image</h4>
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Lock className="w-3 h-3" />
+                            Premium
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Unlock to upload custom images or search our gallery
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={() => onPremiumFeatureAttempt?.('Cover Image Upload')}
+                          className="w-full gap-2"
+                        >
+                          <Lock className="w-4 h-4" />
+                          Unlock Cover Editing
+                        </Button>
+                      </div>
+                    )}
                     
                   </div>
                 </div>
 
                 {/* Cover Branding - Compact Row Below Grid */}
                 <div className="mt-6 pt-4 border-t">
-                  <h4 className="font-medium text-sm mb-3 text-center">Cover Branding</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-sm text-center flex-1">Cover Branding</h4>
+                    {!hasFullAccess && (
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Lock className="w-3 h-3" />
+                        View Only
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center justify-center gap-4">
                     {/* Brand Name */}
                     <div className="flex items-center gap-2">
@@ -2168,6 +2266,7 @@ p { margin-bottom: 1em; }`);
                         onChange={(e) => setCustomBrandName(e.target.value)}
                         placeholder="Your brand..."
                         className="w-32 h-8"
+                        disabled={!hasFullAccess}
                       />
                     </div>
                     
@@ -2180,11 +2279,12 @@ p { margin-bottom: 1em; }`);
                         checked={showBrandLogo}
                         onChange={(e) => setShowBrandLogo(e.target.checked)}
                         className="h-4 w-4"
+                        disabled={!hasFullAccess}
                       />
                     </div>
                     
-                    {/* Upload Logo Button */}
-                    {showBrandLogo && (
+                    {/* Upload Logo Button - Only for paid users */}
+                    {showBrandLogo && hasFullAccess && (
                       <>
                         <input
                           ref={logoUploadRef}
@@ -2224,10 +2324,12 @@ p { margin-bottom: 1em; }`);
                       </>
                     )}
                     
-                    {/* Reset Button */}
-                    <Button variant="ghost" size="sm" onClick={handleResetBranding}>
-                      Reset
-                    </Button>
+                    {/* Reset Button - Only for paid users */}
+                    {hasFullAccess && (
+                      <Button variant="ghost" size="sm" onClick={handleResetBranding}>
+                        Reset
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -2278,7 +2380,15 @@ p { margin-bottom: 1em; }`);
                   {/* Settings Column */}
                   <div className="space-y-4">
                     <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
-                      <h4 className="font-medium text-sm">Back Cover Text {!isAdmin && <span className="text-xs text-muted-foreground">(Admin Only)</span>}</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-sm">Back Cover Text</h4>
+                        {!hasFullAccess && (
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Lock className="w-3 h-3" />
+                            View Only
+                          </Badge>
+                        )}
+                      </div>
                       <div>
                         <Label htmlFor="back-cover-title" className="text-sm">Header</Label>
                         <Input
@@ -2287,7 +2397,7 @@ p { margin-bottom: 1em; }`);
                           onChange={(e) => setBackCoverTitle(e.target.value)}
                           placeholder="Header text..."
                           className="mt-1"
-                          disabled={!isAdmin}
+                          disabled={!hasFullAccess}
                         />
                       </div>
                       <div>
@@ -2298,6 +2408,7 @@ p { margin-bottom: 1em; }`);
                           onChange={(e) => setDedicationText(e.target.value)}
                           placeholder="e.g., Prepared for the Smith Family"
                           className="mt-1"
+                          disabled={!hasFullAccess}
                         />
                       </div>
                       <div>
@@ -2309,7 +2420,7 @@ p { margin-bottom: 1em; }`);
                           placeholder="Book description..."
                           rows={4}
                           className="mt-1"
-                          disabled={!isAdmin}
+                          disabled={!hasFullAccess}
                         />
                       </div>
                       <div>
@@ -2320,7 +2431,7 @@ p { margin-bottom: 1em; }`);
                           onChange={(e) => setBackCoverCTA(e.target.value)}
                           placeholder="CTA text..."
                           className="mt-1"
-                          disabled={!isAdmin}
+                          disabled={!hasFullAccess}
                         />
                       </div>
                     </div>
@@ -2382,6 +2493,14 @@ p { margin-bottom: 1em; }`);
                     </div>
                   </div>
                   <div className="space-y-4">
+                    {!hasFullAccess && (
+                      <div className="flex items-center justify-end">
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          <Lock className="w-3 h-3" />
+                          View Only
+                        </Badge>
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="edition-text" className="text-base font-medium">Edition Text</Label>
                       <p className="text-sm text-muted-foreground mb-2">
@@ -2392,6 +2511,7 @@ p { margin-bottom: 1em; }`);
                         value={editionText}
                         onChange={(e) => setEditionText(e.target.value)}
                         placeholder="2026 Edition"
+                        disabled={!hasFullAccess}
                       />
                     </div>
                     <div>
@@ -2404,6 +2524,7 @@ p { margin-bottom: 1em; }`);
                         value={spineText}
                         onChange={(e) => setSpineText(e.target.value)}
                         placeholder="Book title for spine..."
+                        disabled={!hasFullAccess}
                       />
                     </div>
                     <div>
@@ -2415,12 +2536,14 @@ p { margin-bottom: 1em; }`);
                           value={spineColor}
                           onChange={(e) => setSpineColor(e.target.value)}
                           className="w-20 h-12 p-1 cursor-pointer"
+                          disabled={!hasFullAccess}
                         />
                         <Input
                           value={spineColor}
                           onChange={(e) => setSpineColor(e.target.value)}
                           placeholder="#ffffff"
                           className="flex-1"
+                          disabled={!hasFullAccess}
                         />
                       </div>
                     </div>
@@ -2433,44 +2556,50 @@ p { margin-bottom: 1em; }`);
                           value={spineTextColor}
                           onChange={(e) => setSpineTextColor(e.target.value)}
                           className="w-20 h-12 p-1 cursor-pointer"
+                          disabled={!hasFullAccess}
                         />
                         <Input
                           value={spineTextColor}
                           onChange={(e) => setSpineTextColor(e.target.value)}
                           placeholder="#000000"
                           className="flex-1"
+                          disabled={!hasFullAccess}
                         />
                       </div>
                     </div>
-                    <div className="pt-4">
-                      <h4 className="font-medium mb-2">Quick Background Colors</h4>
-                      <div className="flex gap-2 flex-wrap">
-                        {['#ffffff', '#f5f5f5', '#000000', '#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#fdcb6e'].map(color => (
-                          <button
-                            key={color}
-                            className={`w-10 h-10 rounded border-2 transition-colors ${spineColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
-                            style={{ backgroundColor: color }}
-                            onClick={() => setSpineColor(color)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="pt-2">
-                      <h4 className="font-medium mb-2">Quick Text Colors</h4>
-                      <div className="flex gap-2 flex-wrap">
-                        {['#000000', '#1a1a1a', '#333333', '#ffffff', '#f5f5f5', '#6c5ce7', '#d63031'].map(color => (
-                          <button
-                            key={color}
-                            className={`w-10 h-10 rounded border-2 transition-colors ${spineTextColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
-                            style={{ backgroundColor: color }}
-                            onClick={() => setSpineTextColor(color)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <Button onClick={handleSaveSpine} className="w-full mt-4" size="lg">
-                      Save Spine Settings
-                    </Button>
+                    {hasFullAccess && (
+                      <>
+                        <div className="pt-4">
+                          <h4 className="font-medium mb-2">Quick Background Colors</h4>
+                          <div className="flex gap-2 flex-wrap">
+                            {['#ffffff', '#f5f5f5', '#000000', '#1a1a2e', '#0d1b2a', '#2d3436', '#6c5ce7', '#fdcb6e'].map(color => (
+                              <button
+                                key={color}
+                                className={`w-10 h-10 rounded border-2 transition-colors ${spineColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => setSpineColor(color)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="pt-2">
+                          <h4 className="font-medium mb-2">Quick Text Colors</h4>
+                          <div className="flex gap-2 flex-wrap">
+                            {['#000000', '#1a1a1a', '#333333', '#ffffff', '#f5f5f5', '#6c5ce7', '#d63031'].map(color => (
+                              <button
+                                key={color}
+                                className={`w-10 h-10 rounded border-2 transition-colors ${spineTextColor === color ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-foreground/30'}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => setSpineTextColor(color)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <Button onClick={handleSaveSpine} className="w-full mt-4" size="lg">
+                          Save Spine Settings
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </TabsContent>
@@ -2690,145 +2819,180 @@ p { margin-bottom: 1em; }`);
 
               {/* TAB 5: KDP Prep - Amazon Metadata Dashboard */}
               <TabsContent value="kdp-prep" className="pt-4">
-                <KdpPrepDashboard
-                  title={title}
-                  topic={topic}
-                  subtitle={subtitle}
-                  authorName={customBrandName || 'Loom & Page'}
-                  contentPageCount={propEstimatedPageCount || estimatedPages}
-                  bookData={bookData}
-                />
+                {hasFullAccess ? (
+                  <KdpPrepDashboard
+                    title={title}
+                    topic={topic}
+                    subtitle={subtitle}
+                    authorName={customBrandName || 'Loom & Page'}
+                    contentPageCount={propEstimatedPageCount || estimatedPages}
+                    bookData={bookData}
+                  />
+                ) : (
+                  <LockedTabContent
+                    title="Amazon Listing Prep"
+                    description="Unlock to auto-generate your Best-Selling Description and Keywords with AI."
+                    icon={ClipboardList}
+                    onUnlockClick={() => onPremiumFeatureAttempt?.('Amazon Listing Prep')}
+                  />
+                )}
               </TabsContent>
 
-              {/* TAB 5: Finance - KDP Profit Calculator */}
+              {/* TAB 6: Finance - KDP Profit Calculator */}
               <TabsContent value="finance" className="pt-4">
-                <div className="max-w-2xl mx-auto">
-                  <h3 className="font-medium mb-4 text-center">KDP Profit Calculator (2025 Estimates)</h3>
-                  <KdpFinanceCalculator pageCount={estimatedPages} />
-                </div>
-              </TabsContent>
-
-              {/* TAB 6: Legal - Copyright & Hallucination Defense */}
-              <TabsContent value="legal" className="pt-4 h-[500px]">
-                <div className="max-w-2xl mx-auto h-full">
-                  <h3 className="font-medium mb-4 text-center">Copyright & Hallucination Defense</h3>
-                  {bookData && bookId && <KdpLegalDefense bookData={bookData} bookId={bookId} title={title} />}
-                </div>
-              </TabsContent>
-
-              {/* TAB 7: Export - Unified KDP Package */}
-              <TabsContent value="manuscript" className="space-y-4 pt-4">
-                <div className="max-w-lg mx-auto text-center space-y-6">
-                  {/* Unified KDP Package */}
-                  <div className="p-8 border-2 border-primary/20 rounded-lg bg-primary/5">
-                    <Package className="w-16 h-16 mx-auto mb-4 text-primary" />
-                    <h3 className="text-xl font-bold mb-2">Complete KDP Package</h3>
-                    <p className="text-muted-foreground mb-6">
-                      Download everything you need for Amazon KDP in one ZIP file:
-                    </p>
-                    <ul className="text-left list-disc list-inside space-y-2 mb-6 text-sm text-muted-foreground">
-                      <li><strong>Cover-File.pdf</strong> — Full wrap cover with spine</li>
-                      <li><strong>Manuscript.pdf</strong> — Interior text with TOC & images</li>
-                      <li><strong>Kindle-eBook.epub</strong> — Kindle eBook format</li>
-                      <li><strong>Kindle_Cover.jpg</strong> — eBook cover image</li>
-                    </ul>
-                    
-                    <Button 
-                      onClick={handleDownloadKDPPackage} 
-                      disabled={isGeneratingPackage || !bookData}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {isGeneratingPackage ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Generating Package...
-                        </>
-                      ) : (
-                        <>
-                          <Package className="w-4 h-4 mr-2" />
-                          Download KDP Package (ZIP)
-                        </>
-                      )}
-                    </Button>
+                {hasFullAccess ? (
+                  <div className="max-w-2xl mx-auto">
+                    <h3 className="font-medium mb-4 text-center">KDP Profit Calculator (2025 Estimates)</h3>
+                    <KdpFinanceCalculator pageCount={estimatedPages} />
                   </div>
+                ) : (
+                  <LockedTabContent
+                    title="Royalty Calculator"
+                    description="Unlock to calculate your KDP royalties and optimize your pricing strategy."
+                    icon={Calculator}
+                    onUnlockClick={() => onPremiumFeatureAttempt?.('Royalty Calculator')}
+                  />
+                )}
+              </TabsContent>
 
-                  {/* Individual Downloads */}
-                  <div className="p-6 border rounded-lg bg-secondary/10">
-                    <h4 className="font-medium mb-4">Or Download Individually</h4>
-                    <div className="grid grid-cols-1 gap-3">
+              {/* TAB 7: Legal - Copyright & Hallucination Defense */}
+              <TabsContent value="legal" className="pt-4">
+                {hasFullAccess ? (
+                  <div className="max-w-2xl mx-auto h-[500px]">
+                    <h3 className="font-medium mb-4 text-center">Copyright & Hallucination Defense</h3>
+                    {bookData && bookId && <KdpLegalDefense bookData={bookData} bookId={bookId} title={title} />}
+                  </div>
+                ) : (
+                  <LockedTabContent
+                    title="Copyright Defense"
+                    description="Unlock to scan for potential issues and generate legal disclaimers."
+                    icon={ShieldCheck}
+                    onUnlockClick={() => onPremiumFeatureAttempt?.('Copyright Defense')}
+                  />
+                )}
+              </TabsContent>
+
+              {/* TAB 8: Export - Unified KDP Package */}
+              <TabsContent value="manuscript" className="space-y-4 pt-4">
+                {hasFullAccess ? (
+                  <div className="max-w-lg mx-auto text-center space-y-6">
+                    {/* Unified KDP Package */}
+                    <div className="p-8 border-2 border-primary/20 rounded-lg bg-primary/5">
+                      <Package className="w-16 h-16 mx-auto mb-4 text-primary" />
+                      <h3 className="text-xl font-bold mb-2">Complete KDP Package</h3>
+                      <p className="text-muted-foreground mb-6">
+                        Download everything you need for Amazon KDP in one ZIP file:
+                      </p>
+                      <ul className="text-left list-disc list-inside space-y-2 mb-6 text-sm text-muted-foreground">
+                        <li><strong>Cover-File.pdf</strong> — Full wrap cover with spine</li>
+                        <li><strong>Manuscript.pdf</strong> — Interior text with TOC & images</li>
+                        <li><strong>Kindle-eBook.epub</strong> — Kindle eBook format</li>
+                        <li><strong>Kindle_Cover.jpg</strong> — eBook cover image</li>
+                      </ul>
+                      
                       <Button 
-                        variant="outline"
-                        onClick={handleDownloadKDP} 
+                        onClick={handleDownloadKDPPackage} 
+                        disabled={isGeneratingPackage || !bookData}
                         className="w-full"
+                        size="lg"
                       >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Cover PDF
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={handleDownloadManuscript} 
-                        disabled={isDownloadingManuscript || !bookData}
-                        className="w-full"
-                      >
-                        {isDownloadingManuscript ? (
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        {isGeneratingPackage ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Generating Package...
+                          </>
                         ) : (
-                          <FileText className="w-4 h-4 mr-2" />
+                          <>
+                            <Package className="w-4 h-4 mr-2" />
+                            Download KDP Package (ZIP)
+                          </>
                         )}
-                        Download Manuscript PDF
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        className="w-full"
-                        onClick={async () => {
-                          const blob = await generateCoverJPGBlob();
-                          if (blob) {
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_Kindle_Cover.jpg`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            toast.success('Kindle Cover (JPG) downloaded!');
-                          }
-                        }}
-                      >
-                        <div className="flex items-center">
-                          <div className="bg-primary/10 p-1 rounded mr-2">
-                            <div className="w-3 h-4 border border-current rounded-[1px]" />
-                          </div>
-                          Download Kindle Cover (JPG)
-                        </div>
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={async () => {
-                          const epubBlob = await generateEPUBBlob();
-                          if (epubBlob) {
-                            const url = URL.createObjectURL(epubBlob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}-Kindle.epub`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            toast.success('Kindle eBook downloaded!');
-                          }
-                        }}
-                        disabled={!bookData}
-                        className="w-full"
-                      >
-                        <BookOpen className="w-4 h-4 mr-2" />
-                        Download Kindle eBook (EPUB)
                       </Button>
                     </div>
-                  </div>
 
-                </div>
+                    {/* Individual Downloads */}
+                    <div className="p-6 border rounded-lg bg-secondary/10">
+                      <h4 className="font-medium mb-4">Or Download Individually</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        <Button 
+                          variant="outline"
+                          onClick={handleDownloadKDP} 
+                          className="w-full"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Cover PDF
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={handleDownloadManuscript} 
+                          disabled={isDownloadingManuscript || !bookData}
+                          className="w-full"
+                        >
+                          {isDownloadingManuscript ? (
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4 mr-2" />
+                          )}
+                          Download Manuscript PDF
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="w-full"
+                          onClick={async () => {
+                            const blob = await generateCoverJPGBlob();
+                            if (blob) {
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_Kindle_Cover.jpg`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                              toast.success('Kindle Cover (JPG) downloaded!');
+                            }
+                          }}
+                        >
+                          <div className="flex items-center">
+                            <div className="bg-primary/10 p-1 rounded mr-2">
+                              <div className="w-3 h-4 border border-current rounded-[1px]" />
+                            </div>
+                            Download Kindle Cover (JPG)
+                          </div>
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={async () => {
+                            const epubBlob = await generateEPUBBlob();
+                            if (epubBlob) {
+                              const url = URL.createObjectURL(epubBlob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}-Kindle.epub`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                              toast.success('Kindle eBook downloaded!');
+                            }
+                          }}
+                          disabled={!bookData}
+                          className="w-full"
+                        >
+                          <BookOpen className="w-4 h-4 mr-2" />
+                          Download Kindle eBook (EPUB)
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <LockedTabContent
+                    title="KDP Package"
+                    description="Unlock to download your complete Amazon-ready package (PDF, EPUB, Cover)."
+                    icon={Package}
+                    onUnlockClick={() => onPremiumFeatureAttempt?.('KDP Package Export')}
+                  />
+                )}
               </TabsContent>
             </Tabs>
           </DialogContent>
