@@ -2221,7 +2221,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               <div className="text-center">
                 <h4 className="font-serif text-base font-semibold mb-1">End of Preview</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  You've reached the end of the free preview. Unlock the full book to access all {totalChapters} chapters, the Editing Suite, and KDP Export Tools.
+                  You've enjoyed Chapter 1 — there's so much more waiting for you. Unlock to access all {totalChapters} chapters, the Cover Studio, and downloadable PDF & eBook formats.
                 </p>
               </div>
               <Button 

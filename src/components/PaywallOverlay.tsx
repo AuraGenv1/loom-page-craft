@@ -12,10 +12,10 @@ const PaywallOverlay = ({ onPurchase, onDownload }: PaywallOverlayProps) => {
   const [isPurchased, setIsPurchased] = useState(false);
 
   const features = [
-    '10 comprehensive chapters',
+    'All chapters unlocked',
     'Step-by-step instructions',
-    'Expert tips & techniques',
-    'Downloadable PDF version',
+    'Kindle & paperback formats',
+    'Downloadable PDF & eBook',
   ];
 
   const handlePurchase = async () => {
@@ -79,7 +79,7 @@ const PaywallOverlay = ({ onPurchase, onDownload }: PaywallOverlayProps) => {
           ) : (
             <>
               <h2 className="font-serif text-2xl md:text-3xl font-semibold mb-3">
-                The rest of your 10-chapter guide is ready.
+                Your complete guide is ready.
               </h2>
               
               <p className="text-muted-foreground mb-8">
