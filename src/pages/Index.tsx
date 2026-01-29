@@ -864,6 +864,11 @@ const Index = () => {
                     coverImageUrls={coverImageUrls} 
                     isLoadingImage={isLoadingCoverImage}
                     isAdmin={isAdmin}
+                    hasFullAccess={hasFullAccess}
+                    onPremiumFeatureAttempt={(featureName) => {
+                      setPremiumFeatureName(featureName);
+                      setPremiumModalOpen(true);
+                    }}
                     bookId={bookId || undefined}
                     bookData={bookData || undefined}
                     isGenerationComplete={isGenerationComplete}
