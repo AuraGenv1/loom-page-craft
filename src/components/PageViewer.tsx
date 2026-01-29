@@ -550,6 +550,7 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onOpenChange,
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
+  imageSource?: string;
   attribution?: string;
   isLoading?: boolean;
   canEditImages?: boolean;
@@ -559,13 +560,17 @@ const ImageFullPage: React.FC<{
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
+}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
   // Determine visual state:
   // - Show loading only when isLoading is explicitly true
   // - Show empty state (Add Image button) when: not loading, no image, AND fetch was attempted (or is manual)
   // - If fetchAttempted is false and not loading, still show the Add Image button so users can manually add
   const showLoading = isLoading === true;
   const showEmptyState = !isLoading && !imageUrl;
+  
+  // Only show the "AI-selected" swap hint for AI-fetched images, NOT user uploads
+  const isUserUpload = imageSource === 'upload';
+  const showAiSwapHint = canEditImages && onManualSearch && !isUserUpload;
   
   return (
     <div className="flex flex-col h-full group">
@@ -590,30 +595,33 @@ const ImageFullPage: React.FC<{
                 onManualSearch={onManualSearch}
               />
             )}
-            <div className="w-full rounded-lg overflow-hidden shadow-lg">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg relative">
               <img
                 src={imageUrl}
                 alt={content.caption}
                 className="w-full h-auto max-h-[65vh] object-contain bg-muted/20"
                 loading="lazy"
               />
+              {/* AI-selected badge overlay - only for non-upload images */}
+              {showAiSwapHint && (
+                <button
+                  type="button"
+                  className="print:hidden absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-background/80 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 hover:bg-background hover:text-foreground transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onManualSearch();
+                  }}
+                  title="Click to swap image"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  AI · Swap
+                </button>
+              )}
             </div>
             {/* Compact caption below image */}
             {content.caption && (
               <div className="text-center mt-3 max-w-[80%] mx-auto">
                 <p className="text-xs text-muted-foreground italic">{content.caption}</p>
-                {canEditImages && onManualSearch && (
-                  <button
-                    type="button"
-                    className="print:hidden mt-2 text-[11px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onManualSearch();
-                    }}
-                  >
-                    AI-selected image — click to swap
-                  </button>
-                )}
               </div>
             )}
             {attribution && (
@@ -641,6 +649,7 @@ const ImageFullPage: React.FC<{
 const ImageHalfPage: React.FC<{ 
   content: { query: string; caption: string }; 
   imageUrl?: string;
+  imageSource?: string;
   attribution?: string;
   isLoading?: boolean;
   canEditImages?: boolean;
@@ -650,12 +659,16 @@ const ImageHalfPage: React.FC<{
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
+}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
   // Determine visual state:
   // - Show loading only when isLoading is explicitly true
   // - Show empty state (Add Image button) when: not loading and no image
   const showLoading = isLoading === true;
   const showEmptyState = !isLoading && !imageUrl;
+  
+  // Only show the "AI-selected" swap hint for AI-fetched images, NOT user uploads
+  const isUserUpload = imageSource === 'upload';
+  const showAiSwapHint = canEditImages && onManualSearch && !isUserUpload;
 
   return (
     <div className="h-full flex flex-col group">
@@ -684,6 +697,21 @@ const ImageHalfPage: React.FC<{
               alt={content.caption}
               className="absolute inset-0 w-full h-full object-cover"
             />
+            {/* AI-selected badge overlay - only for non-upload images */}
+            {showAiSwapHint && (
+              <button
+                type="button"
+                className="print:hidden absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-background/80 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 hover:bg-background hover:text-foreground transition-colors z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onManualSearch();
+                }}
+                title="Click to swap image"
+              >
+                <RefreshCw className="w-3 h-3" />
+                AI · Swap
+              </button>
+            )}
           </>
         ) : showEmptyState ? (
           <div className="absolute inset-0 bg-muted flex items-center justify-center">
@@ -702,18 +730,6 @@ const ImageHalfPage: React.FC<{
           <p className="italic text-muted-foreground">
             {content.caption}
           </p>
-          {canEditImages && onManualSearch && (
-            <button
-              type="button"
-              className="print:hidden mt-2 text-[11px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2"
-              onClick={(e) => {
-                e.stopPropagation();
-                onManualSearch();
-              }}
-            >
-              AI-selected image — click to swap
-            </button>
-          )}
           {attribution && (
             <p className="text-[9px] text-muted-foreground/50 mt-2">
               {attribution}
@@ -842,6 +858,7 @@ const BlockRenderer: React.FC<{
         <ImageFullPage 
           content={block.content as { query: string; caption: string }} 
           imageUrl={block.image_url}
+          imageSource={(block as any).image_source}
           attribution={attribution}
           isLoading={isLoading}
           fetchAttempted={fetchAttempted}
@@ -858,6 +875,7 @@ const BlockRenderer: React.FC<{
         <ImageHalfPage 
           content={block.content as { query: string; caption: string }} 
           imageUrl={block.image_url}
+          imageSource={(block as any).image_source}
           attribution={attribution}
           isLoading={isLoading}
           fetchAttempted={fetchAttempted}

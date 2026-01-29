@@ -20,6 +20,7 @@ interface BaseBlock {
   page_order: number;
   block_type: PageBlockType;
   image_url?: string;
+  image_source?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -134,8 +135,8 @@ export const isVisualTopic = (topic: string): boolean => {
 };
 
 // Luxury Architect targets
-export const LUXURY_TARGET_PAGES = 120; // Increased target for 100+ page books
-export const LUXURY_MIN_CHAPTERS = 10;
+export const LUXURY_TARGET_PAGES = 140; // Target 140+ pages for professional-length books
+export const LUXURY_MIN_CHAPTERS = 12;
 export const LUXURY_MAX_IMAGE_RATIO = 0.30; // Max 30% images
 
 // Calculate target page count based on topic type

@@ -67,10 +67,11 @@ RULE 0: FORCE HEADERS (AGGRESSIVE!)
 - Chapter 1 is NOT a summary. It must contain full-density text blocks with explicit headers.
 - No blocks of just plain text. Headers are MANDATORY.
 
-RULE 1: STRICT PAGE FIT (220-250 Words MAX)
-- TARGET: Each "text" block must be **220-250 words MAXIMUM**. This is critical for Amazon KDP 6x9 pages—content MUST fit without scrolling.
-- Target exactly 235 words per text block. NEVER exceed 250 words.
-- Pages that overflow ruin the print layout. Keep it tight and focused.
+RULE 1: STRICT PAGE FIT (200-230 Words MAXIMUM)
+- CRITICAL: Each "text" block must be **200-230 words MAXIMUM**. This is essential for Amazon KDP 6x9 pages—content MUST fit without overflow.
+- Target exactly 215 words per text block. NEVER exceed 230 words.
+- Count your words before outputting. Pages that overflow ruin the print layout.
+- Be focused and substantive within the word limit.
 
 RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
 - Use Markdown INSIDE text blocks: "## Header", "### Subheader"
@@ -124,7 +125,7 @@ BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', 
 
 Block types (ONLY use these four types - NO quote blocks!):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
-- "text": { "text": "220-250 words MAX. MUST start with ## Header. Use ### Subheader inside." }
+- "text": { "text": "200-230 words MAX. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
@@ -139,7 +140,7 @@ REQUIREMENTS:
 - Last block MUST be "pro_tip" (anchored to end)
 - Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
-- Each "text" block: 220-250 words MAX with inline markdown (target 235 words, NEVER over 250)
+- Each "text" block: 200-230 words MAX with inline markdown (target 215 words, NEVER over 230)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
 - **NO CONSECUTIVE IMAGES** - Always separate images with at least one text block
@@ -149,8 +150,8 @@ Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE cont
 [
   {"block_type": "chapter_title", "content": {"chapter_number": ${chapterNumber}, "title": "${chapterTitle}"}},
   {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
-  {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 220-250 words MAX. Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
-  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 220-250 words MAX...]"}},
+  {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 200-230 words MAX. Count your words! Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
+  {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 200-230 words MAX. Never exceed 230 words.]"}},
   {"block_type": "text", "content": {"text": "## [Header]\\n\\n[Content...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
