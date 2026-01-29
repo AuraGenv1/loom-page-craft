@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.archive-image]
 verify_jwt = false
+
+[functions.register-openverse]
+verify_jwt = false

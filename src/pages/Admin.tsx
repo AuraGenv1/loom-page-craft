@@ -6,6 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -22,7 +30,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield, Key, Copy, AlertTriangle, Check, Loader2 } from 'lucide-react';
 import Logo from '@/components/Logo';
 
 interface PromoCode {
@@ -34,6 +42,12 @@ interface PromoCode {
   expires_at: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+interface OpenverseCredentials {
+  client_id: string;
+  client_secret: string;
+  name: string;
 }
 
 const Admin = () => {
@@ -50,6 +64,17 @@ const Admin = () => {
     max_uses: '',
     expires_at: '',
   });
+
+  // Openverse registration state
+  const [openverseForm, setOpenverseForm] = useState({
+    name: 'LoomPage Book Generator',
+    email: '',
+    description: 'Book generation tool for education',
+  });
+  const [registeringOpenverse, setRegisteringOpenverse] = useState(false);
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [openverseCredentials, setOpenverseCredentials] = useState<OpenverseCredentials | null>(null);
+  const [copiedField, setCopiedField] = useState<'id' | 'secret' | null>(null);
 
   // Check if user is admin
   useEffect(() => {
@@ -153,7 +178,63 @@ const Admin = () => {
       toast.error('Failed to delete promo code');
     } else {
       setPromoCodes(codes => codes.filter(c => c.id !== id));
-    toast.success('Promo code deleted');
+      toast.success('Promo code deleted');
+    }
+  };
+
+  // Set default email when user loads
+  useEffect(() => {
+    if (user?.email && !openverseForm.email) {
+      setOpenverseForm(prev => ({ ...prev, email: user.email || '' }));
+    }
+  }, [user?.email]);
+
+  const handleRegisterOpenverse = async () => {
+    if (!openverseForm.name.trim() || !openverseForm.email.trim() || !openverseForm.description.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setRegisteringOpenverse(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('register-openverse', {
+        body: {
+          name: openverseForm.name.trim(),
+          email: openverseForm.email.trim(),
+          description: openverseForm.description.trim(),
+        },
+      });
+
+      if (error) {
+        console.error('Error registering with Openverse:', error);
+        toast.error(error.message || 'Failed to register with Openverse');
+        return;
+      }
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      setOpenverseCredentials(data);
+      setCredentialsModalOpen(true);
+      toast.success('Openverse credentials generated!');
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setRegisteringOpenverse(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, field: 'id' | 'secret') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast.success(`${field === 'id' ? 'Client ID' : 'Client Secret'} copied!`);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast.error('Failed to copy to clipboard');
     }
   };
   // Loading state
@@ -228,75 +309,222 @@ const Admin = () => {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            Create new guides directly from the homepage. Manage promo codes below.
+            Create new guides directly from the homepage. Manage API credentials and promo codes below.
           </p>
         </section>
 
+        {/* Openverse API Setup Section */}
+        <section>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Key className="w-5 h-5 text-primary" />
+                <div>
+                  <CardTitle className="font-serif text-xl">Openverse API Setup</CardTitle>
+                  <CardDescription>
+                    Register your application to get API credentials for image search
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="app-name">App Name</Label>
+                <Input
+                  id="app-name"
+                  value={openverseForm.name}
+                  onChange={e => setOpenverseForm({ ...openverseForm, name: e.target.value })}
+                  placeholder="LoomPage Book Generator"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={openverseForm.email}
+                  onChange={e => setOpenverseForm({ ...openverseForm, email: e.target.value })}
+                  placeholder="your@email.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={openverseForm.description}
+                  onChange={e => setOpenverseForm({ ...openverseForm, description: e.target.value })}
+                  placeholder="Book generation tool for education"
+                  rows={2}
+                />
+              </div>
+              <Button 
+                onClick={handleRegisterOpenverse} 
+                disabled={registeringOpenverse}
+                className="w-full sm:w-auto"
+              >
+                {registeringOpenverse ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Registering...
+                  </>
+                ) : (
+                  <>
+                    <Key className="w-4 h-4 mr-2" />
+                    Register & Get Keys
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Credentials Modal */}
+        <Dialog open={credentialsModalOpen} onOpenChange={setCredentialsModalOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-serif flex items-center gap-2">
+                <Check className="w-5 h-5 text-primary" />
+                Openverse Credentials Generated
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              {/* Warning */}
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-destructive">
+                    IMPORTANT: Copy these now!
+                  </p>
+                  <p className="text-muted-foreground">
+                    Openverse will never show them again.
+                  </p>
+                </div>
+              </div>
+
+              {/* Client ID */}
+              <div className="space-y-2">
+                <Label>Client ID</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
+                    {openverseCredentials?.client_id}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(openverseCredentials?.client_id || '', 'id')}
+                    className="shrink-0"
+                  >
+                    {copiedField === 'id' ? (
+                      <Check className="w-4 h-4 text-primary" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Client Secret */}
+              <div className="space-y-2">
+                <Label>Client Secret</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
+                    {openverseCredentials?.client_secret}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(openverseCredentials?.client_secret || '', 'secret')}
+                    className="shrink-0"
+                  >
+                    {copiedField === 'secret' ? (
+                      <Check className="w-4 h-4 text-primary" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Next steps */}
+              <p className="text-sm text-muted-foreground pt-2">
+                Next: Add these as secrets in your project settings (OPENVERSE_CLIENT_ID and OPENVERSE_CLIENT_SECRET)
+              </p>
+
+              <Button 
+                onClick={() => setCredentialsModalOpen(false)} 
+                className="w-full"
+              >
+                Done
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Promo Codes Section */}
         <section>
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="font-serif text-2xl text-foreground">Promo Codes</h2>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Code
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="font-serif">Create Promo Code</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div>
-                  <Label htmlFor="code">Code</Label>
-                  <Input
-                    id="code"
-                    value={newCode.code}
-                    onChange={e => setNewCode({ ...newCode, code: e.target.value })}
-                    placeholder="SAVE20"
-                    className="uppercase"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="discount">Discount %</Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={newCode.discount_percent}
-                    onChange={e =>
-                      setNewCode({ ...newCode, discount_percent: parseInt(e.target.value) || 0 })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="max_uses">Max Uses (leave empty for unlimited)</Label>
-                  <Input
-                    id="max_uses"
-                    type="number"
-                    min="1"
-                    value={newCode.max_uses}
-                    onChange={e => setNewCode({ ...newCode, max_uses: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="expires">Expires At (optional)</Label>
-                  <Input
-                    id="expires"
-                    type="datetime-local"
-                    value={newCode.expires_at}
-                    onChange={e => setNewCode({ ...newCode, expires_at: e.target.value })}
-                  />
-                </div>
-                <Button onClick={handleCreateCode} className="w-full">
-                  Create Code
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="font-serif text-2xl text-foreground">Promo Codes</h2>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Code
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="font-serif">Create Promo Code</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="code">Code</Label>
+                    <Input
+                      id="code"
+                      value={newCode.code}
+                      onChange={e => setNewCode({ ...newCode, code: e.target.value })}
+                      placeholder="SAVE20"
+                      className="uppercase"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="discount">Discount %</Label>
+                    <Input
+                      id="discount"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={newCode.discount_percent}
+                      onChange={e =>
+                        setNewCode({ ...newCode, discount_percent: parseInt(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="max_uses">Max Uses (leave empty for unlimited)</Label>
+                    <Input
+                      id="max_uses"
+                      type="number"
+                      min="1"
+                      value={newCode.max_uses}
+                      onChange={e => setNewCode({ ...newCode, max_uses: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="expires">Expires At (optional)</Label>
+                    <Input
+                      id="expires"
+                      type="datetime-local"
+                      value={newCode.expires_at}
+                      onChange={e => setNewCode({ ...newCode, expires_at: e.target.value })}
+                    />
+                  </div>
+                  <Button onClick={handleCreateCode} className="w-full">
+                    Create Code
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
 
         {loadingCodes ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
