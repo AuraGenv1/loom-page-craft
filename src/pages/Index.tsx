@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import SearchInput from '@/components/SearchInput';
+import AdvancedOptions, { AdvancedOptionsState } from '@/components/AdvancedOptions';
+import { detectAutoPilotSettings } from '@/lib/autoPilot';
 import LoadingAnimation from '@/components/LoadingAnimation';
 import BookCover from '@/components/BookCover';
 import TableOfContents from '@/components/TableOfContents';
@@ -110,6 +112,13 @@ const Index = () => {
   const [isOfficial, setIsOfficial] = useState(false);
   const [premiumModalOpen, setPremiumModalOpen] = useState(false);
   const [premiumFeatureName, setPremiumFeatureName] = useState('');
+  
+  // Advanced options state for directed experience
+  const [advancedOptions, setAdvancedOptions] = useState<AdvancedOptionsState>({
+    voice: null,
+    structure: null,
+    focusAreas: []
+  });
   
   // Block-based architecture state
   const [chapterBlocks, setChapterBlocks] = useState<Record<number, PageBlock[]>>({});
@@ -398,7 +407,7 @@ const Index = () => {
         const tocEntry = bookData.tableOfContents?.find((ch) => ch.chapter === nextMissingChapter);
         if (!tocEntry) throw new Error('No TOC entry found');
         
-        // Call the NEW block-based chapter generator
+        // Call the NEW block-based chapter generator with voice/structure
         const { data, error } = await supabase.functions.invoke('generate-chapter-blocks', {
           body: {
             bookId,
@@ -409,6 +418,9 @@ const Index = () => {
             isVisualTopic,
             targetPagesPerChapter,
             language,
+            voice: advancedOptions.voice || 'insider',
+            structure: advancedOptions.structure || 'balanced',
+            focusAreas: advancedOptions.focusAreas,
           },
         });
         
@@ -457,9 +469,27 @@ const Index = () => {
     try {
       const currentSessionId = getSessionId();
       
-      // Use the NEW block-based book generator
+      // Determine final voice/structure (manual selection or auto-pilot)
+      let finalVoice = advancedOptions.voice;
+      let finalStructure = advancedOptions.structure;
+      
+      if (!finalVoice || !finalStructure) {
+        const autoPilot = detectAutoPilotSettings(query);
+        if (!finalVoice) finalVoice = autoPilot.voice;
+        if (!finalStructure) finalStructure = autoPilot.structure;
+        console.log('[AutoPilot] Detected:', autoPilot);
+      }
+      
+      // Use the NEW block-based book generator with voice/structure
       const { data, error } = await supabase.functions.invoke('generate-book-blocks', {
-        body: { topic: query, sessionId: currentSessionId, language }
+        body: { 
+          topic: query, 
+          sessionId: currentSessionId, 
+          language,
+          voice: finalVoice,
+          structure: finalStructure,
+          focusAreas: advancedOptions.focusAreas
+        }
       });
 
       if (error) {
@@ -794,6 +824,13 @@ const Index = () => {
             </div>
             <div className="w-full animate-fade-up animation-delay-200">
               <SearchInput onSearch={handleSearch} />
+            </div>
+            {/* Advanced Options Panel */}
+            <div className="w-full max-w-2xl mx-auto mt-4 animate-fade-up animation-delay-250">
+              <AdvancedOptions 
+                options={advancedOptions} 
+                onChange={setAdvancedOptions} 
+              />
             </div>
             <p className="text-sm text-muted-foreground mt-8 animate-fade-up animation-delay-300">
               {t('searchExamples')}
