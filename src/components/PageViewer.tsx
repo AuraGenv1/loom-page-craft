@@ -944,6 +944,19 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [imageAttributions, setImageAttributions] = useState<Map<string, string>>(new Map());
+
+  // Session ID is used to securely persist edits for guest-session books.
+  const sessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    try {
+      sessionIdRef.current = localStorage.getItem('loom_page_session_id');
+    } catch {
+      sessionIdRef.current = null;
+    }
+  }, []);
+
+  // Book-wide used URL cache (prevents repeats across chapters even before all chapters hydrate).
+  const bookWideUsedUrlsRef = useRef<Set<string>>(new Set());
   
   // Image upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -1009,6 +1022,35 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     }
   }, []);
 
+  // Load all already-used URLs from the database once per book to reduce repeats.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('book_pages')
+          .select('image_url, original_url')
+          .eq('book_id', bookId)
+          .in('block_type', ['image_full', 'image_half']);
+        if (error) throw error;
+        if (cancelled) return;
+        const set = new Set<string>();
+        (data || []).forEach((row: any) => {
+          const picked = row?.original_url || row?.image_url;
+          if (typeof picked === 'string' && (picked.startsWith('http://') || picked.startsWith('https://'))) {
+            set.add(normalizeUrlForCompare(picked));
+          }
+        });
+        bookWideUsedUrlsRef.current = set;
+      } catch (e) {
+        console.warn('[PageViewer] Failed to prefetch used image urls:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId, normalizeUrlForCompare]);
+
   const getBlockExclusionUrl = useCallback(
     (b: Partial<PageBlockMeta> | null | undefined): string | null => {
       if (!b) return null;
@@ -1030,6 +1072,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       if (u) urls.push(u);
     };
 
+    // Seed with book-wide known URLs.
+    bookWideUsedUrlsRef.current.forEach((u) => urls.push(u));
+
     // Current chapter blocks
     blocks.forEach(add);
 
@@ -1040,6 +1085,43 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
     return [...new Set(urls)];
   }, [blocks, preloadedBlocks, getBlockExclusionUrl]);
+
+  const persistBookPagePatch = useCallback(
+    async (blockId: string, patch: Record<string, any>) => {
+      // 1) Try direct update (works for owned books). We MUST request returned rows
+      // to detect silent RLS failures (204 with 0 rows).
+      try {
+        const { data, error } = await supabase
+          .from('book_pages')
+          .update(patch)
+          .eq('id', blockId)
+          .select('id')
+          .maybeSingle();
+
+        if (!error && data?.id) return true;
+      } catch {
+        // fall through
+      }
+
+      // 2) Fallback: secure backend function for session books / ownership bridging.
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke('update-book-page', {
+        body: {
+          bookId,
+          blockId,
+          patch,
+          sessionId: sessionIdRef.current,
+        },
+      });
+
+      if (fnErr || !fnData?.ok) {
+        console.warn('[PageViewer] update-book-page failed:', fnErr || fnData);
+        return false;
+      }
+
+      return true;
+    },
+    [bookId]
+  );
 
   // Serialize auto-fetches to avoid race-condition duplicates (two blocks grabbing the same image at once)
   const imageFetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1124,13 +1206,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                 original_url: candidateUrl,
                 archived_at: new Date().toISOString(),
               };
-              const { error: updateError } = await supabase
-                .from('book_pages')
-                .update(updatePayload)
-                .eq('id', block.id);
-
-              if (updateError) {
-                console.warn('[PageViewer] Failed to persist image_url to DB (continuing locally):', updateError);
+              const ok = await persistBookPagePatch(block.id, updatePayload);
+              if (!ok) {
+                console.warn('[PageViewer] Failed to persist image_url to backend (continuing locally).');
               }
             }
 
@@ -1148,6 +1226,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               image_attribution: data?.attribution,
               archived_at: new Date().toISOString(),
             };
+
+            // Update book-wide cache immediately
+            bookWideUsedUrlsRef.current.add(normalizeUrlForCompare(candidateUrl));
 
             setBlocksAndPropagate(block.chapter_number, (prevBlocks) =>
               prevBlocks.map(b => (getBlockKey(b) === key ? ({ ...b, ...localPatch } as any) : b))
@@ -1178,7 +1259,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         }
       });
     },
-    [enqueueImageFetch, getUsedImageUrls, normalizeUrlForCompare, setBlocksAndPropagate, topic]
+    [enqueueImageFetch, getUsedImageUrls, normalizeUrlForCompare, setBlocksAndPropagate, topic, persistBookPagePatch]
   );
 
   // Refs to track current state without causing re-renders in useCallback
@@ -1339,24 +1420,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     const currentContent = block.content as { query: string; caption: string };
     const updatedContent = { ...currentContent, caption: newCaption };
 
-    // Update database
-    const { error } = await supabase
-      .from('book_pages')
-      .update({ content: updatedContent })
-      .eq('id', blockId);
-
-    if (error) {
-      // Still update locally so Admin flow works during generation/sync.
-      toast.error('Failed to save caption to the backend (showing locally).');
-    } else {
-      toast.success('Caption updated');
-    }
+    const ok = await persistBookPagePatch(blockId, { content: updatedContent });
+    if (!ok) toast.error('Failed to save caption to the backend (showing locally).');
+    else toast.success('Caption updated');
 
     // Update local state (and parent cache) regardless
     setBlocksAndPropagate(block.chapter_number, (prev) =>
       prev.map(b => (b.id !== blockId ? b : ({ ...b, content: updatedContent } as PageBlock)))
     );
-  }, [blocks, setBlocksAndPropagate]);
+  }, [blocks, setBlocksAndPropagate, persistBookPagePatch]);
 
   const handleReroll = useCallback(async (blockId: string) => {
     const block = blocks.find(b => b.id === blockId);
@@ -1365,14 +1437,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     const key = getBlockKey(block);
 
     // Clear current image and refetch (best-effort)
-    const { error: clearErr } = await supabase
-      .from('book_pages')
-      .update({ image_url: null })
-      .eq('id', blockId);
-
-    if (clearErr) {
-      console.warn('[PageViewer] Failed to clear image_url in DB (continuing locally):', clearErr);
-    }
+    const ok = await persistBookPagePatch(blockId, { image_url: null });
+    if (!ok) console.warn('[PageViewer] Failed to clear image_url in backend (continuing locally).');
 
     // Reset attempted fetch flag so fetchImageForBlock will run again
     attemptedFetchesRef.current.delete(key);
@@ -1389,25 +1455,19 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     toast.info('Finding new image...');
     const updatedBlock = { ...block, image_url: undefined, original_url: undefined } as any;
     fetchImageForBlock(updatedBlock);
-  }, [blocks, fetchImageForBlock, setBlocksAndPropagate]);
+  }, [blocks, fetchImageForBlock, setBlocksAndPropagate, persistBookPagePatch]);
 
   const handleRemoveImage = useCallback(async (blockId: string) => {
-    const { error } = await supabase
-      .from('book_pages')
-      .update({ image_url: null })
-      .eq('id', blockId);
-
-    if (error) {
-      toast.error('Failed to remove image in the backend (removing locally).');
-    }
+    const ok = await persistBookPagePatch(blockId, { image_url: null });
+    if (!ok) toast.error('Failed to remove image in the backend (removing locally).');
 
     const block = blocks.find(b => b.id === blockId);
     setBlocksAndPropagate(block?.chapter_number ?? currentChapter, (prev) =>
       prev.map(b => (b.id !== blockId ? b : ({ ...b, image_url: undefined } as PageBlock)))
     );
 
-    if (!error) toast.success('Image removed');
-  }, [blocks, currentChapter, setBlocksAndPropagate]);
+    if (ok) toast.success('Image removed');
+  }, [blocks, currentChapter, setBlocksAndPropagate, persistBookPagePatch]);
 
   // Open manual search dialog - works even if block isn't synced to DB yet
   const handleOpenSearchDialog = useCallback((blockId: string) => {
@@ -1444,36 +1504,31 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
         if (archiveResult) {
           finalImageUrl = archiveResult.archivedUrl;
-          // Save with full metadata
-          await saveImageMetadata(block.id, archiveResult.archivedUrl, archiveResult.metadata);
+          // Persist with full metadata (avoid silent RLS failures)
+          await persistBookPagePatch(block.id, {
+            image_url: archiveResult.archivedUrl,
+            image_source: archiveResult.metadata.image_source,
+            original_url: archiveResult.metadata.original_url,
+            image_license: archiveResult.metadata.image_license,
+            image_attribution: archiveResult.metadata.image_attribution,
+            archived_at: archiveResult.metadata.archived_at,
+          });
         } else {
           // Fallback: just save the URL without archiving
-          const { error: updateErr } = await supabase
-            .from('book_pages')
-            .update({ 
-              image_url: imageUrl,
-              image_source: metadata.source,
-              original_url: metadata.originalUrl,
-              image_license: metadata.license,
-              image_attribution: metadata.attribution,
-              archived_at: new Date().toISOString(),
-            })
-            .eq('id', searchingBlockId);
-
-          if (updateErr) {
-            console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
-          }
+          const ok = await persistBookPagePatch(searchingBlockId, {
+            image_url: imageUrl,
+            image_source: metadata.source,
+            original_url: metadata.originalUrl,
+            image_license: metadata.license,
+            image_attribution: metadata.attribution,
+            archived_at: new Date().toISOString(),
+          });
+          if (!ok) console.warn('[PageViewer] Failed to persist selected image to backend (continuing locally).');
         }
       } else {
         // No metadata - just update the URL
-        const { error: updateErr } = await supabase
-          .from('book_pages')
-          .update({ image_url: imageUrl })
-          .eq('id', searchingBlockId);
-
-        if (updateErr) {
-          console.warn('[PageViewer] Failed to persist selected image to DB (continuing locally):', updateErr);
-        }
+        const ok = await persistBookPagePatch(searchingBlockId, { image_url: imageUrl });
+        if (!ok) console.warn('[PageViewer] Failed to persist selected image to backend (continuing locally).');
       }
 
       // Update local state
@@ -1486,6 +1541,12 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         image_attribution: metadata?.attribution,
         archived_at: new Date().toISOString(),
       };
+
+      if (localMetaPatch.original_url) {
+        bookWideUsedUrlsRef.current.add(normalizeUrlForCompare(localMetaPatch.original_url));
+      } else if (localMetaPatch.image_url) {
+        bookWideUsedUrlsRef.current.add(normalizeUrlForCompare(localMetaPatch.image_url));
+      }
 
       setBlocksAndPropagate(block.chapter_number, (prev) =>
         prev.map(b => (b.id !== searchingBlockId ? b : ({ ...b, ...localMetaPatch } as any)))
@@ -1513,7 +1574,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setSearchingBlockId(null);
       setSearchQuery('');
     }
-  }, [searchingBlockId, blocks, setBlocksAndPropagate]);
+  }, [searchingBlockId, blocks, setBlocksAndPropagate, persistBookPagePatch, normalizeUrlForCompare]);
 
 
   // Handle opening upload modal - works even if block isn't synced to DB yet
@@ -1545,20 +1606,17 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       const uploadMetadata = createUploadMetadata('Loom & Page Publisher');
 
       // Update database with new image URL and metadata
-      const { error: updateError } = await supabase
-        .from('book_pages')
-        .update({ 
-          image_url: publicUrl,
-          image_source: uploadMetadata.image_source,
-          original_url: uploadMetadata.original_url,
-          image_license: uploadMetadata.image_license,
-          image_attribution: uploadMetadata.image_attribution,
-          archived_at: uploadMetadata.archived_at,
-        })
-        .eq('id', uploadingBlockId);
+      const ok = await persistBookPagePatch(uploadingBlockId, {
+        image_url: publicUrl,
+        image_source: uploadMetadata.image_source,
+        original_url: uploadMetadata.original_url,
+        image_license: uploadMetadata.image_license,
+        image_attribution: uploadMetadata.image_attribution,
+        archived_at: uploadMetadata.archived_at,
+      });
 
-      if (updateError) {
-        console.warn('[PageViewer] Failed to persist uploaded image_url to DB (continuing locally):', updateError);
+      if (!ok) {
+        console.warn('[PageViewer] Failed to persist uploaded image_url to backend (continuing locally).');
       }
 
       // Update local state
@@ -1586,6 +1644,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             archived_at: uploadMetadata.archived_at,
           } as any)))
         );
+
+        bookWideUsedUrlsRef.current.add(normalizeUrlForCompare(publicUrl));
       }
 
       // Close the modal
@@ -1598,7 +1658,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       setIsUploading(false);
       setUploadingBlockId(null);
     }
-  }, [uploadingBlockId, blocks, setBlocksAndPropagate]);
+  }, [uploadingBlockId, blocks, setBlocksAndPropagate, persistBookPagePatch, normalizeUrlForCompare]);
 
   // Handle cropped image upload from gallery (with archiving for provenance)
   const handleCroppedImageUpload = useCallback(async (croppedBlob: Blob, attribution?: string, metadata?: ImageSelectMetadata) => {
