@@ -9,7 +9,7 @@ const corsHeaders = {
 interface ArchiveRequest {
   imageUrl: string;
   bookId: string;
-  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia';
+  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse';
   license?: string;
   attribution?: string;
 }
@@ -140,6 +140,8 @@ function getLicenseForSource(source: string): string {
       return 'Pixabay License';
     case 'wikimedia':
       return 'CC0 Public Domain';
+    case 'openverse':
+      return 'CC Commercial License';
     default:
       return 'Unknown License';
   }
@@ -155,6 +157,8 @@ function getDefaultAttribution(source: string): string {
       return 'Image from Pixabay';
     case 'wikimedia':
       return 'Image from Wikimedia Commons';
+    case 'openverse':
+      return 'Image via Openverse (CC Licensed)';
     default:
       return 'Image source unknown';
   }

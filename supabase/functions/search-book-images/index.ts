@@ -14,12 +14,111 @@ interface ImageResult {
   imageUrl: string;        // Full/Regular resolution for database
   thumbnailUrl: string;    // Small version for preview
   attribution?: string;
-  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay';
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse';
   id: string;
   width: number;           // Image width for quality filtering
   height: number;          // Image height
   isPrintReady: boolean;   // True if width >= 1800px
   license?: string;        // License type for metadata tracking
+}
+
+// ============== OPENVERSE OAUTH2 TOKEN MANAGEMENT ==============
+// In-memory token cache (resets on cold start, but that's fine for edge functions)
+let openverseAccessToken: string | null = null;
+let openverseTokenExpiry: number = 0;
+
+// Obtain or refresh the Openverse OAuth2 access token
+async function getOpenverseAccessToken(): Promise<string | null> {
+  const clientId = Deno.env.get('OPENVERSE_CLIENT_ID');
+  const clientSecret = Deno.env.get('OPENVERSE_CLIENT_SECRET');
+  
+  if (!clientId || !clientSecret) {
+    console.log('[Openverse] No API credentials configured (OPENVERSE_CLIENT_ID / OPENVERSE_CLIENT_SECRET)');
+    return null;
+  }
+  
+  // Check if we have a valid cached token (with 60s buffer)
+  const now = Date.now();
+  if (openverseAccessToken && openverseTokenExpiry > now + 60000) {
+    console.log('[Openverse] Using cached access token');
+    return openverseAccessToken;
+  }
+  
+  console.log('[Openverse] Fetching new access token...');
+  
+  try {
+    const response = await fetch('https://api.openverse.org/v1/auth_tokens/token/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+      }).toString(),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Openverse] Token fetch error:', response.status, errorText);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (!data.access_token) {
+      console.error('[Openverse] No access_token in response');
+      return null;
+    }
+    
+    // Cache the token with expiry (Openverse tokens typically last 12 hours)
+    openverseAccessToken = data.access_token;
+    // Default to 11 hours if expires_in not provided
+    const expiresInMs = (data.expires_in || 39600) * 1000;
+    openverseTokenExpiry = now + expiresInMs;
+    
+    console.log(`[Openverse] Access token obtained, expires in ${Math.round(expiresInMs / 3600000)}h`);
+    return openverseAccessToken;
+  } catch (error) {
+    console.error('[Openverse] Token fetch exception:', error);
+    return null;
+  }
+}
+
+// ============== SPECIFIC LOCATION DETECTION ==============
+// Detect if a query is a "specific entity" (proper noun, location, hotel, landmark)
+function isSpecificLocationQuery(query: string): boolean {
+  // Patterns that indicate specific locations
+  const specificPatterns = [
+    /^[A-Z][a-z]+\s+[A-Z][a-z]+/, // Two capitalized words: "Lake Como", "Hotel Jerome"
+    /\b(hotel|inn|resort|lodge|villa|palace|castle|manor|chateau)\b/i,
+    /\b(lake|mountain|river|valley|bay|island|beach|peak|falls)\s+[A-Z]/i,
+    /\b(city|town|village|district)\s+of\b/i,
+    /^(the\s+)?[A-Z][a-z]+\s+(restaurant|cafe|bar|club|museum|gallery|theater|theatre|church|cathedral|temple|mosque|synagogue)\b/i,
+    /\b(avenue|street|road|plaza|square|park|garden|boulevard)\b/i,
+    /\b(airport|station|terminal|port|harbor|harbour)\b/i,
+    /^[A-Z][a-z]+,?\s+[A-Z][a-z]+$/, // "Courchevel, France" or "Courchevel France"
+  ];
+  
+  // Check for proper noun indicators (capitalized words beyond first)
+  const words = query.split(/\s+/);
+  const capitalizedWordCount = words.filter((w, i) => i > 0 && /^[A-Z]/.test(w)).length;
+  
+  // If multiple capitalized words OR matches specific patterns, it's likely a specific location
+  if (capitalizedWordCount >= 1) {
+    console.log(`[SpecificLocation] Query "${query}" has ${capitalizedWordCount} proper nouns - treating as specific`);
+    return true;
+  }
+  
+  for (const pattern of specificPatterns) {
+    if (pattern.test(query)) {
+      console.log(`[SpecificLocation] Query "${query}" matches specific pattern - treating as specific`);
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 // AI-generated negative prompts to remove
@@ -351,6 +450,126 @@ async function searchPixabayMultiple(
   }
 }
 
+// ============== OPENVERSE IMAGE SEARCH ==============
+// Search Openverse (Flickr, Wikipedia, other CC sources) with commercial-safe license filtering
+// Prioritized for SPECIFIC LOCATIONS where Unsplash/Pexels fail
+async function searchOpenverseMultiple(
+  query: string,
+  orientation: 'landscape' | 'portrait' = 'landscape',
+  limit: number = 50,
+  filterForCover: boolean = false
+): Promise<ImageResult[]> {
+  const accessToken = await getOpenverseAccessToken();
+  
+  if (!accessToken) {
+    console.log('[Openverse] No access token available, skipping search');
+    return [];
+  }
+
+  try {
+    // Openverse orientation mapping
+    const aspectRatio = orientation === 'portrait' ? 'tall' : 'wide';
+    
+    // COMMERCIAL SAFETY: Only fetch commercially usable images
+    // license_type=commercial,modification ensures safe licensing
+    const params = new URLSearchParams({
+      q: query,
+      license_type: 'commercial,modification', // CRITICAL: Only commercially safe images
+      aspect_ratio: aspectRatio,
+      page_size: String(Math.min(limit, 50)), // Openverse max is 50 per page
+      mature: 'false', // Safe search
+    });
+
+    console.log(`[Openverse] Searching: "${query}" with commercial license filter`);
+
+    const response = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'LoomPageBookGenerator/1.0 (https://loom-page-craft.lovable.app)',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Openverse] API error:', response.status, errorText);
+      return [];
+    }
+
+    const data = await response.json();
+
+    if (!data.results || data.results.length === 0) {
+      console.log('[Openverse] No results for query:', query);
+      return [];
+    }
+
+    console.log(`[Openverse] Raw results: ${data.results.length}`);
+
+    const results: ImageResult[] = [];
+
+    for (const result of data.results) {
+      // Extract dimensions
+      const width = result.width || 0;
+      const height = result.height || 0;
+      
+      // HIDDEN FILTER: Skip images below minimum print quality (1200px)
+      if (width < MIN_WIDTH_FILTER) {
+        continue;
+      }
+
+      // COVER LICENSE FILTER: For covers, apply stricter license filtering
+      const license = result.license || '';
+      const licenseVersion = result.license_version || '';
+      const fullLicense = `${license} ${licenseVersion}`.trim();
+      
+      if (filterForCover && !isCoverSafeLicense(fullLicense)) {
+        console.log(`[Openverse] Skipping image with restrictive license for cover: ${fullLicense}`);
+        continue;
+      }
+
+      // ATTRIBUTION EXTRACTION: Map Openverse fields to our attribution system
+      // result.creator -> credit_name
+      // result.license_url -> source_url (for legal docs)
+      // result.title -> caption context
+      const creatorName = result.creator || null;
+      const sourceProvider = result.source || 'Openverse'; // e.g., "flickr", "wikimedia"
+      const title = result.title || '';
+      const licenseUrl = result.license_url || '';
+      
+      // Build attribution - NEVER blank (as per Pixabay pattern)
+      let attribution: string;
+      if (creatorName) {
+        attribution = `${title ? `"${title}" by ` : 'Photo by '}${creatorName} via ${sourceProvider}`;
+      } else {
+        attribution = `Source: ${sourceProvider}`; // Fallback for null creator
+      }
+
+      // Get best URL - prefer full-size
+      const imageUrl = result.url || result.thumbnail || '';
+      const thumbnailUrl = result.thumbnail || result.url || '';
+
+      if (!imageUrl) continue;
+
+      results.push({
+        id: `openverse-${result.id}`,
+        imageUrl,
+        thumbnailUrl,
+        attribution,
+        source: 'openverse' as const,
+        width,
+        height,
+        isPrintReady: width >= PRINT_READY_WIDTH,
+        license: `${fullLicense} (${sourceProvider})`, // Full license info for legal tracking
+      });
+    }
+
+    console.log(`[Openverse] Found ${results.length} high-res commercial images for query (filtered from ${data.results.length}):`, query);
+    return results;
+  } catch (error) {
+    console.error('[Openverse] Fetch error:', error);
+    return [];
+  }
+}
+
 // Search Wikimedia Commons and return multiple results
 async function searchWikimediaMultiple(query: string, limit: number = 20, filterForCover: boolean = false): Promise<ImageResult[]> {
   try {
@@ -669,6 +888,14 @@ serve(async (req) => {
       console.log(`[search-book-images] COVER MODE: Wikimedia blocked for cover safety`);
     }
 
+    // ============== SMART ROUTER: SPECIFIC LOCATION DETECTION ==============
+    // Check if this is a specific location query (proper nouns, hotels, landmarks)
+    // Priority 1: Openverse for specific locations (better quantity for niche places)
+    // Priority 2: Unsplash/Pexels for generic vibes (better aesthetic quality)
+    // Priority 3: Pixabay for vectors/symbols
+    const isSpecificLocation = isSpecificLocationQuery(query); // Use original query for case detection
+    console.log(`[search-book-images] Specific location detection: ${isSpecificLocation}`);
+
     // SMART WIKIPEDIA ARTICLE SEARCH: Only for realistic mode and non-cover
     // This works best for specific locations, landmarks, hotels, etc.
     let wikipediaArticleResult = null;
@@ -676,11 +903,11 @@ serve(async (req) => {
       wikipediaArticleResult = await searchWikipediaArticleImage(cleanedQuery, forCover);
     }
 
-    // Build search promises based on mode
+    // Build search promises based on mode AND specificity
     const searchPromises: Promise<ImageResult[]>[] = [];
     
     if (searchMode === 'abstract') {
-      // ABSTRACT MODE: Prioritize Pixabay vectors/illustrations
+      // ABSTRACT MODE: Prioritize Pixabay vectors/illustrations (NO CHANGE)
       console.log(`[search-book-images] ABSTRACT MODE: Prioritizing Pixabay vectors and illustrations`);
       searchPromises.push(
         // Pixabay vectors (primary for abstract)
@@ -694,25 +921,50 @@ serve(async (req) => {
         searchPexelsMultiple(anchoredQuery, orientation, 40, 1),
       );
     } else if (searchMode === 'realistic') {
-      // REALISTIC MODE: Prioritize Unsplash/Pexels photos
-      console.log(`[search-book-images] REALISTIC MODE: Prioritizing Unsplash and Pexels photos`);
-      searchPromises.push(
-        searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
-        searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
-        searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
-        searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
-        searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
-      );
-      // Add Wikimedia only if not cover mode
-      if (!skipWikimedia) {
+      // REALISTIC MODE: Branch based on specificity
+      if (isSpecificLocation) {
+        // ========= PRIORITY 1: OPENVERSE for SPECIFIC LOCATIONS =========
+        // Openverse excels at finding niche places Unsplash misses (small towns, hotels, landmarks)
+        console.log(`[search-book-images] SPECIFIC LOCATION MODE: Prioritizing Openverse for specificity`);
         searchPromises.push(
-          searchWikimediaMultiple(anchoredQuery, 50, forCover),
-          searchWikimediaMultiple(`${anchoredQuery} scenic`, 50, forCover),
+          // Openverse FIRST - best for specific locations
+          searchOpenverseMultiple(anchoredQuery, orientation, 50, forCover),
+          searchOpenverseMultiple(cleanedQuery, orientation, 50, forCover), // Also try unanchored
+          // Then standard high-quality sources
+          searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+          searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
+          searchPixabayMultiple(anchoredQuery, orientation, 50, 1, 'photo'),
         );
+        // Add Wikimedia for additional specific content (not for covers)
+        if (!skipWikimedia) {
+          searchPromises.push(
+            searchWikimediaMultiple(anchoredQuery, 50, forCover),
+          );
+        }
+      } else {
+        // ========= PRIORITY 2: UNSPLASH/PEXELS for VIBES =========
+        // For generic/aesthetic queries, prioritize high-quality photo platforms
+        console.log(`[search-book-images] VIBE/GENERIC MODE: Prioritizing Unsplash and Pexels photos`);
+        searchPromises.push(
+          searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
+          searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
+          searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
+          searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
+          searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
+          // Include some Openverse as variety
+          searchOpenverseMultiple(anchoredQuery, orientation, 30, forCover),
+        );
+        // Add Wikimedia only if not cover mode
+        if (!skipWikimedia) {
+          searchPromises.push(
+            searchWikimediaMultiple(anchoredQuery, 50, forCover),
+            searchWikimediaMultiple(`${anchoredQuery} scenic`, 50, forCover),
+          );
+        }
       }
     } else {
-      // MIXED MODE: Balanced approach
-      console.log(`[search-book-images] MIXED MODE: Balanced source distribution`);
+      // MIXED MODE: Balanced approach with Openverse included
+      console.log(`[search-book-images] MIXED MODE: Balanced source distribution with Openverse`);
       searchPromises.push(
         searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
         searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
@@ -720,6 +972,8 @@ serve(async (req) => {
         searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
         searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
         searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'vector'),
+        // Add Openverse for additional variety
+        searchOpenverseMultiple(anchoredQuery, orientation, 40, forCover),
       );
       // Add Wikimedia only if not cover mode
       if (!skipWikimedia) {
@@ -737,12 +991,13 @@ serve(async (req) => {
     const pexelsResults: ImageResult[] = [];
     const pixabayResults: ImageResult[] = [];
     const wikimediaResults: ImageResult[] = [];
+    const openverseResults: ImageResult[] = [];
     
     for (const results of searchResults) {
       for (const img of results) {
-        // COVER SAFETY: Double-check no Wikimedia images slip through for covers
-        if (forCover && img.source === 'wikimedia') {
-          console.log(`[search-book-images] BLOCKED Wikimedia image for cover: ${img.id}`);
+        // COVER SAFETY: Double-check no Wikimedia/Openverse-Wikimedia images slip through for covers
+        if (forCover && (img.source === 'wikimedia' || (img.source === 'openverse' && img.license?.toLowerCase().includes('wikimedia')))) {
+          console.log(`[search-book-images] BLOCKED image for cover: ${img.id}`);
           continue;
         }
         
@@ -751,6 +1006,7 @@ serve(async (req) => {
           case 'pexels': pexelsResults.push(img); break;
           case 'pixabay': pixabayResults.push(img); break;
           case 'wikimedia': wikimediaResults.push(img); break;
+          case 'openverse': openverseResults.push(img); break;
         }
       }
     }
@@ -764,8 +1020,8 @@ serve(async (req) => {
       console.log(`[search-book-images] Added verified Wikipedia article image as first result`);
     }
     
-    // Interleave based on search mode
-    let uIdx = 0, pIdx = 0, xIdx = 0, wIdx = 0;
+    // Interleave based on search mode AND specificity
+    let uIdx = 0, pIdx = 0, xIdx = 0, wIdx = 0, oIdx = 0;
     
     if (searchMode === 'abstract') {
       // ABSTRACT MODE: Pixabay first, then photos
@@ -783,9 +1039,34 @@ serve(async (req) => {
           allResults.push(pexelsResults[pIdx++]);
         }
       }
+    } else if (isSpecificLocation) {
+      // SPECIFIC LOCATION MODE: Openverse FIRST, then quality sources
+      console.log(`[search-book-images] Interleaving with Openverse priority for specific location`);
+      while (allResults.length < limit && (oIdx < openverseResults.length || uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
+        // Add up to 3 Openverse (primary for specific locations)
+        for (let i = 0; i < 3 && oIdx < openverseResults.length && allResults.length < limit; i++) {
+          allResults.push(openverseResults[oIdx++]);
+        }
+        // Add 2 Unsplash
+        for (let i = 0; i < 2 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
+          allResults.push(unsplashResults[uIdx++]);
+        }
+        // Add 2 Pexels
+        for (let i = 0; i < 2 && pIdx < pexelsResults.length && allResults.length < limit; i++) {
+          allResults.push(pexelsResults[pIdx++]);
+        }
+        // Add 1 Pixabay
+        if (xIdx < pixabayResults.length && allResults.length < limit) {
+          allResults.push(pixabayResults[xIdx++]);
+        }
+        // Add 1 Wikimedia (only if not cover mode)
+        if (!forCover && wIdx < wikimediaResults.length && allResults.length < limit) {
+          allResults.push(wikimediaResults[wIdx++]);
+        }
+      }
     } else {
-      // REALISTIC/MIXED MODE: Photos first
-      while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length)) {
+      // REALISTIC/MIXED MODE: Photos first, Openverse as variety
+      while (allResults.length < limit && (uIdx < unsplashResults.length || pIdx < pexelsResults.length || xIdx < pixabayResults.length || wIdx < wikimediaResults.length || oIdx < openverseResults.length)) {
         // Add up to 3 Unsplash
         for (let i = 0; i < 3 && uIdx < unsplashResults.length && allResults.length < limit; i++) {
           allResults.push(unsplashResults[uIdx++]);
@@ -798,6 +1079,10 @@ serve(async (req) => {
         for (let i = 0; i < 2 && xIdx < pixabayResults.length && allResults.length < limit; i++) {
           allResults.push(pixabayResults[xIdx++]);
         }
+        // Add 1 Openverse
+        if (oIdx < openverseResults.length && allResults.length < limit) {
+          allResults.push(openverseResults[oIdx++]);
+        }
         // Add 1 Wikimedia (only if not cover mode)
         if (!forCover && wIdx < wikimediaResults.length && allResults.length < limit) {
           allResults.push(wikimediaResults[wIdx++]);
@@ -808,14 +1093,16 @@ serve(async (req) => {
     // Count print-ready images
     const printReadyCount = allResults.filter(img => img.isPrintReady).length;
 
-    console.log(`[search-book-images] Total results: ${allResults.length} (Mode: ${searchMode}, WikiArticle: ${wikipediaArticleResult ? 1 : 0}, Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
+    console.log(`[search-book-images] Total results: ${allResults.length} (Mode: ${searchMode}, Specific: ${isSpecificLocation}, WikiArticle: ${wikipediaArticleResult ? 1 : 0}, Openverse: ${openverseResults.length}, Unsplash: ${unsplashResults.length}, Pexels: ${pexelsResults.length}, Pixabay: ${pixabayResults.length}, Wikimedia: ${wikimediaResults.length}, Print-Ready: ${printReadyCount})`);
 
     return new Response(
       JSON.stringify({ 
         images: allResults,
         query: cleanedQuery,
         searchMode, // Expose detected mode for debugging
+        isSpecificLocation, // Expose specificity detection for debugging
         sources: {
+          openverse: openverseResults.length,
           unsplash: unsplashResults.length,
           pexels: pexelsResults.length,
           pixabay: pixabayResults.length,
