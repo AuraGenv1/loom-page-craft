@@ -183,6 +183,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     rtf += `\\tab - \\b Unsplash: \\b0 Irrevocable Commercial License. Assets incorporated into creative design (Significant Modification).\\par`;
     rtf += `\\tab - \\b Pexels: \\b0 Free Commercial License. All photos and videos are free to use, with no attribution required.\\par`;
     rtf += `\\tab - \\b Pixabay: \\b0 Pixabay License (Free for Commercial Use). No attribution required.\\par`;
+    rtf += `\\tab - \\b Openverse: \\b0 Creative Commons Licensed (commercial + modification filters applied). Attribution provided per license.\\par`;
     rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par`;
     rtf += `\\tab - \\b User Uploads: \\b0 Rights certified by publisher at time of upload.\\par\\par`;
     rtf += `A complete Image Licensing Manifest (03_Image_Manifest.pdf) is included in this Defense Kit with detailed provenance for every image.\\par\\par`;
@@ -343,6 +344,30 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     doc.setTextColor(0, 0, 255);
     doc.setFontSize(9);
     doc.text("URL: https://creativecommons.org/publicdomain/zero/1.0/", 1, y);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    y += 0.5;
+
+    // 6. OPENVERSE (CC Licensed Content)
+    doc.setFont("times", "bold");
+    doc.text("6. Image License (Openverse)", 1, y);
+    y += 0.2;
+    doc.setFont("times", "normal");
+    doc.text("Source: Openverse by WordPress Foundation", 1, y);
+    y += 0.2;
+    doc.setFont("times", "italic");
+    const openverseQuote = "\"Openverse is a tool to search for openly licensed and public domain works. All images are filtered for commercial use with the 'commercial' and 'modification' license type parameters.\"";
+    const splitOpenverse = doc.splitTextToSize(openverseQuote, 6.5);
+    doc.text(splitOpenverse, 1, y);
+    y += (splitOpenverse.length * 0.2) + 0.1;
+
+    doc.setFont("times", "normal");
+    doc.text("Usage: Creative Commons licensed, filtered for commercial use.", 1, y);
+    y += 0.2;
+
+    doc.setTextColor(0, 0, 255);
+    doc.setFontSize(9);
+    doc.text("URL: https://openverse.org/about", 1, y);
 
     return doc.output('blob');
   };

@@ -16,7 +16,7 @@ interface ImageResult {
   imageUrl: string;
   thumbnailUrl: string;
   attribution?: string;
-  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay';
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse';
   width?: number;
   height?: number;
   isPrintReady?: boolean;
@@ -25,7 +25,7 @@ interface ImageResult {
 
 // Extended metadata passed to handlers for provenance tracking
 export interface ImageSelectMetadata {
-  source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay';
+  source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse';
   originalUrl: string;
   license: string;
   attribution: string;
@@ -118,23 +118,25 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   }, [query, orientation, forCover]);
 
   // Helper to get license string for a source
-  const getLicenseForSource = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay'): string => {
+  const getLicenseForSource = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse'): string => {
     switch (source) {
       case 'unsplash': return 'Unsplash License';
       case 'pexels': return 'Pexels License';
       case 'pixabay': return 'Pixabay License';
       case 'wikimedia': return 'CC0 Public Domain';
+      case 'openverse': return 'CC Commercial License';
       default: return 'Unknown License';
     }
   };
 
   // Helper to get display name for a source
-  const getSourceDisplayName = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay'): string => {
+  const getSourceDisplayName = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse'): string => {
     switch (source) {
       case 'unsplash': return 'Unsplash';
       case 'pexels': return 'Pexels';
       case 'pixabay': return 'Pixabay';
       case 'wikimedia': return 'Wikimedia Commons';
+      case 'openverse': return 'Openverse';
       default: return source;
     }
   };
@@ -189,6 +191,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   const pexelsImages = images.filter(img => img.source === 'pexels');
   const pixabayImages = images.filter(img => img.source === 'pixabay');
   const wikimediaImages = images.filter(img => img.source === 'wikimedia');
+  const openverseImages = images.filter(img => img.source === 'openverse');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -263,8 +266,9 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             </div>
           ) : (
             <Tabs defaultValue="all" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-5 mb-2">
+              <TabsList className="grid w-full grid-cols-6 mb-2">
                 <TabsTrigger value="all">All ({images.length})</TabsTrigger>
+                <TabsTrigger value="openverse">Openverse ({openverseImages.length})</TabsTrigger>
                 <TabsTrigger value="unsplash">Unsplash ({unsplashImages.length})</TabsTrigger>
                 <TabsTrigger value="pexels">Pexels ({pexelsImages.length})</TabsTrigger>
                 <TabsTrigger value="pixabay">Pixabay ({pixabayImages.length})</TabsTrigger>
@@ -274,6 +278,14 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
               <TabsContent value="all" className="flex-1 min-h-0 mt-0">
                 <ImageGrid 
                   images={images} 
+                  selectedImage={selectedImage}
+                  onSelectImage={setSelectedImage}
+                />
+              </TabsContent>
+              
+              <TabsContent value="openverse" className="flex-1 min-h-0 mt-0">
+                <ImageGrid 
+                  images={openverseImages} 
                   selectedImage={selectedImage}
                   onSelectImage={setSelectedImage}
                 />
@@ -493,10 +505,12 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
                     ? 'bg-emerald-600 text-white'
                     : image.source === 'pixabay'
                     ? 'bg-teal-600 text-white'
+                    : image.source === 'openverse'
+                    ? 'bg-orange-600 text-white'
                     : 'bg-primary/80 text-primary-foreground'
                   }
                 `}>
-                  {image.source === 'unsplash' ? 'Unsplash' : image.source === 'pexels' ? 'Pexels' : image.source === 'pixabay' ? 'Pixabay' : 'Wikimedia'}
+                  {image.source === 'unsplash' ? 'Unsplash' : image.source === 'pexels' ? 'Pexels' : image.source === 'pixabay' ? 'Pixabay' : image.source === 'openverse' ? 'Openverse' : 'Wikimedia'}
                 </span>
               </div>
               
