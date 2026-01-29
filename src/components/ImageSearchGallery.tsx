@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles, Wand2 } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles, Wand2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ImageCropper } from '@/components/ImageCropper';
@@ -22,6 +23,7 @@ interface ImageResult {
   height?: number;
   isPrintReady?: boolean;
   license?: string; // License type from API for metadata tracking
+  imageType?: 'photo' | 'vector' | 'illustration'; // Type for frontend filtering
 }
 
 // Extended metadata passed to handlers for provenance tracking
@@ -56,7 +58,10 @@ const STYLE_PRESETS: Record<string, string> = {
   'lineart': 'black and white, vector line art, minimal',
 };
 
-// AI Studio Panel Component
+// Enhancement suffix for Magic Enhance mode
+const ENHANCE_SUFFIX = 'masterfully composed, professional lighting, vivid colors, sharp focus, award-winning photography';
+
+// AI Studio Panel Component - Horizontal Layout
 interface AiStudioPanelProps {
   initialPrompt: string;
   onSelectImage: (imageUrl: string) => void;
@@ -69,25 +74,53 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
   const [isGenerating, setIsGenerating] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [enhanceMode, setEnhanceMode] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update prompt when initialPrompt changes
   useEffect(() => {
     setAiPrompt(initialPrompt);
   }, [initialPrompt]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const handleGenerate = useCallback(() => {
     if (cooldown > 0 || !aiPrompt.trim()) return;
 
     setIsGenerating(true);
     setImageLoaded(false);
+    setLoadError(false);
 
-    // Build final prompt with style suffix
+    // Clear any existing timeout
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    // Start 15-second timeout for error handling
+    timeoutRef.current = setTimeout(() => {
+      if (!imageLoaded) {
+        setIsGenerating(false);
+        setLoadError(true);
+      }
+    }, 15000);
+
+    // FRESHNESS: Generate unique seed and timestamp to prevent cached results
+    const seed = Math.floor(Math.random() * 1000000);
+    const timestamp = Date.now();
+
+    // Build final prompt with style suffix and optional enhancement
     const styleAppendix = STYLE_PRESETS[selectedStyle] || '';
-    const fullPrompt = `${aiPrompt.trim()}, ${styleAppendix}`;
+    const fullPrompt = enhanceMode 
+      ? `${aiPrompt.trim()}, ${styleAppendix}, ${ENHANCE_SUFFIX}`
+      : `${aiPrompt.trim()}, ${styleAppendix}`;
 
-    // Construct Pollinations URL
+    // Construct Pollinations URL with seed and cache-buster
     const encodedPrompt = encodeURIComponent(fullPrompt);
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`;
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}&_t=${timestamp}`;
 
     setGeneratedImageUrl(url);
 
@@ -102,26 +135,30 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
         return prev - 1;
       });
     }, 1000);
-  }, [aiPrompt, selectedStyle, cooldown]);
+  }, [aiPrompt, selectedStyle, cooldown, enhanceMode, imageLoaded]);
 
   const handleImageLoad = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsGenerating(false);
     setImageLoaded(true);
+    setLoadError(false);
   }, []);
 
   const handleImageError = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsGenerating(false);
     setImageLoaded(false);
-    toast.error('Failed to generate image. Try a different prompt.');
+    setLoadError(true);
   }, []);
 
   return (
-    <ScrollArea className="h-[400px]">
-      <div className="p-4 space-y-4">
+    <div className="flex gap-6 p-4 h-[400px]">
+      {/* Left Side: Controls */}
+      <div className="w-1/2 space-y-4 overflow-y-auto pr-2">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <Sparkles className="w-8 h-8 mx-auto text-primary" />
-          <h3 className="font-semibold">AI Studio</h3>
+        <div className="text-center space-y-1">
+          <Sparkles className="w-6 h-6 mx-auto text-primary" />
+          <h3 className="font-semibold text-sm">AI Studio</h3>
           <p className="text-xs text-muted-foreground">
             Generate custom images when stock photos fail
           </p>
@@ -129,21 +166,21 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
 
         {/* Prompt Input */}
         <div className="space-y-2">
-          <Label htmlFor="ai-prompt" className="text-sm font-medium">Describe your image</Label>
+          <Label htmlFor="ai-prompt" className="text-xs font-medium">Describe your image</Label>
           <Textarea
             id="ai-prompt"
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
-            placeholder="Describe your ideal image... (e.g., sunset over Lake Como with mountains)"
-            className="min-h-[80px] resize-none"
+            placeholder="e.g., sunset over Lake Como with mountains"
+            className="min-h-[70px] resize-none text-sm"
           />
         </div>
 
         {/* Style Selector */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Style</Label>
+          <Label className="text-xs font-medium">Style</Label>
           <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9">
               <SelectValue placeholder="Select style..." />
             </SelectTrigger>
             <SelectContent>
@@ -154,11 +191,27 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
           </Select>
         </div>
 
+        {/* Magic Enhance Toggle */}
+        <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <Label htmlFor="enhance-toggle" className="text-xs font-medium cursor-pointer">
+              Enhance Prompt
+            </Label>
+          </div>
+          <Switch 
+            id="enhance-toggle"
+            checked={enhanceMode}
+            onCheckedChange={setEnhanceMode}
+          />
+        </div>
+
         {/* Generate Button with Cooldown */}
         <Button
           onClick={handleGenerate}
           disabled={!aiPrompt.trim() || cooldown > 0 || isGenerating}
           className="w-full gap-2"
+          size="sm"
         >
           {isGenerating ? (
             <>
@@ -175,10 +228,36 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
           )}
         </Button>
 
-        {/* Preview */}
-        {generatedImageUrl && (
-          <div className="border rounded-lg overflow-hidden">
-            <div className="relative bg-muted">
+        {/* Licensing Note */}
+        <p className="text-[10px] text-muted-foreground text-center">
+          Pollinations.ai (Flux Model) · Public Domain · Free for commercial use
+        </p>
+      </div>
+
+      {/* Right Side: Preview */}
+      <div className="w-1/2 flex flex-col">
+        {loadError ? (
+          /* Error State with Retry */
+          <div className="flex flex-col items-center justify-center h-full p-4 text-center border rounded-lg bg-muted/30">
+            <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+            <p className="text-sm text-muted-foreground mb-3">
+              Server busy. Please click Retry.
+            </p>
+            <Button 
+              variant="outline" 
+              onClick={handleGenerate}
+              disabled={cooldown > 0}
+              className="gap-2"
+              size="sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </Button>
+          </div>
+        ) : generatedImageUrl ? (
+          /* Generated Image Preview */
+          <div className="flex flex-col h-full border rounded-lg overflow-hidden">
+            <div className="relative flex-1 bg-muted flex items-center justify-center min-h-0">
               {!imageLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -187,7 +266,7 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
               <img
                 src={generatedImageUrl}
                 alt="AI Generated"
-                className={`w-full h-auto transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`max-w-full max-h-full object-contain transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
               />
@@ -195,21 +274,28 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
             {imageLoaded && (
               <Button
                 onClick={() => onSelectImage(generatedImageUrl)}
-                className="w-full rounded-t-none gap-2"
+                className="rounded-t-none gap-2 shrink-0"
+                size="sm"
               >
                 <Check className="w-4 h-4" />
                 Insert into Book
               </Button>
             )}
           </div>
+        ) : (
+          /* Empty State Placeholder */
+          <div className="flex flex-col items-center justify-center h-full border rounded-lg bg-muted/30 text-center p-4">
+            <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+            <p className="text-sm text-muted-foreground">
+              Your generated image will appear here
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Click Generate to create a custom image
+            </p>
+          </div>
         )}
-
-        {/* Licensing Note */}
-        <p className="text-xs text-muted-foreground text-center">
-          Generated by Pollinations.ai (Flux Model). Public Domain - free for commercial use.
-        </p>
       </div>
-    </ScrollArea>
+    </div>
   );
 };
 
@@ -262,6 +348,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           limit: 150, // More variety (server enforces print-quality + no-faces)
           bookTopic, // Anchor search to book's topic for relevance
           forCover, // Filter restrictive licenses (CC BY-SA) for cover images
+          searchAllSources: true, // ALWAYS search all sources in manual gallery for complete tab coverage
         }
       });
 
@@ -372,7 +459,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   // Gallery: High-quality stock photos (Unsplash, Pexels, Pixabay photos)
   const galleryImages = images.filter(img => 
     img.source === 'unsplash' || img.source === 'pexels' || 
-    (img.source === 'pixabay' && !img.imageUrl?.includes('vector'))
+    (img.source === 'pixabay' && (img as any).imageType !== 'vector')
   );
 
   // Locations & Landmarks: Specific places, editorial content (Openverse, Wikimedia)
@@ -380,9 +467,9 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     img.source === 'openverse' || img.source === 'wikimedia'
   );
 
-  // Vectors & Icons: Diagrams, symbols (Pixabay vectors)
+  // Vectors & Icons: Diagrams, symbols (Pixabay vectors - using imageType field from backend)
   const vectorImages = images.filter(img => 
-    img.source === 'pixabay' && img.imageUrl?.includes('vector')
+    (img as any).imageType === 'vector'
   );
 
   return (
