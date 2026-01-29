@@ -35,6 +35,21 @@ const toTitleCase = (str: string): string => {
   return str.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 };
 
+// Voice-to-instruction mapping for Gemini prompts
+const VOICE_INSTRUCTIONS: Record<string, string> = {
+  insider: 'Write with high taste and authority. Avoid tourist clichés. Use an "IYKYK" (If you know, you know) tone. Focus on hidden gems and insider knowledge.',
+  bestie: 'Write in a confident, sassy, female-forward voice. Treat the reader like a close friend. Use punchy, witty language and share genuine excitement.',
+  poet: 'Use evocative, sensory-rich language. Focus on atmosphere, emotion, and beauty. Paint vivid word pictures that transport the reader.',
+  professor: 'Write with academic authority and educational clarity. Use structured explanations, cite relevant background, and maintain an informative tone.',
+};
+
+// Structure-to-instruction mapping for Gemini prompts
+const STRUCTURE_INSTRUCTIONS: Record<string, string> = {
+  curated: 'Structure the content as a curated directory. Prioritize specific venues (Hotels, Restaurants, Shops) with address details, vibe checks, and insider recommendations.',
+  playbook: 'Structure the content as an educational manual. Use clear steps, bullet points for "How-to" sections, and focus on practical, actionable instructions.',
+  balanced: 'Balance educational content with curated recommendations. Mix teaching moments with specific venue suggestions for a well-rounded guide.',
+};
+
 // Retry helper
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -62,7 +77,15 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, sessionId, language = 'en' } = await req.json();
+    const { 
+      topic, 
+      sessionId, 
+      language = 'en',
+      voice = 'insider',
+      structure = 'balanced',
+      focusAreas = []
+    } = await req.json();
+    
     if (!topic) {
       return new Response(JSON.stringify({ error: 'Missing topic' }), { 
         status: 400, headers: corsHeaders 
@@ -73,7 +96,14 @@ serve(async (req) => {
     const topicTitleCase = toTitleCase(cleanTopic);
     const isVisual = isVisualTopic(cleanTopic);
     
-    console.log(`[generate-book-blocks] Topic: "${cleanTopic}", Visual: ${isVisual}`);
+    // Get voice and structure instructions
+    const voiceInstruction = VOICE_INSTRUCTIONS[voice] || VOICE_INSTRUCTIONS.insider;
+    const structureInstruction = STRUCTURE_INSTRUCTIONS[structure] || STRUCTURE_INSTRUCTIONS.balanced;
+    const focusInstruction = focusAreas.length > 0 
+      ? `\n=== FOCUS AREAS ===\nEmphasize these topics throughout the book: ${focusAreas.join(', ')}`
+      : '';
+    
+    console.log(`[generate-book-blocks] Topic: "${cleanTopic}", Visual: ${isVisual}, Voice: ${voice}, Structure: ${structure}`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
@@ -88,6 +118,13 @@ serve(async (req) => {
     const targetTotalPages = topicBreadth === 'narrow' ? 100 : 140;
     
     const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
+
+=== NARRATIVE VOICE ===
+${voiceInstruction}
+
+=== BOOK STRUCTURE ===
+${structureInstruction}
+${focusInstruction}
 
 === LUXURY ARCHITECT RULES ===
 

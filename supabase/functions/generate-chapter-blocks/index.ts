@@ -41,8 +41,11 @@ serve(async (req) => {
       topic, 
       tableOfContents,
       isVisualTopic = false,
-      targetPagesPerChapter = 10, // Increased from 6 for 100+ page books
-      language = 'en' 
+      targetPagesPerChapter = 10,
+      language = 'en',
+      voice = 'insider',
+      structure = 'balanced',
+      focusAreas = []
     } = await req.json();
 
     if (!bookId || !chapterNumber || !chapterTitle || !topic) {
@@ -51,12 +54,40 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[generate-chapter-blocks] Chapter ${chapterNumber}: "${chapterTitle}" for "${topic}"`);
+    console.log(`[generate-chapter-blocks] Chapter ${chapterNumber}: "${chapterTitle}" for "${topic}" (Voice: ${voice}, Structure: ${structure})`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
+    // Voice-to-instruction mapping
+    const VOICE_INSTRUCTIONS: Record<string, string> = {
+      insider: 'Write with high taste and authority. Avoid tourist clichés. Use an "IYKYK" (If you know, you know) tone. Focus on hidden gems and insider knowledge.',
+      bestie: 'Write in a confident, sassy, female-forward voice. Treat the reader like a close friend. Use punchy, witty language and share genuine excitement.',
+      poet: 'Use evocative, sensory-rich language. Focus on atmosphere, emotion, and beauty. Paint vivid word pictures that transport the reader.',
+      professor: 'Write with academic authority and educational clarity. Use structured explanations, cite relevant background, and maintain an informative tone.',
+    };
+
+    // Structure-to-instruction mapping
+    const STRUCTURE_INSTRUCTIONS: Record<string, string> = {
+      curated: 'Structure the content as a curated directory. Prioritize specific venues (Hotels, Restaurants, Shops) with address details, vibe checks, and insider recommendations.',
+      playbook: 'Structure the content as an educational manual. Use clear steps, bullet points for "How-to" sections, and focus on practical, actionable instructions.',
+      balanced: 'Balance educational content with curated recommendations. Mix teaching moments with specific venue suggestions for a well-rounded guide.',
+    };
+
+    const voiceInstruction = VOICE_INSTRUCTIONS[voice] || VOICE_INSTRUCTIONS.insider;
+    const structureInstruction = STRUCTURE_INSTRUCTIONS[structure] || STRUCTURE_INSTRUCTIONS.balanced;
+    const focusInstruction = focusAreas.length > 0 
+      ? `\n=== FOCUS AREAS ===\nEmphasize these topics: ${focusAreas.join(', ')}`
+      : '';
+
     const prompt = `You are an elite "Luxury Book Architect." Generate structured page blocks for Chapter ${chapterNumber}: "${chapterTitle}" of the book "${topic}".
+
+=== NARRATIVE VOICE ===
+${voiceInstruction}
+
+=== BOOK STRUCTURE ===
+${structureInstruction}
+${focusInstruction}
 
 === LUXURY ARCHITECT RULES ===
 
