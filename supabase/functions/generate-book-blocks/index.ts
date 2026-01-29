@@ -71,10 +71,10 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
     // STEP 1: Generate book outline and Chapter 1 blocks using Luxury Architect Rules
-    // Increased pages per chapter to hit 100+ page targets
-    const pagesPerChapter = isVisual ? 14 : 10;
-    const minChapters = 10;
-    const targetTotalPages = 120; // Aim for 100+ pages for professional-length books
+    // Increased pages per chapter and chapters to hit 140+ page targets
+    const pagesPerChapter = isVisual ? 12 : 10;
+    const minChapters = 12;
+    const targetTotalPages = 140; // Aim for 140+ pages for professional-length books
     
     const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
 
@@ -85,16 +85,17 @@ RULE 0: FORCE HEADERS (AGGRESSIVE!)
 - EVERY SINGLE text block MUST contain at least one \`## Header\` or \`### Subheader\`.
 - Do NOT write plain text blocks without headers. Headers are MANDATORY.
 
-RULE 1: GOLDILOCKS DENSITY (300-320 Words)
-- TARGET: Each "text" block must be **300-320 words**. This is the Goldilocks zone for 6x9 pages—dense enough to fill the page, but short enough to avoid scrolling.
-- Target exactly 310 words per text block to perfectly fill the layout without overflow.
-- Be substantive. Every paragraph must add value and depth.
+RULE 1: STRICT PAGE FIT (200-230 Words MAXIMUM)
+- CRITICAL: Each "text" block must be **200-230 words MAXIMUM**. This is essential for Amazon KDP 6x9 pages—content MUST fit without overflow.
+- Target exactly 215 words per text block. NEVER exceed 230 words.
+- Pages that overflow ruin the print layout. Count your words before outputting.
+- Be focused and substantive within the word limit.
 
 RULE 2: VISUAL BREATHING ROOM (Luxury Rhythm)
 Each chapter MUST follow this rhythm:
   1x Chapter Title Page (ALWAYS first)
   1-2x Full-Page "Hero" Images (image_full blocks)
-  4-6x Text Pages (text blocks, 300-320 words each, EACH starts with ## Header)
+  4-6x Text Pages (text blocks, 200-230 words each, EACH starts with ## Header)
   1x Pro Tip Page (ALWAYS last block)
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 
@@ -115,7 +116,7 @@ MINIMUM CHAPTERS: ${minChapters}
 
 Block types available (ONLY use these - NO quote blocks!):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
-- "text": { "text": "300-320 words. MUST start with ## Header. Use ### Subheader inside." }
+- "text": { "text": "200-230 words MAX. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "heading": { "level": 2, "text": "Section heading" }
@@ -136,10 +137,10 @@ Return ONLY valid JSON:
   "chapter_1_blocks": [
     {"block_type": "chapter_title", "content": {"chapter_number": 1, "title": "Introduction"}},
     {"block_type": "image_full", "content": {"query": "atmospheric landscape scene", "caption": "Setting the scene"}},
-    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of opening content...]"}},
-    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of continued content...]"}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[200-230 words MAX of opening content...]"}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[200-230 words MAX of continued content...]"}},
     {"block_type": "image_full", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
-    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[300-320 words of content...]"}},
+    {"block_type": "text", "content": {"text": "## [Header]\\n\\n[200-230 words MAX of content...]"}},
     {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
 }
