@@ -75,6 +75,13 @@ interface KdpLegalDefenseProps {
 
 const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, title }) => {
   const publisherName = "Larvotto Ventures LLC DBA Loom & Page";
+  const sessionId = (() => {
+    try {
+      return localStorage.getItem('loom_page_session_id');
+    } catch {
+      return null;
+    }
+  })();
   
   // State
   const [isScanning, setIsScanning] = useState(false);
@@ -383,6 +390,44 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     const doc = new jsPDF({ format: 'letter', unit: 'in' });
     const dateStr = new Date().toLocaleDateString();
 
+    const truncateToWidth = (text: string, maxWidthIn: number) => {
+      const str = String(text ?? '');
+      if (!str) return '';
+      if (doc.getTextWidth(str) <= maxWidthIn) return str;
+      const ell = '...';
+      let lo = 0;
+      let hi = str.length;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        const candidate = str.slice(0, mid).trimEnd() + ell;
+        if (doc.getTextWidth(candidate) <= maxWidthIn) lo = mid + 1;
+        else hi = mid;
+      }
+      const cut = Math.max(0, lo - 1);
+      return str.slice(0, cut).trimEnd() + ell;
+    };
+
+    const persistPatch = async (blockId: string, patch: Record<string, unknown>) => {
+      // direct update first (owned books)
+      try {
+        const { data, error } = await supabase
+          .from('book_pages')
+          .update(patch)
+          .eq('id', blockId)
+          .select('id')
+          .maybeSingle();
+        if (!error && data?.id) return true;
+      } catch {
+        // ignore
+      }
+
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke('update-book-page', {
+        body: { bookId, blockId, patch, sessionId },
+      });
+      if (fnErr || !fnData?.ok) return false;
+      return true;
+    };
+
     // Ensure images exist in DB before generating the manifest.
     // Reason: images are lazily populated when viewing pages; if the user exports immediately
     // after generation, image_url can still be null for all image blocks → empty manifest.
@@ -489,12 +534,16 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
           existingUrls.add(archivedUrl);
 
-          // Best-effort persistence: guest books may not have UPDATE permission.
-          try {
-            await saveImageMetadata(block.id as string, archivedUrl, metadata);
-          } catch (persistErr) {
-            console.warn('[ImageManifest] saveImageMetadata failed (continuing):', persistErr);
-          }
+          // Best-effort persistence: session books won't pass RLS for logged-in users.
+          const ok = await persistPatch(block.id as string, {
+            image_url: archivedUrl,
+            image_source: metadata.image_source,
+            original_url: metadata.original_url,
+            image_license: metadata.image_license,
+            image_attribution: metadata.image_attribution,
+            archived_at: metadata.archived_at,
+          });
+          if (!ok) console.warn('[ImageManifest] Failed to persist image metadata (continuing).');
 
           // Always hydrate in-memory for this manifest run.
           block.image_url = archivedUrl;
@@ -536,6 +585,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     let y = 2.0;
     const colWidths = { page: 0.4, chapter: 0.4, caption: 1.4, source: 0.9, license: 1.1, urls: 2.6 };
     const startX = 0.75;
+    const colGap = 0.08;
 
     doc.setFont("times", "bold");
     doc.setFontSize(8);
@@ -581,11 +631,11 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
       const content = img.content as { caption?: string; query?: string };
       const caption = content?.caption || content?.query || 'No caption';
-      const truncatedCaption = caption.length > 50 ? caption.substring(0, 47) + '...' : caption;
+      const truncatedCaption = truncateToWidth(caption, colWidths.caption - colGap);
       
       const source = img.image_source || 'Unknown';
       const license = img.image_license || 'Unknown';
-      const truncatedLicense = license.length > 20 ? license.substring(0, 17) + '...' : license;
+      const truncatedLicense = truncateToWidth(license, colWidths.license - colGap);
       
       // Format source display
       const sourceDisplay = source === 'upload' ? 'Upload' : 
@@ -596,7 +646,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
 
       // Truncate URL for display
       const archivedUrl = img.image_url || '';
-      const truncatedUrl = archivedUrl.length > 45 ? archivedUrl.substring(0, 42) + '...' : archivedUrl;
+      const truncatedUrl = truncateToWidth(archivedUrl, colWidths.urls - colGap);
 
       doc.text(String(img.page_order), startX, y);
       doc.text(String(img.chapter_number), startX + colWidths.page, y);
@@ -605,12 +655,24 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
       doc.text(truncatedCaption, startX + colWidths.page + colWidths.chapter, y);
       
       // Source and License on the same line but properly spaced
-      doc.text(sourceDisplay, startX + colWidths.page + colWidths.chapter + colWidths.caption + 0.1, y);
-      doc.text(truncatedLicense, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + 0.1, y);
+      doc.text(
+        truncateToWidth(sourceDisplay, colWidths.source - colGap),
+        startX + colWidths.page + colWidths.chapter + colWidths.caption + colGap,
+        y
+      );
+      doc.text(
+        truncatedLicense,
+        startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colGap,
+        y
+      );
       
       // URL as link
       doc.setTextColor(0, 0, 255);
-      doc.text(truncatedUrl, startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license + 0.1, y);
+      doc.text(
+        truncatedUrl,
+        startX + colWidths.page + colWidths.chapter + colWidths.caption + colWidths.source + colWidths.license + colGap,
+        y
+      );
       doc.setTextColor(0, 0, 0);
 
       y += 0.28; // Slightly more row spacing
