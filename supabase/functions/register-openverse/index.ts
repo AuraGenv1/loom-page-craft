@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -53,17 +52,67 @@ serve(async (req) => {
 
     console.log(`Registering with Openverse API: name="${name}", email="${email}"`);
 
-    // Call Openverse API
-    const openverseResponse = await fetch('https://api.openverse.engineering/v1/auth_tokens/register/', {
+    // Openverse API endpoint - note: no trailing slash to avoid redirects
+    const apiUrl = 'https://api.openverse.org/v1/auth_tokens/register/';
+    
+    const requestBody = JSON.stringify({ name, email, description });
+    console.log(`Request body: ${requestBody}`);
+
+    // Call Openverse API with explicit settings
+    const openverseResponse = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({ name, email, description }),
+      body: requestBody,
+      redirect: 'manual', // Don't auto-follow redirects that might change POST to GET
     });
+
+    // Handle redirect manually if needed
+    if (openverseResponse.status >= 300 && openverseResponse.status < 400) {
+      const redirectUrl = openverseResponse.headers.get('Location');
+      console.log(`Redirect detected to: ${redirectUrl}`);
+      
+      if (redirectUrl) {
+        // Follow redirect with POST
+        const redirectResponse = await fetch(redirectUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: requestBody,
+        });
+        
+        const redirectText = await redirectResponse.text();
+        console.log(`Redirect response status: ${redirectResponse.status}`);
+        
+        if (!redirectResponse.ok) {
+          console.error(`Openverse API error after redirect: ${redirectText}`);
+          return new Response(
+            JSON.stringify({ error: redirectText || 'Failed to register with Openverse' }),
+            { status: redirectResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        const data: OpenverseResponse = JSON.parse(redirectText);
+        console.log(`Successfully registered with Openverse. Client ID: ${data.client_id.substring(0, 8)}...`);
+        
+        return new Response(
+          JSON.stringify({
+            client_id: data.client_id,
+            client_secret: data.client_secret,
+            name: data.name,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     const responseText = await openverseResponse.text();
     console.log(`Openverse API response status: ${openverseResponse.status}`);
+    console.log(`Openverse API response: ${responseText.substring(0, 500)}`);
 
     if (!openverseResponse.ok) {
       console.error(`Openverse API error: ${responseText}`);
