@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.register-openverse]
 verify_jwt = false
+
+[functions.search-book-images]
+verify_jwt = false
+
+[functions.generate-image]
+verify_jwt = false
