@@ -20,6 +20,7 @@ interface ImageResult {
   height: number;          // Image height
   isPrintReady: boolean;   // True if width >= 1800px
   license?: string;        // License type for metadata tracking
+  imageType?: 'photo' | 'vector' | 'illustration'; // Type for frontend filtering
 }
 
 // ============== OPENVERSE OAUTH2 TOKEN MANAGEMENT ==============
@@ -439,6 +440,8 @@ async function searchPixabayMultiple(
         isPrintReady: width >= PRINT_READY_WIDTH || isVector, // Vectors are always print-ready
         // Extended metadata for data mapping verification
         license: 'Pixabay License', // All Pixabay images use the same license
+        // NEW: Type field for frontend filtering
+        imageType: isVector ? 'vector' : (imageType === 'illustration' ? 'illustration' : 'photo'),
       });
     }
 
@@ -855,7 +858,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, orientation = 'landscape', limit = 300, bookTopic, forCover = false } = await req.json();
+    const { query, orientation = 'landscape', limit = 300, bookTopic, forCover = false, searchAllSources = false } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -864,7 +867,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}, Topic: "${bookTopic || 'none'}", ForCover: ${forCover}`);
+    console.log(`[search-book-images] Query: "${query}", Orientation: ${orientation}, Limit: ${limit}, Topic: "${bookTopic || 'none'}", ForCover: ${forCover}, SearchAllSources: ${searchAllSources}`);
 
     const cleanedQuery = cleanQuery(query);
     
@@ -879,8 +882,9 @@ serve(async (req) => {
     const anchoredQuery = anchorQueryToTopic(cleanedQuery, bookTopic);
 
     // SMART SEARCH MODE DETECTION: Categorize as abstract vs realistic
-    const searchMode = detectSearchMode(cleanedQuery, bookTopic);
-    console.log(`[search-book-images] Detected search mode: ${searchMode}`);
+    // When searchAllSources is true (manual gallery), we ignore smart routing
+    const searchMode = searchAllSources ? 'mixed' : detectSearchMode(cleanedQuery, bookTopic);
+    console.log(`[search-book-images] Detected search mode: ${searchMode}${searchAllSources ? ' (searchAllSources override)' : ''}`);
 
     // COVER SAFETY: Explicitly block Wikimedia for covers due to complex attribution requirements
     const skipWikimedia = forCover;
@@ -963,22 +967,28 @@ serve(async (req) => {
         }
       }
     } else {
-      // MIXED MODE: Balanced approach with Openverse included
-      console.log(`[search-book-images] MIXED MODE: Balanced source distribution with Openverse`);
+      // MIXED MODE or searchAllSources=true: Balanced approach searching ALL sources
+      // This ensures the manual gallery always has content for every tab
+      console.log(`[search-book-images] ${searchAllSources ? 'ALL SOURCES' : 'MIXED'} MODE: Balanced source distribution`);
       searchPromises.push(
+        // Photos from all primary sources
         searchUnsplashMultiple(anchoredQuery, orientation, 30, 1),
         searchUnsplashMultiple(anchoredQuery, orientation, 30, 2),
         searchPexelsMultiple(anchoredQuery, orientation, 80, 1),
         searchPexelsMultiple(anchoredQuery, orientation, 80, 2),
         searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'photo'),
+        // ALWAYS include vectors for the Vectors tab
         searchPixabayMultiple(anchoredQuery, orientation, 100, 1, 'vector'),
-        // Add Openverse for additional variety
-        searchOpenverseMultiple(anchoredQuery, orientation, 40, forCover),
+        searchPixabayMultiple(anchoredQuery, orientation, 100, 2, 'vector'),
+        // ALWAYS include Openverse for the Locations tab
+        searchOpenverseMultiple(anchoredQuery, orientation, 50, forCover),
+        searchOpenverseMultiple(cleanedQuery, orientation, 50, forCover), // Unanchored too
       );
-      // Add Wikimedia only if not cover mode
+      // ALWAYS include Wikimedia for the Locations tab (unless cover mode)
       if (!skipWikimedia) {
         searchPromises.push(
           searchWikimediaMultiple(anchoredQuery, 50, forCover),
+          searchWikimediaMultiple(cleanedQuery, 50, forCover), // Unanchored too
         );
       }
     }
