@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Key, Loader2, Pencil, Type, RefreshCw, Trash2, Search, Upload, AlertTriangle, Wrench, ImagePlus, ZoomIn, ZoomOut, PlusCircle, PlusSquare, Image, Printer, BookOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageBlock } from '@/lib/pageBlockTypes';
 import { supabase } from '@/integrations/supabase/client';
@@ -1160,6 +1160,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const currentChapterRef = useRef(currentChapter);
   // Prevent late async fetches from overwriting navigation state (causes page flicker)
   const fetchSeqRef = useRef(0);
+  // Ref for preloadedBlocks to avoid recreating fetchBlocks on every update
+  const preloadedBlocksRef = useRef(preloadedBlocks);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -1173,18 +1175,25 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   useEffect(() => {
     currentChapterRef.current = currentChapter;
   }, [currentChapter]);
+  
+  useEffect(() => {
+    preloadedBlocksRef.current = preloadedBlocks;
+  }, [preloadedBlocks]);
 
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
-  // IMPORTANT: This callback must NOT depend on blocks/currentIndex state to avoid infinite loops
+  // IMPORTANT: This callback must NOT depend on blocks/currentIndex/preloadedBlocks state to avoid infinite loops
   const fetchBlocks = useCallback(async (chapter: number) => {
     // Every call increments the sequence. Only the latest call is allowed to apply state.
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
 
+    // Read preloadedBlocks from ref to avoid circular dependency
+    const currentPreloadedBlocks = preloadedBlocksRef.current;
+
     // We may receive preloaded blocks first (fast), but we still need to hydrate from DB
     // so blocks have real IDs (required for auto-fetch + manual image tools) and so
     // subsequent preloaded updates don't wipe out hydrated state.
-    const preloaded = preloadedBlocks?.[chapter];
+    const preloaded = currentPreloadedBlocks?.[chapter];
     const hasPreloaded = !!preloaded && preloaded.length > 0;
     const alreadyHydrated = hydratedChaptersRef.current.has(chapter);
 
@@ -1273,7 +1282,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     } finally {
       if (!isStale()) setLoading(false);
     }
-  }, [bookId, preloadedBlocks, findTitleBlockIndex]); // Removed blocks, currentIndex, currentChapter from deps
+  }, [bookId, findTitleBlockIndex]); // Removed preloadedBlocks from deps - now read from ref
 
   // Auto-trigger image fetch for blocks without images on mount
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
@@ -1918,21 +1927,23 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // Track preloaded blocks changes with a stable reference
   const preloadedBlocksLengthRef = useRef<Record<number, number>>({});
   
+  // Track the preloaded blocks length for triggering fetches
+  const currentPreloadedLength = preloadedBlocks?.[currentChapter]?.length || 0;
+  
   useEffect(() => {
     // Only re-fetch if the chapter changes OR if preloaded blocks for this chapter
     // have newly arrived (length changed from 0 to >0)
     const prevLength = preloadedBlocksLengthRef.current[currentChapter] || 0;
-    const newLength = preloadedBlocks?.[currentChapter]?.length || 0;
-    const hasNewPreloadedData = prevLength === 0 && newLength > 0;
+    const hasNewPreloadedData = prevLength === 0 && currentPreloadedLength > 0;
     
     // Update the ref
-    preloadedBlocksLengthRef.current[currentChapter] = newLength;
+    preloadedBlocksLengthRef.current[currentChapter] = currentPreloadedLength;
     
     // Only fetch if this is a new chapter or we just got preloaded data
     if (hasNewPreloadedData || !hydratedChaptersRef.current.has(currentChapter)) {
       fetchBlocks(currentChapter);
     }
-  }, [currentChapter, fetchBlocks, preloadedBlocks]);
+  }, [currentChapter, fetchBlocks, currentPreloadedLength]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -2090,8 +2101,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
         onSelect={handleImageSelect}
         onSelectBlob={handleCroppedImageUpload}
         orientation="landscape"
-        enableCrop={true} // Enable 6x9 crop feature
-        bookTopic={topic} // Anchor search to book's topic for relevance
+        enableCrop={true}
+        bookTopic={topic}
+        windowShopperMode={!hasFullAccess}
+        onWindowShopperBlock={() => onPremiumFeatureAttempt?.('Image Selection')}
       />
       
       {/* Page Edit Modal (Admin only) */}
@@ -2179,8 +2192,33 @@ export const PageViewer: React.FC<PageViewerProps> = ({
 
         {/* REMOVED: NextChapterOverlay - Auto-navigation handles this now */}
         
-        {/* Weaving indicator when next chapter is loading */}
-        {isLastPageOfChapter && hasNextChapter && !isNextChapterReady && (
+        {/* End of Preview card for guests at end of Chapter 1 */}
+        {isLastPageOfChapter && !hasFullAccess && currentChapter === 1 && hasNextChapter && (
+          <div className="absolute bottom-4 inset-x-0 flex justify-center z-10">
+            <div className="bg-background/95 backdrop-blur-sm rounded-xl px-6 py-4 flex flex-col items-center gap-3 shadow-xl border-2 border-primary/20 max-w-sm mx-4">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-primary" />
+              </div>
+              <div className="text-center">
+                <h4 className="font-serif text-base font-semibold mb-1">End of Preview</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  You've reached the end of the free preview. Unlock the full book to access all {totalChapters} chapters, the Editing Suite, and KDP Export Tools.
+                </p>
+              </div>
+              <Button 
+                onClick={() => onPremiumFeatureAttempt?.('Full Book Access')}
+                size="sm"
+                className="gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                Unlock Full Book
+              </Button>
+            </div>
+          </div>
+        )}
+        
+        {/* Weaving indicator when next chapter is loading (only for users with access) */}
+        {isLastPageOfChapter && hasNextChapter && !isNextChapterReady && hasFullAccess && (
           <div className="absolute bottom-4 inset-x-0 flex justify-center">
             <div className="bg-background/90 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2 shadow-lg border">
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />

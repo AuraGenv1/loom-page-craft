@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop } from 'lucide-react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -42,6 +42,10 @@ interface ImageSearchGalleryProps {
   cropAspectRatio?: number; // Defaults to 6/9 for book pages; use 1 for cover image box
   bookTopic?: string; // Book topic for anchoring searches geographically
   forCover?: boolean; // Filter out restrictive licenses (CC BY-SA) for cover images
+  /** Window Shopper Mode: Allow searching but block selection (for guests) */
+  windowShopperMode?: boolean;
+  /** Callback when guest tries to select in window shopper mode */
+  onWindowShopperBlock?: () => void;
 }
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
@@ -55,6 +59,8 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   cropAspectRatio = 6 / 9,
   bookTopic,
   forCover = false,
+  windowShopperMode = false,
+  onWindowShopperBlock,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [images, setImages] = useState<ImageResult[]>([]);
@@ -308,8 +314,37 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           )}
         </div>
 
-        {/* Selection Preview & Consent */}
-        {selectedImage && (
+        {/* Window Shopper Mode - Block selection with premium prompt */}
+        {selectedImage && windowShopperMode && (
+          <div className="pt-4 border-t space-y-4">
+            <div className="flex items-center gap-4">
+              <img 
+                src={selectedImage.thumbnailUrl} 
+                alt="Selected" 
+                className="w-16 h-12 object-cover rounded"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  Selected from {getSourceDisplayName(selectedImage.source)}
+                </p>
+              </div>
+            </div>
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg text-center">
+              <Lock className="w-8 h-8 mx-auto mb-2 text-primary" />
+              <h4 className="font-semibold mb-1">Premium Feature</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Unlock to insert this image. Premium users get unlimited photo swaps.
+              </p>
+              <Button onClick={() => { onWindowShopperBlock?.(); onOpenChange(false); }} className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                Unlock Now
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Selection Preview & Consent - Only for non-window-shopper mode */}
+        {selectedImage && !windowShopperMode && (
           <div className="pt-4 border-t space-y-4">
             {/* Preview Row */}
             <div className="flex items-center gap-4">
