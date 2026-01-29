@@ -1,187 +1,348 @@
 
-# Plan: Multi-Issue Resolution for KDP Compliance & UX
+# Plan: Restructure Image Gallery with Purpose-Based Tabs & AI Studio Integration
 
 ## Summary
 
-This plan addresses seven distinct issues raised from the Lake Como book generation:
-
-1. **Evidence Dossier Missing Openverse** - Section 6 exists but not displaying correctly
-2. **Image Manifest Column Overlap** - Caption overlapping Source column
-3. **User Upload Tracking in Manifest** - Confirm uploads are properly reflected
-4. **Minimum Chapter Flexibility** - Avoid forcing 12 chapters on topics with limited content
-5. **Page Count Including Front Matter** - Prep and $$$ tabs should show final print count
-6. **Bottom Toolbar Chapter Display** - "Chapter 1 * 1/7" is confusing
-7. **AI-Swap Badge Behavior** - Move to top-right, show on hover, better messaging
+This plan implements a major UI overhaul of the Image Search Gallery, consolidating the current 6 vendor-specific tabs (All, Openverse, Unsplash, Pexels, Pixabay, Wikimedia) into 4 purpose-based tabs, and adding a new AI image generation feature via Pollinations.ai.
 
 ---
 
-## Issue Analysis
+## Current State Analysis
 
-### Issue 1: Evidence Dossier Missing Openverse
-**Finding:** The Evidence Dossier PDF generator (`generatePdfBlob()` in KdpLegalDefense.tsx) already includes Openverse at lines 351-371. However, looking at the screenshot, it appears the PDF might be cut off or the section isn't rendering correctly due to Y-coordinate overflow on a single page.
+### Current Tab Structure (6 tabs)
+```
+[All] [Openverse] [Unsplash] [Pexels] [Pixabay] [Wikimedia]
+```
 
-**Root Cause:** The PDF is only 1 page but the content for 6 sections overflows past the printable area. Section 6 (Openverse) starts at approximately Y=8.8" on a letter page (11" tall), so it may render but get cut off at the margin.
+**Problems:**
+- Cluttered with too many vendor-specific tabs
+- Users don't care about the vendor—they care about the *type* of image
+- No AI generation option when stock fails
 
-**Fix:** Add page break logic or reduce section spacing to ensure all 6 licensing sections fit on the page.
+### Current Backend (`search-book-images/index.ts`)
+- Already categorizes by source (unsplash, pexels, pixabay, wikimedia, openverse)
+- Already has `searchMode` detection (abstract/realistic/mixed)
+- Already has `imageType` parameter for Pixabay vectors
 
-### Issue 2: Image Manifest Caption/Source Overlap
-**Finding:** The column widths in the manifest table are:
-- `caption: 1.8"` 
-- `source: 0.8"`
+---
 
-The issue is that captions longer than ~50 characters still overlap with the source column because jsPDF text doesn't respect column boundaries automatically.
+## Proposed Tab Structure (4 purpose-based tabs)
 
-**Fix:** 
-1. Reduce caption column width from 1.8" to 1.5"
-2. Add 0.1" spacing between columns consistently
-3. Increase source column width from 0.8" to 0.9"
+```
++-------------------------------------------------------------------+
+| [Gallery]  [Locations & Landmarks]  [Vectors & Icons]  [AI Studio] |
++-------------------------------------------------------------------+
+```
 
-### Issue 3: User Upload Tracking
-**Confirmation:** The code already handles this correctly:
-- `image_source === 'upload'` is set when users upload their own photos
-- Line 585-586 in KdpLegalDefense.tsx maps `source === 'upload'` to display as "Upload"
-- Line 188 in the RTF Declaration includes "User Uploads: Rights certified by publisher"
-
-**No code changes needed** - just confirmation that it works.
-
-### Issue 4: Minimum Chapter Flexibility
-**Current Logic:** All visual topics get `minChapters = 12`, which can force AI to generate filler content.
-
-**Solution:** Implement a "topic depth assessment" that allows the AI to generate fewer chapters for topics with limited scope:
-- For narrow topics (e.g., "Courchevel Ski Resort"), allow minimum 8 chapters
-- For broad topics (e.g., "Lake Como Travel Guide"), require minimum 12 chapters
-- Add a `topicBreadth` heuristic based on query length and specificity
-
-### Issue 5: Page Count Including Front Matter
-**Current State:**
-- `KdpPrepDashboard.tsx` receives `contentPageCount` and uses `formatDimensions()` which internally calls `calculateFinalPageCount()` that adds 4 front matter pages
-- `KdpFinanceCalculator.tsx` receives `pageCount` directly but this should also include front matter
-
-**Finding:** The Prep tab already shows "103 pages" (99 content + 4 front matter) via `formatDimensions()`. The $$$ tab shows "99 Pages" because it receives raw `pageCount` without front matter.
-
-**Fix:** In BookCover.tsx where KdpFinanceCalculator is invoked, pass `calculateFinalPageCount(estimatedPages)` instead of raw `estimatedPages`.
-
-### Issue 6: Bottom Toolbar Chapter Display
-**Current:** `Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}`
-Shows: "Chapter 1 • 1/7" (meaning page 1 of 7 pages in chapter 1)
-
-**User Request:** "Chapter X out of Y chapters"
-
-**Fix:** Change the display to show chapter progress:
-- From: `Chapter 1 • 1/7`
-- To: `Chapter {currentChapter} of {totalChapters}`
-
-### Issue 7: AI-Swap Badge Behavior
-**Current State:**
-- Badge shows "AI · Swap" in top-LEFT corner (lines 606-618)
-- Badge is clickable but doesn't clearly communicate the purpose
-- Badge doesn't disappear on hover to reveal the full toolbar
-
-**Requested Changes:**
-1. Move badge from top-LEFT to top-RIGHT corner
-2. Hide badge when hovering to reveal the AuthorImageToolbar
-3. Change text from "AI · Swap" to something more informative like "AI-selected · Click to change"
-4. Add a tooltip explaining the image was AI-selected and can be changed
+| Tab | Source | Purpose |
+|-----|--------|---------|
+| **Gallery** (Default) | Unsplash + Pexels + Pixabay (photos) | High-quality stock photos for general vibes |
+| **Locations & Landmarks** | Openverse + Wikimedia | Specific hotels, towns, editorial content |
+| **Vectors & Icons** | Pixabay (vectors only) | Diagrams, astrology symbols, logos |
+| **AI Studio** | Pollinations.ai | Custom generation when stock fails |
 
 ---
 
 ## Implementation Plan
 
-### Part 1: Fix Evidence Dossier Openverse Section
-**File:** `src/components/KdpLegalDefense.tsx`
+### Part 1: Update Frontend Tab Structure
 
-- Reduce Y spacing between sections from 0.5" to 0.4"
-- Add page break check before section 5 to ensure sections 5-6 are visible
-- Alternatively, add a second page for the Openverse section if space is tight
+**File: `src/components/ImageSearchGallery.tsx`**
 
-### Part 2: Fix Image Manifest Column Overlap
-**File:** `src/components/KdpLegalDefense.tsx`
+**1A. Change Tab Definitions**
 
-Update column widths (around line 531):
+Replace the current 6-tab structure with 4 purpose-based tabs:
+
 ```typescript
-const colWidths = { 
-  page: 0.4,      // was 0.5
-  chapter: 0.4,   // was 0.6
-  caption: 1.4,   // was 1.8 - reduced to prevent overlap
-  source: 0.9,    // was 0.8 - increased
-  license: 1.1,   // was 1.2
-  urls: 2.6       // was 2.3 - increased to use saved space
+// NEW: Group images by purpose, not vendor
+const galleryImages = images.filter(img => 
+  img.source === 'unsplash' || img.source === 'pexels' || 
+  (img.source === 'pixabay' && !img.license?.includes('vector'))
+);
+
+const locationsImages = images.filter(img => 
+  img.source === 'openverse' || img.source === 'wikimedia'
+);
+
+const vectorImages = images.filter(img => 
+  img.source === 'pixabay' && img.imageUrl?.includes('vector')
+);
+```
+
+**1B. New Tab UI**
+
+```tsx
+<Tabs defaultValue="gallery" className="h-full flex flex-col">
+  <TabsList className="grid w-full grid-cols-4 mb-2">
+    <TabsTrigger value="gallery">Gallery ({galleryImages.length})</TabsTrigger>
+    <TabsTrigger value="locations">Locations ({locationsImages.length})</TabsTrigger>
+    <TabsTrigger value="vectors">Vectors ({vectorImages.length})</TabsTrigger>
+    <TabsTrigger value="ai-studio">AI Studio</TabsTrigger>
+  </TabsList>
+  
+  {/* Tab contents... */}
+</Tabs>
+```
+
+**1C. Add AI Studio Tab Content**
+
+```tsx
+<TabsContent value="ai-studio" className="flex-1 min-h-0 mt-0">
+  <AiStudioPanel 
+    initialPrompt={query}
+    onSelectImage={(imageUrl) => {
+      // Create AI-generated image result
+      const aiImage: ImageResult = {
+        id: `pollinations-${Date.now()}`,
+        imageUrl,
+        thumbnailUrl: imageUrl,
+        attribution: 'Generated by Pollinations.ai (Flux Model)',
+        source: 'pollinations' as any, // New source type
+        width: 1024,
+        height: 1024,
+        isPrintReady: true,
+        license: 'Public Domain',
+      };
+      setSelectedImage(aiImage);
+    }}
+  />
+</TabsContent>
+```
+
+---
+
+### Part 2: Create AI Studio Panel Component
+
+**File: `src/components/ImageSearchGallery.tsx` (inline component)**
+
+New `AiStudioPanel` component with:
+
+**2A. State**
+```typescript
+const [aiPrompt, setAiPrompt] = useState(initialPrompt);
+const [selectedStyle, setSelectedStyle] = useState('photorealistic');
+const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+const [isGenerating, setIsGenerating] = useState(false);
+const [cooldown, setCooldown] = useState(0); // 5-second cooldown
+```
+
+**2B. Style Presets**
+```typescript
+const STYLE_PRESETS = {
+  'watercolor': 'watercolor style, white background, artistic',
+  'photorealistic': 'highly detailed, 8k, realistic',
+  'lineart': 'black and white, vector line art, minimal',
 };
 ```
 
-Add proper text clipping to ensure each column stays within its bounds.
-
-### Part 3: Finance Calculator Page Count Fix
-**File:** `src/components/BookCover.tsx`
-
-Where KdpFinanceCalculator is rendered (around line ~1900), change:
+**2C. Generate Handler**
 ```typescript
-// From:
-pageCount={propEstimatedPageCount || estimatedPages}
-
-// To:
-pageCount={calculateFinalPageCount(propEstimatedPageCount || estimatedPages)}
+const handleGenerate = () => {
+  if (cooldown > 0 || !aiPrompt.trim()) return;
+  
+  setIsGenerating(true);
+  
+  // Build final prompt with style suffix
+  const styleAppendix = STYLE_PRESETS[selectedStyle];
+  const fullPrompt = `${aiPrompt.trim()}, ${styleAppendix}`;
+  
+  // Construct Pollinations URL
+  const encodedPrompt = encodeURIComponent(fullPrompt);
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`;
+  
+  setGeneratedImageUrl(url);
+  setIsGenerating(false);
+  
+  // Start 5-second cooldown
+  setCooldown(5);
+  const interval = setInterval(() => {
+    setCooldown(prev => {
+      if (prev <= 1) {
+        clearInterval(interval);
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+};
 ```
 
-Import `calculateFinalPageCount` from `@/lib/kdpUtils`.
-
-### Part 4: Bottom Toolbar Chapter Display
-**File:** `src/components/PageViewer.tsx`
-
-Update lines 2467-2469:
-```typescript
-// From:
-<p className="text-xs text-muted-foreground/60 mt-1">
-  Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
-</p>
-
-// To:
-<p className="text-xs text-muted-foreground/60 mt-1">
-  Chapter {currentChapter} of {totalChapters || '?'}
-</p>
-```
-
-### Part 5: AI-Swap Badge Improvements
-**File:** `src/components/PageViewer.tsx`
-
-**5A: Move badge to top-RIGHT and improve messaging**
-Update the badge positioning (around line 606-619):
-```typescript
-{showAiSwapHint && (
-  <div
-    className="print:hidden absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 bg-background/90 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 group-hover:opacity-0 transition-opacity pointer-events-none z-20"
-    title="This image was auto-selected by AI. Hover to swap it."
-  >
-    <Sparkles className="w-3 h-3" />
-    <span>AI-selected</span>
+**2D. UI Layout**
+```tsx
+<div className="p-4 space-y-4">
+  <div className="text-center space-y-2">
+    <Sparkles className="w-8 h-8 mx-auto text-primary" />
+    <h3 className="font-semibold">AI Studio</h3>
+    <p className="text-xs text-muted-foreground">
+      Generate custom images when stock photos fail
+    </p>
   </div>
-)}
+  
+  {/* Prompt Input */}
+  <Textarea
+    value={aiPrompt}
+    onChange={(e) => setAiPrompt(e.target.value)}
+    placeholder="Describe your ideal image..."
+    className="min-h-[80px]"
+  />
+  
+  {/* Style Selector */}
+  <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+    <SelectTrigger>
+      <SelectValue placeholder="Select style..." />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="watercolor">Watercolor Sketch</SelectItem>
+      <SelectItem value="photorealistic">Photorealistic</SelectItem>
+      <SelectItem value="lineart">Line Art / Diagram</SelectItem>
+    </SelectContent>
+  </Select>
+  
+  {/* Generate Button with Cooldown */}
+  <Button 
+    onClick={handleGenerate} 
+    disabled={!aiPrompt.trim() || cooldown > 0}
+    className="w-full gap-2"
+  >
+    {cooldown > 0 ? (
+      <>Cooldown ({cooldown}s)</>
+    ) : (
+      <>
+        <Wand2 className="w-4 h-4" />
+        Generate Image
+      </>
+    )}
+  </Button>
+  
+  {/* Preview */}
+  {generatedImageUrl && (
+    <div className="border rounded-lg overflow-hidden">
+      <img 
+        src={generatedImageUrl} 
+        alt="AI Generated" 
+        className="w-full h-auto"
+        onLoad={() => setIsGenerating(false)}
+      />
+      <Button 
+        onClick={() => onSelectImage(generatedImageUrl)}
+        className="w-full rounded-t-none"
+      >
+        <Check className="w-4 h-4 mr-2" />
+        Insert into Book
+      </Button>
+    </div>
+  )}
+</div>
 ```
 
-**5B: Hide badge on hover to reveal toolbar**
-The badge gets `group-hover:opacity-0` so it fades out when the user hovers, revealing the AuthorImageToolbar which is already positioned at `top-2 right-2`.
+---
 
-**5C: Adjust AuthorImageToolbar position**
-Since the badge is now in the top-right, move the toolbar to only appear on hover (it already has `opacity-0 group-hover:opacity-100`).
+### Part 3: Update Source Type & Metadata
 
-### Part 6: Flexible Minimum Chapters (Topic Depth Assessment)
-**File:** `supabase/functions/generate-book-blocks/index.ts`
+**File: `src/components/ImageSearchGallery.tsx`**
 
-Add a heuristic to determine topic breadth:
+**3A. Extend ImageResult interface**
 ```typescript
-// Assess topic breadth for chapter count flexibility
-const assessTopicBreadth = (topic: string): 'narrow' | 'broad' => {
-  const words = topic.split(/\s+/).length;
-  const hasSpecificLocation = /resort|hotel|village|neighborhood/i.test(topic);
-  const isNiche = words <= 4 && hasSpecificLocation;
-  return isNiche ? 'narrow' : 'broad';
-};
-
-const topicBreadth = assessTopicBreadth(topic);
-const minChapters = isVisualTopic 
-  ? (topicBreadth === 'narrow' ? 8 : 12) 
-  : 10;
+interface ImageResult {
+  // ... existing fields
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse' | 'pollinations';
+}
 ```
+
+**3B. Update ImageSelectMetadata**
+```typescript
+export interface ImageSelectMetadata {
+  source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse' | 'pollinations';
+  // ... rest unchanged
+}
+```
+
+**3C. Update getLicenseForSource**
+```typescript
+case 'pollinations': return 'Public Domain (Pollinations.ai)';
+```
+
+**3D. Update getSourceDisplayName**
+```typescript
+case 'pollinations': return 'Pollinations.ai';
+```
+
+---
+
+### Part 4: Update Legal Documents
+
+**File: `src/components/KdpLegalDefense.tsx`**
+
+**4A. Update RTF Declaration (Section 2)**
+
+Add Pollinations to the image licensing list:
+```typescript
+rtf += `\\tab - \\b AI Image Generation (Pollinations.ai): \\b0 Powered by the Flux model. Generated assets are Public Domain and cleared for commercial use.\\par`;
+```
+
+**4B. Update PDF Evidence Dossier**
+
+Add new Section 7 for Pollinations:
+```typescript
+// Check page break before Pollinations section
+if (y > 9.0) {
+  doc.addPage();
+  y = 1.0;
+}
+
+// 7. AI IMAGE GENERATION (Pollinations)
+doc.setFont("times", "bold");
+doc.text("7. AI Image Generation (Pollinations.ai)", 1, y);
+y += 0.2;
+doc.setFont("times", "normal");
+doc.text("Source: Pollinations.ai (Flux Model)", 1, y);
+y += 0.2;
+doc.setFont("times", "italic");
+const pollinationsQuote = "\"Pollinations generates images using the Flux model. All generated images are released into the Public Domain with no restrictions on commercial use. No attribution is required.\"";
+const splitPollinations = doc.splitTextToSize(pollinationsQuote, 6.5);
+doc.text(splitPollinations, 1, y);
+y += (splitPollinations.length * 0.2) + 0.1;
+
+doc.setFont("times", "normal");
+doc.text("Usage: AI-generated for custom content, Public Domain.", 1, y);
+y += 0.2;
+
+doc.setTextColor(0, 0, 255);
+doc.setFontSize(9);
+doc.text("URL: https://pollinations.ai/", 1, y);
+doc.setTextColor(0, 0, 0);
+doc.setFontSize(10);
+```
+
+**4C. Update Image Manifest Source Mapping**
+
+In the manifest table source display logic:
+```typescript
+case 'pollinations': sourceDisplay = 'Pollinations AI'; break;
+```
+
+---
+
+### Part 5: Update Backend (Optional Enhancement)
+
+**File: `supabase/functions/search-book-images/index.ts`**
+
+Add a new `category` parameter to allow frontend to request specific source groups:
+
+```typescript
+const { query, orientation, limit, bookTopic, forCover, category } = await req.json();
+
+// category: 'gallery' | 'locations' | 'vectors' | undefined
+if (category === 'gallery') {
+  // Only search Unsplash, Pexels, Pixabay (photos)
+} else if (category === 'locations') {
+  // Only search Openverse, Wikimedia
+} else if (category === 'vectors') {
+  // Only search Pixabay with image_type='vector'
+}
+```
+
+**Note:** This is optional - the frontend can filter results client-side initially. Backend optimization can be done later for performance.
 
 ---
 
@@ -189,47 +350,70 @@ const minChapters = isVisualTopic
 
 | File | Changes |
 |------|---------|
-| `src/components/KdpLegalDefense.tsx` | 1) Fix Evidence Dossier spacing for Openverse visibility; 2) Fix manifest column widths to prevent overlap |
-| `src/components/BookCover.tsx` | Pass front matter-inclusive page count to KdpFinanceCalculator |
-| `src/components/PageViewer.tsx` | 1) Update chapter display format; 2) Move AI badge to top-right with improved messaging and hover behavior |
-| `supabase/functions/generate-book-blocks/index.ts` | Add topic breadth assessment for flexible minimum chapters |
+| `src/components/ImageSearchGallery.tsx` | 1) Restructure tabs from 6 vendor tabs to 4 purpose tabs; 2) Add AI Studio panel component; 3) Update source types to include 'pollinations' |
+| `src/components/KdpLegalDefense.tsx` | 1) Add Pollinations to RTF Declaration; 2) Add Section 7 to PDF Evidence Dossier; 3) Update Image Manifest source mapping |
 
 ---
 
 ## Visual Changes
 
-### Bottom Toolbar (Before vs After)
+### Before (Current)
 ```
-Before: "Chapter 1 • 1/7"
-After:  "Chapter 1 of 12"
-```
-
-### AI Badge (Before vs After)
-```
-Before: [AI · Swap] button in TOP-LEFT, always visible
-After:  [AI-selected] badge in TOP-RIGHT, fades on hover to reveal toolbar
++----------------------------------------------------------------+
+| [All] [Openverse] [Unsplash] [Pexels] [Pixabay] [Wikimedia]     |
++----------------------------------------------------------------+
 ```
 
-### Image Manifest Table (Before vs After)
+### After (Proposed)
 ```
-Before: Caption bleeds into Source column
-After:  Clean column separation with proper padding
++----------------------------------------------------------------+
+| [Gallery]  [Locations & Landmarks]  [Vectors & Icons]  [AI Studio] |
++----------------------------------------------------------------+
+```
+
+### AI Studio Tab
+```
++--------------------------------+
+|          ✨ AI Studio          |
+|  Generate custom images when   |
+|     stock photos fail          |
+|                                |
+| Prompt:                        |
+| [A sunset over Lake Como... ]  |
+|                                |
+| Style:                         |
+| [▾ Photorealistic            ] |
+|                                |
+| [   🪄 Generate Image        ] |
+|      or  Cooldown (3s)         |
+|                                |
+| +----------------------------+ |
+| |                            | |
+| |    [Generated Image]       | |
+| |                            | |
+| +----------------------------+ |
+| [    ✓ Insert into Book     ]  |
++--------------------------------+
 ```
 
 ---
 
 ## Technical Notes
 
-### Front Matter Constants (from kdpUtils.ts)
-- Title Page: 1 page
-- Copyright Page: 1 page  
-- Table of Contents: 2 pages
-- **Total Front Matter: 4 pages**
+### Pollinations.ai API
+- **URL Pattern**: `https://image.pollinations.ai/prompt/[ENCODED_PROMPT]?width=1024&height=1024&model=flux&nologo=true`
+- **No API Key Required**: Direct URL-based generation
+- **Licensing**: Public Domain - free for commercial use
+- **Rate Limiting**: 5-second client-side cooldown to prevent abuse
 
-### Page Count Calculation
-- Content pages (from blocks) + 4 front matter = Final print page count
-- Example: 99 blocks + 4 = 103 pages (shown in Prep and $$$ tabs)
+### Style Presets
+| Style | Appended Keywords |
+|-------|-------------------|
+| Watercolor Sketch | "watercolor style, white background, artistic" |
+| Photorealistic | "highly detailed, 8k, realistic" |
+| Line Art/Diagram | "black and white, vector line art, minimal" |
 
-### User Upload Detection
-- `image_source === 'upload'` indicates user-uploaded photo
-- These images show "Upload" in the manifest and skip the AI badge
+### Source Badge Colors (for ImageGrid)
+```typescript
+case 'pollinations': return 'bg-violet-600 text-white'; // New purple color for AI
+```
