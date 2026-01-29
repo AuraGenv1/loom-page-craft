@@ -1,250 +1,199 @@
 
-
-# Plan: Fix Image Gallery Filtering + AI Studio Improvements
+# Plan: Compress AI Studio Layout + Improve Error Handling + Remove Duplicate Admin Button
 
 ## Summary
 
-This plan addresses 3 categories of issues:
-1. **Filter Bug Fixes**: Vectors and Locations tabs showing 0 results due to incorrect frontend filtering
-2. **AI Studio Layout**: Convert from vertical to horizontal side-by-side layout
-3. **AI Studio Features**: Add freshness guarantee, Magic Enhance toggle, and robust error handling
+This plan combines three improvements:
+1. **Compress AI Studio layout** to fit on one page without scrolling
+2. **Fix AI Studio error handling** with friendlier messaging and smarter retry logic
+3. **Remove redundant "Export KDP Package" button** for admins (since Cover Studio does the same thing)
 
 ---
 
-## Issue Analysis
+## Part 1: Compress AI Studio Layout to Fit on One Page
 
-### Issue 1: Vectors Tab Always Shows 0
+### Current Issues
+- Header section takes ~60px (icon + title + subtitle)
+- Vertical spacing (`space-y-4`) adds 16px between each element
+- Textarea has `min-h-[70px]` which is taller than needed
+- Padding (`p-4`) adds 16px on all sides
+- Total exceeds the 400px container, forcing scroll
 
-**Root Cause:** The frontend filter uses `img.imageUrl?.includes('vector')`:
-```typescript
-const vectorImages = images.filter(img => 
-  img.source === 'pixabay' && img.imageUrl?.includes('vector')
-);
+### Changes to `AiStudioPanel` in `ImageSearchGallery.tsx`
+
+| Change | Before | After | Saved |
+|--------|--------|-------|-------|
+| Remove header section | Icon + title + subtitle (~60px) | Remove entirely | 60px |
+| Reduce container padding | `p-4` (16px) | `p-3` (12px) | 8px |
+| Reduce gap between columns | `gap-6` (24px) | `gap-4` (16px) | 8px |
+| Reduce vertical spacing | `space-y-4` (16px) | `space-y-2` (8px) | 40px |
+| Reduce textarea height | `min-h-[70px]` | `min-h-[56px]` | 14px |
+| Move label to placeholder | "Describe your image" label | Inline as placeholder | 20px |
+| Inline Style + Generate | 2 separate rows | Same row | 30px |
+| Compact Enhance + License | 2 separate rows | Single row | 26px |
+| **Total Saved** | | | **~188px** |
+
+### After Layout
 ```
-
-This is wrong because Pixabay vector URLs don't literally contain the word "vector" - the URL looks like `https://cdn.pixabay.com/photo/...` for all image types.
-
-**Solution:** The backend already distinguishes vectors via the `image_type` parameter and marks them with `isPrintReady: true` for vectors. However, we need a better way to identify vectors. Options:
-- **Option A:** Add a `imageType` field to the ImageResult from the backend
-- **Option B:** Change the filtering to look for Pixabay images with `license === 'Pixabay License'` and check if they came from a vector search
-
-**Best fix:** Modify the backend to include an `imageType` field ('photo' | 'vector' | 'illustration') in the response, then filter by that on the frontend.
-
-### Issue 2: Locations Tab Shows 0 for "Lake Como"
-
-**Root Cause:** The backend IS searching Openverse and Wikimedia (as shown in logs). However:
-1. Openverse requires OAuth2 credentials (`OPENVERSE_CLIENT_ID`/`OPENVERSE_CLIENT_SECRET`) - if missing, returns 0
-2. Wikimedia has a 1200px minimum width filter that may exclude many results
-3. "Lake Como" with 2 capitalized words triggers `isSpecificLocation = true` so Openverse is prioritized
-
-**Solution:** 
-1. Add a "search all sources always" approach for the Gallery page (vs. the smart routing which is meant for auto-selection)
-2. Alternatively, relax the filter for the Locations tab to also include high-quality Unsplash/Pexels location photos
-
-For now, the best UX fix is to **always search ALL sources** in the manual gallery, then let the frontend filter by purpose. This gives users maximum choice.
-
-### Issue 3: AI Studio Layout Needs Horizontal Layout
-
-**Current:** Vertical stack in 400px ScrollArea - forces scrolling
-**Desired:** Side-by-side layout with controls on left, preview on right
++------------------------------------------------------------------+
+| LEFT SIDE (Controls)             |  RIGHT SIDE (Preview)         |
++----------------------------------+-------------------------------+
+| [Describe your image...        ] |  +---------------------------+ |
+| [______________________________] |  |                           | |
+|                                  |  |    [Generated Image]      | |
+| [▾ Photorealistic] [🪄 Generate] |  |                           | |
+|                                  |  +---------------------------+ |
+| [🔘 Enhance]   Pollinations · PD |  [   ✓ Insert into Book    ]  |
++----------------------------------+-------------------------------+
+```
 
 ---
 
-## Implementation Plan
+## Part 2: Improve AI Studio Error Handling
 
-### Part 1: Fix Vectors Tab - Add imageType Field
+### Current Problem
+- "Server busy. Please click Retry." is too technical
+- Retry often fails because:
+  - The timeout triggers even while the image is still loading (slow network)
+  - No automatic retry mechanism - users must manually click
+  - The error check uses stale state (`imageLoaded` in timeout closure)
 
-**Backend: `supabase/functions/search-book-images/index.ts`**
+### Solution
 
-Add `imageType` field to ImageResult interface and populate it:
+**2A. Friendlier Error Message**
+
+Replace technical message with reassuring, user-friendly copy:
+
+Before:
+```
+Server busy. Please click Retry.
+```
+
+After:
+```
+Almost there! The image is taking a bit longer than usual.
+Try again or tweak your prompt.
+```
+
+**2B. Fix Timeout State Management**
+
+The current timeout closure captures `imageLoaded` at the time the timeout is set, which is always `false`. Use a ref to track the loaded state:
 
 ```typescript
-interface ImageResult {
-  // ... existing fields
-  imageType?: 'photo' | 'vector' | 'illustration'; // NEW FIELD
-}
-```
-
-In `searchPixabayMultiple()`, set the imageType based on the `imageType` parameter and actual API response:
-
-```typescript
-results.push({
-  // ... existing fields
-  imageType: isVector ? 'vector' : (imageType === 'illustration' ? 'illustration' : 'photo'),
-});
-```
-
-**Frontend: `src/components/ImageSearchGallery.tsx`**
-
-Update the filter logic:
-
-```typescript
-// Vectors & Icons: Pixabay vectors
-const vectorImages = images.filter(img => 
-  (img as any).imageType === 'vector' || 
-  (img.source === 'pixabay' && img.license?.toLowerCase().includes('vector'))
-);
-```
-
-### Part 2: Fix Locations Tab - Search All Sources
-
-**Backend:** Modify the search logic to ALWAYS include Openverse + Wikimedia in the search, regardless of search mode. This ensures the Locations tab always has potential results.
-
-Currently the backend routes based on `searchMode` (abstract/realistic/mixed) and `isSpecificLocation`. For the manual gallery, we should always search all sources.
-
-**Quick Fix (Frontend Only):** For now, expand what counts as "Locations":
-- Include any Unsplash/Pexels images with location-related keywords in attribution
-- This is a fallback when Openverse/Wikimedia return nothing
-
-**Proper Fix (Backend):** Add a `searchAllSources: true` parameter when called from the manual gallery to ensure all 5 sources are always searched.
-
-### Part 3: AI Studio Horizontal Layout
-
-Convert the AiStudioPanel from vertical ScrollArea to a horizontal flexbox layout:
-
-```tsx
-<div className="flex gap-6 p-4 h-[400px]">
-  {/* Left Side: Controls */}
-  <div className="w-1/2 space-y-4 overflow-y-auto">
-    {/* Header */}
-    <div className="text-center space-y-1">
-      <Sparkles className="w-6 h-6 mx-auto text-primary" />
-      <h3 className="font-semibold text-sm">AI Studio</h3>
-      <p className="text-xs text-muted-foreground">
-        Generate custom images when stock photos fail
-      </p>
-    </div>
-    
-    {/* Prompt Input */}
-    {/* Style Selector */}
-    {/* Enhance Toggle */}
-    {/* Generate Button */}
-    {/* Licensing Note */}
-  </div>
-  
-  {/* Right Side: Preview */}
-  <div className="w-1/2 flex flex-col">
-    {generatedImageUrl ? (
-      /* Generated image preview with Insert button */
-    ) : (
-      /* Empty state placeholder */
-    )}
-  </div>
-</div>
-```
-
-### Part 4: Freshness Guarantee (No Duplicates)
-
-Add seed + timestamp to every Pollinations request:
-
-```typescript
-const handleGenerate = useCallback(() => {
-  // Generate unique seed for freshness
-  const seed = Math.floor(Math.random() * 1000000);
-  const timestamp = Date.now();
-  
-  const fullPrompt = enhanceMode 
-    ? `${aiPrompt.trim()}, ${STYLE_PRESETS[selectedStyle]}, masterfully composed, professional lighting, vivid colors`
-    : `${aiPrompt.trim()}, ${STYLE_PRESETS[selectedStyle]}`;
-  
-  const encodedPrompt = encodeURIComponent(fullPrompt);
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}&_t=${timestamp}`;
-  
-  setGeneratedImageUrl(url);
-  // ...
-}, [aiPrompt, selectedStyle, enhanceMode]);
-```
-
-### Part 5: Magic Enhance Toggle
-
-Add a toggle switch next to the Generate button:
-
-```typescript
-const [enhanceMode, setEnhanceMode] = useState(false);
-```
-
-```tsx
-{/* Enhance Toggle */}
-<div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-  <div className="flex items-center gap-2">
-    <Sparkles className="w-4 h-4 text-primary" />
-    <Label htmlFor="enhance-toggle" className="text-sm font-medium cursor-pointer">
-      Enhance Prompt
-    </Label>
-  </div>
-  <Switch 
-    id="enhance-toggle"
-    checked={enhanceMode}
-    onCheckedChange={setEnhanceMode}
-  />
-</div>
-```
-
-When enabled, automatically append enhancement keywords:
-```typescript
-const enhancementSuffix = "masterfully composed, professional lighting, vivid colors, sharp focus";
-```
-
-### Part 6: Robust Error Handling (15-Second Timeout)
-
-Add timeout logic with retry option:
-
-```typescript
-const [loadError, setLoadError] = useState(false);
-const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+const imageLoadedRef = useRef(false);
 
 const handleGenerate = useCallback(() => {
-  setIsGenerating(true);
-  setImageLoaded(false);
-  setLoadError(false);
+  // Reset the ref
+  imageLoadedRef.current = false;
   
-  // Start 15-second timeout
-  if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  // Set timeout using ref for current state
   timeoutRef.current = setTimeout(() => {
-    if (!imageLoaded) {
+    if (!imageLoadedRef.current) {
       setIsGenerating(false);
       setLoadError(true);
     }
   }, 15000);
   
-  // ... generate URL
-}, []);
+  // ... rest of logic
+}, [...]);
 
 const handleImageLoad = useCallback(() => {
+  imageLoadedRef.current = true; // Update the ref
   if (timeoutRef.current) clearTimeout(timeoutRef.current);
   setIsGenerating(false);
   setImageLoaded(true);
   setLoadError(false);
 }, []);
+```
 
-// Cleanup on unmount
-useEffect(() => {
-  return () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  };
+**2C. Add Auto-Retry (1 attempt)**
+
+Before showing the error, automatically retry once with a new seed. This handles transient failures gracefully:
+
+```typescript
+const [retryCount, setRetryCount] = useState(0);
+
+// In timeout handler:
+timeoutRef.current = setTimeout(() => {
+  if (!imageLoadedRef.current) {
+    if (retryCount < 1) {
+      // Auto-retry once
+      setRetryCount(prev => prev + 1);
+      generateNewImage(); // Regenerate with new seed
+    } else {
+      // Show friendly error after 1 retry
+      setIsGenerating(false);
+      setLoadError(true);
+    }
+  }
+}, 15000);
+
+// Reset retry count on successful load
+const handleImageLoad = useCallback(() => {
+  setRetryCount(0);
+  // ... rest
 }, []);
 ```
 
-Display retry option when timeout occurs:
+**2D. Extend Timeout to 20 Seconds**
+
+Pollinations.ai can be slow under load. Increase timeout from 15s to 20s to reduce false positives.
+
+---
+
+## Part 3: Remove "Export KDP Package" Button for Admin Mode
+
+### Current Behavior
+- When `isAdmin=true`, the `ProgressDownloadButton` shows "Export KDP Package"
+- Clicking it opens the Cover Studio dialog and switches to the "manuscript" tab
+- However, admins already have a "Cover Studio" button on the book cover itself
+- This creates duplicate functionality and UI clutter
+
+### Solution
+
+**Option A: Hide button entirely for admin mode**
+
+In `Index.tsx`, don't render `ProgressDownloadButton` when `isAdmin` is true:
+
 ```tsx
-{loadError && (
-  <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-    <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
-    <p className="text-sm text-muted-foreground mb-3">
-      Server busy. Please click Retry.
-    </p>
-    <Button 
-      variant="outline" 
-      onClick={handleGenerate}
-      disabled={cooldown > 0}
-      className="gap-2"
-    >
-      <RefreshCw className="w-4 h-4" />
-      Retry
-    </Button>
-  </div>
+{isPaid && !isAdmin && (
+  <ProgressDownloadButton ... />
 )}
 ```
+
+However, admins may want quick access to the PDF download. Let's keep the button but change its behavior.
+
+**Option B (Recommended): Show regular download button for admins**
+
+Change the admin button to behave like a normal user (direct PDF download) instead of opening Cover Studio. This removes the redundancy while keeping useful functionality.
+
+In `ProgressDownloadButton.tsx`:
+
+Before:
+```typescript
+const getLabel = () => {
+  if (isAdmin) return "Export KDP Package";
+  ...
+};
+
+return (
+  <button onClick={isAdmin ? handleAdminClick : handleUserDownload} ...>
+```
+
+After:
+```typescript
+const getLabel = () => {
+  // Remove isAdmin special case - admins see normal download label
+  if (isCompiling) return "Generating PDF...";
+  ...
+};
+
+return (
+  // Remove isAdmin special click handler - always download
+  <button onClick={handleUserDownload} ...>
+```
+
+This simplifies the code and removes the duplicate path to Cover Studio.
 
 ---
 
@@ -252,79 +201,86 @@ Display retry option when timeout occurs:
 
 | File | Changes |
 |------|---------|
-| `src/components/ImageSearchGallery.tsx` | 1) Fix vector/location filtering logic; 2) Redesign AI Studio to horizontal layout; 3) Add freshness seed+timestamp; 4) Add Enhance toggle; 5) Add 15-second timeout with retry |
-| `supabase/functions/search-book-images/index.ts` | Add `imageType` field to ImageResult for proper vector detection |
+| `src/components/ImageSearchGallery.tsx` | 1) Compress AI Studio layout; 2) Fix timeout state management with ref; 3) Add auto-retry logic; 4) Improve error messaging; 5) Extend timeout to 20s |
+| `src/components/ProgressDownloadButton.tsx` | Remove admin-specific "Export KDP Package" logic - make button behave normally for all users |
 
 ---
 
-## Visual Changes
+## Technical Details
 
-### AI Studio Layout (Before vs After)
+### AI Studio Error State UI Update
 
-**Before (Vertical - Requires Scrolling):**
+```tsx
+{loadError ? (
+  <div className="flex flex-col items-center justify-center h-full p-4 text-center border rounded-lg bg-muted/30">
+    <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+    <p className="text-sm font-medium mb-1">
+      Almost there!
+    </p>
+    <p className="text-xs text-muted-foreground mb-3">
+      The image is taking a bit longer than usual.<br />
+      Try again or tweak your prompt.
+    </p>
+    <Button 
+      variant="outline" 
+      onClick={handleGenerate}
+      disabled={cooldown > 0}
+      className="gap-2"
+      size="sm"
+    >
+      <RefreshCw className="w-4 h-4" />
+      Try Again
+    </Button>
+  </div>
+) : ...}
 ```
-+----------------------------------+
-|         ✨ AI Studio             |
-|   Generate custom images...      |
-|                                  |
-| Describe your image:             |
-| [________________________]       |
-|                                  |
-| Style:                           |
-| [▾ Photorealistic      ]         |
-|                                  |
-| [   🪄 Generate Image   ]        |
-|                                  |
-| +------------------------------+ |
-| |                              | |
-| |    [Generated Image]         | |
-| |    (BELOW THE FOLD)          | |
-| +------------------------------+ |
-| [    ✓ Insert into Book       ]  |
-+----------------------------------+
+
+### ProgressDownloadButton Simplified Logic
+
+```typescript
+// BEFORE (Lines 108-123):
+const handleAdminClick = () => {
+  const studioTrigger = document.getElementById('kdp-studio-trigger');
+  // ... opens Cover Studio
+};
+
+// AFTER: Remove handleAdminClick entirely
+
+// BEFORE (Line 170):
+onClick={isAdmin ? handleAdminClick : handleUserDownload}
+
+// AFTER:
+onClick={handleUserDownload}
+
+// BEFORE (Lines 154-155):
+if (isAdmin) return "Export KDP Package";
+
+// AFTER: Remove this line
 ```
 
-**After (Horizontal - No Scrolling):**
+---
+
+## Visual Summary
+
+### AI Studio (After All Changes)
 ```
 +------------------------------------------------------------------+
-| LEFT SIDE (Controls)        |  RIGHT SIDE (Preview)              |
-+-----------------------------+------------------------------------+
-| ✨ AI Studio                |                                    |
-| Generate when stock fails   |  +------------------------------+  |
-|                             |  |                              |  |
-| Describe your image:        |  |    [Generated Image]         |  |
-| [____________________]      |  |                              |  |
-|                             |  +------------------------------+  |
-| Style:                      |  [    ✓ Insert into Book       ]   |
-| [▾ Photorealistic     ]     |                                    |
-|                             |                                    |
-| [⚡ Enhance Prompt]    [ON] |                                    |
-|                             |                                    |
-| [   🪄 Generate Image   ]   |                                    |
-|                             |                                    |
-| Public Domain - free use    |                                    |
-+-----------------------------+------------------------------------+
+| [Describe your image...        ] |  +---------------------------+ |
+| [______________________________] |  |                           | |
+|                                  |  |    Almost there!          | |
+| [▾ Photorealistic] [🪄 Generate] |  |    The image is taking    | |
+|                                  |  |    a bit longer...        | |
+| [🔘 Enhance]   Pollinations · PD |  |   [   Try Again   ]       | |
++----------------------------------+-------------------------------+
 ```
 
----
-
-## Technical Notes
-
-### Pollinations URL Parameters
-- `seed={random}` - Forces unique generation each time
-- `_t={timestamp}` - Cache-busting parameter
-- `nologo=true` - Removes watermark
-- `model=flux` - Uses Flux model (best quality)
-
-### Client-Side Image Loading
-The image is loaded directly via `<img src={pollinationsUrl}>` which means:
-- Each user's browser makes the request from their own IP
-- No backend routing = no IP bans on our server
-- Already compliant with the scalability requirement
-
-### Enhance Mode Keywords
-When "Enhance Prompt" is enabled, append:
+### Admin View (After Changes)
 ```
-masterfully composed, professional lighting, vivid colors, sharp focus, award-winning photography
+BEFORE:                         AFTER:
++-------------------------+     +-------------------------+
+| 🎁 Export KDP Package   |     | 📥 Download Full Guide  |
++-------------------------+     +-------------------------+
+     (Opens Cover Studio)            (Downloads PDF directly)
 ```
 
+Admins use the Cover Studio button on the book cover for KDP exports; the bottom button now downloads PDFs like regular users.
