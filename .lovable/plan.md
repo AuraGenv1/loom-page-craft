@@ -1,131 +1,90 @@
 
-# Plan: Openverse API Registration Tool for Admin Dashboard
+# Plan: Complete Openverse Integration in Auto-Fetch Function
 
-## Overview
+## Summary
 
-Build an admin tool that registers your application with the Openverse API and displays the generated credentials. This eliminates the need for you to run curl commands manually.
+The Openverse integration for the **Image Search Gallery** is complete and working. However, the **automatic image fetching** function (`fetch-book-images`) that runs during book generation does NOT include Openverse. This means images auto-populated into chapters won't benefit from Openverse's superior coverage of specific locations.
 
 ---
 
-## Architecture
+## Gap Analysis
 
-```text
-Admin Dashboard                     Edge Function                         Openverse API
-     │                                   │                                      │
-     ├── [Register & Get Keys] ─────────►│                                      │
-     │   {name, email, description}      │                                      │
-     │                                   ├── POST /v1/auth_tokens/register/ ───►│
-     │                                   │   {name, email, description}         │
-     │                                   │                                      │
-     │                                   │◄── {client_id, client_secret} ───────┤
-     │◄── Display in Modal ──────────────┤                                      │
-     │   (copy buttons + warning)        │                                      │
-```
+| Feature | Search Gallery | Auto-Fetch |
+|---------|---------------|------------|
+| Openverse OAuth2 Token | Implemented | Missing |
+| Openverse Search | Implemented | Missing |
+| Smart Router (Priority 1 for locations) | Implemented | Missing |
+| Attribution Extraction | Implemented | N/A |
+| Source Type in Response | Includes `openverse` | Only 4 sources |
 
 ---
 
 ## Implementation
 
-### 1. Create Edge Function: `register-openverse`
+### 1. Add Openverse OAuth2 Token Handler to `fetch-book-images`
 
-**File:** `supabase/functions/register-openverse/index.ts`
+Copy the token management logic from `search-book-images`:
+- In-memory token cache
+- Token refresh with 60-second buffer
+- Secure client credentials flow
 
+### 2. Add Openverse Search Function to `fetch-book-images`
+
+Add a `searchOpenverse()` function that:
+- Uses authenticated API with access token
+- Filters for `license_type=commercial,modification`
+- Enforces minimum 1600px width for KDP quality
+- Maps attribution correctly
+
+### 3. Update ImageResult Type
+
+Add `openverse` to the source union:
 ```typescript
-// Registers with Openverse API and returns credentials
-// POST body: { name: string, email: string, description: string }
-// Response: { client_id: string, client_secret: string, name: string }
+source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse' | 'none';
 ```
 
-Key logic:
-- Validates input (name, email, description required)
-- Sends POST to `https://api.openverse.engineering/v1/auth_tokens/register/`
-- Returns the `client_id` and `client_secret` from Openverse
-- Handles errors gracefully (rate limits, validation errors, etc.)
+### 4. Update Smart Router in `fetch-book-images`
 
-### 2. Update `supabase/config.toml`
-
-Add the new function configuration:
-```toml
-[functions.register-openverse]
-verify_jwt = false
-```
-
-### 3. Update Admin Dashboard UI
-
-**File:** `src/pages/Admin.tsx`
-
-Add a new "API Setup" section with:
-
-| Element | Details |
-|---------|---------|
-| Card Header | "Openverse API Setup" with key icon |
-| App Name Input | Default: "LoomPage Book Generator" |
-| Email Input | Default: Current user's email (`user?.email`) |
-| Description Input | Default: "Book generation tool for education" |
-| Action Button | "Register & Get Keys" (loading state while processing) |
-
-### 4. Credentials Modal
-
-After successful registration, display a modal with:
+Modify the waterfall priority:
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│  ✓ Openverse Credentials Generated                      │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ⚠️ IMPORTANT: Copy these now!                          │
-│  Openverse will never show them again.                  │
-│                                                         │
-│  Client ID                                              │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ abc123-def456-ghi789...             [Copy]      │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  Client Secret                                          │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ xyz987-uvw654-rst321...             [Copy]      │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  Next: Add these as secrets in your project settings    │
-│                                                         │
-│                                    [Done]               │
-└─────────────────────────────────────────────────────────┘
+For LANDMARKS (hotels, museums, etc.):
+1. Wikimedia (strict 1800px+)
+2. Openverse (1600px+, commercial license)   <- NEW
+3. Unsplash
+4. Pixabay
+5. Pexels
+
+For GENERIC queries:
+1. Unsplash
+2. Pixabay
+3. Pexels
+4. Openverse                                  <- NEW
+5. Wikimedia
 ```
 
-Features:
-- Large, monospace font for credentials
-- Individual "Copy" buttons for each field
-- Toast notifications on copy success
-- Warning styling (amber/yellow) for the "copy now" message
+### 5. Update License Helper
+
+Add Openverse to the `getLicenseForSource()` function:
+```typescript
+case 'openverse': return 'CC Commercial License';
+```
 
 ---
 
-## About Auto-Save to Secrets
+## Files to Modify
 
-Unfortunately, programmatic saving to project secrets is not possible from within the application code. The secrets system requires manual input through the Lovable interface.
-
-**Alternative workflow:**
-1. After copying credentials, I can prompt you to add them
-2. I'll use my tools to request the secret addition
-3. You'll just paste the values in the modal that appears
-
-This keeps the flow simple while maintaining security.
+| File | Changes |
+|------|---------|
+| `supabase/functions/fetch-book-images/index.ts` | Add Openverse OAuth2, search function, update waterfall router, update ImageResult type |
 
 ---
 
-## Files to Create/Modify
+## No Changes Needed
 
-| File | Action |
-|------|--------|
-| `supabase/functions/register-openverse/index.ts` | Create - Edge function for Openverse registration |
-| `supabase/config.toml` | Modify - Add function config |
-| `src/pages/Admin.tsx` | Modify - Add API Setup section + Credentials modal |
-
----
-
-## Security Notes
-
-- Admin-only access (existing admin check protects the page)
-- No secrets stored in code
-- Credentials only displayed once in the browser (never persisted)
-- Edge function proxies the request to avoid CORS issues
+These components are already complete:
+- `search-book-images/index.ts` - Full Openverse support
+- `ImageSearchGallery.tsx` - Openverse tab and source handling
+- `KdpLegalDefense.tsx` - Openverse in legal documents
+- `archive-image/index.ts` - Openverse source type
+- `bookImages.ts` - Openverse in ImageMetadata type
