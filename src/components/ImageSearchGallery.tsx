@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ImageCropper } from '@/components/ImageCropper';
@@ -16,7 +17,7 @@ interface ImageResult {
   imageUrl: string;
   thumbnailUrl: string;
   attribution?: string;
-  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse';
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse' | 'pollinations';
   width?: number;
   height?: number;
   isPrintReady?: boolean;
@@ -25,7 +26,7 @@ interface ImageResult {
 
 // Extended metadata passed to handlers for provenance tracking
 export interface ImageSelectMetadata {
-  source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse';
+  source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse' | 'pollinations';
   originalUrl: string;
   license: string;
   attribution: string;
@@ -47,6 +48,170 @@ interface ImageSearchGalleryProps {
   /** Callback when guest tries to select in window shopper mode */
   onWindowShopperBlock?: () => void;
 }
+
+// Style presets for AI Studio
+const STYLE_PRESETS: Record<string, string> = {
+  'watercolor': 'watercolor style, white background, artistic',
+  'photorealistic': 'highly detailed, 8k, realistic',
+  'lineart': 'black and white, vector line art, minimal',
+};
+
+// AI Studio Panel Component
+interface AiStudioPanelProps {
+  initialPrompt: string;
+  onSelectImage: (imageUrl: string) => void;
+}
+
+const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectImage }) => {
+  const [aiPrompt, setAiPrompt] = useState(initialPrompt);
+  const [selectedStyle, setSelectedStyle] = useState('photorealistic');
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Update prompt when initialPrompt changes
+  useEffect(() => {
+    setAiPrompt(initialPrompt);
+  }, [initialPrompt]);
+
+  const handleGenerate = useCallback(() => {
+    if (cooldown > 0 || !aiPrompt.trim()) return;
+
+    setIsGenerating(true);
+    setImageLoaded(false);
+
+    // Build final prompt with style suffix
+    const styleAppendix = STYLE_PRESETS[selectedStyle] || '';
+    const fullPrompt = `${aiPrompt.trim()}, ${styleAppendix}`;
+
+    // Construct Pollinations URL
+    const encodedPrompt = encodeURIComponent(fullPrompt);
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`;
+
+    setGeneratedImageUrl(url);
+
+    // Start 5-second cooldown
+    setCooldown(5);
+    const interval = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [aiPrompt, selectedStyle, cooldown]);
+
+  const handleImageLoad = useCallback(() => {
+    setIsGenerating(false);
+    setImageLoaded(true);
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setIsGenerating(false);
+    setImageLoaded(false);
+    toast.error('Failed to generate image. Try a different prompt.');
+  }, []);
+
+  return (
+    <ScrollArea className="h-[400px]">
+      <div className="p-4 space-y-4">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <Sparkles className="w-8 h-8 mx-auto text-primary" />
+          <h3 className="font-semibold">AI Studio</h3>
+          <p className="text-xs text-muted-foreground">
+            Generate custom images when stock photos fail
+          </p>
+        </div>
+
+        {/* Prompt Input */}
+        <div className="space-y-2">
+          <Label htmlFor="ai-prompt" className="text-sm font-medium">Describe your image</Label>
+          <Textarea
+            id="ai-prompt"
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            placeholder="Describe your ideal image... (e.g., sunset over Lake Como with mountains)"
+            className="min-h-[80px] resize-none"
+          />
+        </div>
+
+        {/* Style Selector */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Style</Label>
+          <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select style..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="watercolor">Watercolor Sketch</SelectItem>
+              <SelectItem value="photorealistic">Photorealistic</SelectItem>
+              <SelectItem value="lineart">Line Art / Diagram</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Generate Button with Cooldown */}
+        <Button
+          onClick={handleGenerate}
+          disabled={!aiPrompt.trim() || cooldown > 0 || isGenerating}
+          className="w-full gap-2"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Generating...
+            </>
+          ) : cooldown > 0 ? (
+            <>Cooldown ({cooldown}s)</>
+          ) : (
+            <>
+              <Wand2 className="w-4 h-4" />
+              Generate Image
+            </>
+          )}
+        </Button>
+
+        {/* Preview */}
+        {generatedImageUrl && (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="relative bg-muted">
+              {!imageLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <img
+                src={generatedImageUrl}
+                alt="AI Generated"
+                className={`w-full h-auto transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+            </div>
+            {imageLoaded && (
+              <Button
+                onClick={() => onSelectImage(generatedImageUrl)}
+                className="w-full rounded-t-none gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Insert into Book
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Licensing Note */}
+        <p className="text-xs text-muted-foreground text-center">
+          Generated by Pollinations.ai (Flux Model). Public Domain - free for commercial use.
+        </p>
+      </div>
+    </ScrollArea>
+  );
+};
 
 export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   open,
@@ -115,28 +280,30 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     } finally {
       setIsSearching(false);
     }
-  }, [query, orientation, forCover]);
+  }, [query, orientation, forCover, bookTopic]);
 
   // Helper to get license string for a source
-  const getLicenseForSource = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse'): string => {
+  const getLicenseForSource = (source: ImageResult['source']): string => {
     switch (source) {
       case 'unsplash': return 'Unsplash License';
       case 'pexels': return 'Pexels License';
       case 'pixabay': return 'Pixabay License';
       case 'wikimedia': return 'CC0 Public Domain';
       case 'openverse': return 'CC Commercial License';
+      case 'pollinations': return 'Public Domain (Pollinations.ai)';
       default: return 'Unknown License';
     }
   };
 
   // Helper to get display name for a source
-  const getSourceDisplayName = (source: 'unsplash' | 'pexels' | 'wikimedia' | 'pixabay' | 'openverse'): string => {
+  const getSourceDisplayName = (source: ImageResult['source']): string => {
     switch (source) {
       case 'unsplash': return 'Unsplash';
       case 'pexels': return 'Pexels';
       case 'pixabay': return 'Pixabay';
       case 'wikimedia': return 'Wikimedia Commons';
       case 'openverse': return 'Openverse';
+      case 'pollinations': return 'Pollinations.ai';
       default: return source;
     }
   };
@@ -184,14 +351,39 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
     }
   }, [selectedImage, onSelectBlob, onSelect, onOpenChange]);
 
-  // handleKeyDown moved inline to avoid any issues with event handling
+  // Handle AI Studio image selection
+  const handleAiImageSelect = useCallback((imageUrl: string) => {
+    const aiImage: ImageResult = {
+      id: `pollinations-${Date.now()}`,
+      imageUrl,
+      thumbnailUrl: imageUrl,
+      attribution: 'Generated by Pollinations.ai (Flux Model)',
+      source: 'pollinations',
+      width: 1024,
+      height: 1024,
+      isPrintReady: true,
+      license: 'Public Domain',
+    };
+    setSelectedImage(aiImage);
+    setHasConsented(false); // Require consent for AI images too
+  }, []);
 
-  // Group images by source
-  const unsplashImages = images.filter(img => img.source === 'unsplash');
-  const pexelsImages = images.filter(img => img.source === 'pexels');
-  const pixabayImages = images.filter(img => img.source === 'pixabay');
-  const wikimediaImages = images.filter(img => img.source === 'wikimedia');
-  const openverseImages = images.filter(img => img.source === 'openverse');
+  // Group images by PURPOSE (not vendor)
+  // Gallery: High-quality stock photos (Unsplash, Pexels, Pixabay photos)
+  const galleryImages = images.filter(img => 
+    img.source === 'unsplash' || img.source === 'pexels' || 
+    (img.source === 'pixabay' && !img.imageUrl?.includes('vector'))
+  );
+
+  // Locations & Landmarks: Specific places, editorial content (Openverse, Wikimedia)
+  const locationsImages = images.filter(img => 
+    img.source === 'openverse' || img.source === 'wikimedia'
+  );
+
+  // Vectors & Icons: Diagrams, symbols (Pixabay vectors)
+  const vectorImages = images.filter(img => 
+    img.source === 'pixabay' && img.imageUrl?.includes('vector')
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -202,7 +394,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
             Search Images
           </DialogTitle>
           <DialogDescription>
-            Search Unsplash, Pexels, Pixabay, and Wikimedia for the perfect image. Click to select, then confirm.
+            Browse stock photos, location images, vectors, or generate custom AI images.
           </DialogDescription>
         </DialogHeader>
 
@@ -237,93 +429,141 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
           </Button>
         </div>
 
-        {/* Results */}
+        {/* Results with Purpose-Based Tabs */}
         <div className="flex-1 min-h-0">
-          {isSearching ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">Searching...</p>
-            </div>
-          ) : !hasSearched ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                Enter a search term and click Search to find images
-              </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Tip: Be specific! "London skyline sunset" works better than "city"
-              </p>
-            </div>
-          ) : images.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No images found for "{query}"
-              </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Try different keywords or a broader search term
-              </p>
-            </div>
-          ) : (
-            <Tabs defaultValue="all" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-6 mb-2">
-                <TabsTrigger value="all">All ({images.length})</TabsTrigger>
-                <TabsTrigger value="openverse">Openverse ({openverseImages.length})</TabsTrigger>
-                <TabsTrigger value="unsplash">Unsplash ({unsplashImages.length})</TabsTrigger>
-                <TabsTrigger value="pexels">Pexels ({pexelsImages.length})</TabsTrigger>
-                <TabsTrigger value="pixabay">Pixabay ({pixabayImages.length})</TabsTrigger>
-                <TabsTrigger value="wikimedia">Wikimedia ({wikimediaImages.length})</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="all" className="flex-1 min-h-0 mt-0">
-                <ImageGrid 
-                  images={images} 
-                  selectedImage={selectedImage}
-                  onSelectImage={setSelectedImage}
-                />
-              </TabsContent>
-              
-              <TabsContent value="openverse" className="flex-1 min-h-0 mt-0">
-                <ImageGrid 
-                  images={openverseImages} 
-                  selectedImage={selectedImage}
-                  onSelectImage={setSelectedImage}
-                />
-              </TabsContent>
-              
-              <TabsContent value="unsplash" className="flex-1 min-h-0 mt-0">
-                <ImageGrid 
-                  images={unsplashImages} 
-                  selectedImage={selectedImage}
-                  onSelectImage={setSelectedImage}
-                />
-              </TabsContent>
+          <Tabs defaultValue="gallery" className="h-full flex flex-col">
+            <TabsList className="grid w-full grid-cols-4 mb-2">
+              <TabsTrigger value="gallery" className="text-xs sm:text-sm">
+                Gallery {hasSearched && `(${galleryImages.length})`}
+              </TabsTrigger>
+              <TabsTrigger value="locations" className="text-xs sm:text-sm">
+                Locations {hasSearched && `(${locationsImages.length})`}
+              </TabsTrigger>
+              <TabsTrigger value="vectors" className="text-xs sm:text-sm">
+                Vectors {hasSearched && `(${vectorImages.length})`}
+              </TabsTrigger>
+              <TabsTrigger value="ai-studio" className="text-xs sm:text-sm gap-1">
+                <Sparkles className="w-3 h-3" />
+                AI Studio
+              </TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="pexels" className="flex-1 min-h-0 mt-0">
+            {/* Gallery Tab - Stock Photos */}
+            <TabsContent value="gallery" className="flex-1 min-h-0 mt-0">
+              {isSearching ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Searching Unsplash, Pexels, Pixabay...</p>
+                </div>
+              ) : !hasSearched ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    Enter a search term and click Search to find images
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Gallery shows high-quality stock photos for general vibes
+                  </p>
+                </div>
+              ) : galleryImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No stock photos found for "{query}"
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Try the AI Studio tab to generate a custom image
+                  </p>
+                </div>
+              ) : (
                 <ImageGrid 
-                  images={pexelsImages} 
+                  images={galleryImages} 
                   selectedImage={selectedImage}
                   onSelectImage={setSelectedImage}
                 />
-              </TabsContent>
+              )}
+            </TabsContent>
 
-              <TabsContent value="pixabay" className="flex-1 min-h-0 mt-0">
+            {/* Locations Tab - Openverse + Wikimedia */}
+            <TabsContent value="locations" className="flex-1 min-h-0 mt-0">
+              {isSearching ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Searching Openverse, Wikimedia...</p>
+                </div>
+              ) : !hasSearched ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    Enter a search term and click Search to find images
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Locations shows specific hotels, towns, and editorial content
+                  </p>
+                </div>
+              ) : locationsImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No location images found for "{query}"
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Try searching for specific place names or landmarks
+                  </p>
+                </div>
+              ) : (
                 <ImageGrid 
-                  images={pixabayImages} 
+                  images={locationsImages} 
                   selectedImage={selectedImage}
                   onSelectImage={setSelectedImage}
                 />
-              </TabsContent>
-              
-              <TabsContent value="wikimedia" className="flex-1 min-h-0 mt-0">
+              )}
+            </TabsContent>
+
+            {/* Vectors Tab - Pixabay vectors */}
+            <TabsContent value="vectors" className="flex-1 min-h-0 mt-0">
+              {isSearching ? (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">Searching vectors...</p>
+                </div>
+              ) : !hasSearched ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    Enter a search term and click Search to find images
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Vectors shows diagrams, symbols, and icons
+                  </p>
+                </div>
+              ) : vectorImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No vector images found for "{query}"
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Try searching for symbols, icons, or diagrams
+                  </p>
+                </div>
+              ) : (
                 <ImageGrid 
-                  images={wikimediaImages} 
+                  images={vectorImages} 
                   selectedImage={selectedImage}
                   onSelectImage={setSelectedImage}
                 />
-              </TabsContent>
-            </Tabs>
-          )}
+              )}
+            </TabsContent>
+
+            {/* AI Studio Tab */}
+            <TabsContent value="ai-studio" className="flex-1 min-h-0 mt-0">
+              <AiStudioPanel 
+                initialPrompt={query}
+                onSelectImage={handleAiImageSelect}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Window Shopper Mode - Block selection with premium prompt */}
@@ -391,7 +631,11 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
                   I certify I have the rights to use this image.
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  <strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of selected content.
+                  {selectedImage.source === 'pollinations' ? (
+                    <><strong>AI Generated:</strong> This image is Public Domain. You may use it freely for any purpose.</>
+                  ) : (
+                    <><strong>Commercial Risk:</strong> Do not use images with recognizable people. Without a signed Model Release, using a stranger's likeness on a product is a legal risk. Loom & Page is not liable for copyright infringement or misuse of selected content.</>
+                  )}
                 </p>
               </div>
             </div>
@@ -450,6 +694,30 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
     setLoadedImages(prev => new Set(prev).add(id));
   }, []);
 
+  // Get badge color based on source
+  const getSourceBadgeClass = (source: ImageResult['source']): string => {
+    switch (source) {
+      case 'unsplash': return 'bg-foreground/70 text-background';
+      case 'pexels': return 'bg-emerald-600 text-white';
+      case 'pixabay': return 'bg-teal-600 text-white';
+      case 'openverse': return 'bg-orange-600 text-white';
+      case 'pollinations': return 'bg-violet-600 text-white';
+      default: return 'bg-primary/80 text-primary-foreground';
+    }
+  };
+
+  // Get display name for source
+  const getSourceLabel = (source: ImageResult['source']): string => {
+    switch (source) {
+      case 'unsplash': return 'Unsplash';
+      case 'pexels': return 'Pexels';
+      case 'pixabay': return 'Pixabay';
+      case 'openverse': return 'Openverse';
+      case 'pollinations': return 'AI';
+      default: return 'Wikimedia';
+    }
+  };
+
   return (
     <ScrollArea className="h-[400px]">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-1">
@@ -497,20 +765,8 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
               
               {/* Source badge - bottom left */}
               <div className="absolute bottom-1 left-1">
-                <span className={`
-                  text-[10px] px-1.5 py-0.5 rounded-full font-medium
-                  ${image.source === 'unsplash' 
-                    ? 'bg-foreground/70 text-background' 
-                    : image.source === 'pexels'
-                    ? 'bg-emerald-600 text-white'
-                    : image.source === 'pixabay'
-                    ? 'bg-teal-600 text-white'
-                    : image.source === 'openverse'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-primary/80 text-primary-foreground'
-                  }
-                `}>
-                  {image.source === 'unsplash' ? 'Unsplash' : image.source === 'pexels' ? 'Pexels' : image.source === 'pixabay' ? 'Pixabay' : image.source === 'openverse' ? 'Openverse' : 'Wikimedia'}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getSourceBadgeClass(image.source)}`}>
+                  {getSourceLabel(image.source)}
                 </span>
               </div>
               

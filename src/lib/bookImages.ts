@@ -27,7 +27,7 @@ export async function uploadToBookImages(params: UploadParams): Promise<string> 
 
 // Image metadata types for provenance tracking
 export interface ImageMetadata {
-  image_source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse' | 'upload';
+  image_source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse' | 'pollinations' | 'upload';
   original_url: string | null;
   image_license: string;
   image_attribution: string;
@@ -38,7 +38,7 @@ export interface ImageMetadata {
 export async function archiveExternalImage(
   imageUrl: string,
   bookId: string,
-  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse',
+  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse' | 'pollinations',
   attribution?: string
 ): Promise<{ archivedUrl: string; metadata: ImageMetadata } | null> {
   try {
