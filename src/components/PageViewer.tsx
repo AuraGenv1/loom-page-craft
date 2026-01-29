@@ -1158,6 +1158,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const blocksRef = useRef<PageBlockMeta[]>([]);
   const currentIndexRef = useRef(0);
   const currentChapterRef = useRef(currentChapter);
+  // Prevent late async fetches from overwriting navigation state (causes page flicker)
+  const fetchSeqRef = useRef(0);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -1175,17 +1177,9 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   // Fetch blocks for a chapter - prefer preloaded, fallback to DB
   // IMPORTANT: This callback must NOT depend on blocks/currentIndex state to avoid infinite loops
   const fetchBlocks = useCallback(async (chapter: number) => {
-    // Use refs to read current state without creating circular dependency
-    const currentBlocks = blocksRef.current;
-    const currIdx = currentIndexRef.current;
-    const currChapter = currentChapterRef.current;
-    
-    // Preserve the user's current page when we re-hydrate from the backend
-    // (e.g., after image upload/select updates that sync parent state).
-    const preserveKey =
-      chapter === currChapter && currentBlocks[currIdx]
-        ? getBlockKey(currentBlocks[currIdx])
-        : null;
+    // Every call increments the sequence. Only the latest call is allowed to apply state.
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
 
     // We may receive preloaded blocks first (fast), but we still need to hydrate from DB
     // so blocks have real IDs (required for auto-fetch + manual image tools) and so
@@ -1197,13 +1191,25 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (hasPreloaded && !alreadyHydrated) {
       console.log('[PageViewer] Using preloaded blocks for chapter', chapter, preloaded!.length);
       setBlocks(preloaded!);
-      if (preserveKey) {
-        const idx = preloaded!.findIndex(b => getBlockKey(b) === preserveKey);
-        setCurrentIndex(idx >= 0 ? idx : findTitleBlockIndex(preloaded!));
-      } else {
-        setCurrentIndex(findTitleBlockIndex(preloaded!));
+      // Preserve using *latest* navigation state (user may have navigated while fetch was inflight)
+      if (!isStale()) {
+        const latestBlocks = blocksRef.current;
+        const latestIdx = currentIndexRef.current;
+        const latestChapter = currentChapterRef.current;
+        const preserveKeyNow =
+          chapter === latestChapter && latestBlocks[latestIdx]
+            ? getBlockKey(latestBlocks[latestIdx])
+            : null;
+
+        if (preserveKeyNow) {
+          const idx = preloaded!.findIndex(b => getBlockKey(b) === preserveKeyNow);
+          setCurrentIndex(idx >= 0 ? idx : findTitleBlockIndex(preloaded!));
+        } else {
+          setCurrentIndex(findTitleBlockIndex(preloaded!));
+        }
+
+        setLoading(false);
       }
-      setLoading(false);
     } else if (!hasPreloaded) {
       setLoading(true);
     }
@@ -1238,22 +1244,34 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       
       // If DB has rows, prefer them (real IDs + freshest image_url)
       if (mappedBlocks.length > 0) {
+        if (isStale()) return;
+
         hydratedChaptersRef.current.add(chapter);
         setBlocks(mappedBlocks);
-        if (preserveKey) {
-          const idx = mappedBlocks.findIndex(b => getBlockKey(b) === preserveKey);
+
+        // Preserve using *latest* navigation state (user may have navigated while fetch was inflight)
+        const latestBlocks = blocksRef.current;
+        const latestIdx = currentIndexRef.current;
+        const latestChapter = currentChapterRef.current;
+        const preserveKeyNow =
+          chapter === latestChapter && latestBlocks[latestIdx]
+            ? getBlockKey(latestBlocks[latestIdx])
+            : null;
+
+        if (preserveKeyNow) {
+          const idx = mappedBlocks.findIndex(b => getBlockKey(b) === preserveKeyNow);
           setCurrentIndex(idx >= 0 ? idx : findTitleBlockIndex(mappedBlocks));
         } else {
           setCurrentIndex(findTitleBlockIndex(mappedBlocks));
         }
       } else if (!hasPreloaded) {
         // No DB rows and no preloaded blocks -> stay in loading state
-        setBlocks([]);
+        if (!isStale()) setBlocks([]);
       }
     } catch (err) {
       console.error('Error fetching blocks:', err);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [bookId, preloadedBlocks, findTitleBlockIndex]); // Removed blocks, currentIndex, currentChapter from deps
 
