@@ -2843,7 +2843,7 @@ p { margin-bottom: 1em; }`);
                 {hasFullAccess ? (
                   <div className="max-w-2xl mx-auto">
                     <h3 className="font-medium mb-4 text-center">KDP Profit Calculator (2025 Estimates)</h3>
-                    <KdpFinanceCalculator pageCount={estimatedPages} />
+                    <KdpFinanceCalculator pageCount={kdpDimensions.finalPageCount} />
                   </div>
                 ) : (
                   <LockedTabContent

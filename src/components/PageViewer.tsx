@@ -602,20 +602,15 @@ const ImageFullPage: React.FC<{
                 className="w-full h-auto max-h-[65vh] object-contain bg-muted/20"
                 loading="lazy"
               />
-              {/* AI-selected badge overlay - only for non-upload images */}
+              {/* AI-selected badge overlay - moves to top-right, fades on hover to reveal toolbar */}
               {showAiSwapHint && (
-                <button
-                  type="button"
-                  className="print:hidden absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-background/80 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 hover:bg-background hover:text-foreground transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onManualSearch();
-                  }}
-                  title="Click to swap image"
+                <div
+                  className="print:hidden absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 bg-background/90 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 group-hover:opacity-0 transition-opacity pointer-events-none z-20"
+                  title="This image was auto-selected by AI. Hover to change it."
                 >
-                  <RefreshCw className="w-3 h-3" />
-                  AI · Swap
-                </button>
+                  <Sparkles className="w-3 h-3" />
+                  <span>AI-selected</span>
+                </div>
               )}
             </div>
             {/* Compact caption below image */}
@@ -697,20 +692,15 @@ const ImageHalfPage: React.FC<{
               alt={content.caption}
               className="absolute inset-0 w-full h-full object-cover"
             />
-            {/* AI-selected badge overlay - only for non-upload images */}
+            {/* AI-selected badge overlay - moves to top-right, fades on hover to reveal toolbar */}
             {showAiSwapHint && (
-              <button
-                type="button"
-                className="print:hidden absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-background/80 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 hover:bg-background hover:text-foreground transition-colors z-10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onManualSearch();
-                }}
-                title="Click to swap image"
+              <div
+                className="print:hidden absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 bg-background/90 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 group-hover:opacity-0 transition-opacity pointer-events-none z-20"
+                title="This image was auto-selected by AI. Hover to change it."
               >
-                <RefreshCw className="w-3 h-3" />
-                AI · Swap
-              </button>
+                <Sparkles className="w-3 h-3" />
+                <span>AI-selected</span>
+              </div>
             )}
           </>
         ) : showEmptyState ? (
@@ -2465,7 +2455,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               )}
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
-              Chapter {currentChapter} • {currentIndex + 1}/{blocks.length}
+              Chapter {currentChapter} of {totalChapters || '?'}
             </p>
           </div>
         </div>

@@ -23,6 +23,14 @@ const isVisualTopic = (topic: string): boolean => {
   return VISUAL_KEYWORDS.some(kw => lower.includes(kw));
 };
 
+// Assess topic breadth to allow flexible chapter counts
+const assessTopicBreadth = (topic: string): 'narrow' | 'broad' => {
+  const words = topic.split(/\s+/).length;
+  const hasSpecificLocation = /resort|hotel|village|neighborhood|restaurant|spa|museum|gallery/i.test(topic);
+  const isNiche = words <= 4 && hasSpecificLocation;
+  return isNiche ? 'narrow' : 'broad';
+};
+
 const toTitleCase = (str: string): string => {
   return str.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 };
@@ -71,10 +79,13 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
     // STEP 1: Generate book outline and Chapter 1 blocks using Luxury Architect Rules
-    // Increased pages per chapter and chapters to hit 140+ page targets
+    // Flexible chapter counts based on topic breadth to prevent filler content
+    const topicBreadth = assessTopicBreadth(cleanTopic);
     const pagesPerChapter = isVisual ? 12 : 10;
-    const minChapters = 12;
-    const targetTotalPages = 140; // Aim for 140+ pages for professional-length books
+    const minChapters = isVisual 
+      ? (topicBreadth === 'narrow' ? 8 : 12)  // Narrow topics can have fewer chapters
+      : 10;
+    const targetTotalPages = topicBreadth === 'narrow' ? 100 : 140;
     
     const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
 
