@@ -76,7 +76,9 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [enhanceMode, setEnhanceMode] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const imageLoadedRef = useRef(false); // Track loaded state for timeout closure
 
   // Update prompt when initialPrompt changes
   useEffect(() => {
@@ -90,39 +92,55 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
     };
   }, []);
 
+  // Generate a new image URL with fresh seed
+  const generateNewImageUrl = useCallback(() => {
+    const seed = Math.floor(Math.random() * 1000000);
+    const timestamp = Date.now();
+    const styleAppendix = STYLE_PRESETS[selectedStyle] || '';
+    const fullPrompt = enhanceMode 
+      ? `${aiPrompt.trim()}, ${styleAppendix}, ${ENHANCE_SUFFIX}`
+      : `${aiPrompt.trim()}, ${styleAppendix}`;
+    const encodedPrompt = encodeURIComponent(fullPrompt);
+    return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}&_t=${timestamp}`;
+  }, [aiPrompt, selectedStyle, enhanceMode]);
+
   const handleGenerate = useCallback(() => {
     if (cooldown > 0 || !aiPrompt.trim()) return;
 
     setIsGenerating(true);
     setImageLoaded(false);
     setLoadError(false);
+    imageLoadedRef.current = false; // Reset ref
 
     // Clear any existing timeout
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Start 15-second timeout for error handling
-    timeoutRef.current = setTimeout(() => {
-      if (!imageLoaded) {
-        setIsGenerating(false);
-        setLoadError(true);
-      }
-    }, 15000);
-
-    // FRESHNESS: Generate unique seed and timestamp to prevent cached results
-    const seed = Math.floor(Math.random() * 1000000);
-    const timestamp = Date.now();
-
-    // Build final prompt with style suffix and optional enhancement
-    const styleAppendix = STYLE_PRESETS[selectedStyle] || '';
-    const fullPrompt = enhanceMode 
-      ? `${aiPrompt.trim()}, ${styleAppendix}, ${ENHANCE_SUFFIX}`
-      : `${aiPrompt.trim()}, ${styleAppendix}`;
-
-    // Construct Pollinations URL with seed and cache-buster
-    const encodedPrompt = encodeURIComponent(fullPrompt);
-    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true&seed=${seed}&_t=${timestamp}`;
-
+    // Generate and set image URL
+    const url = generateNewImageUrl();
     setGeneratedImageUrl(url);
+
+    // Start 20-second timeout with auto-retry logic
+    timeoutRef.current = setTimeout(() => {
+      if (!imageLoadedRef.current) {
+        if (retryCount < 1) {
+          // Auto-retry once with new seed
+          setRetryCount(prev => prev + 1);
+          const newUrl = generateNewImageUrl();
+          setGeneratedImageUrl(newUrl);
+          // Reset timeout for retry
+          timeoutRef.current = setTimeout(() => {
+            if (!imageLoadedRef.current) {
+              setIsGenerating(false);
+              setLoadError(true);
+            }
+          }, 20000);
+        } else {
+          // Show friendly error after 1 retry
+          setIsGenerating(false);
+          setLoadError(true);
+        }
+      }
+    }, 20000);
 
     // Start 5-second cooldown
     setCooldown(5);
@@ -135,13 +153,15 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
         return prev - 1;
       });
     }, 1000);
-  }, [aiPrompt, selectedStyle, cooldown, enhanceMode, imageLoaded]);
+  }, [aiPrompt, cooldown, generateNewImageUrl, retryCount]);
 
   const handleImageLoad = useCallback(() => {
+    imageLoadedRef.current = true; // Update ref immediately
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsGenerating(false);
     setImageLoaded(true);
     setLoadError(false);
+    setRetryCount(0); // Reset retry count on success
   }, []);
 
   const handleImageError = useCallback(() => {
@@ -151,37 +171,30 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
     setLoadError(true);
   }, []);
 
+  // Manual retry resets counter
+  const handleManualRetry = useCallback(() => {
+    setRetryCount(0);
+    handleGenerate();
+  }, [handleGenerate]);
+
   return (
-    <div className="flex gap-6 p-4 h-[400px]">
-      {/* Left Side: Controls */}
-      <div className="w-1/2 space-y-4 overflow-y-auto pr-2">
-        {/* Header */}
-        <div className="text-center space-y-1">
-          <Sparkles className="w-6 h-6 mx-auto text-primary" />
-          <h3 className="font-semibold text-sm">AI Studio</h3>
-          <p className="text-xs text-muted-foreground">
-            Generate custom images when stock photos fail
-          </p>
-        </div>
+    <div className="flex gap-4 p-3 h-[400px]">
+      {/* Left Side: Controls - Compressed */}
+      <div className="w-1/2 space-y-2 overflow-y-auto pr-2">
+        {/* Prompt Input - Label as placeholder */}
+        <Textarea
+          id="ai-prompt"
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          placeholder="Describe your image... (e.g., sunset over Lake Como)"
+          className="min-h-[56px] resize-none text-sm"
+        />
 
-        {/* Prompt Input */}
-        <div className="space-y-2">
-          <Label htmlFor="ai-prompt" className="text-xs font-medium">Describe your image</Label>
-          <Textarea
-            id="ai-prompt"
-            value={aiPrompt}
-            onChange={(e) => setAiPrompt(e.target.value)}
-            placeholder="e.g., sunset over Lake Como with mountains"
-            className="min-h-[70px] resize-none text-sm"
-          />
-        </div>
-
-        {/* Style Selector */}
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Style</Label>
+        {/* Style + Generate - Same row */}
+        <div className="flex gap-2">
           <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Select style..." />
+            <SelectTrigger className="h-9 flex-1">
+              <SelectValue placeholder="Style..." />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="watercolor">Watercolor Sketch</SelectItem>
@@ -189,69 +202,59 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
               <SelectItem value="lineart">Line Art / Diagram</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        {/* Magic Enhance Toggle */}
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <Label htmlFor="enhance-toggle" className="text-xs font-medium cursor-pointer">
-              Enhance Prompt
-            </Label>
-          </div>
-          <Switch 
-            id="enhance-toggle"
-            checked={enhanceMode}
-            onCheckedChange={setEnhanceMode}
-          />
-        </div>
-
-        {/* Generate Button with Cooldown */}
-        <Button
-          onClick={handleGenerate}
-          disabled={!aiPrompt.trim() || cooldown > 0 || isGenerating}
-          className="w-full gap-2"
-          size="sm"
-        >
-          {isGenerating ? (
-            <>
+          <Button
+            onClick={handleGenerate}
+            disabled={!aiPrompt.trim() || cooldown > 0 || isGenerating}
+            size="sm"
+            className="shrink-0 gap-1"
+          >
+            {isGenerating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-              Generating...
-            </>
-          ) : cooldown > 0 ? (
-            <>Cooldown ({cooldown}s)</>
-          ) : (
-            <>
+            ) : cooldown > 0 ? (
+              <span className="text-xs">{cooldown}s</span>
+            ) : (
               <Wand2 className="w-4 h-4" />
-              Generate Image
-            </>
-          )}
-        </Button>
+            )}
+            {!isGenerating && cooldown === 0 && <span className="hidden sm:inline">Generate</span>}
+          </Button>
+        </div>
 
-        {/* Licensing Note */}
-        <p className="text-[10px] text-muted-foreground text-center">
-          Pollinations.ai (Flux Model) · Public Domain · Free for commercial use
-        </p>
+        {/* Enhance + License - Same row, compact */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Switch 
+              id="enhance-toggle"
+              checked={enhanceMode}
+              onCheckedChange={setEnhanceMode}
+            />
+            <Label htmlFor="enhance-toggle" className="text-xs cursor-pointer">Enhance</Label>
+          </div>
+          <span className="text-[9px] text-muted-foreground">
+            Pollinations.ai · Public Domain
+          </span>
+        </div>
       </div>
 
       {/* Right Side: Preview */}
       <div className="w-1/2 flex flex-col">
         {loadError ? (
-          /* Error State with Retry */
+          /* Error State - Friendly message */
           <div className="flex flex-col items-center justify-center h-full p-4 text-center border rounded-lg bg-muted/30">
             <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
-            <p className="text-sm text-muted-foreground mb-3">
-              Server busy. Please click Retry.
+            <p className="text-sm font-medium mb-1">Almost there!</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              The image is taking a bit longer than usual.<br />
+              Try again or tweak your prompt.
             </p>
             <Button 
               variant="outline" 
-              onClick={handleGenerate}
+              onClick={handleManualRetry}
               disabled={cooldown > 0}
               className="gap-2"
               size="sm"
             >
               <RefreshCw className="w-4 h-4" />
-              Retry
+              Try Again
             </Button>
           </div>
         ) : generatedImageUrl ? (
@@ -288,9 +291,6 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({ initialPrompt, onSelectIm
             <ImageIcon className="w-12 h-12 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">
               Your generated image will appear here
-            </p>
-            <p className="text-xs text-muted-foreground/60 mt-1">
-              Click Generate to create a custom image
             </p>
           </div>
         )}

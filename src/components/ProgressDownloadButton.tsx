@@ -1,4 +1,4 @@
-import { Download, Loader2, Package } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
@@ -15,6 +15,7 @@ interface ProgressDownloadButtonProps {
   bookData?: BookData | null;
   topic?: string;
   coverImageUrls?: string[];
+  /** @deprecated No longer used - admin button removed */
   isAdmin?: boolean;
   /** Actual total page count from blocks (for UI display) */
   totalPageCount?: number;
@@ -94,7 +95,7 @@ const ProgressDownloadButton = ({
   bookData,
   topic = 'guide',
   coverImageUrls = [],
-  isAdmin = false,
+  isAdmin: _isAdmin = false, // Kept for API compatibility but no longer used
   totalPageCount,
   isGrayscale = false,
 }: ProgressDownloadButtonProps) => {
@@ -104,23 +105,6 @@ const ProgressDownloadButton = ({
   const isComplete = completedChapters >= totalChapters;
   const isCompiling = externalIsCompiling || isConverting;
   const canDownload = isPurchased ? isComplete && !isCompiling : !disabled && !isCompiling;
-
-  // ADMIN HANDLER: Opens the KDP Studio
-  const handleAdminClick = () => {
-    const studioTrigger = document.getElementById('kdp-studio-trigger');
-    if (studioTrigger) {
-      studioTrigger.click();
-      toast.info("Opening KDP Export Studio...");
-      
-      // Auto-switch to Export tab after a short delay
-      setTimeout(() => {
-        const exportTab = document.querySelector('[value="manuscript"]');
-        if (exportTab instanceof HTMLElement) exportTab.click();
-      }, 500);
-    } else {
-      toast.error("Could not open Studio. Please scroll up.");
-    }
-  };
 
   // USER HANDLER: Generates PDF
   const handleUserDownload = async () => {
@@ -150,9 +134,8 @@ const ProgressDownloadButton = ({
     }
   };
 
-  // Button Label
+  // Button Label - simplified, no admin special case
   const getLabel = () => {
-    if (isAdmin) return "Export KDP Package";
     if (isCompiling) return "Generating PDF...";
     if (isPurchased && !isComplete) {
       // Show page count if available, otherwise chapter count
@@ -167,18 +150,16 @@ const ProgressDownloadButton = ({
   return (
     <div className="w-full flex flex-col items-center gap-2">
       <button
-        onClick={isAdmin ? handleAdminClick : handleUserDownload}
-        disabled={!isAdmin && !canDownload}
+        onClick={handleUserDownload}
+        disabled={!canDownload}
         className={`relative overflow-hidden w-full max-w-md h-14 rounded-md border border-neutral-800 font-serif text-lg transition-all duration-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-80`}
         style={{ background: '#f5f5f5', color: '#000000' }}
       >
         {/* Progress Bar (Gray/Black) */}
-        {!isAdmin && (
-          <div 
-            className="absolute inset-0 bg-neutral-900 transition-all duration-700 ease-out" 
-            style={{ width: `${progress}%` }} 
-          />
-        )}
+        <div 
+          className="absolute inset-0 bg-neutral-900 transition-all duration-700 ease-out" 
+          style={{ width: `${progress}%` }} 
+        />
         {/* Text Layer */}
         <span 
           className="relative z-10 flex items-center justify-center gap-3 h-full px-6"
@@ -187,13 +168,13 @@ const ProgressDownloadButton = ({
             color: 'white' 
           }}
         >
-          {isCompiling ? <Loader2 className="w-5 h-5 animate-spin" /> : isAdmin ? <Package className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+          {isCompiling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
           <span className="font-medium tracking-wide">{getLabel()}</span>
         </span>
       </button>
 
       {/* Status Text */}
-      {!isAdmin && !isCompiling && !isComplete && (
+      {!isCompiling && !isComplete && (
         <p className="text-xs text-muted-foreground text-center">
           {isPurchased ? `Please wait for all chapters...` : 'Our Artisan is weaving your custom details...'}
         </p>
