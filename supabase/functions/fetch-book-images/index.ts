@@ -8,8 +8,64 @@ const corsHeaders = {
 interface ImageResult {
   imageUrl: string | null;
   attribution: string;
-  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'none';
+  source: 'unsplash' | 'pexels' | 'pixabay' | 'wikimedia' | 'openverse' | 'none';
   license: string;
+}
+
+// ==== OPENVERSE OAUTH2 TOKEN MANAGEMENT ====
+interface OpenverseToken {
+  access_token: string;
+  expires_at: number;
+}
+
+let openverseTokenCache: OpenverseToken | null = null;
+
+async function getOpenverseAccessToken(): Promise<string | null> {
+  const clientId = Deno.env.get('OPENVERSE_CLIENT_ID');
+  const clientSecret = Deno.env.get('OPENVERSE_CLIENT_SECRET');
+  
+  if (!clientId || !clientSecret) {
+    console.log('[Openverse] No credentials configured');
+    return null;
+  }
+
+  // Check if cached token is still valid (with 60s buffer)
+  if (openverseTokenCache && openverseTokenCache.expires_at > Date.now() + 60000) {
+    console.log('[Openverse] Using cached token');
+    return openverseTokenCache.access_token;
+  }
+
+  try {
+    console.log('[Openverse] Fetching new access token...');
+    const response = await fetch('https://api.openverse.engineering/v1/auth_tokens/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[Openverse] Token request failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const expiresIn = data.expires_in || 3600;
+    
+    openverseTokenCache = {
+      access_token: data.access_token,
+      expires_at: Date.now() + (expiresIn * 1000),
+    };
+
+    console.log('[Openverse] Token acquired, expires in', expiresIn, 'seconds');
+    return openverseTokenCache.access_token;
+  } catch (error) {
+    console.error('[Openverse] Token error:', error);
+    return null;
+  }
 }
 
 // Helper to get license string for a source
@@ -19,6 +75,7 @@ function getLicenseForSource(source: string): string {
     case 'pexels': return 'Pexels License';
     case 'pixabay': return 'Pixabay License';
     case 'wikimedia': return 'CC0 Public Domain';
+    case 'openverse': return 'CC Commercial License';
     default: return 'Unknown License';
   }
 }
@@ -340,7 +397,79 @@ async function searchPexels(
   }
 }
 
-// ==== WATERFALL STEP 4: Wikimedia (For Landmarks - STRICT 1800px+) ====
+// ==== WATERFALL STEP 4: Openverse (For Specific Locations) ====
+async function searchOpenverse(
+  query: string,
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
+  const accessToken = await getOpenverseAccessToken();
+  if (!accessToken) {
+    console.log('[Openverse] No access token available');
+    return null;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      license_type: 'commercial,modification',
+      page_size: '20',
+    });
+
+    const response = await fetch(`https://api.openverse.engineering/v1/images/?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'LoomPageBookGenerator/1.0',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('[Openverse] API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const results: any[] = data?.results || [];
+
+    if (results.length === 0) {
+      console.log('[Openverse] No results for query:', query);
+      return null;
+    }
+
+    for (const photo of results) {
+      const width = photo.width || 0;
+      if (width < KDP_MIN_WIDTH) {
+        console.log(`[Openverse] Skipping low-res image (${width}px):`, photo.id);
+        continue;
+      }
+
+      const imageUrl = photo.url;
+      if (!imageUrl) continue;
+
+      const candidateKey = normalizeUrlForCompare(imageUrl);
+      if (excludeUrls.has(candidateKey) || excludeUrls.has(imageUrl)) {
+        continue;
+      }
+
+      // RULE 2: Universal Credit with Openverse attribution
+      const creatorName = photo.creator || null;
+      const license = photo.license || 'CC';
+      const attribution = creatorName 
+        ? `Photo by ${creatorName} via Openverse (${license.toUpperCase()})`
+        : `Source: Openverse (${license.toUpperCase()})`;
+
+      console.log(`[Openverse] Found high-res image (${width}px):`, imageUrl.substring(0, 60));
+      return { imageUrl, attribution, source: 'openverse', license: `CC ${license.toUpperCase()}` };
+    }
+
+    console.log('[Openverse] All results were duplicates or too low-res');
+    return null;
+  } catch (error) {
+    console.error('[Openverse] Fetch error:', error);
+    return null;
+  }
+}
+
+// ==== WATERFALL STEP 5: Wikimedia (For Landmarks - STRICT 1800px+) ====
 async function searchWikimedia(query: string): Promise<ImageResult | null> {
   try {
     const searchParams = new URLSearchParams({
@@ -474,6 +603,31 @@ async function searchWikimediaWithFallbacks(query: string): Promise<ImageResult 
   return null;
 }
 
+// Openverse with fallbacks
+async function searchOpenverseWithFallbacks(
+  query: string,
+  excludeUrls: Set<string> = new Set()
+): Promise<ImageResult | null> {
+  const lockTokens = extractSignificantTokens(query);
+
+  let result = await searchOpenverse(query, excludeUrls);
+  if (result) return result;
+
+  const fallbacks = generateFallbackQueries(query).filter((fallbackQuery: string) => {
+    if (lockTokens.length === 0) return true;
+    const lower = fallbackQuery.toLowerCase();
+    return lockTokens.some((t) => lower.includes(t));
+  });
+  
+  for (const fallbackQuery of fallbacks) {
+    console.log(`[Openverse] Trying fallback: "${fallbackQuery}"`);
+    result = await searchOpenverse(fallbackQuery, excludeUrls);
+    if (result) return result;
+  }
+
+  return null;
+}
+
 // Extract location/topic for grounding searches
 function extractTopicAnchor(topic: string | undefined): string | null {
   if (!topic) return null;
@@ -555,40 +709,73 @@ serve(async (req) => {
 
     let result: ImageResult | null = null;
 
-    // ==== BUSINESS RULE 1: WATERFALL SEARCH ORDER ====
-    // For landmarks, try Wikipedia first (only if 1800px+), then fall through
+    // ==== SMART ROUTER: WATERFALL SEARCH ORDER ====
+    // For landmarks: Wikimedia -> Openverse -> Unsplash -> Pixabay -> Pexels
+    // For generic: Unsplash -> Pixabay -> Pexels -> Openverse -> Wikimedia
     const isLandmark = isLandmarkQuery(anchoredQuery);
     
     if (isLandmark) {
-      console.log('[fetch-book-images] Landmark detected, trying Wikipedia first...');
+      console.log('[fetch-book-images] Landmark detected, using landmark priority...');
+      
+      // LANDMARK PRIORITY 1: Wikimedia (strict 1800px+)
       result = await searchWikimediaWithFallbacks(anchoredQuery);
       if (result) {
-        console.log('[fetch-book-images] Wikipedia found high-res landmark image');
+        console.log('[fetch-book-images] Wikimedia found high-res landmark image');
       }
-    }
-
-    // WATERFALL STEP 1: Unsplash
-    if (!result) {
-      console.log('[fetch-book-images] Trying Unsplash...');
+      
+      // LANDMARK PRIORITY 2: Openverse (1600px+, commercial license)
+      if (!result) {
+        console.log('[fetch-book-images] Trying Openverse for landmark...');
+        result = await searchOpenverseWithFallbacks(anchoredQuery, excludeSet);
+      }
+      
+      // LANDMARK PRIORITY 3: Unsplash
+      if (!result) {
+        console.log('[fetch-book-images] Trying Unsplash...');
+        result = await searchWithFallbacks(searchUnsplash, 'Unsplash', anchoredQuery, orientation, excludeSet);
+      }
+      
+      // LANDMARK PRIORITY 4: Pixabay
+      if (!result) {
+        console.log('[fetch-book-images] Trying Pixabay...');
+        result = await searchWithFallbacks(searchPixabay, 'Pixabay', anchoredQuery, orientation, excludeSet);
+      }
+      
+      // LANDMARK PRIORITY 5: Pexels
+      if (!result) {
+        console.log('[fetch-book-images] Trying Pexels...');
+        result = await searchWithFallbacks(searchPexels, 'Pexels', anchoredQuery, orientation, excludeSet);
+      }
+    } else {
+      // GENERIC QUERIES: Prioritize aesthetic quality
+      
+      // GENERIC PRIORITY 1: Unsplash
+      console.log('[fetch-book-images] Generic query, trying Unsplash...');
       result = await searchWithFallbacks(searchUnsplash, 'Unsplash', anchoredQuery, orientation, excludeSet);
-    }
 
-    // WATERFALL STEP 2: Pixabay (first fallback)
-    if (!result) {
-      console.log('[fetch-book-images] Unsplash exhausted, trying Pixabay...');
-      result = await searchWithFallbacks(searchPixabay, 'Pixabay', anchoredQuery, orientation, excludeSet);
-    }
+      // GENERIC PRIORITY 2: Pixabay
+      if (!result) {
+        console.log('[fetch-book-images] Unsplash exhausted, trying Pixabay...');
+        result = await searchWithFallbacks(searchPixabay, 'Pixabay', anchoredQuery, orientation, excludeSet);
+      }
 
-    // WATERFALL STEP 3: Pexels (second fallback)
-    if (!result) {
-      console.log('[fetch-book-images] Pixabay exhausted, trying Pexels...');
-      result = await searchWithFallbacks(searchPexels, 'Pexels', anchoredQuery, orientation, excludeSet);
-    }
+      // GENERIC PRIORITY 3: Pexels
+      if (!result) {
+        console.log('[fetch-book-images] Pixabay exhausted, trying Pexels...');
+        result = await searchWithFallbacks(searchPexels, 'Pexels', anchoredQuery, orientation, excludeSet);
+      }
 
-    // WATERFALL STEP 4: Wikimedia (final fallback for non-landmarks)
-    if (!result && !isLandmark) {
-      console.log('[fetch-book-images] All paid sources exhausted, trying Wikimedia...');
-      result = await searchWikimediaWithFallbacks(anchoredQuery);
+      // GENERIC PRIORITY 4: Openverse
+      if (!result) {
+        console.log('[fetch-book-images] Trying Openverse...');
+        result = await searchOpenverseWithFallbacks(anchoredQuery, excludeSet);
+      }
+
+      // GENERIC PRIORITY 5: Wikimedia
+      if (!result) {
+        console.log('[fetch-book-images] All sources exhausted, trying Wikimedia...');
+        result = await searchWikimediaWithFallbacks(anchoredQuery);
+      }
     }
 
     // EMERGENCY FALLBACK: Broad topic search
@@ -601,6 +788,7 @@ serve(async (req) => {
           await searchWithFallbacks(searchUnsplash, 'Unsplash', broad, orientation, excludeSet) ||
           await searchWithFallbacks(searchPixabay, 'Pixabay', broad, orientation, excludeSet) ||
           await searchWithFallbacks(searchPexels, 'Pexels', broad, orientation, excludeSet) ||
+          await searchOpenverseWithFallbacks(broad, excludeSet) ||
           await searchWikimediaWithFallbacks(broad);
       }
     }
