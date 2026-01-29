@@ -358,12 +358,17 @@ const Index = () => {
   const isGenerationComplete = useMemo(() => {
     if (!totalChapters || totalChapters === 0) return false;
     
-    // Check if we have blocks for all chapters
+    // For guests (unpaid users), Chapter 1 completion is enough to show the Studio
+    if (!hasFullAccess && chapterBlocks[1]?.length > 0) {
+      return true;
+    }
+    
+    // For paid users, require all chapters
     for (let i = 1; i <= totalChapters; i++) {
       if (!chapterBlocks[i] || chapterBlocks[i].length === 0) return false;
     }
     return true;
-  }, [totalChapters, chapterBlocks]);
+  }, [totalChapters, chapterBlocks, hasFullAccess]);
   
   // Count completed chapters (dynamic)
   const completedChapterCount = useMemo(() => {

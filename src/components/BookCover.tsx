@@ -1906,7 +1906,7 @@ p { margin-bottom: 1em; }`);
               className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md"
             >
               <Pencil className="w-4 h-4 mr-1" />
-              {hasFullAccess ? 'Edit Cover / Export KDP' : 'View Export Options'}
+              {hasFullAccess ? 'Cover Studio' : 'Preview Studio'}
             </Button>
           )}
 
