@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Network, ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -30,13 +30,13 @@ const STRUCTURE_OPTIONS = [
 ] as const;
 
 const FOCUS_OPTIONS = [
-  { id: 'history', label: 'History' },
-  { id: 'wellness', label: 'Wellness' },
-  { id: 'nightlife', label: 'Nightlife' },
-  { id: 'art', label: 'Art & Design' },
-  { id: 'luxury', label: 'Luxury' },
-  { id: 'culture', label: 'Local Culture' },
-  { id: 'nature', label: 'Nature' },
+  { id: 'history', label: 'History', tooltip: 'Ancient stories, heritage sites, and cultural timelines' },
+  { id: 'wellness', label: 'Wellness', tooltip: 'Spas, retreats, meditation, and self-care rituals' },
+  { id: 'nightlife', label: 'Nightlife', tooltip: 'Bars, clubs, live music, and after-dark scenes' },
+  { id: 'art', label: 'Art & Design', tooltip: 'Galleries, architecture, studios, and creative spaces' },
+  { id: 'luxury', label: 'Luxury', tooltip: 'High-end experiences, exclusive venues, and premium services' },
+  { id: 'culture', label: 'Local Culture', tooltip: 'Traditions, local customs, food markets, and community life' },
+  { id: 'nature', label: 'Nature', tooltip: 'Parks, hiking trails, beaches, and outdoor adventures' },
 ] as const;
 
 const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
@@ -66,7 +66,6 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mx-auto">
-        <Network className="w-4 h-4" />
         <span>{t('advancedOptions') || 'Advanced Options'}</span>
         {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
       </CollapsibleTrigger>
@@ -76,7 +75,7 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
           {/* Voice Section */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
-              {t('narrativeVoice') || 'Voice'}
+              {t('narrativeVoice') || 'Narrative Voice'}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {VOICE_OPTIONS.map((voice) => (
@@ -104,7 +103,7 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
           {/* Structure Section */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
-              {t('bookStructure') || 'Structure'}
+              {t('bookStructure') || 'Book Structure'}
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {STRUCTURE_OPTIONS.map((structure) => (
@@ -136,17 +135,23 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {FOCUS_OPTIONS.map((focus) => (
-                <button
-                  key={focus.id}
-                  type="button"
-                  onClick={() => handleFocusToggle(focus.id)}
-                  className={cn(
-                    chipBaseClass,
-                    options.focusAreas.includes(focus.id) ? chipActiveClass : chipInactiveClass
-                  )}
-                >
-                  {focus.label}
-                </button>
+                <Tooltip key={focus.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => handleFocusToggle(focus.id)}
+                      className={cn(
+                        chipBaseClass,
+                        options.focusAreas.includes(focus.id) ? chipActiveClass : chipInactiveClass
+                      )}
+                    >
+                      {focus.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[220px]">
+                    <p className="text-xs">{focus.tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </div>

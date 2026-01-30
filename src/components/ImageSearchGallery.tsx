@@ -96,6 +96,14 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
   const [statusMessage, setStatusMessage] = useState<string>('');
   const startTimeRef = useRef<number>(0);
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Session history state (last 5 generated images)
+  const [generatedHistory, setGeneratedHistory] = useState<string[]>([]);
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number>(0);
+  
+  // Cooldown state (anti-spam)
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update prompt when initialPrompt changes
   useEffect(() => {
@@ -106,12 +114,30 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
   useEffect(() => {
     return () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
     };
+  }, []);
+  
+  // Start cooldown timer after generation
+  const startCooldown = useCallback(() => {
+    setCooldownRemaining(10);
+    cooldownTimerRef.current = setInterval(() => {
+      setCooldownRemaining(prev => {
+        if (prev <= 1) {
+          if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current);
+            cooldownTimerRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   }, []);
 
   // Generate image via Hugging Face backend
   const handleGenerate = useCallback(async () => {
-    if (!aiPrompt.trim() || isGenerating || isLocked) return;
+    if (!aiPrompt.trim() || isGenerating || isLocked || cooldownRemaining > 0) return;
 
     setIsGenerating(true);
     setImageLoaded(false);
@@ -164,6 +190,14 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
 
       if (data?.imageData) {
         setGeneratedImageUrl(data.imageData);
+        // Add to history (prepend, max 5)
+        setGeneratedHistory(prev => {
+          const newHistory = [data.imageData, ...prev].slice(0, 5);
+          return newHistory;
+        });
+        setSelectedHistoryIndex(0);
+        // Start cooldown after successful generation
+        startCooldown();
         // Image loaded handler will set isGenerating to false
       } else {
         setLoadError(true);
@@ -180,7 +214,18 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
       setErrorMessage('Something went wrong. Please try again.');
       setIsGenerating(false);
     }
-  }, [aiPrompt, selectedStyle, enhanceMode, isGenerating, isLocked]);
+  }, [aiPrompt, selectedStyle, enhanceMode, isGenerating, isLocked, cooldownRemaining, startCooldown]);
+  
+  // Handle selecting an image from history
+  const handleSelectFromHistory = useCallback((index: number) => {
+    setSelectedHistoryIndex(index);
+    setGeneratedImageUrl(generatedHistory[index]);
+    setImageLoaded(true);
+    setLoadError(false);
+  }, [generatedHistory]);
+  
+  // Get the currently selected/displayed image
+  const displayedImage = generatedHistory[selectedHistoryIndex] || generatedImageUrl;
 
   const handleImageLoad = useCallback(() => {
     if (statusTimerRef.current) {
@@ -263,16 +308,18 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
           ) : (
             <Button
               onClick={handleGenerate}
-              disabled={!aiPrompt.trim() || isGenerating}
+              disabled={!aiPrompt.trim() || isGenerating || cooldownRemaining > 0}
               size="sm"
               className="shrink-0 gap-1"
             >
               {isGenerating ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : cooldownRemaining > 0 ? (
+                <span className="text-xs">Wait {cooldownRemaining}s</span>
               ) : (
                 <Wand2 className="w-4 h-4" />
               )}
-              {!isGenerating && <span className="hidden sm:inline">Generate</span>}
+              {!isGenerating && cooldownRemaining === 0 && <span className="hidden sm:inline">Generate</span>}
             </Button>
           )}
         </div>
@@ -333,8 +380,8 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
               Try Again
             </Button>
           </div>
-        ) : generatedImageUrl ? (
-          /* Generated Image Preview */
+        ) : displayedImage ? (
+          /* Generated Image Preview with History */
           <div className="flex flex-col h-full border rounded-lg overflow-hidden">
             <div className="relative flex-1 bg-muted flex items-center justify-center min-h-0">
               {!imageLoaded && (
@@ -346,21 +393,49 @@ const AiStudioPanel: React.FC<AiStudioPanelProps> = ({
                 </div>
               )}
               <img
-                src={generatedImageUrl}
+                src={displayedImage}
                 alt="AI Generated"
                 className={`max-w-full max-h-full object-contain transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
               />
             </div>
+            
+            {/* Session History Thumbnails */}
+            {generatedHistory.length > 1 && (
+              <div className="flex gap-1 p-2 bg-muted/50 border-t overflow-x-auto">
+                {generatedHistory.map((imgUrl, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSelectFromHistory(idx)}
+                    className={`flex-shrink-0 w-12 h-12 rounded border-2 overflow-hidden transition-all ${
+                      idx === selectedHistoryIndex 
+                        ? 'border-primary ring-1 ring-primary' 
+                        : 'border-transparent hover:border-muted-foreground/50'
+                    }`}
+                  >
+                    <img 
+                      src={imgUrl} 
+                      alt={`Generation ${generatedHistory.length - idx}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+                <span className="flex items-center text-[10px] text-muted-foreground px-1">
+                  History
+                </span>
+              </div>
+            )}
+            
+            {/* Use This Image Button */}
             {imageLoaded && (
               <Button
-                onClick={() => onSelectImage(generatedImageUrl)}
+                onClick={() => onSelectImage(displayedImage)}
                 className="rounded-t-none gap-2 shrink-0"
                 size="sm"
               >
                 <Check className="w-4 h-4" />
-                Insert into Book
+                Use This Image
               </Button>
             )}
           </div>
