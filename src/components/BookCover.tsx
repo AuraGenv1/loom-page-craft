@@ -160,10 +160,17 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     const [coverGalleryOpen, setCoverGalleryOpen] = useState(false);
     
     // Back Cover Text State
-    const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
-    const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you're exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.");
-    const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
+    const [backCoverTitle, setBackCoverTitle] = useState("");
+    const [backCoverBody, setBackCoverBody] = useState("");
+    const [backCoverCTA, setBackCoverCTA] = useState("");
     const [dedicationText, setDedicationText] = useState("");
+    
+    // Initialize back cover defaults from translations (reactive to language changes)
+    useEffect(() => {
+      if (!backCoverTitle) setBackCoverTitle(t('backCoverDefaultTitle'));
+      if (!backCoverBody) setBackCoverBody(t('backCoverDefaultBody'));
+      if (!backCoverCTA) setBackCoverCTA(t('backCoverDefaultCta'));
+    }, [t]);
     
     // Calculate estimated pages for smart spine logic
     // PREFER: propEstimatedPageCount (actual block count from parent)
@@ -2035,7 +2042,7 @@ p { margin-bottom: 1em; }`);
             </DialogHeader>
 
             <Tabs defaultValue="front" className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-7">
+              <TabsList className={`grid w-full ${isAdminFromContext ? 'grid-cols-8' : 'grid-cols-7'}`}>
                 <TabsTrigger value="front" className="text-xs sm:text-sm">{t('tabFront')}</TabsTrigger>
                 <TabsTrigger value="back" className="text-xs sm:text-sm">{t('tabBack')}</TabsTrigger>
                 <TabsTrigger value="spine" className="text-xs sm:text-sm">{t('tabSpine')}</TabsTrigger>
@@ -2050,6 +2057,12 @@ p { margin-bottom: 1em; }`);
                   {hasFullAccess && <DollarSign className="w-3 h-3" />}
                   {t('tabRoyalty')}
                 </TabsTrigger>
+                {isAdminFromContext && (
+                  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
+                    <ShieldCheck className="w-3 h-3" />
+                    {t('tabLegal')}
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="manuscript" className="gap-1 text-xs sm:text-sm">
                   {!hasFullAccess && <Lock className="w-3 h-3" />}
                   {hasFullAccess && <Package className="w-3 h-3" />}

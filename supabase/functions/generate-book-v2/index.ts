@@ -57,12 +57,32 @@ const callGemini = async (prompt: string): Promise<string> => {
   return geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 };
 
+// Helper: Get language name from code
+const getLanguageName = (code: string): string => {
+  const names: Record<string, string> = {
+    en: 'English',
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    it: 'Italian',
+    pt: 'Portuguese',
+    zh: 'Chinese',
+    ja: 'Japanese',
+  };
+  return names[code] || 'English';
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json();
     const { mode, topic, title, subtitle, sessionId, language = 'en', bookData } = body;
+
+    // Language instruction for non-English outputs
+    const languageInstruction = language && language !== 'en'
+      ? `\n\nCRITICAL LANGUAGE REQUIREMENT: Write the ENTIRE response in ${getLanguageName(language)}. Do NOT write in English. Every word, phrase, and sentence must be in ${getLanguageName(language)}.`
+      : '';
 
     // === KDP DESCRIPTION MODE ===
     if (mode === 'kdp-description') {
@@ -71,6 +91,7 @@ serve(async (req) => {
       }
 
       const prompt = `You are a bestselling Amazon book marketing expert. Write a compelling book description for Amazon KDP that will maximize sales.
+${languageInstruction}
 
 Book Title: "${title}"
 ${subtitle ? `Subtitle: "${subtitle}"` : ''}
@@ -112,6 +133,7 @@ Return ONLY valid JSON:
       }
 
       const prompt = `You are a bestselling book marketing expert. Generate an intriguing subtitle for this book.
+${languageInstruction}
 
 Book Title: "${title}"
 ${topic ? `Topic: "${topic}"` : ''}
@@ -143,6 +165,7 @@ Return ONLY valid JSON:
       }
 
       const prompt = `You are an Amazon KDP keyword research expert. Generate 7 unique long-tail keyword phrases for this book.
+${languageInstruction}
 
 Book Title: "${title}"
 ${subtitle ? `Subtitle: "${subtitle}"` : ''}
