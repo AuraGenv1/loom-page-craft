@@ -987,12 +987,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const [insertDirection, setInsertDirection] = useState<InsertDirection>('after');
   const [isInserting, setIsInserting] = useState(false);
 
-  // Sync with external chapter changes (from TOC clicks)
-  useEffect(() => {
-    if (initialChapter !== currentChapter) {
-      setCurrentChapter(initialChapter);
-    }
-  }, [initialChapter]);
+  // Note: Sync with external chapter changes is handled in a useEffect below,
+  // after fetchBlocks and findTitleBlockIndex are defined.
 
   // Find the chapter_title block index to start on
   const findTitleBlockIndex = useCallback((blockList: PageBlock[]): number => {
@@ -1391,6 +1387,26 @@ export const PageViewer: React.FC<PageViewerProps> = ({
       if (!isStale()) setLoading(false);
     }
   }, [bookId, findTitleBlockIndex]); // Removed preloadedBlocks from deps - now read from ref
+
+  // Sync with external chapter changes (from TOC clicks)
+  useEffect(() => {
+    if (initialChapter !== currentChapter) {
+      setCurrentChapter(initialChapter);
+      setCurrentIndex(0); // Reset to first page of new chapter
+      setLoading(true); // Show loading state
+      
+      // Force fetch blocks for the new chapter
+      const preloaded = preloadedBlocksRef.current?.[initialChapter];
+      if (preloaded && preloaded.length > 0) {
+        setBlocks(preloaded);
+        setCurrentIndex(findTitleBlockIndex(preloaded));
+        setLoading(false);
+      }
+      
+      // Always trigger fetchBlocks to ensure we have the latest data
+      fetchBlocks(initialChapter);
+    }
+  }, [initialChapter, currentChapter, fetchBlocks, findTitleBlockIndex]);
 
   // Auto-trigger image fetch for blocks without images on mount
   // ALL users (including Admins) get auto-populated images, Admins can manually override via toolbar
@@ -2117,16 +2133,23 @@ export const PageViewer: React.FC<PageViewerProps> = ({
     if (currentChapter > 1) {
       const prevChapter = currentChapter - 1;
       setCurrentChapter(prevChapter);
+      setLoading(true); // Show loading state during transition
+      
       // Go to the last page of the previous chapter
       const prevChapterBlocks = preloadedBlocks?.[prevChapter];
       if (prevChapterBlocks && prevChapterBlocks.length > 0) {
+        setBlocks(prevChapterBlocks); // Set blocks immediately from preloaded
         setCurrentIndex(prevChapterBlocks.length - 1);
+        setLoading(false);
       } else {
         setCurrentIndex(0);
       }
+      
+      // Always trigger fetchBlocks to ensure we have the latest data
+      fetchBlocks(prevChapter);
       onChapterChange?.(prevChapter);
     }
-  }, [currentChapter, preloadedBlocks, onChapterChange]);
+  }, [currentChapter, preloadedBlocks, onChapterChange, fetchBlocks]);
 
   const goPrev = useCallback(() => {
     if (currentIndex > 0) {
