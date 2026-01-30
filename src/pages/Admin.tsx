@@ -30,7 +30,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield, Key, Copy, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield, Key, Copy, AlertTriangle, Check, Loader2, Settings, Mail } from 'lucide-react';
 import Logo from '@/components/Logo';
 
 interface PromoCode {
@@ -75,6 +75,11 @@ const Admin = () => {
   const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
   const [openverseCredentials, setOpenverseCredentials] = useState<OpenverseCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<'id' | 'secret' | null>(null);
+
+  // Platform settings state
+  const [supportEmail, setSupportEmail] = useState('');
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   // Check if user is admin
   useEffect(() => {
@@ -126,6 +131,56 @@ const Admin = () => {
       fetchPromoCodes();
     }
   }, [isAdmin]);
+
+  // Fetch platform settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!isAdmin) return;
+
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('support_email')
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error('Error fetching platform settings:', error);
+      } else {
+        setSupportEmail(data?.support_email || '');
+      }
+      setLoadingSettings(false);
+    };
+
+    if (isAdmin) {
+      fetchSettings();
+    }
+  }, [isAdmin]);
+
+  const handleSaveEmail = async () => {
+    if (!supportEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+
+    setSavingEmail(true);
+    try {
+      const { error } = await supabase
+        .from('platform_settings')
+        .update({ support_email: supportEmail.trim() })
+        .not('id', 'is', null); // Update all rows (there should be only one)
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Email address saved successfully');
+    } catch (error) {
+      console.error('Error saving email:', error);
+      toast.error('Failed to save email address');
+    } finally {
+      setSavingEmail(false);
+    }
+  };
 
   const handleCreateCode = async () => {
     if (!newCode.code.trim()) {
@@ -581,6 +636,63 @@ const Admin = () => {
             </Table>
           </div>
         )}
+        </section>
+
+        {/* Platform Settings Section */}
+        <section>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Settings className="w-5 h-5 text-primary" />
+                <div>
+                  <CardTitle className="font-serif text-xl">Platform Settings</CardTitle>
+                  <CardDescription>
+                    Configure notification settings and platform preferences
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingSettings ? (
+                <div className="text-center py-4 text-muted-foreground">Loading settings...</div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="support-email" className="flex items-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      Notification Email Address
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Contact form submissions will be sent to this email address.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        id="support-email"
+                        type="email"
+                        value={supportEmail}
+                        onChange={(e) => setSupportEmail(e.target.value)}
+                        placeholder="support@example.com"
+                        className="flex-1"
+                      />
+                      <Button 
+                        onClick={handleSaveEmail} 
+                        disabled={savingEmail}
+                      >
+                        {savingEmail ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Email'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </section>
       </main>
     </div>

@@ -53,6 +53,13 @@ const Footer = () => {
           >
             FAQ
           </Link>
+          <span className="text-muted-foreground/30">·</span>
+          <Link 
+            to="/contact" 
+            className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          >
+            {t('contactUs')}
+          </Link>
         </div>
       </div>
     </footer>

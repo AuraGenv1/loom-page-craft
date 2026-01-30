@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import Logo from "@/components/Logo";
 import Footer from "@/components/Footer";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Accordion,
   AccordionContent,
@@ -10,36 +11,36 @@ import {
 } from "@/components/ui/accordion";
 
 const FAQ = () => {
+  const { t } = useLanguage();
+
   const faqs = [
     {
-      question: "Do I own the guide once it's created?",
-      answer:
-        "Yes, absolutely. Once your custom guide is generated, you own the content entirely. The instructional material, table of contents, and all chapter content become your intellectual property to use as you see fit.",
+      question: t('faqOwnershipQ'),
+      answer: t('faqOwnershipA'),
     },
     {
-      question: "Can I sell my custom manuals commercially?",
-      answer:
-        "Yes, you retain full commercial rights to any guide you create. Whether you wish to sell printed copies, offer digital downloads, or include the content in paid courses, you have complete freedom to monetize your custom manuals.",
+      question: t('faqCommercialQ'),
+      answer: t('faqCommercialA'),
     },
     {
-      question: "How does local resource data work?",
-      answer:
-        "We integrate with real-time location services to provide relevant local suppliers, workshops, and specialty shops near you. When you enable location access, our system searches for businesses that match your guide's topic—ensuring you have access to genuine, nearby resources rather than generic suggestions.",
+      question: t('faqLocalResourcesQ'),
+      answer: t('faqLocalResourcesA'),
     },
     {
-      question: "What topics can I create guides for?",
-      answer:
-        "Loom & Page can weave instructional volumes on a vast array of subjects—from artisan crafts like leatherworking and woodworking, to technical pursuits like vintage car restoration or electronics repair. We focus on practical, skill-based topics where step-by-step instruction provides genuine value.",
+      question: t('faqTopicsQ'),
+      answer: t('faqTopicsA'),
     },
     {
-      question: "How is my guide different from others?",
-      answer:
-        "Each guide is uniquely composed based on your specific topic query. Unlike template-based content, our AI architect crafts original instructional prose in the style of classic technical manuals. No two guides are identical, even on similar subjects.",
+      question: t('faqUniqueQ'),
+      answer: t('faqUniqueA'),
     },
     {
-      question: "Can I access my guides on multiple devices?",
-      answer:
-        "Yes. When you create an account and save your guides to the cloud, they become accessible from any device. You can also download PDF versions for offline access and printing.",
+      question: t('faqMultiDeviceQ'),
+      answer: t('faqMultiDeviceA'),
+    },
+    {
+      question: t('faqReturnsQ'),
+      answer: t('faqReturnsA'),
     },
   ];
 
@@ -82,7 +83,7 @@ const FAQ = () => {
               <AccordionTrigger className="text-left font-serif text-lg hover:no-underline py-5">
                 {faq.question}
               </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+              <AccordionContent className="text-muted-foreground leading-relaxed pb-5 whitespace-pre-line">
                 {faq.answer}
               </AccordionContent>
             </AccordionItem>
@@ -94,10 +95,10 @@ const FAQ = () => {
             Have another question?
           </p>
           <Link
-            to="/"
+            to="/contact"
             className="inline-flex items-center gap-2 font-serif text-primary hover:text-primary/80 transition-colors"
           >
-            Return to the Loom
+            {t('contactUs')}
           </Link>
         </div>
       </main>

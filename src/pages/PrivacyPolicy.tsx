@@ -1,7 +1,12 @@
 import { Link } from 'react-router-dom';
 import Logo from '@/components/Logo';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 const PrivacyPolicy = () => {
+  const { t, language } = useLanguage();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -18,6 +23,16 @@ const PrivacyPolicy = () => {
         <h1 className="font-serif text-3xl md:text-4xl font-semibold text-foreground mb-8">
           Privacy Policy
         </h1>
+        
+        {/* Translation Disclaimer Banner - show for non-English */}
+        {language !== 'en' && (
+          <Alert className="mb-8 border-primary/30 bg-primary/5">
+            <Info className="h-4 w-4 text-primary" />
+            <AlertDescription className="text-sm text-foreground/80">
+              {t('legalTranslationDisclaimer')}
+            </AlertDescription>
+          </Alert>
+        )}
         
         <div className="prose prose-neutral dark:prose-invert max-w-none space-y-6 text-muted-foreground">
           <p className="text-sm text-muted-foreground/70">
@@ -68,7 +83,10 @@ const PrivacyPolicy = () => {
           <section className="space-y-3">
             <h2 className="font-serif text-xl font-medium text-foreground">Contact</h2>
             <p>
-              If you have questions about this Privacy Policy, please contact us through our website.
+              If you have questions about this Privacy Policy, please contact us through our{' '}
+              <Link to="/contact" className="text-primary hover:underline">
+                contact page
+              </Link>.
             </p>
           </section>
         </div>
