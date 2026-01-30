@@ -1,356 +1,329 @@
 
-# Plan: Four-Part Fix - Advanced Options Labels, Search Tabs, Navigation, and Image Margins
+# Plan: Comprehensive Translation System Fix
 
 ## Summary
 
-This plan addresses four distinct issues identified from the screenshots:
+This plan addresses multiple translation gaps and a critical crash bug identified across the application:
 
-1. **Advanced Options Panel**: Fix remaining label formatting issues (add spaces between words)
-2. **Vectors & Locations Tabs**: Debug and fix the search function to return results
-3. **Back Navigation**: Ensure "Prev" button always goes back by exactly one page, never by chapter
-4. **Image Attribution Margins**: Move attribution text higher to maintain KDP margin compliance
-
----
-
-## Issue 1: Advanced Options Label Fixes
-
-### Current Problems (Screenshot 1)
-The labels are still showing without proper formatting:
-- "advancedOptions" → should be "Advanced Options"
-- "NARRATIVEVOICE" → should be "NARRATIVE VOICE"
-- "BOOKSTRUCTURE" → should be "BOOK STRUCTURE"
-- "FOCUSAREAS" → should be "FOCUS AREAS"
-
-Additionally, the Focus Area tooltips overlap with the "Try:" text below.
-
-### Root Cause
-The issue is in `LanguageContext.tsx` - the translation keys don't exist, so `t('advancedOptions')` returns the key itself, which then gets displayed directly. The fallback strings are being used, but the uppercase labels for section headers are also coming from translation keys that don't exist.
-
-Looking at the code more carefully:
-- Line 69: `{t('advancedOptions') || 'Advanced Options'}` - `t()` returns the key if not found
-- Line 78: `{t('narrativeVoice') || 'Narrative Voice'}` - same issue
-- Line 106: `{t('bookStructure') || 'Book Structure'}` - same issue
-- Line 134: `{t('focusAreas') || 'Focus Areas'}` - same issue
-
-The `t()` function in `LanguageContext.tsx` line 386-388:
-```typescript
-const t = useCallback((key: string): string => {
-  return translations[language][key] || translations.en[key] || key;
-}, [language]);
-```
-
-Since these keys don't exist in the translations object, it returns the key itself, which is truthy, so the fallback never triggers.
-
-### Files to Modify
-- `src/contexts/LanguageContext.tsx` - Add the missing translation keys
-- `src/pages/Index.tsx` - Add spacing between Advanced Options and "Try:" text
-
-### Solution
-
-**Add translation keys to all 8 languages in `LanguageContext.tsx`:**
-
-Add these keys to each language's translations object:
-```typescript
-advancedOptions: 'Advanced Options',
-narrativeVoice: 'NARRATIVE VOICE',
-bookStructure: 'BOOK STRUCTURE',
-focusAreas: 'FOCUS AREAS',
-```
-
-**Add spacing in Index.tsx (line 835):**
-
-Change the `mt-8` margin to `mt-12` or add `pt-4` to prevent tooltip overlap:
-```typescript
-<p className="text-sm text-muted-foreground mt-12 animate-fade-up animation-delay-300">
-```
+1. **Focus Area Tooltips**: Add translations for all 7 tooltip descriptions in 8 languages
+2. **Weaving Process Steps**: Translate the 5 loading animation stages
+3. **Book Content Language**: Ensure language is properly passed to chapter generation (language IS being passed - investigating crash)
+4. **Chapter Status Labels**: Translate "Reading", "Expand", "Drafting", "Pending" in Table of Contents
+5. **Block Labels**: Translate "KEY TAKEAWAY" and "PRO TIP" labels in PageViewer
+6. **Download Button Text**: Translate "Download Full Guide (PDF)" and related text
+7. **Footer AI Disclaimer**: Translate the AI-generated content disclaimer (keep Privacy/Terms/FAQ links in English)
+8. **Critical Crash Bug**: Investigate and fix the chapter navigation crash that resets to homepage
 
 ---
 
-## Issue 2: Vectors & Locations Tabs Returning 0 Results
+## Issue Analysis
 
-### Current Problems (Screenshot 2)
-- Gallery tab shows 150 results for "Tokyo"
-- Locations tab shows 0 results
-- Vectors tab shows 0 results
+### Current Translation Architecture
+The app uses `LanguageContext.tsx` with a `translations` object containing key-value pairs for 8 languages. The `t()` function returns the translation or falls back to English, then to the key itself.
 
-### Root Cause Analysis
+### Missing Translation Keys Identified
 
-Looking at the frontend filtering logic in `ImageSearchGallery.tsx` (lines 639-652):
+| Location | Current Text (English) | Translation Key Needed |
+|----------|----------------------|----------------------|
+| AdvancedOptions.tsx | Focus Area tooltips | `tooltip_history`, `tooltip_wellness`, etc. |
+| LoadingAnimation.tsx | "Gathering threads..." | `weaving_step1`, `weaving_step2`, etc. |
+| TableOfContents.tsx | "Reading", "Expand", "Drafting", "Pending" | `status_reading`, `status_expand`, etc. |
+| PageViewer.tsx | "KEY TAKEAWAY", "PRO TIP" | `keyTakeaway`, `proTip` |
+| ProgressDownloadButton.tsx | "Download Full Guide (PDF)" | `downloadFullGuide` |
+| Footer.tsx | AI disclaimer text | `aiDisclaimer` |
 
-```typescript
-// Gallery: High-quality stock photos (Unsplash, Pexels, Pixabay photos)
-const galleryImages = images.filter(img => 
-  img.source === 'unsplash' || img.source === 'pexels' || 
-  (img.source === 'pixabay' && (img as any).imageType !== 'vector')
-);
-
-// Locations & Landmarks: Specific places (Openverse, Wikimedia)
-const locationsImages = images.filter(img => 
-  img.source === 'openverse' || img.source === 'wikimedia'
-);
-
-// Vectors & Icons: Diagrams, symbols (Pixabay vectors)
-const vectorImages = images.filter(img => 
-  (img as any).imageType === 'vector'
-);
-```
-
-The problem is that the backend doesn't call Openverse/Wikimedia or Pixabay vectors when `searchAllSources` is false and the query is detected as "realistic" mode.
-
-Looking at the backend logic (line 933-973), for a "realistic" query like "Tokyo":
-- If it's a "specific location", it calls Openverse and Wikimedia
-- If not, it prioritizes Unsplash/Pexels and only includes "some Openverse"
-
-**The real issue**: The frontend calls the search API but the smart routing may not include all sources. The `searchAllSources` parameter exists but might not be passed from the frontend.
-
-Looking at the frontend search call, I need to verify if `searchAllSources: true` is being passed when the user is in the gallery modal.
-
-### Solution
-
-**Frontend (`ImageSearchGallery.tsx`)**: Ensure the search call includes `searchAllSources: true` to force all source searches for the manual gallery.
-
-**Backend verification**: The backend already has logic for `searchAllSources = true` (line 978-999) that searches all sources including vectors and Openverse/Wikimedia. We need to ensure this is being passed correctly.
-
-The issue is likely in the frontend's `handleSearch` function - need to pass `searchAllSources: true` in the request body.
+### Critical Bug Investigation
+The crash when navigating to Chapter 2+ that reverts content to English and crashes to homepage suggests:
+- The `language` variable might not be available or reset during navigation
+- A React error boundary or uncaught exception is forcing a navigation reset
+- State corruption during chapter hydration
 
 ---
 
-## Issue 3: "Back" Button Goes by Chapter Instead of Page
+## Files to Modify
 
-### Current Problems (Screenshot 3)
-The "Prev" button in the book viewer sometimes navigates back by an entire chapter instead of a single page.
+### 1. `src/contexts/LanguageContext.tsx`
+Add the following new translation keys to all 8 languages:
 
-### Root Cause Analysis
+**Focus Area Tooltips:**
+- `tooltip_history`: Ancient stories, heritage sites, and cultural timelines
+- `tooltip_wellness`: Spas, retreats, meditation, and self-care rituals
+- `tooltip_nightlife`: Bars, clubs, live music, and after-dark scenes
+- `tooltip_art`: Galleries, architecture, studios, and creative spaces
+- `tooltip_luxury`: High-end experiences, exclusive venues, and premium services
+- `tooltip_culture`: Traditions, local customs, food markets, and community life
+- `tooltip_nature`: Parks, hiking trails, beaches, and outdoor adventures
 
-Looking at the `goPrev` function in `PageViewer.tsx` (lines 2154-2162):
+**Weaving Process Steps:**
+- `weaving_step1`: Gathering threads...
+- `weaving_step2`: Setting up the loom...
+- `weaving_step3`: Weaving chapters...
+- `weaving_step4`: Adding finishing touches...
+- `weaving_step5`: Almost ready...
+
+**Chapter Status Labels:**
+- `status_reading`: Reading
+- `status_expand`: Expand
+- `status_drafting`: Drafting...
+- `status_pending`: Pending
+- `status_locked`: Locked
+- `chapters`: Chapters
+
+**Block Labels:**
+- `keyTakeaway`: KEY TAKEAWAY
+- `proTip`: PRO TIP
+
+**Download/Progress:**
+- `downloadFullGuide`: Download Full Guide (PDF)
+- `generatingPdf`: Generating PDF...
+- `weavingPages`: Weaving... {count} pages
+- `pleaseWaitChapters`: Please wait for all chapters...
+- `artisanWeaving`: Our Artisan is weaving your custom details...
+
+**Footer:**
+- `aiDisclaimer`: AI-generated content for creative inspiration only. Not professional advice.
+
+---
+
+### 2. `src/components/AdvancedOptions.tsx`
+Update FOCUS_OPTIONS to use translated tooltips:
 
 ```typescript
-const goPrev = useCallback(() => {
-  if (currentIndex > 0) {
-    setCurrentIndex(prev => prev - 1);  // Go back ONE page
-  } else if (currentChapter > 1) {
-    goToPrevChapter();  // Problem: jumps to previous chapter
-  }
-}, [currentIndex, currentChapter, goToPrevChapter, onPageChange]);
+const FOCUS_OPTIONS = [
+  { id: 'history', label: 'History', tooltipKey: 'tooltip_history' },
+  { id: 'wellness', label: 'Wellness', tooltipKey: 'tooltip_wellness' },
+  // ... etc
+];
+
+// In render:
+<TooltipContent>
+  <p className="text-xs">{t(focus.tooltipKey)}</p>
+</TooltipContent>
 ```
 
-The issue: When `currentIndex === 0` (first page of chapter), clicking Prev calls `goToPrevChapter()` instead of staying on the current page or providing proper feedback.
+---
 
-However, this is intentional behavior - when you're on the first page of Chapter 5, pressing "Prev" should take you to the last page of Chapter 4.
-
-**The actual bug** is that `goToPrevChapter()` (lines 2132-2152) has issues:
-1. It calls `setLoading(true)` which shows the loading spinner
-2. If `prevChapterBlocks` exists, it tries to set blocks and index
-3. But then it ALWAYS calls `fetchBlocks(prevChapter)` which may reset state
-
-The problem is race conditions between setting state and triggering async operations.
-
-### Solution
-
-The `goToPrevChapter` function should be synchronous if we have preloaded blocks, and should NOT call `fetchBlocks` if blocks are already available:
+### 3. `src/components/LoadingAnimation.tsx`
+Update stages to use translation keys:
 
 ```typescript
-const goToPrevChapter = useCallback(() => {
-  if (currentChapter > 1) {
-    const prevChapter = currentChapter - 1;
-    const prevChapterBlocks = preloadedBlocks?.[prevChapter];
-    
-    setCurrentChapter(prevChapter);
-    
-    if (prevChapterBlocks && prevChapterBlocks.length > 0) {
-      // Have preloaded blocks - use them immediately, NO fetch
-      setBlocks(prevChapterBlocks);
-      setCurrentIndex(prevChapterBlocks.length - 1);
-      setLoading(false);
-    } else {
-      // Need to fetch - show loading
-      setLoading(true);
-      setCurrentIndex(0);
-      fetchBlocks(prevChapter);
+const stages = [
+  { progress: 15, key: 'weaving_step1' },
+  { progress: 35, key: 'weaving_step2' },
+  { progress: 55, key: 'weaving_step3' },
+  { progress: 75, key: 'weaving_step4' },
+  { progress: 90, key: 'weaving_step5' },
+];
+
+// In effect:
+setStatusText(t(stages[currentStage].key));
+```
+
+---
+
+### 4. `src/components/TableOfContents.tsx`
+Add useLanguage hook and translate status labels:
+
+```typescript
+import { useLanguage } from '@/contexts/LanguageContext';
+
+// In component:
+const { t } = useLanguage();
+
+// Replace hardcoded strings:
+<span>... {t('status_drafting')}</span>  // was "Drafting..."
+<span>... {t('status_pending')}</span>   // was "Pending"
+<span>... {t('status_expand')}</span>    // was "Expand →"
+<span>... {t('status_reading')}</span>   // was "Reading"
+<span>... {t('status_locked')}</span>    // was "Locked"
+<span>... {t('chapters')}</span>         // was "Chapters"
+```
+
+---
+
+### 5. `src/components/PageViewer.tsx`
+Update ProTipPage and KeyTakeawayPage to use translations:
+
+```typescript
+// ProTipPage - needs language context passed via props or hook
+<p className="text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground">
+  {t('proTip')}  // was "PRO TIP"
+</p>
+
+// KeyTakeawayPage
+<p className="text-xs font-bold tracking-[0.2em] uppercase text-primary mb-3">
+  {t('keyTakeaway')}  // was "KEY TAKEAWAY"
+</p>
+```
+
+Note: PageViewer is a large component - we'll need to either:
+- Pass `t` function as a prop to these sub-components
+- Or create a context consumer inside each component
+
+---
+
+### 6. `src/components/ProgressDownloadButton.tsx`
+Add useLanguage hook and translate labels:
+
+```typescript
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const { t } = useLanguage();
+
+const getLabel = () => {
+  if (isCompiling) return t('generatingPdf');
+  if (isPurchased && !isComplete) {
+    if (totalPageCount && totalPageCount > 0) {
+      return t('weavingPages').replace('{count}', String(totalPageCount));
     }
-    
-    onChapterChange?.(prevChapter);
+    return `${t('weaving')} ${completedChapters}/${totalChapters}`;
   }
-}, [currentChapter, preloadedBlocks, onChapterChange, fetchBlocks]);
+  return t('downloadFullGuide');
+};
+
+// Status text:
+{isPurchased ? t('pleaseWaitChapters') : t('artisanWeaving')}
 ```
 
 ---
 
-## Issue 4: Image Attribution Too Low (KDP Margin Violation)
+### 7. `src/components/Footer.tsx`
+Add useLanguage hook for AI disclaimer (keep links in English as requested):
 
-### Current Problems (Screenshot 3)
-The uploaded photo shows attribution text "Photo by Daiji Sashida via Unsplash" very close to the bottom of the page, which could cause issues with KDP page numbering.
-
-### Root Cause Analysis
-
-Looking at `ImageFullPage` component (lines 560-641), the attribution is positioned:
 ```typescript
-{attribution && (
-  <p className="text-[8px] text-muted-foreground/40 text-center mt-1">
-    {attribution}
-  </p>
-)}
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const { t } = useLanguage();
+
+// Disclaimer:
+<p className="text-[10px] text-center text-muted-foreground/70 leading-relaxed">
+  {t('aiDisclaimer')}
+</p>
+
+// Links remain in English:
+<Link to="/privacy">Privacy Policy</Link>
+<Link to="/terms">Terms of Service</Link>
+<Link to="/faq">FAQ</Link>
 ```
 
-This is inside a flex container with:
-- `py-8 px-6` padding on the main content area
-- `max-h-[65vh]` on the image
+---
 
-The issue is that on tall images, the caption + attribution extend very close to the bottom.
+## Issue 8: Critical Crash Bug Investigation
 
-### Solution
+### Symptoms
+- Reading a book in a non-English language
+- Navigating to Chapter 2 causes text to revert to English
+- Clicking next page crashes and redirects to homepage (in English)
 
-**Option 1**: Move attribution ABOVE the image (as part of a header area) instead of below the caption
-**Option 2**: Reduce image max-height to leave more bottom margin
-**Option 3**: Add explicit bottom padding/margin to ensure KDP compliance
+### Root Cause Hypothesis
+1. **Language prop not persisted to chapter generation**: The `language` variable from `useLanguage()` is used during initial book generation but may not be stored in the database. When Chapter 2 is generated via the daisy-chain, it may not have the original language available.
 
-For KDP 6x9 books, the minimum bottom margin should be 0.375" (0.5" preferred). The current layout doesn't guarantee this.
+2. **Race condition in chapter hydration**: The `fetchBlocks` function might throw an error when blocks are malformed or missing, causing React to unmount and navigate away.
 
-**Recommended approach**: 
-1. Cap the image container height more conservatively
-2. Add a minimum bottom margin to the page container
-3. Consider moving attribution to a less prominent position (e.g., below caption on same line, or at the top of the image)
+3. **State corruption**: The `setBlocks` or `setCurrentChapter` calls might cause a re-render cascade that loses context.
 
-### Implementation
+### Investigation Steps
+1. Check if `language` is stored in the `books` table and passed to subsequent chapter generation calls
+2. Add error boundaries around PageViewer to catch crashes
+3. Add logging to `goToPrevChapter` and `goToNextChapter` to trace the crash
 
-Update `ImageFullPage` to:
-1. Reduce `max-h-[65vh]` to `max-h-[55vh]` for more bottom space
-2. Add `mb-8` to the outer container to ensure minimum margin
-3. Keep attribution compact by combining with caption line
+### Potential Fix
+Store the language in the `books` table during initial creation:
+
+```sql
+-- Add language column to books table
+ALTER TABLE books ADD COLUMN language text DEFAULT 'en';
+```
+
+Then in `generate-book-blocks`:
+```typescript
+// Save language to DB
+await supabase.from('books').update({ language }).eq('id', bookId);
+```
+
+And in `Index.tsx` daisy-chain:
+```typescript
+// Retrieve language from bookData instead of context
+const bookLanguage = bookData?.language || language;
+```
+
+---
+
+## Translation Examples (French)
+
+Here are the translations for French as an example:
+
+```typescript
+fr: {
+  // ... existing keys ...
+  
+  // Focus Area Tooltips
+  tooltip_history: 'Histoires anciennes, sites patrimoniaux et chronologies culturelles',
+  tooltip_wellness: 'Spas, retraites, méditation et rituels de bien-être',
+  tooltip_nightlife: 'Bars, clubs, musique live et scènes nocturnes',
+  tooltip_art: 'Galeries, architecture, studios et espaces créatifs',
+  tooltip_luxury: 'Expériences haut de gamme, lieux exclusifs et services premium',
+  tooltip_culture: 'Traditions, coutumes locales, marchés alimentaires et vie communautaire',
+  tooltip_nature: 'Parcs, sentiers de randonnée, plages et aventures en plein air',
+  
+  // Weaving Steps
+  weaving_step1: 'Rassemblement des fils...',
+  weaving_step2: 'Installation du métier à tisser...',
+  weaving_step3: 'Tissage des chapitres...',
+  weaving_step4: 'Ajout des touches finales...',
+  weaving_step5: 'Presque prêt...',
+  
+  // Chapter Status
+  status_reading: 'Lecture',
+  status_expand: 'Développer',
+  status_drafting: 'Rédaction...',
+  status_pending: 'En attente',
+  status_locked: 'Verrouillé',
+  chapters: 'Chapitres',
+  
+  // Block Labels
+  keyTakeaway: 'POINT CLÉ',
+  proTip: 'CONSEIL PRO',
+  
+  // Download
+  downloadFullGuide: 'Télécharger le Guide Complet (PDF)',
+  generatingPdf: 'Génération du PDF...',
+  weavingPages: 'Tissage... {count} pages',
+  pleaseWaitChapters: 'Veuillez patienter pour tous les chapitres...',
+  artisanWeaving: 'Notre Artisan tisse vos détails personnalisés...',
+  
+  // Footer
+  aiDisclaimer: 'Contenu généré par IA pour inspiration créative uniquement. Ce n\'est pas un conseil professionnel.',
+}
+```
 
 ---
 
 ## Files Summary
 
-| File | Action | Changes |
-|------|--------|---------|
-| `src/contexts/LanguageContext.tsx` | MODIFY | Add `advancedOptions`, `narrativeVoice`, `bookStructure`, `focusAreas` translation keys to all 8 languages |
-| `src/pages/Index.tsx` | MODIFY | Increase margin between Advanced Options and "Try:" text |
-| `src/components/ImageSearchGallery.tsx` | MODIFY | Pass `searchAllSources: true` to the search API call |
-| `src/components/PageViewer.tsx` | MODIFY | Fix `goToPrevChapter` to not trigger unnecessary fetch, fix image layout margins |
+| File | Changes |
+|------|---------|
+| `src/contexts/LanguageContext.tsx` | Add ~50 new translation keys across 8 languages |
+| `src/components/AdvancedOptions.tsx` | Use `t()` for Focus Area tooltips |
+| `src/components/LoadingAnimation.tsx` | Use `t()` for weaving stage text |
+| `src/components/TableOfContents.tsx` | Add `useLanguage` hook, translate status labels |
+| `src/components/PageViewer.tsx` | Pass translation function to block components |
+| `src/components/ProgressDownloadButton.tsx` | Add `useLanguage` hook, translate button text |
+| `src/components/Footer.tsx` | Add `useLanguage` hook, translate AI disclaimer |
+| Database (optional) | Add `language` column to `books` table for crash fix |
 
 ---
 
-## Visual Changes After Fixes
+## Testing Checklist
 
-### Advanced Options (After Fix)
-```text
-[  v Advanced Options ]   <- Proper spacing
-
-       NARRATIVE VOICE    <- All caps with space
-[The Insider] [The Bestie] [The Poet] [The Professor]
-
-       BOOK STRUCTURE     <- All caps with space
-[Curated Guide] [Playbook] [Balanced]
-
-       FOCUS AREAS        <- All caps with space
-[History] [Wellness] [Nightlife] [Art & Design]
-
-
-                          <- Extra spacing before "Try:"
-Try: "Sourdough bread baking" or "Watercolor painting basics"
-```
-
-### Search Gallery (After Fix)
-- Gallery tab: 150 results (unchanged)
-- Locations tab: 50+ results from Openverse and Wikimedia
-- Vectors tab: 100+ results from Pixabay vectors
-
-### Page Navigation (After Fix)
-- Prev button always goes back exactly one page
-- At first page of Chapter 5 → goes to last page of Chapter 4 smoothly
-- No infinite loading spinners
-
-### Image Layout (After Fix)
-- Images constrained to `max-h-[55vh]` instead of `65vh`
-- Attribution text positioned with adequate margin from page bottom
-- Complies with Amazon KDP 0.375" minimum margin requirement
-
----
-
-## Technical Details
-
-### Translation Key Updates
-
-All 8 languages need these keys added:
-
-**English (en):**
-```typescript
-advancedOptions: 'Advanced Options',
-narrativeVoice: 'NARRATIVE VOICE',
-bookStructure: 'BOOK STRUCTURE',
-focusAreas: 'FOCUS AREAS',
-```
-
-**Spanish (es):**
-```typescript
-advancedOptions: 'Opciones Avanzadas',
-narrativeVoice: 'VOZ NARRATIVA',
-bookStructure: 'ESTRUCTURA DEL LIBRO',
-focusAreas: 'ÁREAS DE ENFOQUE',
-```
-
-**French (fr):**
-```typescript
-advancedOptions: 'Options Avancées',
-narrativeVoice: 'VOIX NARRATIVE',
-bookStructure: 'STRUCTURE DU LIVRE',
-focusAreas: 'DOMAINES DE FOCUS',
-```
-
-**German (de):**
-```typescript
-advancedOptions: 'Erweiterte Optionen',
-narrativeVoice: 'ERZÄHLSTIMME',
-bookStructure: 'BUCHSTRUKTUR',
-focusAreas: 'SCHWERPUNKTE',
-```
-
-**Italian (it):**
-```typescript
-advancedOptions: 'Opzioni Avanzate',
-narrativeVoice: 'VOCE NARRATIVA',
-bookStructure: 'STRUTTURA DEL LIBRO',
-focusAreas: 'AREE DI FOCUS',
-```
-
-**Portuguese (pt):**
-```typescript
-advancedOptions: 'Opções Avançadas',
-narrativeVoice: 'VOZ NARRATIVA',
-bookStructure: 'ESTRUTURA DO LIVRO',
-focusAreas: 'ÁREAS DE FOCO',
-```
-
-**Chinese (zh):**
-```typescript
-advancedOptions: '高级选项',
-narrativeVoice: '叙事风格',
-bookStructure: '书籍结构',
-focusAreas: '关注领域',
-```
-
-**Japanese (ja):**
-```typescript
-advancedOptions: '詳細オプション',
-narrativeVoice: 'ナラティブボイス',
-bookStructure: 'ブック構造',
-focusAreas: 'フォーカスエリア',
-```
-
-### Search API Fix
-
-In `ImageSearchGallery.tsx`, update the search invocation to include `searchAllSources: true`:
-
-```typescript
-const { data, error } = await supabase.functions.invoke('search-book-images', {
-  body: {
-    query: searchQuery,
-    orientation,
-    limit: 300,
-    bookTopic,
-    forCover,
-    searchAllSources: true,  // CRITICAL: Force all sources for manual gallery
-  },
-});
-```
+After implementation:
+1. Switch to each of the 8 languages and verify:
+   - Focus Area tooltips display correctly
+   - Weaving animation text is translated
+   - Table of Contents status labels are translated
+   - "KEY TAKEAWAY" and "PRO TIP" blocks show translated labels
+   - Download button text is translated
+   - Footer disclaimer is translated (links remain English)
+2. Generate a book in French/Spanish/etc. and navigate through all chapters
+3. Verify no crash occurs when moving between chapters in non-English languages
+4. Confirm the language persists throughout the reading experience
