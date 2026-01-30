@@ -1,394 +1,358 @@
 
-# Plan: "Advanced Options" Panel with Smart Auto-Pilot Logic
+
+# Plan: Gallery Grid - Unsplash Compliance with Safe Click Areas & Download Tracking
 
 ## Summary
 
-Transform the book generation experience from a simple search into a "Directed Experience" by adding an Advanced Options panel below the search input. Users can optionally define the **Voice**, **Structure**, and **Focus Areas** of their book. If they skip these options, the system will intelligently detect keywords in their input and auto-select appropriate defaults.
+Update the `ImageGrid` component in `ImageSearchGallery.tsx` to comply with Unsplash API guidelines:
+1. Display attribution footer on hover (bottom 20% of card)
+2. Separate click zones: Footer opens photographer profile, Image area selects for book
+3. Trigger Unsplash `download_location` endpoint when user actually selects an image
 
----
-
-## Architecture Overview
+## Architecture
 
 ```
-+---------------------------+
-|   SearchInput Component   |
-+---------------------------+
-            |
-            v
-+---------------------------+
-| AdvancedOptions Component | (NEW - collapsible panel)
-|---------------------------|
-| [Network Icon] Advanced   |
-|                           |
-| VOICE: [Chip] [Chip]...   |
-| STRUCTURE: [Chip] [Chip]  |
-| FOCUS: [Chip] [Chip]...   |
-+---------------------------+
-            |
-            v (on submit)
-+---------------------------+
-| Smart Auto-Pilot Logic    | (keyword detection if no manual selection)
-+---------------------------+
-            |
-            v
-+---------------------------+
-| generate-book-blocks      | (Edge Function - receives voice/structure params)
-+---------------------------+
++------------------------------------------+
+|                                          |
+|        Image Area (~80%)                 |
+|        Click = Select for Book           |
+|        + Trigger download_location       |
+|                                          |
++------------------------------------------+
+|  [Photo by Jane Doe / Unsplash  ↗]       |  <-- Footer (~20%)
+|  Click = Open profile (stopPropagation)  |
++------------------------------------------+
 ```
 
 ---
 
-## Part 1: Create AdvancedOptions Component
+## Part 1: Update Backend - Add `download_location` to Unsplash Results
 
-**New file: `src/components/AdvancedOptions.tsx`**
+### File: `supabase/functions/search-book-images/index.ts`
 
-### Props Interface
-
+**Changes to ImageResult interface (line 13-24):**
 ```typescript
-export interface AdvancedOptionsState {
-  voice: 'insider' | 'bestie' | 'poet' | 'professor' | null;
-  structure: 'curated' | 'playbook' | 'balanced' | null;
-  focusAreas: string[]; // Multi-select: history, wellness, nightlife, art, luxury, culture, nature
-}
-
-interface AdvancedOptionsProps {
-  options: AdvancedOptionsState;
-  onChange: (options: AdvancedOptionsState) => void;
+interface ImageResult {
+  imageUrl: string;
+  thumbnailUrl: string;
+  attribution?: string;
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse';
+  id: string;
+  width: number;
+  height: number;
+  isPrintReady: boolean;
+  license?: string;
+  imageType?: 'photo' | 'vector' | 'illustration';
+  // NEW: Unsplash compliance
+  downloadLocation?: string;  // Unsplash download tracking URL
+  photographerUrl?: string;   // Photographer profile URL for attribution link
 }
 ```
 
-### UI Design
-
-1. **Trigger Button**: Text-only button with a thread/weave icon (`Network` from Lucide - represents threads coming together)
-   - Label: "Advanced Options"
-   - Style: Minimalist, muted text color, no border
-
-2. **Collapsible Panel**: Uses `Collapsible` from Radix
-
-3. **Section A - Narrative Voice** (Single Select):
-   - Chips: `The Insider`, `The Bestie`, `The Poet`, `The Professor`
-   - Each chip has a tooltip on hover with the subtext
-   - State: Inactive = `border-muted text-muted-foreground`, Active = `bg-foreground text-background`
-
-4. **Section B - Book Structure** (Single Select):
-   - Chips: `Curated Guide`, `Playbook`, `Balanced`
-   - Tooltips explain focus areas
-
-5. **Section C - Focus Areas** (Multi-Select):
-   - Chips: `History`, `Wellness`, `Nightlife`, `Art & Design`, `Luxury`, `Local Culture`, `Nature`
-   - Multiple can be selected (toggle behavior)
-
-### Chip Styling (No emojis, text-only)
-
-```tsx
-// Inactive state
-className="px-3 py-1.5 text-sm border border-muted rounded-full text-muted-foreground hover:border-foreground/50 transition-colors cursor-pointer"
-
-// Active state
-className="px-3 py-1.5 text-sm bg-foreground text-background rounded-full cursor-pointer"
-```
-
----
-
-## Part 2: Integrate into Index.tsx
-
-### State Management
-
-Add state in Index.tsx:
-
+**Changes to searchUnsplashMultiple function (around lines 244-253):**
 ```typescript
-const [advancedOptions, setAdvancedOptions] = useState<AdvancedOptionsState>({
-  voice: null,
-  structure: null,
-  focusAreas: []
+results.push({
+  id: `unsplash-${photo.id}`,
+  imageUrl: imageUrl || photo.urls?.regular,
+  thumbnailUrl: photo.urls?.small || photo.urls?.thumb,
+  attribution: `Photo by ${photographerName} on Unsplash`,
+  source: 'unsplash' as const,
+  width,
+  height,
+  isPrintReady: width >= PRINT_READY_WIDTH,
+  // NEW: Unsplash compliance fields
+  downloadLocation: photo.links?.download_location,  // For tracking
+  photographerUrl: photo.user?.links?.html,          // For attribution click
 });
 ```
 
-### Layout Integration
-
-Position the AdvancedOptions component directly below SearchInput:
-
-```tsx
-{viewState === 'landing' && (
-  <div className="min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center px-4">
-    {/* ... heading ... */}
-    <div className="w-full animate-fade-up animation-delay-200">
-      <SearchInput onSearch={handleSearch} />
-    </div>
-    {/* NEW: Advanced Options Panel */}
-    <div className="w-full max-w-2xl mx-auto mt-4 animate-fade-up animation-delay-250">
-      <AdvancedOptions 
-        options={advancedOptions} 
-        onChange={setAdvancedOptions} 
-      />
-    </div>
-    <p className="text-sm text-muted-foreground mt-8 animate-fade-up animation-delay-300">
-      {t('searchExamples')}
-    </p>
-  </div>
-)}
-```
-
 ---
 
-## Part 3: Smart Auto-Pilot Logic
+## Part 2: Update Frontend Interface
 
-**New file: `src/lib/autoPilot.ts`**
+### File: `src/components/ImageSearchGallery.tsx`
 
-### Keyword Detection Function
-
+**Update ImageResult interface (lines 18-29):**
 ```typescript
-export interface AutoPilotResult {
-  voice: 'insider' | 'bestie' | 'poet' | 'professor';
-  structure: 'curated' | 'playbook' | 'balanced';
-  detectedKeywords: string[];
+interface ImageResult {
+  id: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  attribution?: string;
+  source: 'unsplash' | 'wikimedia' | 'pexels' | 'pixabay' | 'openverse' | 'pollinations' | 'huggingface';
+  width?: number;
+  height?: number;
+  isPrintReady?: boolean;
+  license?: string;
+  imageType?: 'photo' | 'vector' | 'illustration';
+  // NEW: Unsplash compliance
+  downloadLocation?: string;
+  photographerUrl?: string;
 }
-
-export const detectAutoPilotSettings = (input: string): AutoPilotResult => {
-  const lower = input.toLowerCase();
-  let voice: AutoPilotResult['voice'] = 'insider'; // Default fallback
-  let structure: AutoPilotResult['structure'] = 'balanced'; // Default fallback
-  const detectedKeywords: string[] = [];
-
-  // Structure Detection
-  const playbookKeywords = ['how to', 'learn', 'steps', 'education', 'practice', 'guide to', 'tutorial', 'beginner'];
-  const curatedKeywords = ['guide', 'travel', 'where to', 'best', 'stay', 'eat', 'visit', 'destination', 'trip'];
-
-  for (const kw of playbookKeywords) {
-    if (lower.includes(kw)) {
-      structure = 'playbook';
-      detectedKeywords.push(kw);
-      break;
-    }
-  }
-
-  if (structure !== 'playbook') {
-    for (const kw of curatedKeywords) {
-      if (lower.includes(kw)) {
-        structure = 'curated';
-        detectedKeywords.push(kw);
-        break;
-      }
-    }
-  }
-
-  // Voice Detection
-  const poetKeywords = ['romantic', 'love', 'dream', 'beautiful', 'enchanting', 'magical'];
-  const bestieKeywords = ['fun', 'girls trip', 'party', 'weekend', 'brunch', 'vibes'];
-
-  for (const kw of poetKeywords) {
-    if (lower.includes(kw)) {
-      voice = 'poet';
-      detectedKeywords.push(kw);
-      break;
-    }
-  }
-
-  if (voice === 'insider') {
-    for (const kw of bestieKeywords) {
-      if (lower.includes(kw)) {
-        voice = 'bestie';
-        detectedKeywords.push(kw);
-        break;
-      }
-    }
-  }
-
-  return { voice, structure, detectedKeywords };
-};
 ```
 
-### Integration in handleSearch
+---
+
+## Part 3: Create Download Tracking Utility
+
+### File: `src/lib/unsplashTracking.ts` (NEW)
 
 ```typescript
-const handleSearch = async (query: string) => {
-  // Determine final options (manual or auto-pilot)
-  let finalVoice = advancedOptions.voice;
-  let finalStructure = advancedOptions.structure;
+/**
+ * Trigger Unsplash download tracking
+ * Per Unsplash API guidelines, this must be called when a user
+ * actually uses/downloads an image (not just views it)
+ */
+export async function triggerUnsplashDownload(downloadLocation: string): Promise<void> {
+  if (!downloadLocation) return;
   
-  if (!finalVoice || !finalStructure) {
-    const autoPilot = detectAutoPilotSettings(query);
-    if (!finalVoice) finalVoice = autoPilot.voice;
-    if (!finalStructure) finalStructure = autoPilot.structure;
-    console.log('[AutoPilot] Detected:', autoPilot);
+  try {
+    // Fire-and-forget background request
+    // The download_location URL already includes the client_id
+    await fetch(downloadLocation, {
+      method: 'GET',
+      mode: 'no-cors', // Unsplash doesn't require response handling
+    });
+    console.log('[Unsplash] Download tracked:', downloadLocation.substring(0, 60) + '...');
+  } catch (error) {
+    // Non-blocking - don't fail the user action if tracking fails
+    console.warn('[Unsplash] Download tracking failed:', error);
   }
+}
+```
 
-  // Include in API call
-  const { data, error } = await supabase.functions.invoke('generate-book-blocks', {
-    body: { 
-      topic: query, 
-      sessionId: currentSessionId, 
-      language,
-      voice: finalVoice,
-      structure: finalStructure,
-      focusAreas: advancedOptions.focusAreas
+---
+
+## Part 4: Update ImageGrid Component with Hover Attribution Footer
+
+### File: `src/components/ImageSearchGallery.tsx`
+
+**Redesign ImageGrid (lines 860-964):**
+
+The new card structure:
+1. Outer container with `group` class for hover detection
+2. Main image area (clickable for selection)
+3. Hover-reveal attribution footer with separate click handler
+
+```typescript
+const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectImage }) => {
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+
+  const handleImageLoad = useCallback((id: string) => {
+    setLoadedImages(prev => new Set(prev).add(id));
+  }, []);
+
+  // Get badge color based on source
+  const getSourceBadgeClass = (source: ImageResult['source']): string => {
+    // ... existing logic
+  };
+
+  // Extract photographer name from attribution string
+  const extractPhotographerName = (attribution?: string): string => {
+    if (!attribution) return 'Unknown';
+    // "Photo by Jane Doe on Unsplash" -> "Jane Doe"
+    const match = attribution.match(/Photo by (.+?) on/i);
+    return match ? match[1] : attribution;
+  };
+
+  // Handle attribution footer click (open photographer profile)
+  const handleFooterClick = useCallback((e: React.MouseEvent, image: ImageResult) => {
+    e.stopPropagation(); // CRITICAL: Prevent image selection
+    
+    if (image.photographerUrl) {
+      window.open(image.photographerUrl, '_blank', 'noopener,noreferrer');
+    } else if (image.source === 'unsplash') {
+      // Fallback: open Unsplash homepage
+      window.open('https://unsplash.com', '_blank', 'noopener,noreferrer');
     }
-  });
-  // ... rest of handler
+  }, []);
+
+  return (
+    <ScrollArea className="h-[400px]">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-1">
+        {images.map((image) => {
+          const isSelected = selectedImage?.id === image.id;
+          const isLoaded = loadedImages.has(image.id);
+          const isUnsplash = image.source === 'unsplash';
+          
+          return (
+            <div
+              key={image.id}
+              className={`
+                group relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer
+                ${isSelected 
+                  ? 'border-primary ring-2 ring-primary/30 scale-[1.02]' 
+                  : 'border-transparent hover:border-muted-foreground/30'
+                }
+              `}
+            >
+              {/* Main Image Area - Click to Select */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectImage(image);
+                }}
+                className="w-full block"
+              >
+                {/* Loading skeleton */}
+                {!isLoaded && (
+                  <div className="w-full h-32 bg-muted animate-pulse" />
+                )}
+                
+                {/* Thumbnail */}
+                <img
+                  src={image.thumbnailUrl}
+                  alt=""
+                  className={`w-full h-auto max-h-40 object-contain bg-muted transition-opacity ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => handleImageLoad(image.id)}
+                  loading="lazy"
+                />
+              </button>
+              
+              {/* Print Ready badge - top left */}
+              {image.isPrintReady && (
+                <div className="absolute top-1 left-1 pointer-events-none">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-green-600 text-white">
+                    Print Ready
+                  </span>
+                </div>
+              )}
+              
+              {/* Source badge - bottom left (visible when not hovering) */}
+              <div className="absolute bottom-1 left-1 transition-opacity duration-200 group-hover:opacity-0 pointer-events-none">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getSourceBadgeClass(image.source)}`}>
+                  {getSourceLabel(image.source)}
+                </span>
+              </div>
+              
+              {/* Selection checkmark */}
+              {isSelected && (
+                <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center pointer-events-none">
+                  <Check className="w-3 h-3 text-primary-foreground" />
+                </div>
+              )}
+              
+              {/* Hover Attribution Footer - Only for Unsplash */}
+              {isUnsplash && (
+                <button
+                  onClick={(e) => handleFooterClick(e, image)}
+                  className="
+                    absolute bottom-0 left-0 right-0
+                    bg-black/70 backdrop-blur-sm
+                    px-2 py-1.5
+                    flex items-center justify-between gap-1
+                    translate-y-full group-hover:translate-y-0
+                    transition-transform duration-200 ease-out
+                  "
+                >
+                  <span className="text-[10px] text-white/90 truncate">
+                    Photo by {extractPhotographerName(image.attribution)} / Unsplash
+                  </span>
+                  <ExternalLink className="w-3 h-3 text-white/70 shrink-0" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </ScrollArea>
+  );
 };
 ```
 
 ---
 
-## Part 4: Backend Integration (Edge Function)
+## Part 5: Trigger Download on Image Selection
 
-**File: `supabase/functions/generate-book-blocks/index.ts`**
+When user selects an image (not when hovering, only when they click to add it to the book), trigger the download endpoint.
 
-### Add Voice & Structure to Prompt
+### Update `onSelectImage` handler in ImageSearchGallery
 
-Modify the request parsing:
-
-```typescript
-const { 
-  topic, 
-  sessionId, 
-  language = 'en',
-  voice = 'insider',      // NEW
-  structure = 'balanced', // NEW
-  focusAreas = []         // NEW
-} = await req.json();
-```
-
-### Voice-to-Instruction Mapping
+The download trigger should happen when the image is actually used (when user clicks "Use As-Is" or "Crop for 6x9"). Update `handleSelect` and `handleCropAndSelect`:
 
 ```typescript
-const VOICE_INSTRUCTIONS: Record<string, string> = {
-  insider: 'Write with high taste and authority. Avoid tourist clichés. Use an "IYKYK" (If you know, you know) tone. Focus on hidden gems and insider knowledge.',
-  bestie: 'Write in a confident, sassy, female-forward voice. Treat the reader like a close friend. Use punchy, witty language and share genuine excitement.',
-  poet: 'Use evocative, sensory-rich language. Focus on atmosphere, emotion, and beauty. Paint vivid word pictures that transport the reader.',
-  professor: 'Write with academic authority and educational clarity. Use structured explanations, cite relevant background, and maintain an informative tone.'
-};
+// At top of ImageSearchGallery component
+import { triggerUnsplashDownload } from '@/lib/unsplashTracking';
 
-const STRUCTURE_INSTRUCTIONS: Record<string, string> = {
-  curated: 'Structure the content as a curated directory. Prioritize specific venues (Hotels, Restaurants, Shops) with address details, vibe checks, and insider recommendations.',
-  playbook: 'Structure the content as an educational manual. Use clear steps, bullet points for "How-to" sections, and focus on practical, actionable instructions.',
-  balanced: 'Balance educational content with curated recommendations. Mix teaching moments with specific venue suggestions for a well-rounded guide.'
-};
-```
+// Update handleSelect (around line 495)
+const handleSelect = useCallback(() => {
+  if (!selectedImage || !hasConsented) return;
+  
+  // CRITICAL: Trigger Unsplash download tracking when image is actually used
+  if (selectedImage.source === 'unsplash' && selectedImage.downloadLocation) {
+    triggerUnsplashDownload(selectedImage.downloadLocation);
+  }
+  
+  const metadata = createMetadata(selectedImage);
+  onSelect(selectedImage.imageUrl, selectedImage.attribution, metadata);
+  onOpenChange(false);
+}, [selectedImage, hasConsented, onSelect, onOpenChange]);
 
-### Inject into Gemini Prompt
-
-Add these instructions to the prompt template:
-
-```typescript
-const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
-
-=== NARRATIVE VOICE ===
-${VOICE_INSTRUCTIONS[voice]}
-
-=== BOOK STRUCTURE ===
-${STRUCTURE_INSTRUCTIONS[structure]}
-
-${focusAreas.length > 0 ? `=== FOCUS AREAS ===
-Emphasize these topics throughout the book: ${focusAreas.join(', ')}` : ''}
-
-=== LUXURY ARCHITECT RULES ===
-... (existing rules)
-`;
+// Update handleCropAndSelect similarly (around line 502)
+const handleCropAndSelect = useCallback(() => {
+  if (!selectedImage || !hasConsented) return;
+  
+  // CRITICAL: Trigger Unsplash download tracking when image is actually used
+  if (selectedImage.source === 'unsplash' && selectedImage.downloadLocation) {
+    triggerUnsplashDownload(selectedImage.downloadLocation);
+  }
+  
+  setShowCropper(true);
+}, [selectedImage, hasConsented]);
 ```
 
 ---
 
-## Part 5: Update generate-chapter-blocks
-
-**File: `supabase/functions/generate-chapter-blocks/index.ts`**
-
-The voice and structure should be stored with the book and passed to chapter generation for consistency.
-
-### Option A: Store in books table
-
-Add `voice` and `structure` columns to books table (simple TEXT fields).
-
-### Option B: Pass through from client
-
-For now, the simpler approach is to store these in the book record and retrieve them when generating subsequent chapters.
-
-**Recommended approach**: Add `voice` and `structure` fields to the books table, populate them during book creation, then read them in generate-chapter-blocks.
-
----
-
-## Files to Create/Modify
+## Files to Modify
 
 | File | Action | Changes |
 |------|--------|---------|
-| `src/components/AdvancedOptions.tsx` | **CREATE** | New component with collapsible panel, voice/structure/focus chips |
-| `src/lib/autoPilot.ts` | **CREATE** | Keyword detection logic for Smart Auto-Pilot |
-| `src/pages/Index.tsx` | MODIFY | Add state for advancedOptions, integrate AdvancedOptions component, update handleSearch |
-| `supabase/functions/generate-book-blocks/index.ts` | MODIFY | Accept voice/structure/focusAreas params, inject into Gemini prompt |
-| `supabase/functions/generate-chapter-blocks/index.ts` | MODIFY | Read voice/structure from book record, maintain consistency |
+| `supabase/functions/search-book-images/index.ts` | MODIFY | Add `downloadLocation` and `photographerUrl` to Unsplash results |
+| `src/lib/unsplashTracking.ts` | CREATE | Utility to trigger Unsplash download endpoint |
+| `src/components/ImageSearchGallery.tsx` | MODIFY | 1) Update ImageResult interface; 2) Redesign ImageGrid with hover footer; 3) Add download trigger on select |
 
 ---
 
-## Visual Design Reference
+## Visual Behavior Summary
 
-### Collapsed State (Default)
+### Default State (No Hover)
 ```
-[========== Search Input ==========]
-
-    [🔗] Advanced Options
-```
-
-### Expanded State
-```
-[========== Search Input ==========]
-
-    [🔗] Advanced Options ▲
-
-    Voice
-    [The Insider] [The Bestie] [The Poet] [The Professor]
-                      ↑ Active (solid black bg)
-
-    Structure  
-    [Curated Guide] [Playbook] [Balanced]
-         ↑ Inactive (gray outline)
-
-    Focus Areas
-    [History] [Wellness] [Nightlife] [Art & Design]
-    [Luxury] [Local Culture] [Nature]
-      ↑ Multi-select (can select multiple)
++-----------------------------+
+|                             |
+|      [Thumbnail Image]      |
+|                             |
+|  [Unsplash]                 |  <-- Source badge visible
++-----------------------------+
 ```
 
-### Chip States
+### Hover State
 ```
-INACTIVE:        [  History  ]  ← light gray border, gray text
-ACTIVE:          [  History  ]  ← solid black bg, white text
-HOVER:           [  History  ]  ← darker border, ready state
++-----------------------------+
+|                             |
+|      [Thumbnail Image]      |  <-- Click this = Select
+|                             |
++-----------------------------+
+| Photo by Jane / Unsplash ↗  |  <-- Click this = Open profile
++-----------------------------+
 ```
+
+### Click Behaviors
+1. **Click on image area (top ~80%)** → Select image for book + trigger `download_location`
+2. **Click on footer strip** → Open photographer profile in new tab (no selection, no download trigger)
 
 ---
 
 ## Technical Notes
 
-### Tooltip Implementation
+### Unsplash API Compliance
+- Per [Unsplash guidelines](https://help.unsplash.com/en/articles/2511258-guideline-triggering-a-download), the `download_location` endpoint must be triggered when a user actually downloads/uses an image
+- This is a GET request to a URL like: `https://api.unsplash.com/photos/:id/download?ixid=...`
+- The tracking request is fire-and-forget; failure should not block user action
 
-Each Voice/Structure chip will have a tooltip (using Radix Tooltip) that appears on hover:
+### Event Propagation
+- The footer uses `e.stopPropagation()` to prevent the click from bubbling to the parent image selection handler
+- This ensures clicking the attribution link does NOT select the image
 
-```tsx
-<TooltipProvider>
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <button className={chipClassName}>The Insider</button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>Curated, cool, "If you know, you know"</p>
-    </TooltipContent>
-  </Tooltip>
-</TooltipProvider>
-```
+### External Link Icon
+- Import `ExternalLink` from lucide-react for the ↗ indicator
 
-### Icon Selection
-
-Using `Network` from Lucide (represents threads/connections coming together) as the Advanced Options icon. Alternative options: `Sliders`, `Settings2`, `Combine`.
-
-### Database Migration (Optional but Recommended)
-
-To persist voice/structure settings with each book:
-
-```sql
-ALTER TABLE books 
-ADD COLUMN voice TEXT DEFAULT 'insider',
-ADD COLUMN structure TEXT DEFAULT 'balanced',
-ADD COLUMN focus_areas TEXT[] DEFAULT '{}';
-```
-
-This ensures chapter generation maintains consistent voice across all chapters.
