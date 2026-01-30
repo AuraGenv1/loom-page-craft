@@ -595,11 +595,11 @@ const ImageFullPage: React.FC<{
                 onManualSearch={onManualSearch}
               />
             )}
-            <div className="w-full rounded-lg overflow-hidden shadow-lg relative">
+            <div className="w-full rounded-lg overflow-hidden shadow-lg relative mb-8">
               <img
                 src={imageUrl}
                 alt={content.caption}
-                className="w-full h-auto max-h-[65vh] object-contain bg-muted/20"
+                className="w-full h-auto max-h-[55vh] object-contain bg-muted/20"
                 loading="lazy"
               />
               {/* AI-selected badge overlay - moves to top-right, fades on hover to reveal toolbar */}
@@ -2132,21 +2132,22 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   const goToPrevChapter = useCallback(() => {
     if (currentChapter > 1) {
       const prevChapter = currentChapter - 1;
-      setCurrentChapter(prevChapter);
-      setLoading(true); // Show loading state during transition
-      
-      // Go to the last page of the previous chapter
       const prevChapterBlocks = preloadedBlocks?.[prevChapter];
+      
+      setCurrentChapter(prevChapter);
+      
       if (prevChapterBlocks && prevChapterBlocks.length > 0) {
-        setBlocks(prevChapterBlocks); // Set blocks immediately from preloaded
+        // Have preloaded blocks - use them immediately, NO fetch needed
+        setBlocks(prevChapterBlocks);
         setCurrentIndex(prevChapterBlocks.length - 1);
         setLoading(false);
       } else {
+        // Need to fetch - show loading
+        setLoading(true);
         setCurrentIndex(0);
+        fetchBlocks(prevChapter);
       }
       
-      // Always trigger fetchBlocks to ensure we have the latest data
-      fetchBlocks(prevChapter);
       onChapterChange?.(prevChapter);
     }
   }, [currentChapter, preloadedBlocks, onChapterChange, fetchBlocks]);
