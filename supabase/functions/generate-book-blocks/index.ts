@@ -197,14 +197,17 @@ TOPIC TYPE: ${isVisual ? 'VISUAL (Travel/Lifestyle/Art) - More hero images, atmo
 TARGET PAGES PER CHAPTER: ${pagesPerChapter}
 MINIMUM CHAPTERS: ${minChapters}
 
-Block types available (ONLY use these - NO quote blocks!):
+Block types available (ONLY use these):
 - "chapter_title": { "chapter_number": N, "title": "Chapter Title" } - ALWAYS first
 - "text": { "text": "200-230 words MAX. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
+- "key_takeaway": { "text": "The key insight - DO NOT include 'Key Takeaway' in the text" } - SECOND-TO-LAST block
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 - "heading": { "level": 2, "text": "Section heading" }
 - "list": { "items": ["item 1", "item 2", "item 3"] }
 - "divider": { "style": "minimal" } - Use for visual breaks
+
+IMPORTANT: Use "key_takeaway" as a block type, NOT as a heading. The UI displays the translated label.
 
 Return ONLY valid JSON:
 {
@@ -224,6 +227,7 @@ Return ONLY valid JSON:
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[200-230 words MAX of continued content...]"}},
     {"block_type": "image_full", "content": {"query": "architectural detail texture", "caption": "Detail shot"}},
     {"block_type": "text", "content": {"text": "## [Header]\\n\\n[200-230 words MAX of content...]"}},
+    {"block_type": "key_takeaway", "content": {"text": "The most important insight from this chapter."}},
     {"block_type": "pro_tip", "content": {"text": "Expert advice"}}
   ]
 }

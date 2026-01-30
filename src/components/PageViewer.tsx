@@ -2404,14 +2404,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                 <span className="hidden sm:inline">{t('pageTools')}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-56">
+            <DropdownMenuContent align="center" className="min-w-[280px]">
               {/* Section Header for Guests */}
               {!hasFullAccess && (
                 <>
                   <div className="px-2 py-1.5 mb-1">
                     <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                       <Lock className="w-3 h-3" />
-                      Premium Editing Suite
+                      {t('premiumEditingSuite')}
                     </span>
                   </div>
                   <DropdownMenuSeparator />
@@ -2430,7 +2430,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                     className="gap-2"
                   >
                     <PlusCircle className="w-4 h-4" />
-                    Insert Page Before
+                    {t('insertPageBefore')}
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => {
@@ -2441,7 +2441,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                     className="gap-2"
                   >
                     <PlusSquare className="w-4 h-4" />
-                    Insert Page After
+                    {t('insertPageAfter')}
                   </DropdownMenuItem>
                 </>
               ) : (
