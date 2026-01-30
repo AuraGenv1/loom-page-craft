@@ -1,122 +1,75 @@
 
 
-# Plan: Complete Translation System - Phase 2
+# Plan: Fix Remaining Translation Issues
 
 ## Summary
 
-This plan addresses the remaining translation gaps identified in the screenshots:
+This plan addresses four critical translation gaps and a UI width issue:
 
-1. **Key Takeaway label**: Verify the translation is being applied correctly (already exists in translations)
-2. **Page Tools menu items**: Translate all dropdown menu items
-3. **Image loading states**: Translate "Searching Archives..." and "Searching..."
-4. **"AI-selected" badge**: Translate the badge text
-5. **"Cover Studio" button**: Translate the button label
-6. **KDP Cover Studio dialog**: Translate title, tab labels, and all UI text
-7. **Prep tab content**: Translate labels and button text
-8. **Export tab content**: Translate descriptions and UI text
-9. **Legal tab access**: Hide the Legal tab from non-admin users (admin-only)
+1. **"Insert Page Before/After" in English** - The full-access menu items are hardcoded while locked versions use translations
+2. **"Key Takeaway" still in English** - Need to investigate if this is a rendering issue or AI-generated content issue
+3. **Auth Modal translation** - All 30+ strings in AuthModal.tsx are hardcoded in English
+4. **SaveToCloudBanner translation** - All strings are hardcoded in English
+5. **Dropdown width too narrow** - Menu items wrap to 2 lines
 
 ---
 
 ## Technical Analysis
 
-### Issue 1: Key Takeaway Still in English
+### Issue 1: "Insert Page Before/After" in PageViewer.tsx
 
-Looking at the code in `PageViewer.tsx` lines 793-798 and 2271-2273:
-
+**Problem**: Lines 2432-2444 show that for `hasFullAccess` users, the insert page options are hardcoded:
 ```typescript
-// Line 793 - Component definition with default fallback
-const KeyTakeawayPage: React.FC<{ content: { text: string }; keyTakeawayLabel?: string }> = ({ content, keyTakeawayLabel = 'KEY TAKEAWAY' }) => (
+// For hasFullAccess (hardcoded - BUG):
+Insert Page Before
 
-// Line 2273 - Where it's called with translation
-keyTakeawayLabel={t('keyTakeaway')}
+// For guests (correctly uses translation):
+{t('insertPageBefore')}
 ```
 
-The translation key exists in all 8 languages (verified via search). The issue is likely that the `t()` function from `useLanguage()` is not imported or available where `BlockRenderer` is being rendered. Need to verify `useLanguage` is imported and `t` is passed correctly.
+**Fix**: Use `t('insertPageBefore')` and `t('insertPageAfter')` for both cases.
 
-**Root Cause**: The `t` function is obtained from `useLanguage()` hook in the main `PageViewer` component (line ~2062), and passed to `BlockRenderer` via props. This should work. Let me verify the actual usage.
+### Issue 2: "Key Takeaway" Still in English
 
-### Issue 2: Page Tools Menu Items
+**Analysis**: The KeyTakeawayPage component DOES receive and use `keyTakeawayLabel` prop correctly. The translation keys exist in all 8 languages. 
 
-The following strings are hardcoded in `PageViewer.tsx` lines 2388-2519:
+**Potential causes**:
+1. The block type coming from AI is not `key_takeaway` - could be rendering as generic text
+2. The translation is happening but the AI content itself contains "Key Takeaway" as part of the text
 
-| Line | Hardcoded String |
-|------|-----------------|
-| 2390 | `"Premium Editing Suite"` |
-| 2409 | `"Insert Page Before"` |
-| 2420 | `"Insert Page After"` |
-| 2441 | `"Search Gallery"` |
-| 2448 | `"Upload Own Photo"` |
-| 2460 | `"Try it!"` |
-| 2478 | `"Regenerate Chapter {n}"` |
-| 2485 | `"Edit Page Content"` |
-| 2493 | `"Delete This Page"` |
-| 2510 | `"B&W Print Mode"` |
-| 2518 | `"Optimizes for Amazon's cheaper B&W printing"` |
+Looking at the screenshot, I can see the French book has "Key Takeaway" as a section header IN the content, not as a block label. This suggests the AI is generating "Key Takeaway" as part of the text content rather than using the proper block type.
 
-### Issue 3: Image Loading States
+**Solution**: The AI prompt in edge functions needs to be strengthened to not include "Key Takeaway" as text - it should only use the `key_takeaway` block type. However, for existing content, we also need a fallback to detect and replace "Key Takeaway" text.
 
-In `PageViewer.tsx`:
-- Line 582: `"Searching Archives..."` (ImageFullPage)
-- Line 676: `"Searching..."` (ImageHalfPage)
+### Issue 3: Auth Modal Translation (30+ strings)
 
-**Recommendation**: Replace with translated text OR use the WeavingLoader component for consistency (user's preference). I recommend translating the text as it's more informative.
+All strings in `AuthModal.tsx` are hardcoded:
+- "Join LOOM & PAGE"
+- "Create an account"
+- "Welcome back"
+- "Reset password"
+- "Save your guides to the cloud and access them anywhere."
+- "Continue with Google"
+- "Sign up with Email"
+- "Already have an account? Sign in"
+- Form labels: "Name (optional)", "Email", "Password"
+- Button text: "Create account", "Sign in", "Send reset link"
+- Links: "Forgot password?", "Don't have an account?", "Back to options", "Back to login"
+- Placeholders: "Your name", "you@example.com", "At least 6 characters", "Your password"
 
-### Issue 4: "AI-selected" Badge
+### Issue 4: SaveToCloudBanner Translation
 
-In `PageViewer.tsx`:
-- Line 613: `<span>AI-selected</span>` (ImageFullPage)
-- Line 703: `<span>AI-selected</span>` (ImageHalfPage)
+Hardcoded strings:
+- "Save your guide to the cloud"
+- "Sign in to save this guide permanently and access it from any device."
+- "Sign in" / "Signing in..."
+- "Maybe later"
 
-### Issue 5: "Cover Studio" Button
+### Issue 5: Dropdown Width
 
-In `BookCover.tsx` line 1909:
-```typescript
-{hasFullAccess ? 'Cover Studio' : 'Preview Studio'}
-```
+**Current**: `className="w-56"` (224px) - too narrow for French translations like "Insérer une Page Avant"
 
-### Issue 6: KDP Cover Studio Dialog
-
-In `BookCover.tsx`:
-- Line 2028: `"KDP Cover Studio & Export Manager"`
-- Line 2034-2057: Tab labels ("Front", "Back", "Spine", "Wrap", "Prep", "$$$", "Legal", "Export")
-- Line 2064: `"Current Front Cover"`
-- Line 2129: `"Edit Cover Text"`
-- Line 2133: `"View Only"`
-- Line 2138: `"Title"`
-- Line 2149: `"Subtitle"`
-- Line 2172: `"Save Text Changes"`
-- Line 2181: `"Or Upload Your Own Image"`
-- Line 2193: `"Search Gallery"`
-- Line 2217: `"Upload Cover Image"`
-- Line 2225: `"Custom Cover Image"`
-- Line 2228: `"Premium"`
-- Line 2240: `"Unlock Cover Editing"`
-- Line 2251: `"Cover Branding"`
-- Line 2262: `"Brand:"`
-- Line 2275: `"Logo"`
-- Line 2305: `"Change Logo"` / `"Upload Logo"`
-- Line 2329: `"Reset"`
-
-And many more in the Back, Spine, Wrap, and Export tabs...
-
-### Issue 7: Prep Tab Content (KdpPrepDashboard.tsx)
-
-Key strings to translate:
-- Line 226: `"Preparing Amazon metadata..."`
-- Line 228: `"Generating description, subtitle, and keywords..."`
-- Line 239: `"Page Count:"`, `"Spine:"`, `"Trim:"`, `"Bleed:"`
-- Line 265: `"Book Description"`
-- Line 277: `"Preview"`, `"HTML"`
-- Line 289-294: `"Preview (Formatted)"`, `"Edit HTML"`
-- Line 330: `"Write Best-Selling Description"`
-- Line 348-349: `"Preview shows formatted text..."`
-
-### Issue 8: Legal Tab - Admin Only
-
-Per user request, the Legal tab should only be visible to Admin users, not to paid users or guests. Currently it shows for `hasFullAccess` which includes both admins and paid users.
-
-**Solution**: Add an `isAdmin` prop check to conditionally render the Legal tab.
+**Fix**: Change to `className="w-72"` (288px) or `min-w-[280px]` to accommodate longer translations
 
 ---
 
@@ -124,113 +77,62 @@ Per user request, the Legal tab should only be visible to Admin users, not to pa
 
 | File | Changes |
 |------|---------|
-| `src/contexts/LanguageContext.tsx` | Add ~60 new translation keys per language for all UI strings |
-| `src/components/PageViewer.tsx` | Use `t()` for all Page Tools items, image loading text, and AI-selected badge |
-| `src/components/BookCover.tsx` | Use `t()` for Cover Studio button, dialog title, tabs, and all form labels. Hide Legal tab for non-admins |
-| `src/components/KdpPrepDashboard.tsx` | Use `t()` for all form labels and button text |
+| `src/contexts/LanguageContext.tsx` | Add ~30 new translation keys for Auth Modal and SaveToCloudBanner |
+| `src/components/PageViewer.tsx` | Fix "Insert Page" translations for full-access users, widen dropdown |
+| `src/components/AuthModal.tsx` | Import useLanguage, use t() for all strings |
+| `src/components/SaveToCloudBanner.tsx` | Import useLanguage, use t() for all strings |
+| `supabase/functions/generate-book-blocks/index.ts` | Strengthen prompt to translate "KEY TAKEAWAY" label in block content |
+| `supabase/functions/generate-chapter-blocks/index.ts` | Same prompt fix |
 
 ---
 
 ## New Translation Keys Required
 
-### Page Tools & Image States
+### Auth Modal Keys
 ```typescript
-// Page Tools Menu
-premiumEditingSuite: 'Premium Editing Suite',
-insertPageBefore: 'Insert Page Before',
-insertPageAfter: 'Insert Page After',
-searchGallery: 'Search Gallery',
-uploadOwnPhoto: 'Upload Own Photo',
-tryIt: 'Try it!',
-regenerateChapter: 'Regenerate Chapter {n}',
-editPageContent: 'Edit Page Content',
-deleteThisPage: 'Delete This Page',
-bwPrintMode: 'B&W Print Mode',
-bwPrintModeDesc: "Optimizes for Amazon's cheaper B&W printing",
+// Auth Modal Titles
+authJoinTitle: 'Join LOOM & PAGE',
+authCreateAccount: 'Create an account',
+authWelcomeBack: 'Welcome back',
+authResetPassword: 'Reset password',
 
-// Image Loading
-searchingArchives: 'Searching Archives...',
-searching: 'Searching...',
-aiSelected: 'AI-selected',
-imageNotFound: 'Image not found',
+// Auth Modal Content
+authSaveToCloud: 'Save your guides to the cloud and access them anywhere.',
+authContinueGoogle: 'Continue with Google',
+authSignUpEmail: 'Sign up with Email',
+authAlreadyHaveAccount: 'Already have an account?',
+authDontHaveAccount: "Don't have an account?",
+authSignIn: 'Sign in',
+authSignUp: 'Sign up',
+authBackToOptions: 'Back to options',
+authBackToLogin: 'Back to login',
+authForgotPassword: 'Forgot password?',
+authSendResetLink: 'Send reset link',
+authResetEmailSent: 'Enter your email and we\'ll send you a link to reset your password.',
+
+// Form Labels
+formName: 'Name (optional)',
+formEmail: 'Email',
+formPassword: 'Password',
+formCreateAccount: 'Create account',
+
+// Placeholders
+placeholderName: 'Your name',
+placeholderEmail: 'you@example.com',
+placeholderPassword6: 'At least 6 characters',
+placeholderPassword: 'Your password',
+
+// OR separator
+orSeparator: 'or',
 ```
 
-### Cover Studio
+### SaveToCloudBanner Keys
 ```typescript
-// Cover Studio Button
-coverStudio: 'Cover Studio',
-previewStudio: 'Preview Studio',
-
-// Dialog Title
-kdpCoverStudioTitle: 'KDP Cover Studio & Export Manager',
-
-// Tab Labels
-tabFront: 'Front',
-tabBack: 'Back',
-tabSpine: 'Spine',
-tabWrap: 'Wrap',
-tabPrep: 'Prep',
-tabRoyalty: '$$$',
-tabLegal: 'Legal',
-tabExport: 'Export',
-
-// Front Tab
-currentFrontCover: 'Current Front Cover',
-editCoverText: 'Edit Cover Text',
-viewOnly: 'View Only',
-title: 'Title',
-subtitle: 'Subtitle',
-saveTextChanges: 'Save Text Changes',
-uploadYourOwnImage: 'Or Upload Your Own Image',
-uploadCustomCoverDesc: 'Upload a custom cover image (JPG, PNG, max 5MB)',
-uploadCoverImage: 'Upload Cover Image',
-customCoverImage: 'Custom Cover Image',
-unlockCoverEditing: 'Unlock Cover Editing',
-coverBranding: 'Cover Branding',
-brand: 'Brand',
-logo: 'Logo',
-uploadLogo: 'Upload Logo',
-changeLogo: 'Change Logo',
-reset: 'Reset',
-premium: 'Premium',
-noImage: 'No Image',
-saving: 'Saving...',
-uploading: 'Uploading...',
-
-// Export Tab
-completeKdpPackage: 'Complete KDP Package',
-kdpPackageDesc: 'Download everything you need for Amazon KDP in one ZIP file:',
-coverFile: 'Full wrap cover with spine',
-manuscriptFile: 'Interior text with TOC & images',
-kindleEbook: 'Kindle eBook format',
-kindleCover: 'eBook cover image',
-downloadKdpPackage: 'Download KDP Package',
-generatingPackage: 'Generating...',
-
-// Locked Tab Content
-unlockFullGuide: 'Unlock Full Guide',
-amazonListingPrep: 'Amazon Listing Prep',
-amazonListingPrepDesc: 'Unlock to auto-generate your Best-Selling Description and Keywords with AI.',
-royaltyCalculator: 'Royalty Calculator',
-royaltyCalculatorDesc: 'Unlock to calculate your KDP royalties and optimize your pricing strategy.',
-```
-
-### Prep Dashboard
-```typescript
-// KDP Prep Dashboard
-preparingMetadata: 'Preparing Amazon metadata...',
-generatingMetadata: 'Generating description, subtitle, and keywords...',
-pageCount: 'Page Count',
-spineLabel: 'Spine',
-trimLabel: 'Trim',
-bleedLabel: 'Bleed',
-bookDescription: 'Book Description',
-preview: 'Preview',
-html: 'HTML',
-previewFormatted: 'Preview (Formatted)',
-editHtml: 'Edit HTML',
-writeBestSellingDesc: 'Write Best-Selling Description',
-copyHtmlNote: 'Preview shows formatted text. Copy button copies raw HTML for Amazon KDP.',
+// SaveToCloudBanner
+saveToCloudTitle: 'Save your guide to the cloud',
+saveToCloudDesc: 'Sign in to save this guide permanently and access it from any device.',
+signingIn: 'Signing in...',
+maybeLater: 'Maybe later',
 ```
 
 ---
@@ -239,145 +141,160 @@ copyHtmlNote: 'Preview shows formatted text. Copy button copies raw HTML for Ama
 
 ```typescript
 fr: {
-  // Page Tools
-  premiumEditingSuite: 'Suite d\'Édition Premium',
-  insertPageBefore: 'Insérer une Page Avant',
-  insertPageAfter: 'Insérer une Page Après',
-  searchGallery: 'Rechercher dans la Galerie',
-  uploadOwnPhoto: 'Téléverser Votre Photo',
-  tryIt: 'Essayez !',
-  regenerateChapter: 'Régénérer le Chapitre {n}',
-  editPageContent: 'Modifier le Contenu de la Page',
-  deleteThisPage: 'Supprimer Cette Page',
-  bwPrintMode: 'Mode Impression N&B',
-  bwPrintModeDesc: 'Optimisé pour l\'impression N&B moins chère d\'Amazon',
-  
-  // Image States
-  searchingArchives: 'Recherche dans les Archives...',
-  searching: 'Recherche...',
-  aiSelected: 'Sélectionné par IA',
-  imageNotFound: 'Image non trouvée',
-  
-  // Cover Studio
-  coverStudio: 'Studio de Couverture',
-  previewStudio: 'Studio de Prévisualisation',
-  kdpCoverStudioTitle: 'Studio KDP & Gestionnaire d\'Export',
-  
-  // Tab Labels
-  tabFront: 'Avant',
-  tabBack: 'Arrière',
-  tabSpine: 'Dos',
-  tabWrap: 'Complet',
-  tabPrep: 'Prépa',
-  tabRoyalty: '$$$',
-  tabExport: 'Export',
+  // Auth Modal
+  authJoinTitle: 'Rejoindre LOOM & PAGE',
+  authCreateAccount: 'Créer un compte',
+  authWelcomeBack: 'Bon retour',
+  authResetPassword: 'Réinitialiser le mot de passe',
+  authSaveToCloud: 'Sauvegardez vos guides dans le cloud et accédez-y partout.',
+  authContinueGoogle: 'Continuer avec Google',
+  authSignUpEmail: "S'inscrire par e-mail",
+  authAlreadyHaveAccount: 'Vous avez déjà un compte ?',
+  authDontHaveAccount: "Vous n'avez pas de compte ?",
+  authSignIn: 'Se connecter',
+  authSignUp: "S'inscrire",
+  authBackToOptions: 'Retour aux options',
+  authBackToLogin: 'Retour à la connexion',
+  authForgotPassword: 'Mot de passe oublié ?',
+  authSendResetLink: 'Envoyer le lien',
+  authResetEmailSent: 'Entrez votre e-mail et nous vous enverrons un lien pour réinitialiser votre mot de passe.',
   
   // Form Labels
-  currentFrontCover: 'Couverture Avant Actuelle',
-  editCoverText: 'Modifier le Texte de Couverture',
-  viewOnly: 'Lecture Seule',
-  saveTextChanges: 'Enregistrer les Modifications',
-  uploadYourOwnImage: 'Ou Téléversez Votre Image',
-  uploadCoverImage: 'Téléverser une Image',
-  coverBranding: 'Image de Marque',
-  brand: 'Marque',
-  logo: 'Logo',
-  uploadLogo: 'Téléverser le Logo',
-  changeLogo: 'Changer le Logo',
-  reset: 'Réinitialiser',
-  premium: 'Premium',
-  noImage: 'Aucune Image',
+  formName: 'Nom (optionnel)',
+  formEmail: 'E-mail',
+  formPassword: 'Mot de passe',
+  formCreateAccount: 'Créer le compte',
   
-  // Export
-  completeKdpPackage: 'Package KDP Complet',
-  kdpPackageDesc: 'Téléchargez tout ce dont vous avez besoin pour Amazon KDP dans un fichier ZIP :',
-  coverFile: 'Couverture complète avec dos',
-  manuscriptFile: 'Texte intérieur avec table des matières et images',
-  kindleEbook: 'Format eBook Kindle',
-  kindleCover: 'Image de couverture eBook',
-  downloadKdpPackage: 'Télécharger le Package KDP',
-  generatingPackage: 'Génération...',
+  // Placeholders
+  placeholderName: 'Votre nom',
+  placeholderEmail: 'vous@exemple.com',
+  placeholderPassword6: 'Au moins 6 caractères',
+  placeholderPassword: 'Votre mot de passe',
   
-  // Prep Dashboard
-  preparingMetadata: 'Préparation des métadonnées Amazon...',
-  generatingMetadata: 'Génération de la description, du sous-titre et des mots-clés...',
-  pageCount: 'Nombre de Pages',
-  spineLabel: 'Dos',
-  trimLabel: 'Format',
-  bleedLabel: 'Fond Perdu',
-  bookDescription: 'Description du Livre',
-  preview: 'Aperçu',
-  html: 'HTML',
-  writeBestSellingDesc: 'Rédiger une Description Best-Seller',
+  // OR separator
+  orSeparator: 'ou',
+  
+  // SaveToCloudBanner
+  saveToCloudTitle: 'Sauvegardez votre guide dans le cloud',
+  saveToCloudDesc: 'Connectez-vous pour sauvegarder ce guide et y accéder depuis n\'importe quel appareil.',
+  signingIn: 'Connexion...',
+  maybeLater: 'Plus tard',
 }
 ```
 
 ---
 
-## Implementation Steps
+## Implementation Details
 
-### Step 1: Add Translation Keys
-Add ~60 new keys to all 8 languages in `LanguageContext.tsx`.
+### PageViewer.tsx - Fix Insert Page Translations
 
-### Step 2: Update PageViewer.tsx
-1. Import/use `useLanguage` hook at component level
-2. Replace all hardcoded strings in Page Tools menu with `t()` calls
-3. Update ImageFullPage and ImageHalfPage components to accept translation props or use hook
-4. Replace "AI-selected" with `t('aiSelected')`
-5. Replace "Searching Archives..." with `t('searchingArchives')`
+**Lines 2432-2444**: Change hardcoded text to use translations:
+```typescript
+// Before:
+Insert Page Before
 
-### Step 3: Update BookCover.tsx
-1. Import `useLanguage` hook
-2. Replace "Cover Studio" / "Preview Studio" button text with `t()`
-3. Replace dialog title with `t('kdpCoverStudioTitle')`
-4. Replace all tab labels with `t()` calls
-5. Replace all form labels with `t()` calls
-6. **Important**: Hide the "Legal" tab unless `isAdmin` is true (not just `hasFullAccess`)
+// After:
+{t('insertPageBefore')}
+```
 
-### Step 4: Update KdpPrepDashboard.tsx
-1. Import `useLanguage` hook
-2. Replace all form labels and button text with `t()` calls
+### PageViewer.tsx - Widen Dropdown
+
+**Line 2407**: Change width class:
+```typescript
+// Before:
+<DropdownMenuContent align="center" className="w-56">
+
+// After:
+<DropdownMenuContent align="center" className="min-w-[280px]">
+```
+
+This ensures menu items fit on one line while not being excessively wide.
+
+### AuthModal.tsx - Add Translations
+
+Import the hook and use translation keys for all strings:
+```typescript
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const AuthModal = ({ ... }) => {
+  const { t } = useLanguage();
+  
+  // In DialogTitle:
+  {view === "options" && t('authJoinTitle')}
+  
+  // Button text:
+  {t('authContinueGoogle')}
+  
+  // etc.
+};
+```
+
+### SaveToCloudBanner.tsx - Add Translations
+
+```typescript
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const SaveToCloudBanner = ({ ... }) => {
+  const { t } = useLanguage();
+  
+  return (
+    <h3>{t('saveToCloudTitle')}</h3>
+    <p>{t('saveToCloudDesc')}</p>
+    <Button>{isAuthenticating ? t('signingIn') : t('authSignIn')}</Button>
+    <Button variant="ghost">{t('maybeLater')}</Button>
+  );
+};
+```
 
 ---
 
-## Legal Tab Access Control
+## Key Takeaway Issue - Additional Context
 
-**Current behavior**: Shows for `hasFullAccess` (admin OR paid)
-**Desired behavior**: Shows ONLY for `isAdmin`
+Looking more carefully at the screenshot, the text shows:
 
-**Implementation**:
-```typescript
-// In BookCover.tsx TabsList
-{isAdmin && (
-  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
-    <ShieldCheck className="w-3 h-3" />
-    {t('tabLegal')}
-  </TabsTrigger>
-)}
+```
+Key Takeaway
 
-// In TabsContent
-{isAdmin && (
-  <TabsContent value="legal" className="pt-4">
-    ...
-  </TabsContent>
-)}
+Choisir un hôtel de prestige à Venise...
 ```
 
-This ensures guests and paid users never see the Legal tab—only admins.
+This is NOT using the KeyTakeawayPage component styling (which has a left border accent). Instead, it appears to be a heading or text block with "Key Takeaway" as literal text content.
+
+**Root Cause**: The AI is generating blocks like:
+```json
+{
+  "block_type": "heading",
+  "content": { "text": "Key Takeaway", "level": 3 }
+}
+```
+
+Instead of:
+```json
+{
+  "block_type": "key_takeaway",
+  "content": { "text": "Choisir un hôtel..." }
+}
+```
+
+**Solution**: Update edge function prompts to explicitly instruct:
+1. Use `key_takeaway` block type, NOT heading with "Key Takeaway" text
+2. The label is rendered by the UI - do not include it in content
+3. In non-English languages, the UI will display the translated label
 
 ---
 
 ## Testing Checklist
 
 After implementation:
-1. Switch to French, navigate to a book, and verify:
-   - Page Tools menu items are in French
-   - "AI-selected" badge shows "Sélectionné par IA"
-   - Image loading shows "Recherche dans les Archives..."
-   - "Cover Studio" button shows "Studio de Couverture"
-   - KDP Cover Studio dialog title and all labels are in French
-2. Verify Legal tab is hidden for paid users (only visible to admins)
-3. Test Prep tab translations for button labels and descriptions
-4. Test Export tab translations
-5. Verify Key Takeaway blocks render with translated label
+1. Switch to French and open Page Tools menu:
+   - Verify "Insert Page Before/After" show French translations
+   - Verify all menu items fit on one line (except B&W description)
+2. Generate a new book in French:
+   - Verify Key Takeaway blocks use the translated label "POINT CLÉ"
+3. Click "Dashboard" to trigger auth prompt:
+   - Verify Auth Modal shows French translations
+   - Verify all form labels, buttons, and links are in French
+4. With a book generated but not signed in:
+   - Verify SaveToCloudBanner shows French text
+5. Test all 8 languages for consistency
 
