@@ -74,6 +74,38 @@ serve(async (req) => {
       balanced: 'Balance educational content with curated recommendations. Mix teaching moments with specific venue suggestions for a well-rounded guide.',
     };
 
+    // Language name mapping for explicit AI instructions
+    const LANGUAGE_NAMES: Record<string, string> = {
+      en: 'English',
+      es: 'Spanish (Español)',
+      fr: 'French (Français)',
+      de: 'German (Deutsch)',
+      it: 'Italian (Italiano)',
+      pt: 'Portuguese (Português)',
+      zh: 'Chinese (中文)',
+      ja: 'Japanese (日本語)',
+    };
+
+    const languageName = LANGUAGE_NAMES[language] || 'English';
+
+    // Critical language instruction for non-English content
+    const languageInstruction = language !== 'en' 
+      ? `
+=== CRITICAL: LANGUAGE REQUIREMENT ===
+You MUST write ALL content in ${languageName}. This is MANDATORY.
+- All chapter titles: Write in ${languageName}
+- All text block content: Write in ${languageName}  
+- All image captions: Write in ${languageName}
+- All pro_tip content: Write in ${languageName}
+
+The ONLY exceptions are:
+- Proper nouns (hotel names, restaurant names, landmark names) - keep in original form
+- Technical terms with no good translation
+
+DO NOT default to English. The reader speaks ${languageName}.
+`
+      : '';
+
     const voiceInstruction = VOICE_INSTRUCTIONS[voice] || VOICE_INSTRUCTIONS.insider;
     const structureInstruction = STRUCTURE_INSTRUCTIONS[structure] || STRUCTURE_INSTRUCTIONS.balanced;
     const focusInstruction = focusAreas.length > 0 
@@ -81,7 +113,7 @@ serve(async (req) => {
       : '';
 
     const prompt = `You are an elite "Luxury Book Architect." Generate structured page blocks for Chapter ${chapterNumber}: "${chapterTitle}" of the book "${topic}".
-
+${languageInstruction}
 === NARRATIVE VOICE ===
 ${voiceInstruction}
 

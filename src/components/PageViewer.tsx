@@ -2368,7 +2368,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           disabled={!canGoPrev}
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Prev
+          {t('prev')}
         </Button>
 
         <div className="flex items-center gap-4">
@@ -2377,7 +2377,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
                 <Wrench className="w-4 h-4" />
-                <span className="hidden sm:inline">Page Tools</span>
+                <span className="hidden sm:inline">{t('pageTools')}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-56">
@@ -2526,14 +2526,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             size="sm"
             onClick={() => setZoomMode(prev => prev === '100%' ? 'fit' : '100%')}
             className="gap-1.5 text-muted-foreground"
-            title={zoomMode === '100%' ? 'Fit to Screen' : 'Full Size (100%)'}
+            title={zoomMode === '100%' ? t('fit') : t('fullSize')}
           >
             {zoomMode === '100%' ? (
               <ZoomOut className="w-4 h-4" />
             ) : (
               <ZoomIn className="w-4 h-4" />
             )}
-            <span className="hidden sm:inline">{zoomMode === '100%' ? 'Fit' : '100%'}</span>
+            <span className="hidden sm:inline">{zoomMode === '100%' ? t('fit') : t('fullSize')}</span>
           </Button>
           
           <div className="text-center">
@@ -2541,11 +2541,11 @@ export const PageViewer: React.FC<PageViewerProps> = ({
             <p className="font-serif text-lg text-foreground">
               {cumulativePageNumber}
               {totalPageCount && (
-                <span className="text-muted-foreground/60"> of {totalPageCount}</span>
+                <span className="text-muted-foreground/60"> {t('pageOf')} {totalPageCount}</span>
               )}
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
-              Chapter {currentChapter} of {totalChapters || '?'}
+              {t('chapterOf').replace('{current}', String(currentChapter)).replace('{total}', String(totalChapters || '?'))}
             </p>
           </div>
         </div>
@@ -2556,7 +2556,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
           onClick={goNext}
           disabled={!canGoNext}
         >
-          Next
+          {t('next')}
           <ChevronRight className="w-4 h-4 ml-1" />
         </Button>
       </div>

@@ -17,38 +17,27 @@ interface AdvancedOptionsProps {
 }
 
 const VOICE_OPTIONS = [
-  { id: 'insider', label: 'The Insider', tooltipKey: 'tooltip_insider' },
-  { id: 'bestie', label: 'The Bestie', tooltipKey: 'tooltip_bestie' },
-  { id: 'poet', label: 'The Poet', tooltipKey: 'tooltip_poet' },
-  { id: 'professor', label: 'The Professor', tooltipKey: 'tooltip_professor' },
+  { id: 'insider', labelKey: 'voice_insider', tooltipKey: 'tooltip_insider' },
+  { id: 'bestie', labelKey: 'voice_bestie', tooltipKey: 'tooltip_bestie' },
+  { id: 'poet', labelKey: 'voice_poet', tooltipKey: 'tooltip_poet' },
+  { id: 'professor', labelKey: 'voice_professor', tooltipKey: 'tooltip_professor' },
 ] as const;
 
 const STRUCTURE_OPTIONS = [
-  { id: 'curated', label: 'Curated Guide', tooltipKey: 'tooltip_curated' },
-  { id: 'playbook', label: 'Playbook', tooltipKey: 'tooltip_playbook' },
-  { id: 'balanced', label: 'Balanced', tooltipKey: 'tooltip_balanced' },
+  { id: 'curated', labelKey: 'structure_curated', tooltipKey: 'tooltip_curated' },
+  { id: 'playbook', labelKey: 'structure_playbook', tooltipKey: 'tooltip_playbook' },
+  { id: 'balanced', labelKey: 'structure_balanced', tooltipKey: 'tooltip_balanced' },
 ] as const;
 
 const FOCUS_OPTIONS = [
-  { id: 'history', label: 'History', tooltipKey: 'tooltip_history' },
-  { id: 'wellness', label: 'Wellness', tooltipKey: 'tooltip_wellness' },
-  { id: 'nightlife', label: 'Nightlife', tooltipKey: 'tooltip_nightlife' },
-  { id: 'art', label: 'Art & Design', tooltipKey: 'tooltip_art' },
-  { id: 'luxury', label: 'Luxury', tooltipKey: 'tooltip_luxury' },
-  { id: 'culture', label: 'Local Culture', tooltipKey: 'tooltip_culture' },
-  { id: 'nature', label: 'Nature', tooltipKey: 'tooltip_nature' },
+  { id: 'history', labelKey: 'focus_history', tooltipKey: 'tooltip_history' },
+  { id: 'wellness', labelKey: 'focus_wellness', tooltipKey: 'tooltip_wellness' },
+  { id: 'nightlife', labelKey: 'focus_nightlife', tooltipKey: 'tooltip_nightlife' },
+  { id: 'art', labelKey: 'focus_art', tooltipKey: 'tooltip_art' },
+  { id: 'luxury', labelKey: 'focus_luxury', tooltipKey: 'tooltip_luxury' },
+  { id: 'culture', labelKey: 'focus_culture', tooltipKey: 'tooltip_culture' },
+  { id: 'nature', labelKey: 'focus_nature', tooltipKey: 'tooltip_nature' },
 ] as const;
-
-// Fallback tooltips (for voice/structure that don't have translations yet)
-const TOOLTIP_FALLBACKS: Record<string, string> = {
-  tooltip_insider: 'Curated, cool, "If you know, you know"',
-  tooltip_bestie: 'Sassy, confident, and witty',
-  tooltip_poet: 'Dreamy, flowery, and romantic',
-  tooltip_professor: 'Academic, educational, and clear',
-  tooltip_curated: 'Focus: Places, Hotels, Restaurants, Shopping',
-  tooltip_playbook: 'Focus: Practices, How-to, Rituals, Education',
-  tooltip_balanced: 'A 50/50 mix of Teaching and Destinations',
-};
 
 const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -68,13 +57,6 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
       ? currentFocus.filter(f => f !== focusId)
       : [...currentFocus, focusId];
     onChange({ ...options, focusAreas: newFocus });
-  };
-
-  // Helper to get tooltip text (uses translation if available, fallback otherwise)
-  const getTooltip = (key: string): string => {
-    const translated = t(key);
-    // If translation returns the key itself, use fallback
-    return translated === key ? (TOOLTIP_FALLBACKS[key] || key) : translated;
   };
 
   const chipBaseClass = "px-3 py-1.5 text-sm rounded-full transition-colors cursor-pointer select-none";
@@ -107,11 +89,11 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
                         options.voice === voice.id ? chipActiveClass : chipInactiveClass
                       )}
                     >
-                      {voice.label}
+                      {t(voice.labelKey)}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[200px]">
-                    <p className="text-xs">{getTooltip(voice.tooltipKey)}</p>
+                    <p className="text-xs">{t(voice.tooltipKey)}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -135,11 +117,11 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
                         options.structure === structure.id ? chipActiveClass : chipInactiveClass
                       )}
                     >
-                      {structure.label}
+                      {t(structure.labelKey)}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[220px]">
-                    <p className="text-xs">{getTooltip(structure.tooltipKey)}</p>
+                    <p className="text-xs">{t(structure.tooltipKey)}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -163,11 +145,11 @@ const AdvancedOptions = ({ options, onChange }: AdvancedOptionsProps) => {
                         options.focusAreas.includes(focus.id) ? chipActiveClass : chipInactiveClass
                       )}
                     >
-                      {focus.label}
+                      {t(focus.labelKey)}
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[220px]">
-                    <p className="text-xs">{getTooltip(focus.tooltipKey)}</p>
+                    <p className="text-xs">{t(focus.tooltipKey)}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}

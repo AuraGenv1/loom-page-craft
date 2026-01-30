@@ -66,6 +66,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'NARRATIVE VOICE',
     bookStructure: 'BOOK STRUCTURE',
     focusAreas: 'FOCUS AREAS',
+    // Focus Area Labels
+    focus_history: 'History',
+    focus_wellness: 'Wellness',
+    focus_nightlife: 'Nightlife',
+    focus_art: 'Art & Design',
+    focus_luxury: 'Luxury',
+    focus_culture: 'Local Culture',
+    focus_nature: 'Nature',
     // Focus Area Tooltips
     tooltip_history: 'Ancient stories, heritage sites, and cultural timelines',
     tooltip_wellness: 'Spas, retreats, meditation, and self-care rituals',
@@ -74,6 +82,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'High-end experiences, exclusive venues, and premium services',
     tooltip_culture: 'Traditions, local customs, food markets, and community life',
     tooltip_nature: 'Parks, hiking trails, beaches, and outdoor adventures',
+    // Voice Labels
+    voice_insider: 'The Insider',
+    voice_bestie: 'The Bestie',
+    voice_poet: 'The Poet',
+    voice_professor: 'The Professor',
+    // Voice Tooltips
+    tooltip_insider: 'Curated, cool, "If you know, you know"',
+    tooltip_bestie: 'Sassy, confident, and witty',
+    tooltip_poet: 'Dreamy, flowery, and romantic',
+    tooltip_professor: 'Academic, educational, and clear',
+    // Structure Labels
+    structure_curated: 'Curated Guide',
+    structure_playbook: 'Playbook',
+    structure_balanced: 'Balanced',
+    // Structure Tooltips
+    tooltip_curated: 'Focus: Places, Hotels, Restaurants, Shopping',
+    tooltip_playbook: 'Focus: Practices, How-to, Rituals, Education',
+    tooltip_balanced: 'A 50/50 mix of Teaching and Destinations',
     // Weaving Steps
     weaving_step1: 'Gathering threads...',
     weaving_step2: 'Setting up the loom...',
@@ -97,6 +123,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Weaving... {count} pages',
     pleaseWaitChapters: 'Please wait for all chapters...',
     artisanWeaving: 'Our Artisan is weaving your custom details...',
+    // Navigation
+    prev: 'Prev',
+    next: 'Next',
+    pageTools: 'Page Tools',
+    fit: 'Fit',
+    fullSize: '100%',
+    pageOf: 'of',
+    chapterOf: 'Chapter {current} of {total}',
     // Footer
     aiDisclaimer: 'AI-generated content for creative inspiration only. Not professional advice.',
   },
@@ -145,6 +179,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'VOZ NARRATIVA',
     bookStructure: 'ESTRUCTURA DEL LIBRO',
     focusAreas: 'ÁREAS DE ENFOQUE',
+    // Focus Area Labels
+    focus_history: 'Historia',
+    focus_wellness: 'Bienestar',
+    focus_nightlife: 'Vida Nocturna',
+    focus_art: 'Arte y Diseño',
+    focus_luxury: 'Lujo',
+    focus_culture: 'Cultura Local',
+    focus_nature: 'Naturaleza',
     // Focus Area Tooltips
     tooltip_history: 'Historias antiguas, sitios patrimoniales y cronologías culturales',
     tooltip_wellness: 'Spas, retiros, meditación y rituales de autocuidado',
@@ -153,6 +195,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'Experiencias de alta gama, lugares exclusivos y servicios premium',
     tooltip_culture: 'Tradiciones, costumbres locales, mercados de comida y vida comunitaria',
     tooltip_nature: 'Parques, senderos, playas y aventuras al aire libre',
+    // Voice Labels
+    voice_insider: 'El Iniciado',
+    voice_bestie: 'El/La Amigo/a',
+    voice_poet: 'El Poeta',
+    voice_professor: 'El Profesor',
+    // Voice Tooltips
+    tooltip_insider: 'Curado, genial, "Si sabes, sabes"',
+    tooltip_bestie: 'Atrevido, seguro e ingenioso',
+    tooltip_poet: 'Soñador, florido y romántico',
+    tooltip_professor: 'Académico, educativo y claro',
+    // Structure Labels
+    structure_curated: 'Guía Curada',
+    structure_playbook: 'Manual',
+    structure_balanced: 'Equilibrado',
+    // Structure Tooltips
+    tooltip_curated: 'Enfoque: Lugares, Hoteles, Restaurantes, Compras',
+    tooltip_playbook: 'Enfoque: Prácticas, Tutoriales, Rituales, Educación',
+    tooltip_balanced: 'Una mezcla 50/50 de Enseñanza y Destinos',
     // Weaving Steps
     weaving_step1: 'Reuniendo hilos...',
     weaving_step2: 'Preparando el telar...',
@@ -176,6 +236,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Tejiendo... {count} páginas',
     pleaseWaitChapters: 'Por favor espera a todos los capítulos...',
     artisanWeaving: 'Nuestro Artesano está tejiendo tus detalles personalizados...',
+    // Navigation
+    prev: 'Ant',
+    next: 'Sig',
+    pageTools: 'Herramientas',
+    fit: 'Ajustar',
+    fullSize: '100%',
+    pageOf: 'de',
+    chapterOf: 'Capítulo {current} de {total}',
     // Footer
     aiDisclaimer: 'Contenido generado por IA solo para inspiración creativa. No es consejo profesional.',
   },
@@ -224,6 +292,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'VOIX NARRATIVE',
     bookStructure: 'STRUCTURE DU LIVRE',
     focusAreas: 'DOMAINES DE FOCUS',
+    // Focus Area Labels
+    focus_history: 'Histoire',
+    focus_wellness: 'Bien-être',
+    focus_nightlife: 'Vie Nocturne',
+    focus_art: 'Art & Design',
+    focus_luxury: 'Luxe',
+    focus_culture: 'Culture Locale',
+    focus_nature: 'Nature',
     // Focus Area Tooltips
     tooltip_history: 'Histoires anciennes, sites patrimoniaux et chronologies culturelles',
     tooltip_wellness: 'Spas, retraites, méditation et rituels de bien-être',
@@ -232,6 +308,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'Expériences haut de gamme, lieux exclusifs et services premium',
     tooltip_culture: 'Traditions, coutumes locales, marchés alimentaires et vie communautaire',
     tooltip_nature: 'Parcs, sentiers de randonnée, plages et aventures en plein air',
+    // Voice Labels
+    voice_insider: "L'Initié",
+    voice_bestie: "L'Ami(e)",
+    voice_poet: 'Le Poète',
+    voice_professor: 'Le Professeur',
+    // Voice Tooltips
+    tooltip_insider: 'Sélectionné, cool, "Entre connaisseurs"',
+    tooltip_bestie: 'Impertinent, confiant et spirituel',
+    tooltip_poet: 'Rêveur, fleuri et romantique',
+    tooltip_professor: 'Académique, éducatif et clair',
+    // Structure Labels
+    structure_curated: 'Guide Sélectionné',
+    structure_playbook: 'Manuel Pratique',
+    structure_balanced: 'Équilibré',
+    // Structure Tooltips
+    tooltip_curated: 'Focus: Lieux, Hôtels, Restaurants, Shopping',
+    tooltip_playbook: 'Focus: Pratiques, Tutoriels, Rituels, Éducation',
+    tooltip_balanced: 'Un mélange 50/50 d\'Enseignement et de Destinations',
     // Weaving Steps
     weaving_step1: 'Rassemblement des fils...',
     weaving_step2: 'Installation du métier à tisser...',
@@ -255,6 +349,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Tissage... {count} pages',
     pleaseWaitChapters: 'Veuillez patienter pour tous les chapitres...',
     artisanWeaving: 'Notre Artisan tisse vos détails personnalisés...',
+    // Navigation
+    prev: 'Préc',
+    next: 'Suiv',
+    pageTools: 'Outils',
+    fit: 'Ajuster',
+    fullSize: '100%',
+    pageOf: 'sur',
+    chapterOf: 'Chapitre {current} sur {total}',
     // Footer
     aiDisclaimer: 'Contenu généré par IA pour inspiration créative uniquement. Ce n\'est pas un conseil professionnel.',
   },
@@ -303,6 +405,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'ERZÄHLSTIMME',
     bookStructure: 'BUCHSTRUKTUR',
     focusAreas: 'SCHWERPUNKTE',
+    // Focus Area Labels
+    focus_history: 'Geschichte',
+    focus_wellness: 'Wellness',
+    focus_nightlife: 'Nachtleben',
+    focus_art: 'Kunst & Design',
+    focus_luxury: 'Luxus',
+    focus_culture: 'Lokale Kultur',
+    focus_nature: 'Natur',
     // Focus Area Tooltips
     tooltip_history: 'Alte Geschichten, Kulturerbestätten und kulturelle Zeitleisten',
     tooltip_wellness: 'Spas, Retreats, Meditation und Selbstpflege-Rituale',
@@ -311,6 +421,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'High-End-Erlebnisse, exklusive Orte und Premium-Services',
     tooltip_culture: 'Traditionen, lokale Bräuche, Lebensmittelmärkte und Gemeinschaftsleben',
     tooltip_nature: 'Parks, Wanderwege, Strände und Outdoor-Abenteuer',
+    // Voice Labels
+    voice_insider: 'Der Insider',
+    voice_bestie: 'Der/Die Freund/in',
+    voice_poet: 'Der Dichter',
+    voice_professor: 'Der Professor',
+    // Voice Tooltips
+    tooltip_insider: 'Kuratiert, cool, "Wenn du es weißt, weißt du es"',
+    tooltip_bestie: 'Frech, selbstbewusst und witzig',
+    tooltip_poet: 'Verträumt, blumig und romantisch',
+    tooltip_professor: 'Akademisch, lehrreich und klar',
+    // Structure Labels
+    structure_curated: 'Kuratierter Leitfaden',
+    structure_playbook: 'Handbuch',
+    structure_balanced: 'Ausgewogen',
+    // Structure Tooltips
+    tooltip_curated: 'Fokus: Orte, Hotels, Restaurants, Shopping',
+    tooltip_playbook: 'Fokus: Praktiken, Anleitungen, Rituale, Bildung',
+    tooltip_balanced: 'Eine 50/50 Mischung aus Lehre und Reisezielen',
     // Weaving Steps
     weaving_step1: 'Fäden sammeln...',
     weaving_step2: 'Webstuhl aufstellen...',
@@ -334,6 +462,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Weben... {count} Seiten',
     pleaseWaitChapters: 'Bitte warten Sie auf alle Kapitel...',
     artisanWeaving: 'Unser Handwerker webt Ihre individuellen Details...',
+    // Navigation
+    prev: 'Zurück',
+    next: 'Weiter',
+    pageTools: 'Werkzeuge',
+    fit: 'Anpassen',
+    fullSize: '100%',
+    pageOf: 'von',
+    chapterOf: 'Kapitel {current} von {total}',
     // Footer
     aiDisclaimer: 'KI-generierter Inhalt nur zur kreativen Inspiration. Kein professioneller Rat.',
   },
@@ -382,6 +518,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'VOCE NARRATIVA',
     bookStructure: 'STRUTTURA DEL LIBRO',
     focusAreas: 'AREE DI FOCUS',
+    // Focus Area Labels
+    focus_history: 'Storia',
+    focus_wellness: 'Benessere',
+    focus_nightlife: 'Vita Notturna',
+    focus_art: 'Arte & Design',
+    focus_luxury: 'Lusso',
+    focus_culture: 'Cultura Locale',
+    focus_nature: 'Natura',
     // Focus Area Tooltips
     tooltip_history: 'Storie antiche, siti del patrimonio e cronologie culturali',
     tooltip_wellness: 'Spa, ritiri, meditazione e rituali di cura di sé',
@@ -390,6 +534,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'Esperienze di alto livello, luoghi esclusivi e servizi premium',
     tooltip_culture: 'Tradizioni, usanze locali, mercati alimentari e vita comunitaria',
     tooltip_nature: 'Parchi, sentieri, spiagge e avventure all\'aperto',
+    // Voice Labels
+    voice_insider: "L'Iniziato",
+    voice_bestie: "L'Amico/a",
+    voice_poet: 'Il Poeta',
+    voice_professor: 'Il Professore',
+    // Voice Tooltips
+    tooltip_insider: 'Curato, cool, "Se lo sai, lo sai"',
+    tooltip_bestie: 'Sfacciato, sicuro e spiritoso',
+    tooltip_poet: 'Sognante, fiorito e romantico',
+    tooltip_professor: 'Accademico, educativo e chiaro',
+    // Structure Labels
+    structure_curated: 'Guida Curata',
+    structure_playbook: 'Manuale',
+    structure_balanced: 'Equilibrato',
+    // Structure Tooltips
+    tooltip_curated: 'Focus: Luoghi, Hotel, Ristoranti, Shopping',
+    tooltip_playbook: 'Focus: Pratiche, Tutorial, Rituali, Educazione',
+    tooltip_balanced: 'Un mix 50/50 di Insegnamento e Destinazioni',
     // Weaving Steps
     weaving_step1: 'Raccogliendo i fili...',
     weaving_step2: 'Preparando il telaio...',
@@ -413,6 +575,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Tessendo... {count} pagine',
     pleaseWaitChapters: 'Attendi tutti i capitoli...',
     artisanWeaving: 'Il nostro Artigiano sta tessendo i tuoi dettagli personalizzati...',
+    // Navigation
+    prev: 'Prec',
+    next: 'Succ',
+    pageTools: 'Strumenti',
+    fit: 'Adatta',
+    fullSize: '100%',
+    pageOf: 'di',
+    chapterOf: 'Capitolo {current} di {total}',
     // Footer
     aiDisclaimer: 'Contenuto generato da IA solo per ispirazione creativa. Non è un consiglio professionale.',
   },
@@ -461,6 +631,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'VOZ NARRATIVA',
     bookStructure: 'ESTRUTURA DO LIVRO',
     focusAreas: 'ÁREAS DE FOCO',
+    // Focus Area Labels
+    focus_history: 'História',
+    focus_wellness: 'Bem-estar',
+    focus_nightlife: 'Vida Noturna',
+    focus_art: 'Arte & Design',
+    focus_luxury: 'Luxo',
+    focus_culture: 'Cultura Local',
+    focus_nature: 'Natureza',
     // Focus Area Tooltips
     tooltip_history: 'Histórias antigas, patrimônios culturais e cronologias',
     tooltip_wellness: 'Spas, retiros, meditação e rituais de autocuidado',
@@ -469,6 +647,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'Experiências de alto padrão, locais exclusivos e serviços premium',
     tooltip_culture: 'Tradições, costumes locais, mercados e vida comunitária',
     tooltip_nature: 'Parques, trilhas, praias e aventuras ao ar livre',
+    // Voice Labels
+    voice_insider: 'O Iniciado',
+    voice_bestie: 'O/A Amigo/a',
+    voice_poet: 'O Poeta',
+    voice_professor: 'O Professor',
+    // Voice Tooltips
+    tooltip_insider: 'Curado, legal, "Se você sabe, você sabe"',
+    tooltip_bestie: 'Atrevido, confiante e espirituoso',
+    tooltip_poet: 'Sonhador, florido e romântico',
+    tooltip_professor: 'Acadêmico, educacional e claro',
+    // Structure Labels
+    structure_curated: 'Guia Curado',
+    structure_playbook: 'Manual',
+    structure_balanced: 'Equilibrado',
+    // Structure Tooltips
+    tooltip_curated: 'Foco: Lugares, Hotéis, Restaurantes, Compras',
+    tooltip_playbook: 'Foco: Práticas, Tutoriais, Rituais, Educação',
+    tooltip_balanced: 'Uma mistura 50/50 de Ensino e Destinos',
     // Weaving Steps
     weaving_step1: 'Reunindo fios...',
     weaving_step2: 'Preparando o tear...',
@@ -492,6 +688,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: 'Tecendo... {count} páginas',
     pleaseWaitChapters: 'Por favor aguarde todos os capítulos...',
     artisanWeaving: 'Nosso Artesão está tecendo seus detalhes personalizados...',
+    // Navigation
+    prev: 'Ant',
+    next: 'Próx',
+    pageTools: 'Ferramentas',
+    fit: 'Ajustar',
+    fullSize: '100%',
+    pageOf: 'de',
+    chapterOf: 'Capítulo {current} de {total}',
     // Footer
     aiDisclaimer: 'Conteúdo gerado por IA apenas para inspiração criativa. Não é aconselhamento profissional.',
   },
@@ -540,6 +744,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: '叙事风格',
     bookStructure: '书籍结构',
     focusAreas: '关注领域',
+    // Focus Area Labels
+    focus_history: '历史',
+    focus_wellness: '养生',
+    focus_nightlife: '夜生活',
+    focus_art: '艺术设计',
+    focus_luxury: '奢华',
+    focus_culture: '当地文化',
+    focus_nature: '自然',
     // Focus Area Tooltips
     tooltip_history: '古老故事、文化遗产和历史时间线',
     tooltip_wellness: '水疗、静修、冥想和自我护理仪式',
@@ -548,6 +760,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: '高端体验、专属场所和优质服务',
     tooltip_culture: '传统、当地习俗、美食市场和社区生活',
     tooltip_nature: '公园、徒步小径、海滩和户外冒险',
+    // Voice Labels
+    voice_insider: '内行人',
+    voice_bestie: '闺蜜',
+    voice_poet: '诗人',
+    voice_professor: '教授',
+    // Voice Tooltips
+    tooltip_insider: '精选、时尚、"懂的都懂"',
+    tooltip_bestie: '俏皮、自信、机智',
+    tooltip_poet: '梦幻、浪漫、诗意',
+    tooltip_professor: '学术、教育、清晰',
+    // Structure Labels
+    structure_curated: '精选指南',
+    structure_playbook: '实用手册',
+    structure_balanced: '均衡',
+    // Structure Tooltips
+    tooltip_curated: '重点：地点、酒店、餐厅、购物',
+    tooltip_playbook: '重点：实践、教程、仪式、教育',
+    tooltip_balanced: '教学与目的地的50/50混合',
     // Weaving Steps
     weaving_step1: '收集丝线...',
     weaving_step2: '准备织布机...',
@@ -571,6 +801,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: '编织中... {count} 页',
     pleaseWaitChapters: '请等待所有章节完成...',
     artisanWeaving: '我们的工匠正在编织您的定制细节...',
+    // Navigation
+    prev: '上一页',
+    next: '下一页',
+    pageTools: '页面工具',
+    fit: '适应',
+    fullSize: '100%',
+    pageOf: '/',
+    chapterOf: '第{current}章 共{total}章',
     // Footer
     aiDisclaimer: 'AI生成内容仅供创意灵感参考。非专业建议。',
   },
@@ -619,6 +857,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     narrativeVoice: 'ナラティブボイス',
     bookStructure: 'ブック構造',
     focusAreas: 'フォーカスエリア',
+    // Focus Area Labels
+    focus_history: '歴史',
+    focus_wellness: 'ウェルネス',
+    focus_nightlife: 'ナイトライフ',
+    focus_art: 'アート＆デザイン',
+    focus_luxury: 'ラグジュアリー',
+    focus_culture: '地元の文化',
+    focus_nature: '自然',
     // Focus Area Tooltips
     tooltip_history: '古代の物語、文化遺産、歴史年表',
     tooltip_wellness: 'スパ、リトリート、瞑想、セルフケア',
@@ -627,6 +873,24 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tooltip_luxury: 'ハイエンド体験、専用会場、プレミアムサービス',
     tooltip_culture: '伝統、地元の習慣、食品市場、コミュニティライフ',
     tooltip_nature: '公園、ハイキングトレイル、ビーチ、アウトドアアドベンチャー',
+    // Voice Labels
+    voice_insider: 'インサイダー',
+    voice_bestie: '親友',
+    voice_poet: '詩人',
+    voice_professor: '教授',
+    // Voice Tooltips
+    tooltip_insider: 'キュレーション、クール、「知る人ぞ知る」',
+    tooltip_bestie: '生意気、自信、ウィット',
+    tooltip_poet: '夢のような、華やか、ロマンチック',
+    tooltip_professor: 'アカデミック、教育的、明確',
+    // Structure Labels
+    structure_curated: 'キュレーションガイド',
+    structure_playbook: 'プレイブック',
+    structure_balanced: 'バランス',
+    // Structure Tooltips
+    tooltip_curated: 'フォーカス：場所、ホテル、レストラン、ショッピング',
+    tooltip_playbook: 'フォーカス：実践、ハウツー、儀式、教育',
+    tooltip_balanced: '教育と目的地の50/50ミックス',
     // Weaving Steps
     weaving_step1: '糸を集めています...',
     weaving_step2: '織機を準備しています...',
@@ -650,6 +914,14 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     weavingPages: '織り上げ中... {count} ページ',
     pleaseWaitChapters: 'すべての章をお待ちください...',
     artisanWeaving: '職人があなたのカスタム詳細を織り上げています...',
+    // Navigation
+    prev: '前へ',
+    next: '次へ',
+    pageTools: 'ページツール',
+    fit: 'フィット',
+    fullSize: '100%',
+    pageOf: '/',
+    chapterOf: '第{current}章 / 全{total}章',
     // Footer
     aiDisclaimer: 'AI生成コンテンツはクリエイティブなインスピレーション専用です。専門的なアドバイスではありません。',
   },

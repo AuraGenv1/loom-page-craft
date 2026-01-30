@@ -50,6 +50,18 @@ const STRUCTURE_INSTRUCTIONS: Record<string, string> = {
   balanced: 'Balance educational content with curated recommendations. Mix teaching moments with specific venue suggestions for a well-rounded guide.',
 };
 
+// Language name mapping for explicit AI instructions
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish (Español)',
+  fr: 'French (Français)',
+  de: 'German (Deutsch)',
+  it: 'Italian (Italiano)',
+  pt: 'Portuguese (Português)',
+  zh: 'Chinese (中文)',
+  ja: 'Japanese (日本語)',
+};
+
 // Retry helper
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -103,7 +115,30 @@ serve(async (req) => {
       ? `\n=== FOCUS AREAS ===\nEmphasize these topics throughout the book: ${focusAreas.join(', ')}`
       : '';
     
-    console.log(`[generate-book-blocks] Topic: "${cleanTopic}", Visual: ${isVisual}, Voice: ${voice}, Structure: ${structure}`);
+    // Get language name for explicit instruction
+    const languageName = LANGUAGE_NAMES[language] || 'English';
+    
+    // Critical language instruction for non-English content
+    const languageInstruction = language !== 'en' 
+      ? `
+=== CRITICAL: LANGUAGE REQUIREMENT ===
+You MUST write ALL content in ${languageName}. This is MANDATORY.
+- main_title: Write in ${languageName}
+- subtitle: Write in ${languageName}
+- All chapter titles: Write in ${languageName}
+- All text block content: Write in ${languageName}
+- All image captions: Write in ${languageName}
+- All pro_tip content: Write in ${languageName}
+
+The ONLY exceptions are:
+- Proper nouns (hotel names, restaurant names, landmark names) - keep in original form
+- Technical terms with no good translation
+
+DO NOT default to English. The reader speaks ${languageName}.
+`
+      : '';
+    
+    console.log(`[generate-book-blocks] Topic: "${cleanTopic}", Visual: ${isVisual}, Voice: ${voice}, Structure: ${structure}, Language: ${language}`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
@@ -118,7 +153,7 @@ serve(async (req) => {
     const targetTotalPages = topicBreadth === 'narrow' ? 100 : 140;
     
     const prompt = `You are an elite "Luxury Book Architect." Create a structured book outline and Chapter 1 content for: "${cleanTopic}".
-
+${languageInstruction}
 === NARRATIVE VOICE ===
 ${voiceInstruction}
 
