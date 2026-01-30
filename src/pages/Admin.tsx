@@ -29,8 +29,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Plus, Trash2, ArrowLeft, Shield, Key, Copy, AlertTriangle, Check, Loader2, Settings, Mail } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Shield, Key, Copy, AlertTriangle, Check, Loader2, Settings, Mail, ChevronDown } from 'lucide-react';
 import Logo from '@/components/Logo';
 
 interface PromoCode {
@@ -368,153 +373,6 @@ const Admin = () => {
           </p>
         </section>
 
-        {/* Openverse API Setup Section */}
-        <section>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Key className="w-5 h-5 text-primary" />
-                <div>
-                  <CardTitle className="font-serif text-xl">Openverse API Setup</CardTitle>
-                  <CardDescription>
-                    Register your application to get API credentials for image search
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="app-name">App Name</Label>
-                <Input
-                  id="app-name"
-                  value={openverseForm.name}
-                  onChange={e => setOpenverseForm({ ...openverseForm, name: e.target.value })}
-                  placeholder="LoomPage Book Generator"
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={openverseForm.email}
-                  onChange={e => setOpenverseForm({ ...openverseForm, email: e.target.value })}
-                  placeholder="your@email.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={openverseForm.description}
-                  onChange={e => setOpenverseForm({ ...openverseForm, description: e.target.value })}
-                  placeholder="Book generation tool for education"
-                  rows={2}
-                />
-              </div>
-              <Button 
-                onClick={handleRegisterOpenverse} 
-                disabled={registeringOpenverse}
-                className="w-full sm:w-auto"
-              >
-                {registeringOpenverse ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Registering...
-                  </>
-                ) : (
-                  <>
-                    <Key className="w-4 h-4 mr-2" />
-                    Register & Get Keys
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Credentials Modal */}
-        <Dialog open={credentialsModalOpen} onOpenChange={setCredentialsModalOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-serif flex items-center gap-2">
-                <Check className="w-5 h-5 text-primary" />
-                Openverse Credentials Generated
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              {/* Warning */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
-                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-destructive">
-                    IMPORTANT: Copy these now!
-                  </p>
-                  <p className="text-muted-foreground">
-                    Openverse will never show them again.
-                  </p>
-                </div>
-              </div>
-
-              {/* Client ID */}
-              <div className="space-y-2">
-                <Label>Client ID</Label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
-                    {openverseCredentials?.client_id}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(openverseCredentials?.client_id || '', 'id')}
-                    className="shrink-0"
-                  >
-                    {copiedField === 'id' ? (
-                      <Check className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Client Secret */}
-              <div className="space-y-2">
-                <Label>Client Secret</Label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
-                    {openverseCredentials?.client_secret}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(openverseCredentials?.client_secret || '', 'secret')}
-                    className="shrink-0"
-                  >
-                    {copiedField === 'secret' ? (
-                      <Check className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Next steps */}
-              <p className="text-sm text-muted-foreground pt-2">
-                Next: Add these as secrets in your project settings (OPENVERSE_CLIENT_ID and OPENVERSE_CLIENT_SECRET)
-              </p>
-
-              <Button 
-                onClick={() => setCredentialsModalOpen(false)} 
-                className="w-full"
-              >
-                Done
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         {/* Promo Codes Section */}
         <section>
           <div className="flex items-center justify-between mb-8">
@@ -581,61 +439,61 @@ const Admin = () => {
             </Dialog>
           </div>
 
-        {loadingCodes ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : promoCodes.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            No promo codes yet. Create your first one!
-          </div>
-        ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Uses</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {promoCodes.map(code => (
-                  <TableRow key={code.id}>
-                    <TableCell className="font-mono font-medium">{code.code}</TableCell>
-                    <TableCell>{code.discount_percent}%</TableCell>
-                    <TableCell>
-                      {code.current_uses}
-                      {code.max_uses ? ` / ${code.max_uses}` : ''}
-                    </TableCell>
-                    <TableCell>
-                      {code.expires_at
-                        ? new Date(code.expires_at).toLocaleDateString()
-                        : 'Never'}
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={code.is_active}
-                        onCheckedChange={() => handleToggleActive(code.id, code.is_active)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(code.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
+          {loadingCodes ? (
+            <div className="text-center py-12 text-muted-foreground">Loading...</div>
+          ) : promoCodes.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No promo codes yet. Create your first one!
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Discount</TableHead>
+                    <TableHead>Uses</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead>Active</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                </TableHeader>
+                <TableBody>
+                  {promoCodes.map(code => (
+                    <TableRow key={code.id}>
+                      <TableCell className="font-mono font-medium">{code.code}</TableCell>
+                      <TableCell>{code.discount_percent}%</TableCell>
+                      <TableCell>
+                        {code.current_uses}
+                        {code.max_uses ? ` / ${code.max_uses}` : ''}
+                      </TableCell>
+                      <TableCell>
+                        {code.expires_at
+                          ? new Date(code.expires_at).toLocaleDateString()
+                          : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={code.is_active}
+                          onCheckedChange={() => handleToggleActive(code.id, code.is_active)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(code.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </section>
 
         {/* Platform Settings Section */}
@@ -693,6 +551,80 @@ const Admin = () => {
               )}
             </CardContent>
           </Card>
+        </section>
+
+        {/* Openverse API Setup Section - Collapsible */}
+        <section>
+          <Collapsible>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Key className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <CardTitle className="font-serif text-xl">Openverse API Setup</CardTitle>
+                        <CardDescription>
+                          Register your application to get API credentials for image search
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <ChevronDown className="w-5 h-5 text-muted-foreground transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="app-name">App Name</Label>
+                    <Input
+                      id="app-name"
+                      value={openverseForm.name}
+                      onChange={e => setOpenverseForm({ ...openverseForm, name: e.target.value })}
+                      placeholder="LoomPage Book Generator"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={openverseForm.email}
+                      onChange={e => setOpenverseForm({ ...openverseForm, email: e.target.value })}
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={openverseForm.description}
+                      onChange={e => setOpenverseForm({ ...openverseForm, description: e.target.value })}
+                      placeholder="Book generation tool for education"
+                      rows={2}
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleRegisterOpenverse} 
+                    disabled={registeringOpenverse}
+                    className="w-full sm:w-auto"
+                  >
+                    {registeringOpenverse ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Registering...
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4 mr-2" />
+                        Register & Get Keys
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         </section>
       </main>
     </div>
