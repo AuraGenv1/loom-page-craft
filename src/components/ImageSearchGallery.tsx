@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles, Wand2, RefreshCw } from 'lucide-react';
+import { Search, Loader2, Check, Image as ImageIcon, AlertTriangle, Crop, Lock, Sparkles, Wand2, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ImageCropper } from '@/components/ImageCropper';
 import { useAccess } from '@/contexts/AccessContext';
+import { triggerUnsplashDownload } from '@/lib/unsplashTracking';
 
 interface ImageResult {
   id: string;
@@ -26,6 +27,9 @@ interface ImageResult {
   isPrintReady?: boolean;
   license?: string; // License type from API for metadata tracking
   imageType?: 'photo' | 'vector' | 'illustration'; // Type for frontend filtering
+  // Unsplash API compliance fields
+  downloadLocation?: string;  // Unsplash download tracking URL
+  photographerUrl?: string;   // Photographer profile URL for attribution link
 }
 
 // Extended metadata passed to handlers for provenance tracking
@@ -494,6 +498,12 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
 
   const handleSelect = useCallback(() => {
     if (!selectedImage || !hasConsented) return;
+    
+    // CRITICAL: Trigger Unsplash download tracking when image is actually used
+    if (selectedImage.source === 'unsplash' && selectedImage.downloadLocation) {
+      triggerUnsplashDownload(selectedImage.downloadLocation);
+    }
+    
     const metadata = createMetadata(selectedImage);
     onSelect(selectedImage.imageUrl, selectedImage.attribution, metadata);
     onOpenChange(false);
@@ -501,6 +511,12 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
 
   const handleCropAndSelect = useCallback(() => {
     if (!selectedImage || !hasConsented) return;
+    
+    // CRITICAL: Trigger Unsplash download tracking when image is actually used
+    if (selectedImage.source === 'unsplash' && selectedImage.downloadLocation) {
+      triggerUnsplashDownload(selectedImage.downloadLocation);
+    }
+    
     setShowCropper(true);
   }, [selectedImage, hasConsented]);
 
@@ -857,7 +873,7 @@ export const ImageSearchGallery: React.FC<ImageSearchGalleryProps> = ({
   );
 };
 
-// Thumbnail grid component
+// Thumbnail grid component with Unsplash-compliant attribution footer
 interface ImageGridProps {
   images: ImageResult[];
   selectedImage: ImageResult | null;
@@ -897,53 +913,80 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
     }
   };
 
+  // Extract photographer name from attribution string
+  // "Photo by Jane Doe on Unsplash" -> "Jane Doe"
+  const extractPhotographerName = (attribution?: string): string => {
+    if (!attribution) return 'Unknown';
+    const match = attribution.match(/Photo by (.+?) on/i);
+    return match ? match[1] : attribution;
+  };
+
+  // Handle attribution footer click (open photographer profile)
+  const handleFooterClick = useCallback((e: React.MouseEvent, image: ImageResult) => {
+    e.stopPropagation(); // CRITICAL: Prevent image selection
+    e.preventDefault();
+    
+    if (image.photographerUrl) {
+      window.open(image.photographerUrl, '_blank', 'noopener,noreferrer');
+    } else if (image.source === 'unsplash') {
+      // Fallback: open Unsplash homepage
+      window.open('https://unsplash.com', '_blank', 'noopener,noreferrer');
+    }
+  }, []);
+
   return (
     <ScrollArea className="h-[400px]">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-1">
         {images.map((image) => {
           const isSelected = selectedImage?.id === image.id;
           const isLoaded = loadedImages.has(image.id);
+          const isUnsplash = image.source === 'unsplash';
           
           return (
-            <button
+            <div
               key={image.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectImage(image);
-              }}
               className={`
-                relative rounded-lg overflow-hidden border-2 transition-all
+                group relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer
                 ${isSelected 
                   ? 'border-primary ring-2 ring-primary/30 scale-[1.02]' 
                   : 'border-transparent hover:border-muted-foreground/30'
                 }
               `}
             >
-              {/* Loading skeleton */}
-              {!isLoaded && (
-                <div className="w-full h-32 bg-muted animate-pulse" />
-              )}
+              {/* Main Image Area - Click to Select */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectImage(image);
+                }}
+                className="w-full block"
+              >
+                {/* Loading skeleton */}
+                {!isLoaded && (
+                  <div className="w-full h-32 bg-muted animate-pulse" />
+                )}
+                
+                {/* Thumbnail */}
+                <img
+                  src={image.thumbnailUrl}
+                  alt=""
+                  className={`w-full h-auto max-h-40 object-contain bg-muted transition-opacity ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => handleImageLoad(image.id)}
+                  loading="lazy"
+                />
+              </button>
               
-              {/* Full thumbnail - maintain aspect ratio, no cropping */}
-              <img
-                src={image.thumbnailUrl}
-                alt=""
-                className={`w-full h-auto max-h-40 object-contain bg-muted transition-opacity ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
-                onLoad={() => handleImageLoad(image.id)}
-                loading="lazy"
-              />
-              
-              {/* Print Ready badge - top left for high-res images */}
+              {/* Print Ready badge - top left */}
               {image.isPrintReady && (
-                <div className="absolute top-1 left-1">
+                <div className="absolute top-1 left-1 pointer-events-none">
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-green-600 text-white">
                     Print Ready
                   </span>
                 </div>
               )}
               
-              {/* Source badge - bottom left */}
-              <div className="absolute bottom-1 left-1">
+              {/* Source badge - bottom left (visible when not hovering for Unsplash, always visible for others) */}
+              <div className={`absolute bottom-1 left-1 pointer-events-none transition-opacity duration-200 ${isUnsplash ? 'group-hover:opacity-0' : ''}`}>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getSourceBadgeClass(image.source)}`}>
                   {getSourceLabel(image.source)}
                 </span>
@@ -951,11 +994,31 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, selectedImage, onSelectIm
               
               {/* Selection checkmark */}
               {isSelected && (
-                <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center pointer-events-none">
                   <Check className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-            </button>
+              
+              {/* Hover Attribution Footer - Only for Unsplash (API compliance) */}
+              {isUnsplash && (
+                <button
+                  onClick={(e) => handleFooterClick(e, image)}
+                  className="
+                    absolute bottom-0 left-0 right-0
+                    bg-black/70 backdrop-blur-sm
+                    px-2 py-1.5
+                    flex items-center justify-between gap-1
+                    translate-y-full group-hover:translate-y-0
+                    transition-transform duration-200 ease-out
+                  "
+                >
+                  <span className="text-[10px] text-white/90 truncate">
+                    Photo by {extractPhotographerName(image.attribution)} / Unsplash
+                  </span>
+                  <ExternalLink className="w-3 h-3 text-white/70 shrink-0" />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

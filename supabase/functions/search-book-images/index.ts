@@ -21,6 +21,9 @@ interface ImageResult {
   isPrintReady: boolean;   // True if width >= 1800px
   license?: string;        // License type for metadata tracking
   imageType?: 'photo' | 'vector' | 'illustration'; // Type for frontend filtering
+  // Unsplash API compliance fields
+  downloadLocation?: string;  // Unsplash download tracking URL (required for API compliance)
+  photographerUrl?: string;   // Photographer profile URL for attribution link
 }
 
 // ============== OPENVERSE OAUTH2 TOKEN MANAGEMENT ==============
@@ -250,6 +253,9 @@ async function searchUnsplashMultiple(
         width,
         height,
         isPrintReady: width >= PRINT_READY_WIDTH,
+        // Unsplash API compliance: include download tracking URL and photographer profile
+        downloadLocation: photo.links?.download_location,
+        photographerUrl: photo.user?.links?.html,
       });
     }
 
