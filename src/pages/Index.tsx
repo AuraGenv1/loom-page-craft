@@ -977,7 +977,7 @@ const Index = () => {
                 )}
                 {isPaid && (
                   <p className="text-xs text-accent text-center max-w-md font-medium">
-                    ✓ {t('fullAccessUnlocked')} — {completedChapterCount} of {totalChapters} chapters ready
+                    ✓ {t('fullAccessUnlocked')} — {t('chaptersReady').replace('{completed}', String(completedChapterCount)).replace('{total}', String(totalChapters))}
                   </p>
                 )}
                 {/* Save to Library Button */}

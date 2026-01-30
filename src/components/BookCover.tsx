@@ -26,6 +26,9 @@ import { registerPlayfairFont, FONT_SIZES, CHAR_SPACING, LINE_HEIGHTS } from '@/
 import { ImageSearchGallery } from '@/components/ImageSearchGallery';
 import { uploadToBookImages } from '@/lib/bookImages';
 import { getKdpCoverDimensions, shouldShowSpineText, TRIM_SIZE } from '@/lib/kdpUtils';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useAccess } from '@/contexts/AccessContext';
+
 interface BookCoverProps {
   title: string;
   subtitle?: string;
@@ -109,6 +112,8 @@ const BookCover = forwardRef<HTMLDivElement, BookCoverProps>(
     isGrayscale = false,
     onCoverUpdate
   }, ref) => {
+    const { t } = useLanguage();
+    const { isAdmin: isAdminFromContext } = useAccess();
     const TopicIcon = getTopicIcon(topic || propTitle);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
@@ -1906,7 +1911,7 @@ p { margin-bottom: 1em; }`);
               className="absolute top-3 right-3 z-10 opacity-80 hover:opacity-100 shadow-md"
             >
               <Pencil className="w-4 h-4 mr-1" />
-              {hasFullAccess ? 'Cover Studio' : 'Preview Studio'}
+              {hasFullAccess ? t('coverStudio') : t('previewStudio')}
             </Button>
           )}
 
@@ -2025,35 +2030,30 @@ p { margin-bottom: 1em; }`);
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 <Palette className="w-6 h-6" />
-                KDP Cover Studio & Export Manager
+                {t('kdpCoverStudioTitle')}
               </DialogTitle>
             </DialogHeader>
 
             <Tabs defaultValue="front" className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-8">
-                <TabsTrigger value="front" className="text-xs sm:text-sm">Front</TabsTrigger>
-                <TabsTrigger value="back" className="text-xs sm:text-sm">Back</TabsTrigger>
-                <TabsTrigger value="spine" className="text-xs sm:text-sm">Spine</TabsTrigger>
-                <TabsTrigger value="wrap" className="text-xs sm:text-sm">Wrap</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-7">
+                <TabsTrigger value="front" className="text-xs sm:text-sm">{t('tabFront')}</TabsTrigger>
+                <TabsTrigger value="back" className="text-xs sm:text-sm">{t('tabBack')}</TabsTrigger>
+                <TabsTrigger value="spine" className="text-xs sm:text-sm">{t('tabSpine')}</TabsTrigger>
+                <TabsTrigger value="wrap" className="text-xs sm:text-sm">{t('tabWrap')}</TabsTrigger>
                 <TabsTrigger value="kdp-prep" className="gap-1 text-xs sm:text-sm">
                   {!hasFullAccess && <Lock className="w-3 h-3" />}
                   {hasFullAccess && <ClipboardList className="w-3 h-3" />}
-                  Prep
+                  {t('tabPrep')}
                 </TabsTrigger>
                 <TabsTrigger value="finance" className="gap-1 text-xs sm:text-sm">
                   {!hasFullAccess && <Lock className="w-3 h-3" />}
                   {hasFullAccess && <DollarSign className="w-3 h-3" />}
-                  $$$
-                </TabsTrigger>
-                <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
-                  {!hasFullAccess && <Lock className="w-3 h-3" />}
-                  {hasFullAccess && <ShieldCheck className="w-3 h-3" />}
-                  Legal
+                  {t('tabRoyalty')}
                 </TabsTrigger>
                 <TabsTrigger value="manuscript" className="gap-1 text-xs sm:text-sm">
                   {!hasFullAccess && <Lock className="w-3 h-3" />}
                   {hasFullAccess && <Package className="w-3 h-3" />}
-                  Export
+                  {t('tabExport')}
                 </TabsTrigger>
               </TabsList>
 
@@ -2061,7 +2061,7 @@ p { margin-bottom: 1em; }`);
               <TabsContent value="front" className="space-y-4 pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col items-center">
-                    <h3 className="font-medium mb-3">Current Front Cover</h3>
+                    <h3 className="font-medium mb-3">{t('currentFrontCover')}</h3>
                     {/* Full Cover Layout Preview - constrained width, no yellow tint in preview */}
                     <div className="w-[280px] mx-auto">
                       <div className="aspect-[3/4] bg-white rounded-sm shadow-lg overflow-hidden border relative p-5 flex flex-col h-full">
@@ -2076,7 +2076,7 @@ p { margin-bottom: 1em; }`);
                               </div>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px] rounded-lg border-2 border-foreground/10 bg-secondary/10">
-                                No Image
+                                {t('noImage')}
                               </div>
                             )}
                           </div>
@@ -2126,16 +2126,16 @@ p { margin-bottom: 1em; }`);
                     {/* Editable Title/Subtitle Fields */}
                     <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-sm">Edit Cover Text</h4>
+                        <h4 className="font-medium text-sm">{t('editCoverText')}</h4>
                         {!hasFullAccess && (
                           <Badge variant="secondary" className="text-xs gap-1">
                             <Lock className="w-3 h-3" />
-                            View Only
+                            {t('viewOnly')}
                           </Badge>
                         )}
                       </div>
                       <div>
-                        <Label htmlFor="cover-title" className="text-sm">Title</Label>
+                        <Label htmlFor="cover-title" className="text-sm">{t('titleLabel')}</Label>
                         <Input
                           id="cover-title"
                           value={localTitle}
@@ -2146,7 +2146,7 @@ p { margin-bottom: 1em; }`);
                         />
                       </div>
                       <div>
-                        <Label htmlFor="cover-subtitle" className="text-sm">Subtitle</Label>
+                        <Label htmlFor="cover-subtitle" className="text-sm">{t('subtitleLabel')}</Label>
                         <Input
                           id="cover-subtitle"
                           value={localSubtitle}
@@ -2166,10 +2166,10 @@ p { margin-bottom: 1em; }`);
                           {isSavingText ? (
                             <>
                               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                              Saving...
+                              {t('saving')}
                             </>
                           ) : (
-                            'Save Text Changes'
+                            t('saveTextChanges')
                           )}
                         </Button>
                       )}
@@ -2178,9 +2178,9 @@ p { margin-bottom: 1em; }`);
                     {/* Upload Cover Image - Only for paid users */}
                     {hasFullAccess ? (
                       <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5">
-                        <h4 className="font-medium text-sm mb-2">Or Upload Your Own Image</h4>
+                        <h4 className="font-medium text-sm mb-2">{t('uploadYourOwnImage')}</h4>
                         <p className="text-xs text-muted-foreground mb-3">
-                          Upload a custom cover image (JPG, PNG, max 5MB)
+                          {t('uploadCustomCoverDesc')}
                         </p>
 
                         <Button
@@ -2190,7 +2190,7 @@ p { margin-bottom: 1em; }`);
                           className="w-full gap-2 mb-3"
                         >
                           <Search className="w-4 h-4" />
-                          Search Gallery
+                          {t('searchGallery')}
                         </Button>
 
                         <input
@@ -2209,12 +2209,12 @@ p { margin-bottom: 1em; }`);
                           {isUploadingCover ? (
                             <>
                               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                              Uploading...
+                              {t('uploading')}
                             </>
                           ) : (
                             <>
                               <Upload className="w-4 h-4 mr-2" />
-                              Upload Cover Image
+                              {t('uploadCoverImage')}
                             </>
                           )}
                         </Button>
@@ -2222,14 +2222,14 @@ p { margin-bottom: 1em; }`);
                     ) : (
                       <div className="p-4 border-2 border-dashed border-border rounded-lg bg-secondary/5 opacity-60">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">Custom Cover Image</h4>
+                          <h4 className="font-medium text-sm">{t('customCoverImage')}</h4>
                           <Badge variant="secondary" className="text-xs gap-1">
                             <Lock className="w-3 h-3" />
-                            Premium
+                            {t('premium')}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mb-3">
-                          Unlock to upload custom images or search our gallery
+                          {t('uploadCustomCoverDesc')}
                         </p>
                         <Button
                           variant="outline"
@@ -2237,7 +2237,7 @@ p { margin-bottom: 1em; }`);
                           className="w-full gap-2"
                         >
                           <Lock className="w-4 h-4" />
-                          Unlock Cover Editing
+                          {t('unlockCoverEditing')}
                         </Button>
                       </div>
                     )}
@@ -2248,18 +2248,18 @@ p { margin-bottom: 1em; }`);
                 {/* Cover Branding - Compact Row Below Grid */}
                 <div className="mt-6 pt-4 border-t">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-sm text-center flex-1">Cover Branding</h4>
+                    <h4 className="font-medium text-sm text-center flex-1">{t('coverBranding')}</h4>
                     {!hasFullAccess && (
                       <Badge variant="secondary" className="text-xs gap-1">
                         <Lock className="w-3 h-3" />
-                        View Only
+                        {t('viewOnly')}
                       </Badge>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-center gap-4">
                     {/* Brand Name */}
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="brand-name" className="text-sm whitespace-nowrap">Brand:</Label>
+                      <Label htmlFor="brand-name" className="text-sm whitespace-nowrap">{t('brand')}:</Label>
                       <Input
                         id="brand-name"
                         value={customBrandName}
@@ -2272,7 +2272,7 @@ p { margin-bottom: 1em; }`);
                     
                     {/* Show Logo Toggle */}
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="show-logo" className="text-sm">Logo</Label>
+                      <Label htmlFor="show-logo" className="text-sm">{t('logo')}</Label>
                       <input
                         id="show-logo"
                         type="checkbox"
@@ -2302,7 +2302,7 @@ p { margin-bottom: 1em; }`);
                           {isUploadingLogo ? (
                             <RefreshCw className="w-4 h-4 animate-spin" />
                           ) : (
-                            customLogoUrl ? 'Change Logo' : 'Upload Logo'
+                            customLogoUrl ? t('changeLogo') : t('uploadLogo')
                           )}
                         </Button>
                         {customLogoUrl && (
@@ -2327,7 +2327,7 @@ p { margin-bottom: 1em; }`);
                     {/* Reset Button - Only for paid users */}
                     {hasFullAccess && (
                       <Button variant="ghost" size="sm" onClick={handleResetBranding}>
-                        Reset
+                        {t('reset')}
                       </Button>
                     )}
                   </div>
@@ -2352,7 +2352,7 @@ p { margin-bottom: 1em; }`);
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Preview Column */}
                   <div>
-                    <h3 className="font-medium mb-3">Current Back Cover</h3>
+                    <h3 className="font-medium mb-3">{t('currentBackCover')}</h3>
                     <div className="aspect-[3/4] bg-white rounded-sm shadow-sm overflow-hidden border border-gray-200 relative p-8 flex flex-col items-center text-center max-w-[300px]">
                       {/* Content Area - Top 2/3 */}
                       <div className="flex-1 flex flex-col items-center justify-start gap-4">
@@ -2381,16 +2381,16 @@ p { margin-bottom: 1em; }`);
                   <div className="space-y-4">
                     <div className="space-y-3 p-4 border rounded-lg bg-secondary/10">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-sm">Back Cover Text</h4>
+                        <h4 className="font-medium text-sm">{t('backCoverText')}</h4>
                         {!hasFullAccess && (
                           <Badge variant="secondary" className="text-xs gap-1">
                             <Lock className="w-3 h-3" />
-                            View Only
+                            {t('viewOnly')}
                           </Badge>
                         )}
                       </div>
                       <div>
-                        <Label htmlFor="back-cover-title" className="text-sm">Header</Label>
+                        <Label htmlFor="back-cover-title" className="text-sm">{t('header')}</Label>
                         <Input
                           id="back-cover-title"
                           value={backCoverTitle}
@@ -2830,8 +2830,8 @@ p { margin-bottom: 1em; }`);
                   />
                 ) : (
                   <LockedTabContent
-                    title="Amazon Listing Prep"
-                    description="Unlock to auto-generate your Best-Selling Description and Keywords with AI."
+                    title={t('amazonListingPrep')}
+                    description={t('amazonListingPrepDesc')}
                     icon={ClipboardList}
                     onUnlockClick={() => onPremiumFeatureAttempt?.('Amazon Listing Prep')}
                   />
@@ -2847,30 +2847,23 @@ p { margin-bottom: 1em; }`);
                   </div>
                 ) : (
                   <LockedTabContent
-                    title="Royalty Calculator"
-                    description="Unlock to calculate your KDP royalties and optimize your pricing strategy."
+                    title={t('royaltyCalculator')}
+                    description={t('royaltyCalculatorDesc')}
                     icon={Calculator}
                     onUnlockClick={() => onPremiumFeatureAttempt?.('Royalty Calculator')}
                   />
                 )}
               </TabsContent>
 
-              {/* TAB 7: Legal - Copyright & Hallucination Defense */}
-              <TabsContent value="legal" className="pt-4">
-                {hasFullAccess ? (
+              {/* TAB 7: Legal - Copyright & Hallucination Defense - ADMIN ONLY */}
+              {isAdminFromContext && (
+                <TabsContent value="legal" className="pt-4">
                   <div className="max-w-2xl mx-auto h-[500px]">
-                    <h3 className="font-medium mb-4 text-center">Copyright & Hallucination Defense</h3>
+                    <h3 className="font-medium mb-4 text-center">{t('copyrightDefense')}</h3>
                     {bookData && bookId && <KdpLegalDefense bookData={bookData} bookId={bookId} title={title} />}
                   </div>
-                ) : (
-                  <LockedTabContent
-                    title="Copyright Defense"
-                    description="Unlock to scan for potential issues and generate legal disclaimers."
-                    icon={ShieldCheck}
-                    onUnlockClick={() => onPremiumFeatureAttempt?.('Copyright Defense')}
-                  />
-                )}
-              </TabsContent>
+                </TabsContent>
+              )}
 
               {/* TAB 8: Export - Unified KDP Package */}
               <TabsContent value="manuscript" className="space-y-4 pt-4">
@@ -2879,15 +2872,15 @@ p { margin-bottom: 1em; }`);
                     {/* Unified KDP Package */}
                     <div className="p-8 border-2 border-primary/20 rounded-lg bg-primary/5">
                       <Package className="w-16 h-16 mx-auto mb-4 text-primary" />
-                      <h3 className="text-xl font-bold mb-2">Complete KDP Package</h3>
+                      <h3 className="text-xl font-bold mb-2">{t('completeKdpPackage')}</h3>
                       <p className="text-muted-foreground mb-6">
-                        Download everything you need for Amazon KDP in one ZIP file:
+                        {t('kdpPackageDesc')}
                       </p>
                       <ul className="text-left list-disc list-inside space-y-2 mb-6 text-sm text-muted-foreground">
-                        <li><strong>Cover-File.pdf</strong> — Full wrap cover with spine</li>
-                        <li><strong>Manuscript.pdf</strong> — Interior text with TOC & images</li>
-                        <li><strong>Kindle-eBook.epub</strong> — Kindle eBook format</li>
-                        <li><strong>Kindle_Cover.jpg</strong> — eBook cover image</li>
+                        <li><strong>Cover-File.pdf</strong> — {t('coverFile')}</li>
+                        <li><strong>Manuscript.pdf</strong> — {t('manuscriptFile')}</li>
+                        <li><strong>Kindle-eBook.epub</strong> — {t('kindleEbook')}</li>
+                        <li><strong>Kindle_Cover.jpg</strong> — {t('kindleCover')}</li>
                       </ul>
                       
                       <Button 
@@ -2899,12 +2892,12 @@ p { margin-bottom: 1em; }`);
                         {isGeneratingPackage ? (
                           <>
                             <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Generating Package...
+                            {t('generatingPackage')}
                           </>
                         ) : (
                           <>
                             <Package className="w-4 h-4 mr-2" />
-                            Download KDP Package (ZIP)
+                            {t('downloadKdpPackage')} (ZIP)
                           </>
                         )}
                       </Button>
