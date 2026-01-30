@@ -550,7 +550,7 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onOpenChange,
 
 const ImageFullPage: React.FC<{ 
   content: { query: string; caption: string }; 
-  imageUrl?: string;
+  imageUrl?: string; 
   imageSource?: string;
   attribution?: string;
   isLoading?: boolean;
@@ -561,7 +561,12 @@ const ImageFullPage: React.FC<{
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
+  // Translation props
+  searchingArchivesLabel?: string;
+  aiSelectedLabel?: string;
+  aiSelectedTooltip?: string;
+  imageNotFoundLabel?: string;
+}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload, searchingArchivesLabel = 'Searching Archives...', aiSelectedLabel = 'AI-selected', aiSelectedTooltip = 'This image was auto-selected by AI. Hover to change it.', imageNotFoundLabel = 'Image not found' }) => {
   // Determine visual state:
   // - Show loading only when isLoading is explicitly true
   // - Show empty state (Add Image button) when: not loading, no image, AND fetch was attempted (or is manual)
@@ -579,7 +584,7 @@ const ImageFullPage: React.FC<{
         <div className="flex-1 bg-muted flex items-center justify-center">
           <div className="text-center">
             <Loader2 className="w-10 h-10 text-muted-foreground mx-auto mb-3 animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">Searching Archives...</p>
+            <p className="text-sm text-muted-foreground font-medium">{searchingArchivesLabel}</p>
             <p className="text-xs text-muted-foreground/60 mt-1">{content.query}</p>
           </div>
         </div>
@@ -607,10 +612,10 @@ const ImageFullPage: React.FC<{
               {showAiSwapHint && (
                 <div
                   className="print:hidden absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 bg-background/90 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 group-hover:opacity-0 transition-opacity pointer-events-none z-20"
-                  title="This image was auto-selected by AI. Hover to change it."
+                  title={aiSelectedTooltip}
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>AI-selected</span>
+                  <span>{aiSelectedLabel}</span>
                 </div>
               )}
             </div>
@@ -633,7 +638,7 @@ const ImageFullPage: React.FC<{
             {canEditImages && onManualSearch ? (
               <AddImageButton onSearch={onManualSearch} />
             ) : (
-              <p className="text-sm text-muted-foreground">Image not found</p>
+              <p className="text-sm text-muted-foreground">{imageNotFoundLabel}</p>
             )}
           </div>
         </div>
@@ -655,7 +660,12 @@ const ImageHalfPage: React.FC<{
   onRemove?: () => void;
   onManualSearch?: () => void;
   onUpload?: () => void;
-}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload }) => {
+  // Translation props
+  searchingLabel?: string;
+  aiSelectedLabel?: string;
+  aiSelectedTooltip?: string;
+  imageNotFoundLabel?: string;
+}> = ({ content, imageUrl, imageSource, attribution, isLoading, canEditImages, blockId, fetchAttempted, onEditCaption, onRemove, onManualSearch, onUpload, searchingLabel = 'Searching...', aiSelectedLabel = 'AI-selected', aiSelectedTooltip = 'This image was auto-selected by AI. Hover to change it.', imageNotFoundLabel = 'Image not found' }) => {
   // Determine visual state:
   // - Show loading only when isLoading is explicitly true
   // - Show empty state (Add Image button) when: not loading and no image
@@ -673,7 +683,7 @@ const ImageHalfPage: React.FC<{
           <div className="absolute inset-0 bg-muted flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-              <p className="text-xs text-muted-foreground">Searching...</p>
+              <p className="text-xs text-muted-foreground">{searchingLabel}</p>
             </div>
           </div>
         ) : imageUrl ? (
@@ -697,10 +707,10 @@ const ImageHalfPage: React.FC<{
             {showAiSwapHint && (
               <div
                 className="print:hidden absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 bg-background/90 backdrop-blur-sm text-[10px] text-muted-foreground rounded-md border border-border/50 group-hover:opacity-0 transition-opacity pointer-events-none z-20"
-                title="This image was auto-selected by AI. Hover to change it."
+                title={aiSelectedTooltip}
               >
                 <Sparkles className="w-3 h-3" />
-                <span>AI-selected</span>
+                <span>{aiSelectedLabel}</span>
               </div>
             )}
           </>
@@ -710,7 +720,7 @@ const ImageHalfPage: React.FC<{
               {canEditImages && onManualSearch ? (
                 <AddImageButton onSearch={onManualSearch} />
               ) : (
-                <p className="text-sm text-muted-foreground">Image not found</p>
+              <p className="text-sm text-muted-foreground">{imageNotFoundLabel}</p>
               )}
             </div>
           </div>
@@ -835,7 +845,11 @@ const BlockRenderer: React.FC<{
   onUpload?: (blockId: string) => void;
   proTipLabel?: string;
   keyTakeawayLabel?: string;
-}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onRemove, onManualSearch, onUpload, proTipLabel = 'PRO TIP', keyTakeawayLabel = 'KEY TAKEAWAY' }) => {
+  searchingArchivesLabel?: string;
+  searchingLabel?: string;
+  aiSelectedLabel?: string;
+  imageNotFoundLabel?: string;
+}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onRemove, onManualSearch, onUpload, proTipLabel = 'PRO TIP', keyTakeawayLabel = 'KEY TAKEAWAY', searchingArchivesLabel = 'Searching Archives...', searchingLabel = 'Searching...', aiSelectedLabel = 'AI-selected', imageNotFoundLabel = 'Image not found' }) => {
   const key = getBlockKey(block);
   const isLoading = loadingImages.has(key);
   const attribution = imageAttributions.get(key);
@@ -861,6 +875,9 @@ const BlockRenderer: React.FC<{
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
           onUpload={onUpload ? () => onUpload(block.id) : undefined}
+          searchingArchivesLabel={searchingArchivesLabel}
+          aiSelectedLabel={aiSelectedLabel}
+          imageNotFoundLabel={imageNotFoundLabel}
         />
       );
     case 'image_half':
@@ -878,6 +895,9 @@ const BlockRenderer: React.FC<{
           onRemove={onRemove ? () => onRemove(block.id) : undefined}
           onManualSearch={onManualSearch ? () => onManualSearch(block.id) : undefined}
           onUpload={onUpload ? () => onUpload(block.id) : undefined}
+          searchingLabel={searchingLabel}
+          aiSelectedLabel={aiSelectedLabel}
+          imageNotFoundLabel={imageNotFoundLabel}
         />
       );
     case 'pro_tip':
@@ -2271,6 +2291,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               canEditImages={canEditImages || isAdmin}
               proTipLabel={t('proTip')}
               keyTakeawayLabel={t('keyTakeaway')}
+              searchingArchivesLabel={t('searchingArchives')}
+              searchingLabel={t('searching')}
+              aiSelectedLabel={t('aiSelected')}
+              imageNotFoundLabel={t('imageNotFound')}
               onEditCaption={(blockId, newCaption) => {
                 // Intercept if guest tries to edit
                 if (!hasFullAccess && onPremiumFeatureAttempt) {
@@ -2422,8 +2446,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                 </>
               ) : (
                 <>
-                  <LockedMenuItem icon={PlusCircle} label="Insert Page Before" featureName="Insert Page" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
-                  <LockedMenuItem icon={PlusSquare} label="Insert Page After" featureName="Insert Page" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
+                  <LockedMenuItem icon={PlusCircle} label={t('insertPageBefore')} featureName="Insert Page" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
+                  <LockedMenuItem icon={PlusSquare} label={t('insertPageAfter')} featureName="Insert Page" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
                 </>
               )}
               <DropdownMenuSeparator />
@@ -2438,14 +2462,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                         className="gap-2"
                       >
                         <Search className="w-4 h-4" />
-                        Search Gallery
+                        {t('searchGallery')}
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => handleOpenUploadModal(currentBlock.id)}
                         className="gap-2"
                       >
                         <Upload className="w-4 h-4" />
-                        Upload Own Photo
+                        {t('uploadOwnPhoto')}
                       </DropdownMenuItem>
                     </>
                   ) : (
@@ -2456,10 +2480,10 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                         className="gap-2"
                       >
                         <Search className="w-4 h-4" />
-                        Search Gallery
-                        <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded ml-auto">Try it!</span>
+                        {t('searchGallery')}
+                        <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-950/50 px-1.5 py-0.5 rounded ml-auto">{t('tryIt')}</span>
                       </DropdownMenuItem>
-                      <LockedMenuItem icon={Upload} label="Upload Own Photo" featureName="Photo Upload" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
+                      <LockedMenuItem icon={Upload} label={t('uploadOwnPhoto')} featureName="Photo Upload" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
                     </>
                   )}
                   <DropdownMenuSeparator />
@@ -2475,14 +2499,14 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                     className="gap-2"
                   >
                     <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
-                    Regenerate Chapter {currentChapter}
+                    {t('regenerateChapter').replace('{n}', String(currentChapter))}
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={handleOpenEditModal}
                     className="gap-2"
                   >
                     <Pencil className="w-4 h-4" />
-                    Edit Page Content
+                    {t('editPageContent')}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -2490,15 +2514,15 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                     className="gap-2 text-destructive focus:text-destructive"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Delete This Page
+                    {t('deleteThisPage')}
                   </DropdownMenuItem>
                 </>
               ) : (
                 <>
-                  <LockedMenuItem icon={RefreshCw} label={`Regenerate Chapter ${currentChapter}`} featureName="AI Regeneration" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
-                  <LockedMenuItem icon={Pencil} label="Edit Page Content" featureName="Content Editing" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
+                  <LockedMenuItem icon={RefreshCw} label={t('regenerateChapter').replace('{n}', String(currentChapter))} featureName="AI Regeneration" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
+                  <LockedMenuItem icon={Pencil} label={t('editPageContent')} featureName="Content Editing" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} />
                   <DropdownMenuSeparator />
-                  <LockedMenuItem icon={Trash2} label="Delete This Page" featureName="Page Deletion" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} destructive />
+                  <LockedMenuItem icon={Trash2} label={t('deleteThisPage')} featureName="Page Deletion" onPremiumAttempt={(name) => onPremiumFeatureAttempt?.(name)} destructive />
                 </>
               )}
               <DropdownMenuSeparator />
@@ -2507,7 +2531,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               <div className="flex items-center justify-between px-2 py-2">
                 <div className="flex items-center gap-2">
                   <Printer className="w-4 h-4" />
-                  <Label className="text-sm font-normal">B&W Print Mode</Label>
+                  <Label className="text-sm font-normal">{t('bwPrintMode')}</Label>
                 </div>
                 <Switch
                   checked={isGrayscale}
@@ -2515,7 +2539,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
                 />
               </div>
               <p className="text-xs text-muted-foreground px-2 pb-2">
-                Optimizes for Amazon's cheaper B&W printing
+                {t('bwPrintModeDesc')}
               </p>
             </DropdownMenuContent>
           </DropdownMenu>
