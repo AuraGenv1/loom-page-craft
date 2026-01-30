@@ -20,6 +20,7 @@ import {
 import { ImageSearchGallery, ImageSelectMetadata } from '@/components/ImageSearchGallery';
 import ChapterPaywall from '@/components/ChapterPaywall';
 import { uploadToBookImages, archiveExternalImage, saveImageMetadata, createUploadMetadata } from '@/lib/bookImages';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type PageBlockMeta = PageBlock & Partial<{
   original_url: string;
@@ -732,14 +733,14 @@ const ImageHalfPage: React.FC<{
 };
 
 // Pro Tip page - LEFT-ALIGNED style with subtle left border (NO ITALICS)
-const ProTipPage: React.FC<{ content: { text: string } }> = ({ content }) => (
+const ProTipPage: React.FC<{ content: { text: string }; proTipLabel?: string }> = ({ content, proTipLabel = 'PRO TIP' }) => (
   <div className="h-full flex items-start justify-center pt-16 px-12">
     <div className="max-w-md border-l-2 border-muted-foreground/30 pl-4">
       {/* Small icon + label row */}
       <div className="flex items-center gap-2 mb-3">
         <Key className="w-4 h-4 text-muted-foreground" />
         <p className="text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground">
-          PRO TIP
+          {proTipLabel}
         </p>
       </div>
       {/* Left-aligned normal serif text (no italics) */}
@@ -789,11 +790,11 @@ const ListPage: React.FC<{ content: { items: string[]; ordered?: boolean } }> = 
 );
 
 // Key Takeaway page - Professional summary box with left accent
-const KeyTakeawayPage: React.FC<{ content: { text: string } }> = ({ content }) => (
+const KeyTakeawayPage: React.FC<{ content: { text: string }; keyTakeawayLabel?: string }> = ({ content, keyTakeawayLabel = 'KEY TAKEAWAY' }) => (
   <div className="h-full flex items-center justify-center px-12">
     <div className="max-w-lg bg-secondary/10 border-l-4 border-primary p-6 rounded-r-lg">
       <p className="text-xs font-bold tracking-[0.2em] uppercase text-primary mb-3">
-        KEY TAKEAWAY
+        {keyTakeawayLabel}
       </p>
       <p className="font-serif text-lg text-foreground leading-relaxed">
         {content.text}
@@ -832,7 +833,9 @@ const BlockRenderer: React.FC<{
   onRemove?: (blockId: string) => void;
   onManualSearch?: (blockId: string) => void;
   onUpload?: (blockId: string) => void;
-}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onRemove, onManualSearch, onUpload }) => {
+  proTipLabel?: string;
+  keyTakeawayLabel?: string;
+}> = ({ block, loadingImages, imageAttributions, attemptedFetches, canEditImages, onEditCaption, onRemove, onManualSearch, onUpload, proTipLabel = 'PRO TIP', keyTakeawayLabel = 'KEY TAKEAWAY' }) => {
   const key = getBlockKey(block);
   const isLoading = loadingImages.has(key);
   const attribution = imageAttributions.get(key);
@@ -878,7 +881,7 @@ const BlockRenderer: React.FC<{
         />
       );
     case 'pro_tip':
-      return <ProTipPage content={block.content as { text: string }} />;
+      return <ProTipPage content={block.content as { text: string }} proTipLabel={proTipLabel} />;
     case 'heading':
       return <HeadingPage content={block.content as { level: 2 | 3; text: string }} />;
     case 'list':
@@ -892,7 +895,7 @@ const BlockRenderer: React.FC<{
       
       // Handle key_takeaway blocks
       if (blockType === 'key_takeaway') {
-        return <KeyTakeawayPage content={content as { text: string }} />;
+        return <KeyTakeawayPage content={content as { text: string }} keyTakeawayLabel={keyTakeawayLabel} />;
       }
       
       // Handle quote blocks as plain text (no special styling)
@@ -938,6 +941,7 @@ export const PageViewer: React.FC<PageViewerProps> = ({
   hasFullAccess = true,
   onPremiumFeatureAttempt
 }) => {
+  const { t } = useLanguage();
   const [blocks, setBlocks] = useState<PageBlockMeta[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -2265,6 +2269,8 @@ export const PageViewer: React.FC<PageViewerProps> = ({
               imageAttributions={imageAttributions}
               attemptedFetches={attemptedFetches}
               canEditImages={canEditImages || isAdmin}
+              proTipLabel={t('proTip')}
+              keyTakeawayLabel={t('keyTakeaway')}
               onEditCaption={(blockId, newCaption) => {
                 // Intercept if guest tries to edit
                 if (!hasFullAccess && onPremiumFeatureAttempt) {

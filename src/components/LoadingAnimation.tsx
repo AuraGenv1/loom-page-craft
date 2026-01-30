@@ -3,23 +3,23 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
   const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('Gathering threads...');
+  const [currentStageKey, setCurrentStageKey] = useState('weaving_step1');
   const { t } = useLanguage();
 
   useEffect(() => {
     const stages = [
-      { progress: 15, text: 'Gathering threads...' },
-      { progress: 35, text: 'Setting up the loom...' },
-      { progress: 55, text: 'Weaving chapters...' },
-      { progress: 75, text: 'Adding finishing touches...' },
-      { progress: 90, text: 'Almost ready...' },
+      { progress: 15, key: 'weaving_step1' },
+      { progress: 35, key: 'weaving_step2' },
+      { progress: 55, key: 'weaving_step3' },
+      { progress: 75, key: 'weaving_step4' },
+      { progress: 90, key: 'weaving_step5' },
     ];
 
     let currentStage = 0;
     const interval = setInterval(() => {
       if (currentStage < stages.length) {
         setProgress(stages[currentStage].progress);
-        setStatusText(stages[currentStage].text);
+        setCurrentStageKey(stages[currentStage].key);
         currentStage++;
       }
     }, 1800);
@@ -48,9 +48,9 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
         {t('weaving')}
       </h2>
 
-      {/* Status text */}
+      {/* Status text - translated */}
       <p className="text-sm text-muted-foreground mb-8 h-5 transition-opacity duration-300">
-        {statusText}
+        {t(currentStageKey)}
       </p>
 
       {/* Progress bar */}
@@ -78,4 +78,3 @@ const LoadingAnimation = forwardRef<HTMLDivElement>((_, ref) => {
 LoadingAnimation.displayName = 'LoadingAnimation';
 
 export default LoadingAnimation;
-

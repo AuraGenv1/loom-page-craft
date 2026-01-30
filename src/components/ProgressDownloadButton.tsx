@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { generateCleanPDF } from '@/lib/generateCleanPDF';
 import { BookData } from '@/lib/bookTypes';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProgressDownloadButtonProps {
   completedChapters: number;
@@ -100,6 +101,7 @@ const ProgressDownloadButton = ({
   isGrayscale = false,
 }: ProgressDownloadButtonProps) => {
   const [isConverting, setIsConverting] = useState(false);
+  const { t } = useLanguage();
   
   const progress = useMemo(() => Math.round((completedChapters / totalChapters) * 100), [completedChapters, totalChapters]);
   const isComplete = completedChapters >= totalChapters;
@@ -112,7 +114,7 @@ const ProgressDownloadButton = ({
     
     try {
       setIsConverting(true);
-      toast.loading('Preparing guide...', { id: 'pdf-gen' });
+      toast.loading(t('generatingPdf'), { id: 'pdf-gen' });
 
       const { processedBookData, base64CoverUrl } = await processBookImages(bookData, coverImageUrls || []);
       
@@ -134,17 +136,17 @@ const ProgressDownloadButton = ({
     }
   };
 
-  // Button Label - simplified, no admin special case
+  // Button Label - translated
   const getLabel = () => {
-    if (isCompiling) return "Generating PDF...";
+    if (isCompiling) return t('generatingPdf');
     if (isPurchased && !isComplete) {
       // Show page count if available, otherwise chapter count
       if (totalPageCount && totalPageCount > 0) {
-        return `Weaving... ${totalPageCount} pages`;
+        return t('weavingPages').replace('{count}', String(totalPageCount));
       }
-      return `Weaving... ${completedChapters}/${totalChapters}`;
+      return `${t('weaving')} ${completedChapters}/${totalChapters}`;
     }
-    return "Download Full Guide (PDF)";
+    return t('downloadFullGuide');
   };
 
   return (
@@ -173,10 +175,10 @@ const ProgressDownloadButton = ({
         </span>
       </button>
 
-      {/* Status Text */}
+      {/* Status Text - translated */}
       {!isCompiling && !isComplete && (
         <p className="text-xs text-muted-foreground text-center">
-          {isPurchased ? `Please wait for all chapters...` : 'Our Artisan is weaving your custom details...'}
+          {isPurchased ? t('pleaseWaitChapters') : t('artisanWeaving')}
         </p>
       )}
     </div>

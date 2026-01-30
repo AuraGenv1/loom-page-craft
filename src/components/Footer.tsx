@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Footer = () => {
+  const { t } = useLanguage();
+
   return (
     <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border/30 py-3 px-4 z-50">
       <div className="max-w-4xl mx-auto flex flex-col items-center gap-2">
@@ -23,12 +26,12 @@ const Footer = () => {
           </span>
         </div>
         
-        {/* Disclaimer */}
+        {/* Disclaimer - translated */}
         <p className="text-[10px] text-center text-muted-foreground/70 leading-relaxed">
-          AI-generated content for creative inspiration only. Not professional advice.
+          {t('aiDisclaimer')}
         </p>
         
-        {/* Links */}
+        {/* Links - kept in English as requested */}
         <div className="flex items-center gap-4">
           <Link 
             to="/privacy" 
