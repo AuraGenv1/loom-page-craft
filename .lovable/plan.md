@@ -1,343 +1,383 @@
 
-# Plan: Complete Translation System & Language Consistency Fix
+
+# Plan: Complete Translation System - Phase 2
 
 ## Summary
 
-This plan addresses six distinct translation issues plus the core language inconsistency problem:
+This plan addresses the remaining translation gaps identified in the screenshots:
 
-1. **Focus Area Labels & Tooltips**: Translate chip labels (History, Wellness, etc.) and tooltip descriptions
-2. **Voice & Structure Labels**: Translate chip labels (The Insider, The Bestie, etc.)
-3. **PageViewer Navigation Controls**: Translate "Prev", "Next", "Page Tools", "Chapter X of Y", "100%", "Fit"
-4. **Block Labels in Content**: Ensure "KEY TAKEAWAY" and "PRO TIP" labels render translated
-5. **AI Content Generation**: Fix the AI prompt to explicitly generate content IN the selected language
-6. **Language Behavior Clarification**: Document that users SHOULD be able to search in ANY language and get results in their SELECTED website language
-
----
-
-## Root Cause Analysis
-
-### Issue 1: Focus Area Labels Still in English
-Looking at `AdvancedOptions.tsx` lines 32-39:
-```typescript
-const FOCUS_OPTIONS = [
-  { id: 'history', label: 'History', tooltipKey: 'tooltip_history' },
-  // ...
-```
-The `label` property is hardcoded in English. The tooltip uses `t(tooltipKey)` which works, but the chip display uses `{focus.label}` directly (line 166), not a translation.
-
-### Issue 2: Voice & Structure Labels Still in English
-Same issue - lines 19-30:
-```typescript
-const VOICE_OPTIONS = [
-  { id: 'insider', label: 'The Insider', tooltipKey: 'tooltip_insider' },
-```
-The labels are hardcoded and displayed directly via `{voice.label}` (line 110).
-
-### Issue 3: Navigation Controls Hardcoded
-In `PageViewer.tsx` lines 2370-2571, all navigation text is hardcoded:
-- Line 2371: `Prev`
-- Line 2380: `Page Tools`
-- Line 2536: `Fit` / `100%`
-- Line 2544: `of {totalPageCount}`
-- Line 2548: `Chapter {currentChapter} of {totalChapters}`
-- Line 2559: `Next`
-
-### Issue 4: AI Content Not Generated in Target Language
-The edge functions include `Language: ${language}` at the end of the prompt, but this is insufficient. The AI often ignores it because:
-1. It's placed at the very end as a footnote
-2. There's no explicit instruction saying "ALL content MUST be written in {language}"
-3. The prompt examples are in English, so the AI mimics that
-
-### Issue 5: Key Takeaway / Pro Tip Labels
-These are handled in `BlockRenderer` which receives `proTipLabel` and `keyTakeawayLabel` props. Need to verify these are being passed and used correctly.
+1. **Key Takeaway label**: Verify the translation is being applied correctly (already exists in translations)
+2. **Page Tools menu items**: Translate all dropdown menu items
+3. **Image loading states**: Translate "Searching Archives..." and "Searching..."
+4. **"AI-selected" badge**: Translate the badge text
+5. **"Cover Studio" button**: Translate the button label
+6. **KDP Cover Studio dialog**: Translate title, tab labels, and all UI text
+7. **Prep tab content**: Translate labels and button text
+8. **Export tab content**: Translate descriptions and UI text
+9. **Legal tab access**: Hide the Legal tab from non-admin users (admin-only)
 
 ---
 
-## Solution Design
+## Technical Analysis
 
-### Part 1: Add Translation Keys for All UI Labels
+### Issue 1: Key Takeaway Still in English
 
-Add to `LanguageContext.tsx` for all 8 languages:
-
-**Focus Area Labels:**
-- `focus_history`, `focus_wellness`, `focus_nightlife`, `focus_art`, `focus_luxury`, `focus_culture`, `focus_nature`
-
-**Voice Labels:**
-- `voice_insider`, `voice_bestie`, `voice_poet`, `voice_professor`
-
-**Structure Labels:**
-- `structure_curated`, `structure_playbook`, `structure_balanced`
-
-**Navigation Controls:**
-- `prev`, `next`, `pageTools`, `fit`, `fullSize`, `pageOf`, `chapterOf`
-
----
-
-### Part 2: Update AdvancedOptions.tsx
-
-Change all options arrays to use translation keys for labels:
+Looking at the code in `PageViewer.tsx` lines 793-798 and 2271-2273:
 
 ```typescript
-const FOCUS_OPTIONS = [
-  { id: 'history', labelKey: 'focus_history', tooltipKey: 'tooltip_history' },
-  { id: 'wellness', labelKey: 'focus_wellness', tooltipKey: 'tooltip_wellness' },
-  // ...
-];
+// Line 793 - Component definition with default fallback
+const KeyTakeawayPage: React.FC<{ content: { text: string }; keyTakeawayLabel?: string }> = ({ content, keyTakeawayLabel = 'KEY TAKEAWAY' }) => (
 
-// In render:
-{t(focus.labelKey)}
+// Line 2273 - Where it's called with translation
+keyTakeawayLabel={t('keyTakeaway')}
 ```
 
-Same for `VOICE_OPTIONS` and `STRUCTURE_OPTIONS`.
+The translation key exists in all 8 languages (verified via search). The issue is likely that the `t()` function from `useLanguage()` is not imported or available where `BlockRenderer` is being rendered. Need to verify `useLanguage` is imported and `t` is passed correctly.
 
----
+**Root Cause**: The `t` function is obtained from `useLanguage()` hook in the main `PageViewer` component (line ~2062), and passed to `BlockRenderer` via props. This should work. Let me verify the actual usage.
 
-### Part 3: Update PageViewer.tsx Navigation
+### Issue 2: Page Tools Menu Items
 
-Import `useLanguage` and use translation keys:
+The following strings are hardcoded in `PageViewer.tsx` lines 2388-2519:
 
+| Line | Hardcoded String |
+|------|-----------------|
+| 2390 | `"Premium Editing Suite"` |
+| 2409 | `"Insert Page Before"` |
+| 2420 | `"Insert Page After"` |
+| 2441 | `"Search Gallery"` |
+| 2448 | `"Upload Own Photo"` |
+| 2460 | `"Try it!"` |
+| 2478 | `"Regenerate Chapter {n}"` |
+| 2485 | `"Edit Page Content"` |
+| 2493 | `"Delete This Page"` |
+| 2510 | `"B&W Print Mode"` |
+| 2518 | `"Optimizes for Amazon's cheaper B&W printing"` |
+
+### Issue 3: Image Loading States
+
+In `PageViewer.tsx`:
+- Line 582: `"Searching Archives..."` (ImageFullPage)
+- Line 676: `"Searching..."` (ImageHalfPage)
+
+**Recommendation**: Replace with translated text OR use the WeavingLoader component for consistency (user's preference). I recommend translating the text as it's more informative.
+
+### Issue 4: "AI-selected" Badge
+
+In `PageViewer.tsx`:
+- Line 613: `<span>AI-selected</span>` (ImageFullPage)
+- Line 703: `<span>AI-selected</span>` (ImageHalfPage)
+
+### Issue 5: "Cover Studio" Button
+
+In `BookCover.tsx` line 1909:
 ```typescript
-const { t } = useLanguage();
-
-// Navigation buttons:
-<Button>
-  <ChevronLeft />
-  {t('prev')}
-</Button>
-
-<span>{t('pageTools')}</span>
-
-<span>{zoomMode === '100%' ? t('fit') : '100%'}</span>
-
-<p>
-  {cumulativePageNumber}
-  <span> {t('pageOf')} {totalPageCount}</span>
-</p>
-
-<p>
-  {t('chapterOf').replace('{current}', String(currentChapter)).replace('{total}', String(totalChapters))}
-</p>
-
-<Button>
-  {t('next')}
-  <ChevronRight />
-</Button>
+{hasFullAccess ? 'Cover Studio' : 'Preview Studio'}
 ```
+
+### Issue 6: KDP Cover Studio Dialog
+
+In `BookCover.tsx`:
+- Line 2028: `"KDP Cover Studio & Export Manager"`
+- Line 2034-2057: Tab labels ("Front", "Back", "Spine", "Wrap", "Prep", "$$$", "Legal", "Export")
+- Line 2064: `"Current Front Cover"`
+- Line 2129: `"Edit Cover Text"`
+- Line 2133: `"View Only"`
+- Line 2138: `"Title"`
+- Line 2149: `"Subtitle"`
+- Line 2172: `"Save Text Changes"`
+- Line 2181: `"Or Upload Your Own Image"`
+- Line 2193: `"Search Gallery"`
+- Line 2217: `"Upload Cover Image"`
+- Line 2225: `"Custom Cover Image"`
+- Line 2228: `"Premium"`
+- Line 2240: `"Unlock Cover Editing"`
+- Line 2251: `"Cover Branding"`
+- Line 2262: `"Brand:"`
+- Line 2275: `"Logo"`
+- Line 2305: `"Change Logo"` / `"Upload Logo"`
+- Line 2329: `"Reset"`
+
+And many more in the Back, Spine, Wrap, and Export tabs...
+
+### Issue 7: Prep Tab Content (KdpPrepDashboard.tsx)
+
+Key strings to translate:
+- Line 226: `"Preparing Amazon metadata..."`
+- Line 228: `"Generating description, subtitle, and keywords..."`
+- Line 239: `"Page Count:"`, `"Spine:"`, `"Trim:"`, `"Bleed:"`
+- Line 265: `"Book Description"`
+- Line 277: `"Preview"`, `"HTML"`
+- Line 289-294: `"Preview (Formatted)"`, `"Edit HTML"`
+- Line 330: `"Write Best-Selling Description"`
+- Line 348-349: `"Preview shows formatted text..."`
+
+### Issue 8: Legal Tab - Admin Only
+
+Per user request, the Legal tab should only be visible to Admin users, not to paid users or guests. Currently it shows for `hasFullAccess` which includes both admins and paid users.
+
+**Solution**: Add an `isAdmin` prop check to conditionally render the Legal tab.
 
 ---
 
-### Part 4: Fix AI Content Generation Language
-
-Update both edge functions to include EXPLICIT language instructions:
-
-**In `generate-book-blocks/index.ts`:**
-```typescript
-const languageInstruction = language !== 'en' 
-  ? `\n\n=== CRITICAL: LANGUAGE REQUIREMENT ===
-WRITE ALL CONTENT IN ${languageName}. This includes:
-- The main_title and subtitle
-- All chapter titles
-- All text block content
-- All image captions
-- All pro tip content
-The ONLY exception is proper nouns (place names, hotel names, etc.) which should remain in their original form.
-DO NOT write in English. The reader speaks ${languageName}.`
-  : '';
-```
-
-Add a language name mapping:
-```typescript
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish (Español)',
-  fr: 'French (Français)',
-  de: 'German (Deutsch)',
-  it: 'Italian (Italiano)',
-  pt: 'Portuguese (Português)',
-  zh: 'Chinese (中文)',
-  ja: 'Japanese (日本語)',
-};
-```
-
----
-
-### Part 5: Language Behavior Decision
-
-**Recommended Approach**: The website language selector determines the OUTPUT language, regardless of what the user types in the search bar.
-
-This means:
-- User selects French (FR) on the website
-- User types "Tokyo" in the search bar (English)
-- The book is generated ENTIRELY in French
-
-This is the most intuitive UX because:
-1. The language selector sets the user's preferred language
-2. The search query is just a topic - topics can be in any language
-3. Travelers often search for destinations in their native language
-
-**Implementation**: The current architecture already passes `language` to the edge functions. We just need to strengthen the prompt to make the AI actually follow it.
-
----
-
-## Files Summary
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/contexts/LanguageContext.tsx` | Add ~25 new translation keys per language (focus labels, voice labels, structure labels, navigation) |
-| `src/components/AdvancedOptions.tsx` | Use `t(labelKey)` for all chip labels instead of hardcoded strings |
-| `src/components/PageViewer.tsx` | Import `useLanguage`, translate all navigation control text |
-| `supabase/functions/generate-book-blocks/index.ts` | Add explicit language instruction block to AI prompt |
-| `supabase/functions/generate-chapter-blocks/index.ts` | Add explicit language instruction block to AI prompt |
+| `src/contexts/LanguageContext.tsx` | Add ~60 new translation keys per language for all UI strings |
+| `src/components/PageViewer.tsx` | Use `t()` for all Page Tools items, image loading text, and AI-selected badge |
+| `src/components/BookCover.tsx` | Use `t()` for Cover Studio button, dialog title, tabs, and all form labels. Hide Legal tab for non-admins |
+| `src/components/KdpPrepDashboard.tsx` | Use `t()` for all form labels and button text |
 
 ---
 
 ## New Translation Keys Required
 
-### English (baseline)
+### Page Tools & Image States
 ```typescript
-// Focus Area Labels
-focus_history: 'History',
-focus_wellness: 'Wellness',
-focus_nightlife: 'Nightlife',
-focus_art: 'Art & Design',
-focus_luxury: 'Luxury',
-focus_culture: 'Local Culture',
-focus_nature: 'Nature',
+// Page Tools Menu
+premiumEditingSuite: 'Premium Editing Suite',
+insertPageBefore: 'Insert Page Before',
+insertPageAfter: 'Insert Page After',
+searchGallery: 'Search Gallery',
+uploadOwnPhoto: 'Upload Own Photo',
+tryIt: 'Try it!',
+regenerateChapter: 'Regenerate Chapter {n}',
+editPageContent: 'Edit Page Content',
+deleteThisPage: 'Delete This Page',
+bwPrintMode: 'B&W Print Mode',
+bwPrintModeDesc: "Optimizes for Amazon's cheaper B&W printing",
 
-// Voice Labels
-voice_insider: 'The Insider',
-voice_bestie: 'The Bestie',
-voice_poet: 'The Poet',
-voice_professor: 'The Professor',
-
-// Structure Labels
-structure_curated: 'Curated Guide',
-structure_playbook: 'Playbook',
-structure_balanced: 'Balanced',
-
-// Navigation
-prev: 'Prev',
-next: 'Next',
-pageTools: 'Page Tools',
-fit: 'Fit',
-fullSize: '100%',
-pageOf: 'of',
-chapterOf: 'Chapter {current} of {total}',
+// Image Loading
+searchingArchives: 'Searching Archives...',
+searching: 'Searching...',
+aiSelected: 'AI-selected',
+imageNotFound: 'Image not found',
 ```
 
-### French Example
+### Cover Studio
 ```typescript
-// Focus Area Labels
-focus_history: 'Histoire',
-focus_wellness: 'Bien-être',
-focus_nightlife: 'Vie Nocturne',
-focus_art: 'Art & Design',
-focus_luxury: 'Luxe',
-focus_culture: 'Culture Locale',
-focus_nature: 'Nature',
+// Cover Studio Button
+coverStudio: 'Cover Studio',
+previewStudio: 'Preview Studio',
 
-// Voice Labels
-voice_insider: "L'Initié",
-voice_bestie: "L'Ami(e)",
-voice_poet: 'Le Poète',
-voice_professor: 'Le Professeur',
+// Dialog Title
+kdpCoverStudioTitle: 'KDP Cover Studio & Export Manager',
 
-// Structure Labels
-structure_curated: 'Guide Sélectionné',
-structure_playbook: 'Manuel Pratique',
-structure_balanced: 'Équilibré',
+// Tab Labels
+tabFront: 'Front',
+tabBack: 'Back',
+tabSpine: 'Spine',
+tabWrap: 'Wrap',
+tabPrep: 'Prep',
+tabRoyalty: '$$$',
+tabLegal: 'Legal',
+tabExport: 'Export',
 
-// Navigation
-prev: 'Préc',
-next: 'Suiv',
-pageTools: 'Outils de Page',
-fit: 'Ajuster',
-fullSize: '100%',
-pageOf: 'sur',
-chapterOf: 'Chapitre {current} sur {total}',
+// Front Tab
+currentFrontCover: 'Current Front Cover',
+editCoverText: 'Edit Cover Text',
+viewOnly: 'View Only',
+title: 'Title',
+subtitle: 'Subtitle',
+saveTextChanges: 'Save Text Changes',
+uploadYourOwnImage: 'Or Upload Your Own Image',
+uploadCustomCoverDesc: 'Upload a custom cover image (JPG, PNG, max 5MB)',
+uploadCoverImage: 'Upload Cover Image',
+customCoverImage: 'Custom Cover Image',
+unlockCoverEditing: 'Unlock Cover Editing',
+coverBranding: 'Cover Branding',
+brand: 'Brand',
+logo: 'Logo',
+uploadLogo: 'Upload Logo',
+changeLogo: 'Change Logo',
+reset: 'Reset',
+premium: 'Premium',
+noImage: 'No Image',
+saving: 'Saving...',
+uploading: 'Uploading...',
+
+// Export Tab
+completeKdpPackage: 'Complete KDP Package',
+kdpPackageDesc: 'Download everything you need for Amazon KDP in one ZIP file:',
+coverFile: 'Full wrap cover with spine',
+manuscriptFile: 'Interior text with TOC & images',
+kindleEbook: 'Kindle eBook format',
+kindleCover: 'eBook cover image',
+downloadKdpPackage: 'Download KDP Package',
+generatingPackage: 'Generating...',
+
+// Locked Tab Content
+unlockFullGuide: 'Unlock Full Guide',
+amazonListingPrep: 'Amazon Listing Prep',
+amazonListingPrepDesc: 'Unlock to auto-generate your Best-Selling Description and Keywords with AI.',
+royaltyCalculator: 'Royalty Calculator',
+royaltyCalculatorDesc: 'Unlock to calculate your KDP royalties and optimize your pricing strategy.',
+```
+
+### Prep Dashboard
+```typescript
+// KDP Prep Dashboard
+preparingMetadata: 'Preparing Amazon metadata...',
+generatingMetadata: 'Generating description, subtitle, and keywords...',
+pageCount: 'Page Count',
+spineLabel: 'Spine',
+trimLabel: 'Trim',
+bleedLabel: 'Bleed',
+bookDescription: 'Book Description',
+preview: 'Preview',
+html: 'HTML',
+previewFormatted: 'Preview (Formatted)',
+editHtml: 'Edit HTML',
+writeBestSellingDesc: 'Write Best-Selling Description',
+copyHtmlNote: 'Preview shows formatted text. Copy button copies raw HTML for Amazon KDP.',
 ```
 
 ---
 
-## AI Prompt Enhancement
-
-Add this block near the TOP of the prompt (after the voice/structure instructions):
+## French Translation Examples
 
 ```typescript
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-  it: 'Italian',
-  pt: 'Portuguese',
-  zh: 'Chinese',
-  ja: 'Japanese',
-};
-
-const languageName = LANGUAGE_NAMES[language] || 'English';
-
-const languageInstruction = language !== 'en' 
-  ? `
-=== CRITICAL: LANGUAGE REQUIREMENT ===
-You MUST write ALL content in ${languageName}. This is mandatory.
-- main_title: Write in ${languageName}
-- subtitle: Write in ${languageName}
-- All chapter titles: Write in ${languageName}
-- All text block content: Write in ${languageName}
-- All image captions: Write in ${languageName}
-- All pro_tip content: Write in ${languageName}
-
-The ONLY exceptions are:
-- Proper nouns (hotel names, restaurant names, landmark names) - keep in original language
-- Technical terms with no good translation
-
-DO NOT default to English. The reader understands ${languageName}.
-`
-  : '';
+fr: {
+  // Page Tools
+  premiumEditingSuite: 'Suite d\'Édition Premium',
+  insertPageBefore: 'Insérer une Page Avant',
+  insertPageAfter: 'Insérer une Page Après',
+  searchGallery: 'Rechercher dans la Galerie',
+  uploadOwnPhoto: 'Téléverser Votre Photo',
+  tryIt: 'Essayez !',
+  regenerateChapter: 'Régénérer le Chapitre {n}',
+  editPageContent: 'Modifier le Contenu de la Page',
+  deleteThisPage: 'Supprimer Cette Page',
+  bwPrintMode: 'Mode Impression N&B',
+  bwPrintModeDesc: 'Optimisé pour l\'impression N&B moins chère d\'Amazon',
+  
+  // Image States
+  searchingArchives: 'Recherche dans les Archives...',
+  searching: 'Recherche...',
+  aiSelected: 'Sélectionné par IA',
+  imageNotFound: 'Image non trouvée',
+  
+  // Cover Studio
+  coverStudio: 'Studio de Couverture',
+  previewStudio: 'Studio de Prévisualisation',
+  kdpCoverStudioTitle: 'Studio KDP & Gestionnaire d\'Export',
+  
+  // Tab Labels
+  tabFront: 'Avant',
+  tabBack: 'Arrière',
+  tabSpine: 'Dos',
+  tabWrap: 'Complet',
+  tabPrep: 'Prépa',
+  tabRoyalty: '$$$',
+  tabExport: 'Export',
+  
+  // Form Labels
+  currentFrontCover: 'Couverture Avant Actuelle',
+  editCoverText: 'Modifier le Texte de Couverture',
+  viewOnly: 'Lecture Seule',
+  saveTextChanges: 'Enregistrer les Modifications',
+  uploadYourOwnImage: 'Ou Téléversez Votre Image',
+  uploadCoverImage: 'Téléverser une Image',
+  coverBranding: 'Image de Marque',
+  brand: 'Marque',
+  logo: 'Logo',
+  uploadLogo: 'Téléverser le Logo',
+  changeLogo: 'Changer le Logo',
+  reset: 'Réinitialiser',
+  premium: 'Premium',
+  noImage: 'Aucune Image',
+  
+  // Export
+  completeKdpPackage: 'Package KDP Complet',
+  kdpPackageDesc: 'Téléchargez tout ce dont vous avez besoin pour Amazon KDP dans un fichier ZIP :',
+  coverFile: 'Couverture complète avec dos',
+  manuscriptFile: 'Texte intérieur avec table des matières et images',
+  kindleEbook: 'Format eBook Kindle',
+  kindleCover: 'Image de couverture eBook',
+  downloadKdpPackage: 'Télécharger le Package KDP',
+  generatingPackage: 'Génération...',
+  
+  // Prep Dashboard
+  preparingMetadata: 'Préparation des métadonnées Amazon...',
+  generatingMetadata: 'Génération de la description, du sous-titre et des mots-clés...',
+  pageCount: 'Nombre de Pages',
+  spineLabel: 'Dos',
+  trimLabel: 'Format',
+  bleedLabel: 'Fond Perdu',
+  bookDescription: 'Description du Livre',
+  preview: 'Aperçu',
+  html: 'HTML',
+  writeBestSellingDesc: 'Rédiger une Description Best-Seller',
+}
 ```
-
-Then include `${languageInstruction}` right after the structure instructions in the prompt.
 
 ---
 
-## Visual Changes After Fix
+## Implementation Steps
 
-### Advanced Options (After Fix - French Website)
+### Step 1: Add Translation Keys
+Add ~60 new keys to all 8 languages in `LanguageContext.tsx`.
+
+### Step 2: Update PageViewer.tsx
+1. Import/use `useLanguage` hook at component level
+2. Replace all hardcoded strings in Page Tools menu with `t()` calls
+3. Update ImageFullPage and ImageHalfPage components to accept translation props or use hook
+4. Replace "AI-selected" with `t('aiSelected')`
+5. Replace "Searching Archives..." with `t('searchingArchives')`
+
+### Step 3: Update BookCover.tsx
+1. Import `useLanguage` hook
+2. Replace "Cover Studio" / "Preview Studio" button text with `t()`
+3. Replace dialog title with `t('kdpCoverStudioTitle')`
+4. Replace all tab labels with `t()` calls
+5. Replace all form labels with `t()` calls
+6. **Important**: Hide the "Legal" tab unless `isAdmin` is true (not just `hasFullAccess`)
+
+### Step 4: Update KdpPrepDashboard.tsx
+1. Import `useLanguage` hook
+2. Replace all form labels and button text with `t()` calls
+
+---
+
+## Legal Tab Access Control
+
+**Current behavior**: Shows for `hasFullAccess` (admin OR paid)
+**Desired behavior**: Shows ONLY for `isAdmin`
+
+**Implementation**:
+```typescript
+// In BookCover.tsx TabsList
+{isAdmin && (
+  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
+    <ShieldCheck className="w-3 h-3" />
+    {t('tabLegal')}
+  </TabsTrigger>
+)}
+
+// In TabsContent
+{isAdmin && (
+  <TabsContent value="legal" className="pt-4">
+    ...
+  </TabsContent>
+)}
 ```
-[  v Options Avancées ]
 
-       VOIX NARRATIVE
-[L'Initié] [L'Ami(e)] [Le Poète] [Le Professeur]
-   ^hover: "Sélectionné, cool, 'Entre connaisseurs'"
-
-       STRUCTURE DU LIVRE
-[Guide Sélectionné] [Manuel Pratique] [Équilibré]
-
-       DOMAINES DE FOCUS
-[Histoire] [Bien-être] [Vie Nocturne] [Art & Design]
-   ^hover: "Histoires anciennes, sites patrimoniaux..."
-```
-
-### PageViewer Navigation (After Fix - French)
-```
-[ Préc ]    🛠 Outils de Page    📐 Ajuster    42 sur 112    [ Suiv ]
-                                              Chapitre 3 sur 12
-```
-
-### Generated Book Content (After Fix - French Website)
-Title, subtitle, chapter titles, all text content, and captions will be in French, regardless of search query language.
+This ensures guests and paid users never see the Legal tab—only admins.
 
 ---
 
 ## Testing Checklist
 
-1. **Focus Areas**: Switch to French, hover over each Focus Area chip - verify label AND tooltip are in French
-2. **Voice/Structure**: Verify all chip labels translate correctly
-3. **Navigation**: Navigate through a book in French - verify Prev/Next/Page Tools/Chapter text
-4. **Content Generation**: 
-   - Set website to French
-   - Search "Tokyo" (in English)
-   - Verify the generated book title, subtitle, chapters, and all content is in French
-5. **Key Takeaway/Pro Tip**: Navigate to pages with these blocks - verify labels are translated
-6. **All 8 Languages**: Repeat core tests for each supported language
+After implementation:
+1. Switch to French, navigate to a book, and verify:
+   - Page Tools menu items are in French
+   - "AI-selected" badge shows "Sélectionné par IA"
+   - Image loading shows "Recherche dans les Archives..."
+   - "Cover Studio" button shows "Studio de Couverture"
+   - KDP Cover Studio dialog title and all labels are in French
+2. Verify Legal tab is hidden for paid users (only visible to admins)
+3. Test Prep tab translations for button labels and descriptions
+4. Test Export tab translations
+5. Verify Key Takeaway blocks render with translated label
+
