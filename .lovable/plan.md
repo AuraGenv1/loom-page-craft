@@ -1,208 +1,277 @@
 
-# Plan: Complete Localization Phase - Prep Content, Back Cover, and Legal Tab Fix
+# Plan: Comprehensive Legal Content Update & Contact System Implementation
 
 ## Summary
 
-This plan addresses three issues identified in the screenshots:
+This plan implements four major feature areas:
 
-1. **Legal tab missing for Admin in French** - The tab trigger is missing from the TabsList, only the TabsContent is conditionally rendered
-2. **Prep tab content in English** - The AI-generated description, subtitle, and keywords need to be generated in the user's selected language
-3. **Back Cover content in English** - The default text "Created with Loom & Page..." needs to be translated to all 8 languages
+1. **FAQ Content Updates** - Replace specific Q&A content with new legal/commercial text
+2. **Terms of Service & Privacy Policy Updates** - Add translation disclaimer banner and new terms
+3. **Contact Us Page** - New page with form, database table, and footer link
+4. **Admin Settings & Email Notifications** - Platform settings table and email workflow
 
-## Analysis
-
-### Issue 1: Legal Tab Missing for Admin
-
-**Root Cause**: In the previous update, I removed the Legal tab trigger from the TabsList (lines 2037-2058) but kept the TabsContent rendering (lines 2858-2866). The TabsContent is correctly guarded by `isAdminFromContext`, but there's no way to click to that tab because the trigger button was removed.
-
-**Fix**: Add the Legal tab trigger back to the TabsList, conditionally rendered for admin users only:
-```typescript
-{isAdminFromContext && (
-  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
-    <ShieldCheck className="w-3 h-3" />
-    {t('tabLegal')}
-  </TabsTrigger>
-)}
-```
-
-**Grid Adjustment**: When admin, grid should be 8 columns; when non-admin, 7 columns.
-
-### Issue 2: Prep Tab Content Not Translated
-
-**Root Cause**: The `generate-book-v2` edge function does NOT receive the user's language preference. The prompts for `kdp-description`, `kdp-subtitle`, and `kdp-keywords` modes are all in English with no language instruction.
-
-**Fix**: 
-1. Pass `language` from `KdpPrepDashboard` to the edge function calls
-2. Update the edge function prompts to include language-specific instructions
-
-**Files**:
-- `src/components/KdpPrepDashboard.tsx` - Pass language in API calls
-- `supabase/functions/generate-book-v2/index.ts` - Add language parameter to prompts
-
-### Issue 3: Back Cover Default Content in English
-
-**Root Cause**: The default back cover text is hardcoded in `BookCover.tsx`:
-```typescript
-const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
-const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page...");
-const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
-```
-
-**Fix**: Use translation keys for the default values:
-```typescript
-const [backCoverTitle, setBackCoverTitle] = useState(t('backCoverDefaultTitle'));
-const [backCoverBody, setBackCoverBody] = useState(t('backCoverDefaultBody'));
-const [backCoverCTA, setBackCoverCTA] = useState(t('backCoverDefaultCta'));
-```
-
-**Note**: Since `useState` is called at component initialization and `t()` needs to update when language changes, we'll need to use `useEffect` to update these values when language changes.
+All user-facing text will use the existing i18n translation system (8 languages).
 
 ---
 
-## User's Strategic Question: Legal Tab vs. Future Multi-Language Support
+## Part 1: FAQ Content Updates
 
-**Question**: "This isn't a problem if the images and text information will be 100% the same when I create this guide in English or when we add that feature (future state) to take an English book and convert it into all the languages and save into our database."
+### Files to Modify
+- `src/contexts/LanguageContext.tsx` - Add translation keys for FAQ Q&As
+- `src/pages/FAQ.tsx` - Use translations instead of hardcoded strings
 
-**Answer**: For the **Legal tab** specifically (Copyright & Hallucination Defense scanner), the content is **100% language-agnostic**:
-- It scans the book's AI-generated content for potential copyright issues
-- The analysis logic works on any language input
-- The output report structure is the same regardless of language
+### New FAQ Structure (3 questions updated/added)
 
-**Recommendation**: Keep the Legal tab as English-only UI since:
-1. It's admin-only (not customer-facing)
-2. The functionality is identical regardless of book language
-3. For a future "convert English book to other languages" feature, the Legal scan would run post-conversion on each translated version
+| Question Key | Question | Answer Summary |
+|-------------|----------|----------------|
+| `faqOwnership` | "Do I own the guide once it's created?" | Yes for text, note about image licenses |
+| `faqTopics` | "What topics can I create books on?" | Travel, Astrology, Culinary, Wellness, etc. |
+| `faqReturns` | "Can I return a book?" | Digital: final sale. Print: Amazon policy. |
+| `faqCommercial` | "Can I sell my custom manuals commercially?" | (Existing - keep) |
+| `faqLocalResources` | "How does local resource data work?" | (Existing - keep) |
+| `faqUnique` | "How is my guide different from others?" | (Existing - keep) |
+| `faqMultiDevice` | "Can I access my guides on multiple devices?" | (Existing - keep) |
 
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/contexts/LanguageContext.tsx` | Add 3 new translation keys for back cover defaults × 8 languages |
-| `src/components/BookCover.tsx` | 1) Fix Legal tab trigger for admin 2) Dynamic grid columns 3) Translate back cover defaults |
-| `src/components/KdpPrepDashboard.tsx` | Pass language to generate-book-v2 edge function calls |
-| `supabase/functions/generate-book-v2/index.ts` | Add language parameter to KDP description/subtitle/keywords prompts |
-
----
-
-## Technical Details
-
-### LanguageContext.tsx - New Keys
-
+### Translation Keys to Add (all 8 languages)
 ```typescript
-// Back Cover Defaults
-backCoverDefaultTitle: 'Created with Loom & Page',
-backCoverDefaultBody: 'This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you\'re exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.',
-backCoverDefaultCta: 'Create yours at www.LoomandPage.com',
-```
+// FAQ Questions
+faqOwnershipQ: 'Do I own the guide once it\'s created?',
+faqOwnershipA: 'Yes. You own the textual content and the compilation of the guide entirely. You are free to monetize the text as you see fit.\n\nNote on Images: Images selected via third-party libraries (Unsplash, Pexels, Pixabay, Wikimedia) or generated via AI are subject to their respective licenses. While generally free for commercial use, you are responsible for ensuring that specific images—especially those featuring identifiable people, logos, or landmarks—are cleared for your specific commercial use case.',
 
-### French Example
-```typescript
-fr: {
-  backCoverDefaultTitle: 'Créé avec Loom & Page',
-  backCoverDefaultBody: 'Ce livre a été créé avec Loom & Page, la plateforme IA avancée qui transforme les idées en livres professionnels en quelques minutes. Que vous exploriez une nouvelle passion, documentiez l\'histoire ou planifiez votre prochaine aventure, nous vous aidons à tisser votre curiosité en réalité.',
-  backCoverDefaultCta: 'Créez le vôtre sur www.LoomandPage.com',
-}
-```
+faqTopicsQ: 'What topics can I create books on?',
+faqTopicsA: 'Loom & Page can weave instructional volumes on a vast array of subjects. Our AI architect is adept at crafting guides for Travel & Exploration, Astrology & Esoteric Arts, Culinary Arts, Wellness & Yoga, Gardening, History, Business Management, and Technical Pursuits (like vintage car restoration). Whether you need a practical manual for Leatherworking or a spiritual guide to Tarot, we provide structured, high-quality instruction.',
 
-### BookCover.tsx - Legal Tab Fix
-
-```typescript
-// Dynamic grid columns based on admin status
-<TabsList className={`grid w-full ${isAdminFromContext ? 'grid-cols-8' : 'grid-cols-7'}`}>
-  {/* ... existing 7 tabs ... */}
-  {isAdminFromContext && (
-    <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
-      <ShieldCheck className="w-3 h-3" />
-      {t('tabLegal')}
-    </TabsTrigger>
-  )}
-</TabsList>
-```
-
-### BookCover.tsx - Back Cover Language Reactivity
-
-```typescript
-// Initialize with defaults
-const [backCoverTitle, setBackCoverTitle] = useState("");
-const [backCoverBody, setBackCoverBody] = useState("");
-const [backCoverCTA, setBackCoverCTA] = useState("");
-
-// Update when language changes (or on first render)
-useEffect(() => {
-  if (!backCoverTitle) setBackCoverTitle(t('backCoverDefaultTitle'));
-  if (!backCoverBody) setBackCoverBody(t('backCoverDefaultBody'));
-  if (!backCoverCTA) setBackCoverCTA(t('backCoverDefaultCta'));
-}, [t]); // Re-run when translation function changes (language switch)
-```
-
-### KdpPrepDashboard.tsx - Pass Language
-
-```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
-
-const KdpPrepDashboard = ({ ... }) => {
-  const { t, language } = useLanguage(); // Get current language code
-  
-  // Pass language to API calls
-  const generateDescription = async () => {
-    const { data, error } = await supabase.functions.invoke('generate-book-v2', {
-      body: {
-        mode: 'kdp-description',
-        title,
-        topic,
-        subtitle: localSubtitle,
-        bookData,
-        language, // Add this
-      },
-    });
-    // ...
-  };
-};
-```
-
-### generate-book-v2/index.ts - Language-Aware Prompts
-
-```typescript
-// KDP Description Mode
-if (mode === 'kdp-description') {
-  const languageInstruction = language && language !== 'en' 
-    ? `\n\nCRITICAL: Write the entire description in ${getLanguageName(language)}. Do NOT write in English.`
-    : '';
-    
-  const prompt = `You are a bestselling Amazon book marketing expert...
-${languageInstruction}
-
-Book Title: "${title}"
-...`;
-}
+faqReturnsQ: 'Can I return a book?',
+faqReturnsA: 'Digital Downloads (PDF/eBook): Due to the digital nature of these products, all sales are final and non-refundable.\n\nPrinted Copies: Printed books purchased via Amazon are subject to Amazon\'s Return Policy. If your book arrives damaged or with printing errors, please contact Amazon Customer Support directly for a replacement.',
 ```
 
 ---
 
-## Layout Preservation Guarantee
+## Part 2: Terms of Service & Privacy Policy Updates
 
-**CRITICAL**: All changes will preserve existing layout, spacing, and formatting:
-- Back cover preview dimensions unchanged
-- Text flow and positioning unchanged
-- Only the text CONTENT will be translated
-- No CSS or structural changes to the back cover component
+### Files to Modify
+- `src/contexts/LanguageContext.tsx` - Add translation keys
+- `src/pages/TermsOfService.tsx` - Add disclaimer banner + new sections
+- `src/pages/PrivacyPolicy.tsx` - Add disclaimer banner
+
+### Translation Disclaimer Banner (Top of Both Pages)
+```typescript
+legalTranslationDisclaimer: 'Note: Translations of these documents are provided for convenience only. In the event of any discrepancy or dispute, the original English version shall prevail and is the legally binding text.',
+```
+
+### New Terms Sections to Add
+
+**Refunds & Cancellations Section:**
+```typescript
+termsRefundsTitle: 'Refunds & Cancellations',
+termsRefundsContent: 'All purchases of digital downloads, AI generation credits, or subscriptions are final and non-refundable. Loom & Page is not responsible for printing errors, shipping delays, or quality issues arising from third-party print-on-demand services (e.g., Amazon KDP).',
+```
+
+**Branding Rights Section:**
+```typescript
+termsBrandingTitle: 'Branding Rights',
+termsBrandingContent: 'Loom & Page reserves the right to include its logo, name, or \'Powered by\' attribution on the footer or back cover of all generated documents and digital downloads.',
+```
+
+### UI Implementation
+- Use the existing `Alert` component with a subtle info variant for the disclaimer
+- Add 2 new `<section>` blocks at the end of the Terms page
+
+---
+
+## Part 3: Contact Us Page
+
+### Files to Create
+- `src/pages/Contact.tsx` - New page with centered form
+
+### Files to Modify
+- `src/App.tsx` - Add route `/contact`
+- `src/components/Footer.tsx` - Add "Contact Us" link
+- `src/contexts/LanguageContext.tsx` - Add form labels, placeholders, notices
+
+### Database Schema (via migration)
+```sql
+-- Contact Messages Table
+CREATE TABLE public.contact_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  email text NOT NULL,
+  subject text NOT NULL,
+  message text NOT NULL,
+  status text NOT NULL DEFAULT 'unread',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Anyone can insert (public form)
+CREATE POLICY "Anyone can submit contact messages"
+ON public.contact_messages FOR INSERT
+WITH CHECK (true);
+
+-- Policy: Only admins can read
+CREATE POLICY "Admins can view contact messages"
+ON public.contact_messages FOR SELECT
+USING (public.has_role(auth.uid(), 'admin'));
+
+-- Policy: Only admins can update (mark as read)
+CREATE POLICY "Admins can update contact messages"
+ON public.contact_messages FOR UPDATE
+USING (public.has_role(auth.uid(), 'admin'));
+```
+
+### Translation Keys for Contact Form (all 8 languages)
+```typescript
+// Contact Page
+contactTitle: 'Contact Us',
+contactSubtitle: 'Have a question or feedback? We\'d love to hear from you.',
+contactNameLabel: 'Name',
+contactNamePlaceholder: 'Your name',
+contactEmailLabel: 'Email',
+contactEmailPlaceholder: 'you@example.com',
+contactSubjectLabel: 'Subject',
+contactSubjectPlaceholder: 'What is this regarding?',
+contactMessageLabel: 'Message',
+contactMessagePlaceholder: 'Your message...',
+contactSubmit: 'Send Message',
+contactSubmitting: 'Sending...',
+contactSuccess: 'Thank you! Your message has been sent.',
+contactResponseTime: 'We aim to respond to all inquiries within 48 hours.',
+contactUs: 'Contact Us', // For footer link
+```
+
+### Page Design
+- Match existing Terms/Privacy page layout (header with Logo, max-w-2xl container)
+- Centered form with consistent styling
+- "48 hours" notice displayed below the submit button
+- Success toast on submission
+
+---
+
+## Part 4: Admin Settings & Email Notifications
+
+### Database Schema (via migration)
+```sql
+-- Platform Settings Table
+CREATE TABLE public.platform_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  support_email text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Only admins can read/update
+CREATE POLICY "Admins can view platform settings"
+ON public.platform_settings FOR SELECT
+USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can update platform settings"
+ON public.platform_settings FOR UPDATE
+USING (public.has_role(auth.uid(), 'admin'));
+
+-- Insert default row (will be updated with admin's email during implementation)
+INSERT INTO public.platform_settings (support_email) VALUES ('admin@loomandpage.com');
+
+-- Update trigger
+CREATE TRIGGER update_platform_settings_updated_at
+BEFORE UPDATE ON public.platform_settings
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+### Files to Modify
+- `src/pages/Admin.tsx` - Add "Settings" section with email input
+
+### Edge Function: send-contact-notification
+```
+supabase/functions/send-contact-notification/index.ts
+```
+
+**Function Logic:**
+1. Receive contact form data (name, email, subject, message)
+2. Query `platform_settings` to get current `support_email`
+3. Send email via Resend (or Lovable AI email service if configured)
+4. Set `Reply-To: customer@email.com` so admin can reply directly
+5. Return success/error response
+
+**Email Template:**
+- Subject: `New Contact Form: {subject}`
+- From: `Loom & Page <noreply@...>`
+- To: Support email from platform_settings
+- Reply-To: Customer's email
+- Body: Name, Email, Subject, Message, Timestamp
+
+### API Key Requirement
+The existing `RESEND_API_KEY` secret is NOT configured (checked secrets list). Options:
+1. Ask user to add RESEND_API_KEY
+2. Implement without email initially (messages stored in DB, admin views in dashboard)
+
+**Recommendation**: Build the full system but gracefully handle missing API key - log warning and skip email send if not configured. Admin can still view messages in dashboard.
+
+---
+
+## Files Summary
+
+| Action | File |
+|--------|------|
+| Modify | `src/contexts/LanguageContext.tsx` - Add ~40 translation keys × 8 languages |
+| Modify | `src/pages/FAQ.tsx` - Use translations, add returns question |
+| Modify | `src/pages/TermsOfService.tsx` - Add disclaimer banner + 2 sections |
+| Modify | `src/pages/PrivacyPolicy.tsx` - Add disclaimer banner |
+| Create | `src/pages/Contact.tsx` - New contact form page |
+| Modify | `src/App.tsx` - Add /contact route |
+| Modify | `src/components/Footer.tsx` - Add Contact Us link |
+| Modify | `src/pages/Admin.tsx` - Add Settings section |
+| Create | `supabase/functions/send-contact-notification/index.ts` |
+| Migration | Create `contact_messages` table |
+| Migration | Create `platform_settings` table |
+
+---
+
+## Translation Key Count
+
+| Category | Keys |
+|----------|------|
+| FAQ (3 Q&A pairs) | 6 keys |
+| Legal Disclaimer | 1 key |
+| Terms Sections | 4 keys |
+| Contact Form | 13 keys |
+| **Total** | 24 keys × 8 languages = 192 translations |
+
+---
+
+## Implementation Order
+
+1. **Database migrations** (contact_messages, platform_settings)
+2. **LanguageContext.tsx** - Add all translation keys
+3. **FAQ.tsx** - Update with translations
+4. **TermsOfService.tsx** - Add banner + sections
+5. **PrivacyPolicy.tsx** - Add banner
+6. **Contact.tsx** - Create new page
+7. **App.tsx** - Add route
+8. **Footer.tsx** - Add link
+9. **Admin.tsx** - Add Settings section
+10. **Edge Function** - send-contact-notification
 
 ---
 
 ## Testing Checklist
 
-1. **Switch to French** as Admin:
-   - Verify Legal tab appears (8 tabs total)
-   - Click Legal tab to confirm it works
-2. **Switch to French** as Guest/Paid:
-   - Verify Legal tab is hidden (7 tabs total)
-3. **Open Cover Studio → Back tab**:
-   - Verify default text shows in French
-   - Verify layout is identical to English
-4. **Open Cover Studio → Prep tab**:
-   - Wait for auto-generation
-   - Verify description, keywords are in French
-   - Verify no layout changes
-5. **Test all 8 languages** for consistency
+1. **FAQ**: Verify new questions display correctly in all languages
+2. **Terms/Privacy**: Verify disclaimer banner appears at top
+3. **Contact Form**: 
+   - Submit form as guest
+   - Verify data saves to database
+   - Verify success message displays
+   - Verify "48 hours" notice shows
+4. **Footer**: Verify "Contact Us" link appears and navigates correctly
+5. **Admin Settings**:
+   - Verify Settings section appears for admin users
+   - Verify email can be updated
+6. **Email (if RESEND_API_KEY configured)**:
+   - Submit contact form
+   - Verify email arrives at support address
+   - Verify Reply-To is customer's email
