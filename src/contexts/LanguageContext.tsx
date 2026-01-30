@@ -251,6 +251,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'Sign in to save this guide permanently and access it from any device.',
     signingIn: 'Signing in...',
     maybeLater: 'Maybe later',
+    // Chapters Ready
+    chaptersReady: '{completed} of {total} chapters ready',
+    // Legal Tab (admin only)
+    tabLegal: 'Legal',
+    copyrightDefense: 'Copyright & Hallucination Defense',
+    copyrightDefenseDesc: 'Unlock to scan for potential issues and generate legal disclaimers.',
   },
   es: {
     join: 'Unirse',
@@ -482,6 +488,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'Inicia sesión para guardar esta guía permanentemente y acceder desde cualquier dispositivo.',
     signingIn: 'Iniciando sesión...',
     maybeLater: 'Quizás después',
+    // Chapters Ready
+    chaptersReady: '{completed} de {total} capítulos listos',
+    // Legal Tab (admin only)
+    tabLegal: 'Legal',
+    copyrightDefense: 'Defensa de Derechos de Autor y Alucinación',
+    copyrightDefenseDesc: 'Desbloquea para escanear posibles problemas y generar avisos legales.',
   },
   fr: {
     join: 'Rejoindre',
@@ -713,6 +725,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: "Connectez-vous pour sauvegarder ce guide et y accéder depuis n'importe quel appareil.",
     signingIn: 'Connexion...',
     maybeLater: 'Plus tard',
+    // Chapters Ready
+    chaptersReady: '{completed} sur {total} chapitres prêts',
+    // Legal Tab (admin only)
+    tabLegal: 'Légal',
+    copyrightDefense: 'Défense des Droits d\'Auteur et Hallucinations',
+    copyrightDefenseDesc: 'Débloquer pour scanner les problèmes potentiels et générer des avertissements légaux.',
   },
   de: {
     join: 'Beitreten',
@@ -944,6 +962,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'Melden Sie sich an, um diesen Leitfaden dauerhaft zu speichern und von jedem Gerät aus darauf zuzugreifen.',
     signingIn: 'Anmeldung...',
     maybeLater: 'Vielleicht später',
+    // Chapters Ready
+    chaptersReady: '{completed} von {total} Kapiteln fertig',
+    // Legal Tab (admin only)
+    tabLegal: 'Rechtliches',
+    copyrightDefense: 'Urheberrecht & Halluzinationsschutz',
+    copyrightDefenseDesc: 'Freischalten um potenzielle Probleme zu scannen und rechtliche Hinweise zu generieren.',
   },
   it: {
     join: 'Unisciti',
@@ -1175,6 +1199,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'Accedi per salvare questa guida permanentemente e accedere da qualsiasi dispositivo.',
     signingIn: 'Accesso in corso...',
     maybeLater: 'Forse dopo',
+    // Chapters Ready
+    chaptersReady: '{completed} di {total} capitoli pronti',
+    // Legal Tab (admin only)
+    tabLegal: 'Legale',
+    copyrightDefense: 'Difesa Copyright e Allucinazioni',
+    copyrightDefenseDesc: 'Sblocca per scansionare potenziali problemi e generare avvisi legali.',
   },
   pt: {
     join: 'Junte-se',
@@ -1406,6 +1436,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'Entre para salvar este guia permanentemente e acessar de qualquer dispositivo.',
     signingIn: 'Entrando...',
     maybeLater: 'Talvez depois',
+    // Chapters Ready
+    chaptersReady: '{completed} de {total} capítulos prontos',
+    // Legal Tab (admin only)
+    tabLegal: 'Legal',
+    copyrightDefense: 'Defesa de Direitos Autorais e Alucinação',
+    copyrightDefenseDesc: 'Desbloqueie para escanear possíveis problemas e gerar avisos legais.',
   },
   zh: {
     join: '加入',
@@ -1637,6 +1673,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: '登录后永久保存此指南，并从任何设备访问。',
     signingIn: '登录中...',
     maybeLater: '稍后再说',
+    // Chapters Ready
+    chaptersReady: '{completed}/{total}章节已完成',
+    // Legal Tab (admin only)
+    tabLegal: '法律',
+    copyrightDefense: '版权和幻觉防御',
+    copyrightDefenseDesc: '解锁以扫描潜在问题并生成法律声明。',
   },
   ja: {
     join: '参加',
@@ -1868,6 +1910,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     saveToCloudDesc: 'ログインしてこのガイドを永久に保存し、どのデバイスからもアクセスできます。',
     signingIn: 'ログイン中...',
     maybeLater: 'また後で',
+    // Chapters Ready
+    chaptersReady: '{completed}/{total}章完成',
+    // Legal Tab (admin only)
+    tabLegal: '法的事項',
+    copyrightDefense: '著作権と幻覚対策',
+    copyrightDefenseDesc: '潜在的な問題をスキャンし、法的免責事項を生成するためにアンロック。',
   },
 };
 

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDimensions } from '@/lib/kdpUtils';
 import WeavingLoader from '@/components/WeavingLoader';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,8 @@ const KdpPrepDashboard = ({
   contentPageCount,
   bookData,
 }: KdpPrepDashboardProps) => {
+  const { t } = useLanguage();
+  
   // Metadata state
   const [localSubtitle, setLocalSubtitle] = useState(initialSubtitle || '');
   const [author, setAuthor] = useState(authorName);
@@ -223,9 +226,9 @@ const KdpPrepDashboard = ({
   if (isInitialLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-6">
-        <WeavingLoader text="Preparing Amazon metadata..." />
+        <WeavingLoader text={t('preparingMetadata')} />
         <p className="text-sm text-muted-foreground">
-          Generating description, subtitle, and keywords...
+          {t('generatingMetadata')}
         </p>
       </div>
     );
@@ -236,22 +239,22 @@ const KdpPrepDashboard = ({
       {/* Live Specs Header Bar */}
       <div className="flex flex-wrap items-center justify-center gap-4 p-3 bg-muted/50 rounded-lg border">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Page Count:</span>
+          <span className="text-xs text-muted-foreground">{t('pageCount')}:</span>
           <span className="text-sm font-medium">{dims.pageCount}</span>
         </div>
         <div className="h-4 w-px bg-border" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Spine:</span>
+          <span className="text-xs text-muted-foreground">{t('spineLabel')}:</span>
           <span className="text-sm font-medium">{dims.spineWidth}</span>
         </div>
         <div className="h-4 w-px bg-border" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Trim:</span>
+          <span className="text-xs text-muted-foreground">{t('trimLabel')}:</span>
           <span className="text-sm font-medium">{dims.trimSize}</span>
         </div>
         <div className="h-4 w-px bg-border" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Bleed:</span>
+          <span className="text-xs text-muted-foreground">{t('bleedLabel')}:</span>
           <span className="text-sm font-medium">{dims.bleed}</span>
         </div>
       </div>
@@ -262,7 +265,7 @@ const KdpPrepDashboard = ({
         <div className="md:col-span-3 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="description" className="text-sm font-medium">
-              Book Description
+              {t('bookDescription')}
             </Label>
             <div className="flex items-center gap-2">
               <span className={`text-xs ${description.length > MAX_DESCRIPTION_LENGTH * 0.9 ? 'text-destructive' : 'text-muted-foreground'}`}>
@@ -274,12 +277,12 @@ const KdpPrepDashboard = ({
                     {descriptionViewMode === 'preview' ? (
                       <>
                         <Eye className="w-3 h-3" />
-                        Preview
+                        {t('preview')}
                       </>
                     ) : (
                       <>
                         <Code className="w-3 h-3" />
-                        HTML
+                        {t('html')}
                       </>
                     )}
                   </Button>
@@ -287,11 +290,11 @@ const KdpPrepDashboard = ({
                 <DropdownMenuContent align="end" className="bg-popover z-50">
                   <DropdownMenuItem onClick={() => setDescriptionViewMode('preview')}>
                     <Eye className="w-4 h-4 mr-2" />
-                    Preview (Formatted)
+                    {t('previewFormatted')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setDescriptionViewMode('edit')}>
                     <Code className="w-4 h-4 mr-2" />
-                    Edit HTML
+                    {t('editHtml')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -327,7 +330,7 @@ const KdpPrepDashboard = ({
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              Write Best-Selling Description
+              {t('writeBestSellingDesc')}
             </Button>
             
             <Button
@@ -346,7 +349,7 @@ const KdpPrepDashboard = ({
           </div>
           
           <p className="text-xs text-muted-foreground">
-            Preview shows formatted text. Copy button copies raw HTML for Amazon KDP.
+            {t('copyHtmlNote')}
           </p>
         </div>
         
@@ -354,7 +357,7 @@ const KdpPrepDashboard = ({
         <div className="md:col-span-2 space-y-4">
           {/* Title (Locked) */}
           <div>
-            <Label htmlFor="title" className="text-sm font-medium">Title</Label>
+            <Label htmlFor="title" className="text-sm font-medium">{t('titleLabel')}</Label>
             <Input
               id="title"
               value={title}
@@ -365,7 +368,7 @@ const KdpPrepDashboard = ({
           
           {/* Author */}
           <div>
-            <Label htmlFor="author" className="text-sm font-medium">Author</Label>
+            <Label htmlFor="author" className="text-sm font-medium">{t('authorLabel')}</Label>
             <Input
               id="author"
               value={author}
@@ -377,7 +380,7 @@ const KdpPrepDashboard = ({
           
           {/* Subtitle */}
           <div>
-            <Label htmlFor="subtitle" className="text-sm font-medium">Subtitle</Label>
+            <Label htmlFor="subtitle" className="text-sm font-medium">{t('subtitleLabel')}</Label>
             <div className="flex gap-2 mt-1">
               <Input
                 id="subtitle"
@@ -391,7 +394,7 @@ const KdpPrepDashboard = ({
                 disabled={isGeneratingSubtitle}
                 variant="outline"
                 size="icon"
-                title="Generate subtitle"
+                title={t('generateSubtitle')}
               >
                 {isGeneratingSubtitle ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -405,7 +408,7 @@ const KdpPrepDashboard = ({
           {/* Keywords Grid */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label className="text-sm font-medium">Keywords ({keywords.filter(k => k).length}/7)</Label>
+              <Label className="text-sm font-medium">{t('keywords')} ({keywords.filter(k => k).length}/7)</Label>
               <Button
                 onClick={handleGenerateKeywords}
                 disabled={isGeneratingKeywords}
@@ -418,7 +421,7 @@ const KdpPrepDashboard = ({
                 ) : (
                   <Sparkles className="w-3 h-3" />
                 )}
-                Generate All
+                {t('generateAll')}
               </Button>
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -433,7 +436,7 @@ const KdpPrepDashboard = ({
               ))}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Keywords avoid repeating words from your title for better Amazon ranking.
+              {t('keywordsNote')}
             </p>
           </div>
         </div>
