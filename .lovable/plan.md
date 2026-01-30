@@ -1,301 +1,181 @@
 
-# Plan: Comprehensive Translation System Fix
+# Plan: Complete Translation System & Language Consistency Fix
 
 ## Summary
 
-This plan addresses multiple translation gaps and a critical crash bug identified across the application:
+This plan addresses six distinct translation issues plus the core language inconsistency problem:
 
-1. **Focus Area Tooltips**: Add translations for all 7 tooltip descriptions in 8 languages
-2. **Weaving Process Steps**: Translate the 5 loading animation stages
-3. **Book Content Language**: Ensure language is properly passed to chapter generation (language IS being passed - investigating crash)
-4. **Chapter Status Labels**: Translate "Reading", "Expand", "Drafting", "Pending" in Table of Contents
-5. **Block Labels**: Translate "KEY TAKEAWAY" and "PRO TIP" labels in PageViewer
-6. **Download Button Text**: Translate "Download Full Guide (PDF)" and related text
-7. **Footer AI Disclaimer**: Translate the AI-generated content disclaimer (keep Privacy/Terms/FAQ links in English)
-8. **Critical Crash Bug**: Investigate and fix the chapter navigation crash that resets to homepage
+1. **Focus Area Labels & Tooltips**: Translate chip labels (History, Wellness, etc.) and tooltip descriptions
+2. **Voice & Structure Labels**: Translate chip labels (The Insider, The Bestie, etc.)
+3. **PageViewer Navigation Controls**: Translate "Prev", "Next", "Page Tools", "Chapter X of Y", "100%", "Fit"
+4. **Block Labels in Content**: Ensure "KEY TAKEAWAY" and "PRO TIP" labels render translated
+5. **AI Content Generation**: Fix the AI prompt to explicitly generate content IN the selected language
+6. **Language Behavior Clarification**: Document that users SHOULD be able to search in ANY language and get results in their SELECTED website language
 
 ---
 
-## Issue Analysis
+## Root Cause Analysis
 
-### Current Translation Architecture
-The app uses `LanguageContext.tsx` with a `translations` object containing key-value pairs for 8 languages. The `t()` function returns the translation or falls back to English, then to the key itself.
-
-### Missing Translation Keys Identified
-
-| Location | Current Text (English) | Translation Key Needed |
-|----------|----------------------|----------------------|
-| AdvancedOptions.tsx | Focus Area tooltips | `tooltip_history`, `tooltip_wellness`, etc. |
-| LoadingAnimation.tsx | "Gathering threads..." | `weaving_step1`, `weaving_step2`, etc. |
-| TableOfContents.tsx | "Reading", "Expand", "Drafting", "Pending" | `status_reading`, `status_expand`, etc. |
-| PageViewer.tsx | "KEY TAKEAWAY", "PRO TIP" | `keyTakeaway`, `proTip` |
-| ProgressDownloadButton.tsx | "Download Full Guide (PDF)" | `downloadFullGuide` |
-| Footer.tsx | AI disclaimer text | `aiDisclaimer` |
-
-### Critical Bug Investigation
-The crash when navigating to Chapter 2+ that reverts content to English and crashes to homepage suggests:
-- The `language` variable might not be available or reset during navigation
-- A React error boundary or uncaught exception is forcing a navigation reset
-- State corruption during chapter hydration
-
----
-
-## Files to Modify
-
-### 1. `src/contexts/LanguageContext.tsx`
-Add the following new translation keys to all 8 languages:
-
-**Focus Area Tooltips:**
-- `tooltip_history`: Ancient stories, heritage sites, and cultural timelines
-- `tooltip_wellness`: Spas, retreats, meditation, and self-care rituals
-- `tooltip_nightlife`: Bars, clubs, live music, and after-dark scenes
-- `tooltip_art`: Galleries, architecture, studios, and creative spaces
-- `tooltip_luxury`: High-end experiences, exclusive venues, and premium services
-- `tooltip_culture`: Traditions, local customs, food markets, and community life
-- `tooltip_nature`: Parks, hiking trails, beaches, and outdoor adventures
-
-**Weaving Process Steps:**
-- `weaving_step1`: Gathering threads...
-- `weaving_step2`: Setting up the loom...
-- `weaving_step3`: Weaving chapters...
-- `weaving_step4`: Adding finishing touches...
-- `weaving_step5`: Almost ready...
-
-**Chapter Status Labels:**
-- `status_reading`: Reading
-- `status_expand`: Expand
-- `status_drafting`: Drafting...
-- `status_pending`: Pending
-- `status_locked`: Locked
-- `chapters`: Chapters
-
-**Block Labels:**
-- `keyTakeaway`: KEY TAKEAWAY
-- `proTip`: PRO TIP
-
-**Download/Progress:**
-- `downloadFullGuide`: Download Full Guide (PDF)
-- `generatingPdf`: Generating PDF...
-- `weavingPages`: Weaving... {count} pages
-- `pleaseWaitChapters`: Please wait for all chapters...
-- `artisanWeaving`: Our Artisan is weaving your custom details...
-
-**Footer:**
-- `aiDisclaimer`: AI-generated content for creative inspiration only. Not professional advice.
-
----
-
-### 2. `src/components/AdvancedOptions.tsx`
-Update FOCUS_OPTIONS to use translated tooltips:
-
+### Issue 1: Focus Area Labels Still in English
+Looking at `AdvancedOptions.tsx` lines 32-39:
 ```typescript
 const FOCUS_OPTIONS = [
   { id: 'history', label: 'History', tooltipKey: 'tooltip_history' },
-  { id: 'wellness', label: 'Wellness', tooltipKey: 'tooltip_wellness' },
-  // ... etc
+  // ...
+```
+The `label` property is hardcoded in English. The tooltip uses `t(tooltipKey)` which works, but the chip display uses `{focus.label}` directly (line 166), not a translation.
+
+### Issue 2: Voice & Structure Labels Still in English
+Same issue - lines 19-30:
+```typescript
+const VOICE_OPTIONS = [
+  { id: 'insider', label: 'The Insider', tooltipKey: 'tooltip_insider' },
+```
+The labels are hardcoded and displayed directly via `{voice.label}` (line 110).
+
+### Issue 3: Navigation Controls Hardcoded
+In `PageViewer.tsx` lines 2370-2571, all navigation text is hardcoded:
+- Line 2371: `Prev`
+- Line 2380: `Page Tools`
+- Line 2536: `Fit` / `100%`
+- Line 2544: `of {totalPageCount}`
+- Line 2548: `Chapter {currentChapter} of {totalChapters}`
+- Line 2559: `Next`
+
+### Issue 4: AI Content Not Generated in Target Language
+The edge functions include `Language: ${language}` at the end of the prompt, but this is insufficient. The AI often ignores it because:
+1. It's placed at the very end as a footnote
+2. There's no explicit instruction saying "ALL content MUST be written in {language}"
+3. The prompt examples are in English, so the AI mimics that
+
+### Issue 5: Key Takeaway / Pro Tip Labels
+These are handled in `BlockRenderer` which receives `proTipLabel` and `keyTakeawayLabel` props. Need to verify these are being passed and used correctly.
+
+---
+
+## Solution Design
+
+### Part 1: Add Translation Keys for All UI Labels
+
+Add to `LanguageContext.tsx` for all 8 languages:
+
+**Focus Area Labels:**
+- `focus_history`, `focus_wellness`, `focus_nightlife`, `focus_art`, `focus_luxury`, `focus_culture`, `focus_nature`
+
+**Voice Labels:**
+- `voice_insider`, `voice_bestie`, `voice_poet`, `voice_professor`
+
+**Structure Labels:**
+- `structure_curated`, `structure_playbook`, `structure_balanced`
+
+**Navigation Controls:**
+- `prev`, `next`, `pageTools`, `fit`, `fullSize`, `pageOf`, `chapterOf`
+
+---
+
+### Part 2: Update AdvancedOptions.tsx
+
+Change all options arrays to use translation keys for labels:
+
+```typescript
+const FOCUS_OPTIONS = [
+  { id: 'history', labelKey: 'focus_history', tooltipKey: 'tooltip_history' },
+  { id: 'wellness', labelKey: 'focus_wellness', tooltipKey: 'tooltip_wellness' },
+  // ...
 ];
 
 // In render:
-<TooltipContent>
-  <p className="text-xs">{t(focus.tooltipKey)}</p>
-</TooltipContent>
+{t(focus.labelKey)}
 ```
+
+Same for `VOICE_OPTIONS` and `STRUCTURE_OPTIONS`.
 
 ---
 
-### 3. `src/components/LoadingAnimation.tsx`
-Update stages to use translation keys:
+### Part 3: Update PageViewer.tsx Navigation
+
+Import `useLanguage` and use translation keys:
 
 ```typescript
-const stages = [
-  { progress: 15, key: 'weaving_step1' },
-  { progress: 35, key: 'weaving_step2' },
-  { progress: 55, key: 'weaving_step3' },
-  { progress: 75, key: 'weaving_step4' },
-  { progress: 90, key: 'weaving_step5' },
-];
-
-// In effect:
-setStatusText(t(stages[currentStage].key));
-```
-
----
-
-### 4. `src/components/TableOfContents.tsx`
-Add useLanguage hook and translate status labels:
-
-```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
-
-// In component:
 const { t } = useLanguage();
 
-// Replace hardcoded strings:
-<span>... {t('status_drafting')}</span>  // was "Drafting..."
-<span>... {t('status_pending')}</span>   // was "Pending"
-<span>... {t('status_expand')}</span>    // was "Expand →"
-<span>... {t('status_reading')}</span>   // was "Reading"
-<span>... {t('status_locked')}</span>    // was "Locked"
-<span>... {t('chapters')}</span>         // was "Chapters"
+// Navigation buttons:
+<Button>
+  <ChevronLeft />
+  {t('prev')}
+</Button>
+
+<span>{t('pageTools')}</span>
+
+<span>{zoomMode === '100%' ? t('fit') : '100%'}</span>
+
+<p>
+  {cumulativePageNumber}
+  <span> {t('pageOf')} {totalPageCount}</span>
+</p>
+
+<p>
+  {t('chapterOf').replace('{current}', String(currentChapter)).replace('{total}', String(totalChapters))}
+</p>
+
+<Button>
+  {t('next')}
+  <ChevronRight />
+</Button>
 ```
 
 ---
 
-### 5. `src/components/PageViewer.tsx`
-Update ProTipPage and KeyTakeawayPage to use translations:
+### Part 4: Fix AI Content Generation Language
 
+Update both edge functions to include EXPLICIT language instructions:
+
+**In `generate-book-blocks/index.ts`:**
 ```typescript
-// ProTipPage - needs language context passed via props or hook
-<p className="text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground">
-  {t('proTip')}  // was "PRO TIP"
-</p>
-
-// KeyTakeawayPage
-<p className="text-xs font-bold tracking-[0.2em] uppercase text-primary mb-3">
-  {t('keyTakeaway')}  // was "KEY TAKEAWAY"
-</p>
+const languageInstruction = language !== 'en' 
+  ? `\n\n=== CRITICAL: LANGUAGE REQUIREMENT ===
+WRITE ALL CONTENT IN ${languageName}. This includes:
+- The main_title and subtitle
+- All chapter titles
+- All text block content
+- All image captions
+- All pro tip content
+The ONLY exception is proper nouns (place names, hotel names, etc.) which should remain in their original form.
+DO NOT write in English. The reader speaks ${languageName}.`
+  : '';
 ```
 
-Note: PageViewer is a large component - we'll need to either:
-- Pass `t` function as a prop to these sub-components
-- Or create a context consumer inside each component
-
----
-
-### 6. `src/components/ProgressDownloadButton.tsx`
-Add useLanguage hook and translate labels:
-
+Add a language name mapping:
 ```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
-
-const { t } = useLanguage();
-
-const getLabel = () => {
-  if (isCompiling) return t('generatingPdf');
-  if (isPurchased && !isComplete) {
-    if (totalPageCount && totalPageCount > 0) {
-      return t('weavingPages').replace('{count}', String(totalPageCount));
-    }
-    return `${t('weaving')} ${completedChapters}/${totalChapters}`;
-  }
-  return t('downloadFullGuide');
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish (Español)',
+  fr: 'French (Français)',
+  de: 'German (Deutsch)',
+  it: 'Italian (Italiano)',
+  pt: 'Portuguese (Português)',
+  zh: 'Chinese (中文)',
+  ja: 'Japanese (日本語)',
 };
-
-// Status text:
-{isPurchased ? t('pleaseWaitChapters') : t('artisanWeaving')}
 ```
 
 ---
 
-### 7. `src/components/Footer.tsx`
-Add useLanguage hook for AI disclaimer (keep links in English as requested):
+### Part 5: Language Behavior Decision
 
-```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
+**Recommended Approach**: The website language selector determines the OUTPUT language, regardless of what the user types in the search bar.
 
-const { t } = useLanguage();
+This means:
+- User selects French (FR) on the website
+- User types "Tokyo" in the search bar (English)
+- The book is generated ENTIRELY in French
 
-// Disclaimer:
-<p className="text-[10px] text-center text-muted-foreground/70 leading-relaxed">
-  {t('aiDisclaimer')}
-</p>
+This is the most intuitive UX because:
+1. The language selector sets the user's preferred language
+2. The search query is just a topic - topics can be in any language
+3. Travelers often search for destinations in their native language
 
-// Links remain in English:
-<Link to="/privacy">Privacy Policy</Link>
-<Link to="/terms">Terms of Service</Link>
-<Link to="/faq">FAQ</Link>
-```
-
----
-
-## Issue 8: Critical Crash Bug Investigation
-
-### Symptoms
-- Reading a book in a non-English language
-- Navigating to Chapter 2 causes text to revert to English
-- Clicking next page crashes and redirects to homepage (in English)
-
-### Root Cause Hypothesis
-1. **Language prop not persisted to chapter generation**: The `language` variable from `useLanguage()` is used during initial book generation but may not be stored in the database. When Chapter 2 is generated via the daisy-chain, it may not have the original language available.
-
-2. **Race condition in chapter hydration**: The `fetchBlocks` function might throw an error when blocks are malformed or missing, causing React to unmount and navigate away.
-
-3. **State corruption**: The `setBlocks` or `setCurrentChapter` calls might cause a re-render cascade that loses context.
-
-### Investigation Steps
-1. Check if `language` is stored in the `books` table and passed to subsequent chapter generation calls
-2. Add error boundaries around PageViewer to catch crashes
-3. Add logging to `goToPrevChapter` and `goToNextChapter` to trace the crash
-
-### Potential Fix
-Store the language in the `books` table during initial creation:
-
-```sql
--- Add language column to books table
-ALTER TABLE books ADD COLUMN language text DEFAULT 'en';
-```
-
-Then in `generate-book-blocks`:
-```typescript
-// Save language to DB
-await supabase.from('books').update({ language }).eq('id', bookId);
-```
-
-And in `Index.tsx` daisy-chain:
-```typescript
-// Retrieve language from bookData instead of context
-const bookLanguage = bookData?.language || language;
-```
-
----
-
-## Translation Examples (French)
-
-Here are the translations for French as an example:
-
-```typescript
-fr: {
-  // ... existing keys ...
-  
-  // Focus Area Tooltips
-  tooltip_history: 'Histoires anciennes, sites patrimoniaux et chronologies culturelles',
-  tooltip_wellness: 'Spas, retraites, méditation et rituels de bien-être',
-  tooltip_nightlife: 'Bars, clubs, musique live et scènes nocturnes',
-  tooltip_art: 'Galeries, architecture, studios et espaces créatifs',
-  tooltip_luxury: 'Expériences haut de gamme, lieux exclusifs et services premium',
-  tooltip_culture: 'Traditions, coutumes locales, marchés alimentaires et vie communautaire',
-  tooltip_nature: 'Parcs, sentiers de randonnée, plages et aventures en plein air',
-  
-  // Weaving Steps
-  weaving_step1: 'Rassemblement des fils...',
-  weaving_step2: 'Installation du métier à tisser...',
-  weaving_step3: 'Tissage des chapitres...',
-  weaving_step4: 'Ajout des touches finales...',
-  weaving_step5: 'Presque prêt...',
-  
-  // Chapter Status
-  status_reading: 'Lecture',
-  status_expand: 'Développer',
-  status_drafting: 'Rédaction...',
-  status_pending: 'En attente',
-  status_locked: 'Verrouillé',
-  chapters: 'Chapitres',
-  
-  // Block Labels
-  keyTakeaway: 'POINT CLÉ',
-  proTip: 'CONSEIL PRO',
-  
-  // Download
-  downloadFullGuide: 'Télécharger le Guide Complet (PDF)',
-  generatingPdf: 'Génération du PDF...',
-  weavingPages: 'Tissage... {count} pages',
-  pleaseWaitChapters: 'Veuillez patienter pour tous les chapitres...',
-  artisanWeaving: 'Notre Artisan tisse vos détails personnalisés...',
-  
-  // Footer
-  aiDisclaimer: 'Contenu généré par IA pour inspiration créative uniquement. Ce n\'est pas un conseil professionnel.',
-}
-```
+**Implementation**: The current architecture already passes `language` to the edge functions. We just need to strengthen the prompt to make the AI actually follow it.
 
 ---
 
@@ -303,27 +183,161 @@ fr: {
 
 | File | Changes |
 |------|---------|
-| `src/contexts/LanguageContext.tsx` | Add ~50 new translation keys across 8 languages |
-| `src/components/AdvancedOptions.tsx` | Use `t()` for Focus Area tooltips |
-| `src/components/LoadingAnimation.tsx` | Use `t()` for weaving stage text |
-| `src/components/TableOfContents.tsx` | Add `useLanguage` hook, translate status labels |
-| `src/components/PageViewer.tsx` | Pass translation function to block components |
-| `src/components/ProgressDownloadButton.tsx` | Add `useLanguage` hook, translate button text |
-| `src/components/Footer.tsx` | Add `useLanguage` hook, translate AI disclaimer |
-| Database (optional) | Add `language` column to `books` table for crash fix |
+| `src/contexts/LanguageContext.tsx` | Add ~25 new translation keys per language (focus labels, voice labels, structure labels, navigation) |
+| `src/components/AdvancedOptions.tsx` | Use `t(labelKey)` for all chip labels instead of hardcoded strings |
+| `src/components/PageViewer.tsx` | Import `useLanguage`, translate all navigation control text |
+| `supabase/functions/generate-book-blocks/index.ts` | Add explicit language instruction block to AI prompt |
+| `supabase/functions/generate-chapter-blocks/index.ts` | Add explicit language instruction block to AI prompt |
+
+---
+
+## New Translation Keys Required
+
+### English (baseline)
+```typescript
+// Focus Area Labels
+focus_history: 'History',
+focus_wellness: 'Wellness',
+focus_nightlife: 'Nightlife',
+focus_art: 'Art & Design',
+focus_luxury: 'Luxury',
+focus_culture: 'Local Culture',
+focus_nature: 'Nature',
+
+// Voice Labels
+voice_insider: 'The Insider',
+voice_bestie: 'The Bestie',
+voice_poet: 'The Poet',
+voice_professor: 'The Professor',
+
+// Structure Labels
+structure_curated: 'Curated Guide',
+structure_playbook: 'Playbook',
+structure_balanced: 'Balanced',
+
+// Navigation
+prev: 'Prev',
+next: 'Next',
+pageTools: 'Page Tools',
+fit: 'Fit',
+fullSize: '100%',
+pageOf: 'of',
+chapterOf: 'Chapter {current} of {total}',
+```
+
+### French Example
+```typescript
+// Focus Area Labels
+focus_history: 'Histoire',
+focus_wellness: 'Bien-être',
+focus_nightlife: 'Vie Nocturne',
+focus_art: 'Art & Design',
+focus_luxury: 'Luxe',
+focus_culture: 'Culture Locale',
+focus_nature: 'Nature',
+
+// Voice Labels
+voice_insider: "L'Initié",
+voice_bestie: "L'Ami(e)",
+voice_poet: 'Le Poète',
+voice_professor: 'Le Professeur',
+
+// Structure Labels
+structure_curated: 'Guide Sélectionné',
+structure_playbook: 'Manuel Pratique',
+structure_balanced: 'Équilibré',
+
+// Navigation
+prev: 'Préc',
+next: 'Suiv',
+pageTools: 'Outils de Page',
+fit: 'Ajuster',
+fullSize: '100%',
+pageOf: 'sur',
+chapterOf: 'Chapitre {current} sur {total}',
+```
+
+---
+
+## AI Prompt Enhancement
+
+Add this block near the TOP of the prompt (after the voice/structure instructions):
+
+```typescript
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  it: 'Italian',
+  pt: 'Portuguese',
+  zh: 'Chinese',
+  ja: 'Japanese',
+};
+
+const languageName = LANGUAGE_NAMES[language] || 'English';
+
+const languageInstruction = language !== 'en' 
+  ? `
+=== CRITICAL: LANGUAGE REQUIREMENT ===
+You MUST write ALL content in ${languageName}. This is mandatory.
+- main_title: Write in ${languageName}
+- subtitle: Write in ${languageName}
+- All chapter titles: Write in ${languageName}
+- All text block content: Write in ${languageName}
+- All image captions: Write in ${languageName}
+- All pro_tip content: Write in ${languageName}
+
+The ONLY exceptions are:
+- Proper nouns (hotel names, restaurant names, landmark names) - keep in original language
+- Technical terms with no good translation
+
+DO NOT default to English. The reader understands ${languageName}.
+`
+  : '';
+```
+
+Then include `${languageInstruction}` right after the structure instructions in the prompt.
+
+---
+
+## Visual Changes After Fix
+
+### Advanced Options (After Fix - French Website)
+```
+[  v Options Avancées ]
+
+       VOIX NARRATIVE
+[L'Initié] [L'Ami(e)] [Le Poète] [Le Professeur]
+   ^hover: "Sélectionné, cool, 'Entre connaisseurs'"
+
+       STRUCTURE DU LIVRE
+[Guide Sélectionné] [Manuel Pratique] [Équilibré]
+
+       DOMAINES DE FOCUS
+[Histoire] [Bien-être] [Vie Nocturne] [Art & Design]
+   ^hover: "Histoires anciennes, sites patrimoniaux..."
+```
+
+### PageViewer Navigation (After Fix - French)
+```
+[ Préc ]    🛠 Outils de Page    📐 Ajuster    42 sur 112    [ Suiv ]
+                                              Chapitre 3 sur 12
+```
+
+### Generated Book Content (After Fix - French Website)
+Title, subtitle, chapter titles, all text content, and captions will be in French, regardless of search query language.
 
 ---
 
 ## Testing Checklist
 
-After implementation:
-1. Switch to each of the 8 languages and verify:
-   - Focus Area tooltips display correctly
-   - Weaving animation text is translated
-   - Table of Contents status labels are translated
-   - "KEY TAKEAWAY" and "PRO TIP" blocks show translated labels
-   - Download button text is translated
-   - Footer disclaimer is translated (links remain English)
-2. Generate a book in French/Spanish/etc. and navigate through all chapters
-3. Verify no crash occurs when moving between chapters in non-English languages
-4. Confirm the language persists throughout the reading experience
+1. **Focus Areas**: Switch to French, hover over each Focus Area chip - verify label AND tooltip are in French
+2. **Voice/Structure**: Verify all chip labels translate correctly
+3. **Navigation**: Navigate through a book in French - verify Prev/Next/Page Tools/Chapter text
+4. **Content Generation**: 
+   - Set website to French
+   - Search "Tokyo" (in English)
+   - Verify the generated book title, subtitle, chapters, and all content is in French
+5. **Key Takeaway/Pro Tip**: Navigate to pages with these blocks - verify labels are translated
+6. **All 8 Languages**: Repeat core tests for each supported language
