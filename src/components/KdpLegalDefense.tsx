@@ -192,7 +192,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     rtf += `\\tab - \\b Pixabay: \\b0 Pixabay License (Free for Commercial Use). No attribution required.\\par`;
     rtf += `\\tab - \\b Openverse: \\b0 Creative Commons Licensed (commercial + modification filters applied). Attribution provided per license.\\par`;
     rtf += `\\tab - \\b Wikimedia Commons: \\b0 Public Domain (CC0) assets with no restrictions on commercial use.\\par`;
-    rtf += `\\tab - \\b AI Image Generation (Pollinations.ai): \\b0 Powered by the Flux model. Generated assets are Public Domain and cleared for commercial use.\\par`;
+    rtf += `\\tab - \\b AI Image Generation (Hugging Face): \\b0 Powered by the Flux.1-schnell model via Hugging Face Serverless Inference API. Generated assets are licensed under Apache 2.0 (model) with outputs cleared for commercial use.\\par`;
     rtf += `\\tab - \\b User Uploads: \\b0 Rights certified by publisher at time of upload.\\par\\par`;
     rtf += `A complete Image Licensing Manifest (03_Image_Manifest.pdf) is included in this Defense Kit with detailed provenance for every image.\\par\\par`;
     
@@ -386,32 +386,32 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
     doc.setFontSize(10);
     y += 0.5;
 
-    // Check if we need a new page for Pollinations section
+    // Check if we need a new page for Hugging Face section
     if (y > 9.0) {
       doc.addPage();
       y = 1.0;
     }
 
-    // 7. AI IMAGE GENERATION (Pollinations)
+    // 7. AI IMAGE GENERATION (Hugging Face)
     doc.setFont("times", "bold");
-    doc.text("7. AI Image Generation (Pollinations.ai)", 1, y);
+    doc.text("7. AI Image Generation (Hugging Face)", 1, y);
     y += 0.2;
     doc.setFont("times", "normal");
-    doc.text("Source: Pollinations.ai (Flux Model)", 1, y);
+    doc.text("Source: Hugging Face Serverless Inference API (Flux.1-schnell Model)", 1, y);
     y += 0.2;
     doc.setFont("times", "italic");
-    const pollinationsQuote = "\"Pollinations generates images using the Flux model. All generated images are released into the Public Domain with no restrictions on commercial use. No attribution is required.\"";
-    const splitPollinations = doc.splitTextToSize(pollinationsQuote, 6.5);
-    doc.text(splitPollinations, 1, y);
-    y += (splitPollinations.length * 0.2) + 0.1;
+    const hfQuote = "\"Flux.1-schnell is licensed under the Apache 2.0 License. Users can generate images for commercial purposes. The model outputs do not inherit licensing restrictions from training data.\"";
+    const splitHf = doc.splitTextToSize(hfQuote, 6.5);
+    doc.text(splitHf, 1, y);
+    y += (splitHf.length * 0.2) + 0.1;
 
     doc.setFont("times", "normal");
-    doc.text("Usage: AI-generated for custom content, Public Domain.", 1, y);
+    doc.text("Usage: AI-generated for custom content, Apache 2.0 licensed model.", 1, y);
     y += 0.2;
 
     doc.setTextColor(0, 0, 255);
     doc.setFontSize(9);
-    doc.text("URL: https://pollinations.ai/", 1, y);
+    doc.text("URL: https://huggingface.co/black-forest-labs/FLUX.1-schnell", 1, y);
 
     return doc.output('blob');
   };
@@ -674,7 +674,7 @@ const KdpLegalDefense: React.FC<KdpLegalDefenseProps> = ({ bookData, bookId, tit
                            source === 'pexels' ? 'Pexels' :
                            source === 'pixabay' ? 'Pixabay' :
                            source === 'wikimedia' ? 'Wikimedia' :
-                           source === 'pollinations' ? 'Pollinations AI' :
+                           source === 'huggingface' ? 'Hugging Face AI' :
                            source === 'openverse' ? 'Openverse' : source;
 
       // Truncate URL for display
