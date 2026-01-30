@@ -1,84 +1,77 @@
 
-
-# Plan: Complete Remaining Translation Fixes for Phase 2
+# Plan: Complete Localization Phase - Prep Content, Back Cover, and Legal Tab Fix
 
 ## Summary
 
-This plan addresses the remaining translation gaps identified in the screenshots:
+This plan addresses three issues identified in the screenshots:
 
-1. **"x of x chapters ready" progress text** - Currently half-translated in Index.tsx
-2. **"Cover Studio" / "Preview Studio" button** - Already has translation keys but not using them in BookCover.tsx
-3. **KDP Cover Studio dialog** - Entire dialog has hardcoded English strings (title, tabs, labels)
-4. **KDP Prep Dashboard loading animation** - Has translation keys but component not using them
-5. **Legal tab visibility** - Should be hidden for non-admin users (admin-only restriction)
+1. **Legal tab missing for Admin in French** - The tab trigger is missing from the TabsList, only the TabsContent is conditionally rendered
+2. **Prep tab content in English** - The AI-generated description, subtitle, and keywords need to be generated in the user's selected language
+3. **Back Cover content in English** - The default text "Created with Loom & Page..." needs to be translated to all 8 languages
+
+## Analysis
+
+### Issue 1: Legal Tab Missing for Admin
+
+**Root Cause**: In the previous update, I removed the Legal tab trigger from the TabsList (lines 2037-2058) but kept the TabsContent rendering (lines 2858-2866). The TabsContent is correctly guarded by `isAdminFromContext`, but there's no way to click to that tab because the trigger button was removed.
+
+**Fix**: Add the Legal tab trigger back to the TabsList, conditionally rendered for admin users only:
+```typescript
+{isAdminFromContext && (
+  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
+    <ShieldCheck className="w-3 h-3" />
+    {t('tabLegal')}
+  </TabsTrigger>
+)}
+```
+
+**Grid Adjustment**: When admin, grid should be 8 columns; when non-admin, 7 columns.
+
+### Issue 2: Prep Tab Content Not Translated
+
+**Root Cause**: The `generate-book-v2` edge function does NOT receive the user's language preference. The prompts for `kdp-description`, `kdp-subtitle`, and `kdp-keywords` modes are all in English with no language instruction.
+
+**Fix**: 
+1. Pass `language` from `KdpPrepDashboard` to the edge function calls
+2. Update the edge function prompts to include language-specific instructions
+
+**Files**:
+- `src/components/KdpPrepDashboard.tsx` - Pass language in API calls
+- `supabase/functions/generate-book-v2/index.ts` - Add language parameter to prompts
+
+### Issue 3: Back Cover Default Content in English
+
+**Root Cause**: The default back cover text is hardcoded in `BookCover.tsx`:
+```typescript
+const [backCoverTitle, setBackCoverTitle] = useState("Created with Loom & Page");
+const [backCoverBody, setBackCoverBody] = useState("This book was brought to life using Loom & Page...");
+const [backCoverCTA, setBackCoverCTA] = useState("Create yours at www.LoomandPage.com");
+```
+
+**Fix**: Use translation keys for the default values:
+```typescript
+const [backCoverTitle, setBackCoverTitle] = useState(t('backCoverDefaultTitle'));
+const [backCoverBody, setBackCoverBody] = useState(t('backCoverDefaultBody'));
+const [backCoverCTA, setBackCoverCTA] = useState(t('backCoverDefaultCta'));
+```
+
+**Note**: Since `useState` is called at component initialization and `t()` needs to update when language changes, we'll need to use `useEffect` to update these values when language changes.
 
 ---
 
-## Technical Analysis
+## User's Strategic Question: Legal Tab vs. Future Multi-Language Support
 
-### Issue 1: "x of x chapters ready" (Index.tsx line 980)
+**Question**: "This isn't a problem if the images and text information will be 100% the same when I create this guide in English or when we add that feature (future state) to take an English book and convert it into all the languages and save into our database."
 
-Current code:
-```typescript
-✓ {t('fullAccessUnlocked')} — {completedChapterCount} of {totalChapters} chapters ready
-```
+**Answer**: For the **Legal tab** specifically (Copyright & Hallucination Defense scanner), the content is **100% language-agnostic**:
+- It scans the book's AI-generated content for potential copyright issues
+- The analysis logic works on any language input
+- The output report structure is the same regardless of language
 
-The `t('fullAccessUnlocked')` is translated, but `of ... chapters ready` is hardcoded. Need to add a new translation key.
-
-### Issue 2: "Cover Studio" / "Preview Studio" Button (BookCover.tsx line 1909)
-
-Current code:
-```typescript
-{hasFullAccess ? 'Cover Studio' : 'Preview Studio'}
-```
-
-Translation keys already exist (`coverStudio` and `previewStudio` in all 8 languages) but the component doesn't import `useLanguage` or use them.
-
-### Issue 3: KDP Cover Studio Dialog - All Hardcoded
-
-BookCover.tsx does NOT import `useLanguage`. All dialog text is hardcoded:
-
-| Line | Hardcoded String |
-|------|-----------------|
-| 2028 | `"KDP Cover Studio & Export Manager"` |
-| 2034-2057 | Tab labels: "Front", "Back", "Spine", "Wrap", "Prep", "$$$", "Legal", "Export" |
-| 2064 | `"Current Front Cover"` |
-| 2079 | `"No Image"` |
-| 2129 | `"Edit Cover Text"` |
-| 2133 | `"View Only"` |
-| 2138 | `"Title"` |
-| 2149 | `"Subtitle"` |
-| 2169-2172 | `"Saving..."` / `"Save Text Changes"` |
-| 2181-2183 | `"Or Upload Your Own Image"` |
-| 2193 | `"Search Gallery"` |
-| 2212-2217 | `"Uploading..."` / `"Upload Cover Image"` |
-| 2225 | `"Custom Cover Image"` |
-| 2228 | `"Premium"` |
-| 2240 | `"Unlock Cover Editing"` |
-| 2251 | `"Cover Branding"` |
-| 2262 | `"Brand:"` |
-| 2275 | `"Logo"` |
-| 2305 | `"Change Logo"` / `"Upload Logo"` |
-| 2329 | `"Reset"` |
-| 2355 | `"Current Back Cover"` |
-| 2384 | `"Back Cover Text"` |
-| 2393 | `"Header"` |
-| 2882-2884 | Export tab descriptions |
-| ... | Many more |
-
-### Issue 4: KDP Prep Dashboard Loading (KdpPrepDashboard.tsx lines 226-229)
-
-Current code:
-```typescript
-<WeavingLoader text="Preparing Amazon metadata..." />
-<p>Generating description, subtitle, and keywords...</p>
-```
-
-Translation keys exist (`preparingMetadata`, `generatingMetadata`) but component doesn't use `useLanguage`.
-
-### Issue 5: Legal Tab - Admin Only
-
-Current code shows Legal tab for `hasFullAccess` (admin OR paid users). Per user request, it should only show for `isAdmin`.
+**Recommendation**: Keep the Legal tab as English-only UI since:
+1. It's admin-only (not customer-facing)
+2. The functionality is identical regardless of book language
+3. For a future "convert English book to other languages" feature, the Legal scan would run post-conversion on each translated version
 
 ---
 
@@ -86,204 +79,130 @@ Current code shows Legal tab for `hasFullAccess` (admin OR paid users). Per user
 
 | File | Changes |
 |------|---------|
-| `src/contexts/LanguageContext.tsx` | Add new key: `chaptersReady` for "x of x chapters ready" pattern |
-| `src/pages/Index.tsx` | Use new `t('chaptersReady')` translation with placeholder replacement |
-| `src/components/BookCover.tsx` | Import `useLanguage` hook, use `t()` for all 50+ hardcoded strings, hide Legal tab for non-admins |
-| `src/components/KdpPrepDashboard.tsx` | Import `useLanguage` hook, use `t()` for loading text and all form labels |
+| `src/contexts/LanguageContext.tsx` | Add 3 new translation keys for back cover defaults × 8 languages |
+| `src/components/BookCover.tsx` | 1) Fix Legal tab trigger for admin 2) Dynamic grid columns 3) Translate back cover defaults |
+| `src/components/KdpPrepDashboard.tsx` | Pass language to generate-book-v2 edge function calls |
+| `supabase/functions/generate-book-v2/index.ts` | Add language parameter to KDP description/subtitle/keywords prompts |
 
 ---
 
-## New Translation Keys Required
+## Technical Details
 
-### Index.tsx - Chapters Progress
+### LanguageContext.tsx - New Keys
+
 ```typescript
-// Already has fullAccessUnlocked - need to add chapters ready pattern
-chaptersReady: '{completed} of {total} chapters ready',
+// Back Cover Defaults
+backCoverDefaultTitle: 'Created with Loom & Page',
+backCoverDefaultBody: 'This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you\'re exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.',
+backCoverDefaultCta: 'Create yours at www.LoomandPage.com',
 ```
 
 ### French Example
 ```typescript
 fr: {
-  chaptersReady: '{completed} sur {total} chapitres prêts',
+  backCoverDefaultTitle: 'Créé avec Loom & Page',
+  backCoverDefaultBody: 'Ce livre a été créé avec Loom & Page, la plateforme IA avancée qui transforme les idées en livres professionnels en quelques minutes. Que vous exploriez une nouvelle passion, documentiez l\'histoire ou planifiez votre prochaine aventure, nous vous aidons à tisser votre curiosité en réalité.',
+  backCoverDefaultCta: 'Créez le vôtre sur www.LoomandPage.com',
+}
+```
+
+### BookCover.tsx - Legal Tab Fix
+
+```typescript
+// Dynamic grid columns based on admin status
+<TabsList className={`grid w-full ${isAdminFromContext ? 'grid-cols-8' : 'grid-cols-7'}`}>
+  {/* ... existing 7 tabs ... */}
+  {isAdminFromContext && (
+    <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
+      <ShieldCheck className="w-3 h-3" />
+      {t('tabLegal')}
+    </TabsTrigger>
+  )}
+</TabsList>
+```
+
+### BookCover.tsx - Back Cover Language Reactivity
+
+```typescript
+// Initialize with defaults
+const [backCoverTitle, setBackCoverTitle] = useState("");
+const [backCoverBody, setBackCoverBody] = useState("");
+const [backCoverCTA, setBackCoverCTA] = useState("");
+
+// Update when language changes (or on first render)
+useEffect(() => {
+  if (!backCoverTitle) setBackCoverTitle(t('backCoverDefaultTitle'));
+  if (!backCoverBody) setBackCoverBody(t('backCoverDefaultBody'));
+  if (!backCoverCTA) setBackCoverCTA(t('backCoverDefaultCta'));
+}, [t]); // Re-run when translation function changes (language switch)
+```
+
+### KdpPrepDashboard.tsx - Pass Language
+
+```typescript
+import { useLanguage } from '@/contexts/LanguageContext';
+
+const KdpPrepDashboard = ({ ... }) => {
+  const { t, language } = useLanguage(); // Get current language code
+  
+  // Pass language to API calls
+  const generateDescription = async () => {
+    const { data, error } = await supabase.functions.invoke('generate-book-v2', {
+      body: {
+        mode: 'kdp-description',
+        title,
+        topic,
+        subtitle: localSubtitle,
+        bookData,
+        language, // Add this
+      },
+    });
+    // ...
+  };
+};
+```
+
+### generate-book-v2/index.ts - Language-Aware Prompts
+
+```typescript
+// KDP Description Mode
+if (mode === 'kdp-description') {
+  const languageInstruction = language && language !== 'en' 
+    ? `\n\nCRITICAL: Write the entire description in ${getLanguageName(language)}. Do NOT write in English.`
+    : '';
+    
+  const prompt = `You are a bestselling Amazon book marketing expert...
+${languageInstruction}
+
+Book Title: "${title}"
+...`;
 }
 ```
 
 ---
 
-## Implementation Details
+## Layout Preservation Guarantee
 
-### Index.tsx - Fix "x of x chapters ready"
-
-**Before (line 980)**:
-```typescript
-✓ {t('fullAccessUnlocked')} — {completedChapterCount} of {totalChapters} chapters ready
-```
-
-**After**:
-```typescript
-✓ {t('fullAccessUnlocked')} — {t('chaptersReady').replace('{completed}', String(completedChapterCount)).replace('{total}', String(totalChapters))}
-```
-
-### BookCover.tsx - Add Translation Support
-
-1. **Import the hook** at top of file:
-```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
-```
-
-2. **Get t function** inside the component:
-```typescript
-const { t } = useLanguage();
-```
-
-3. **Replace all hardcoded strings** with `t()` calls:
-```typescript
-// Button (line 1909)
-{hasFullAccess ? t('coverStudio') : t('previewStudio')}
-
-// Dialog title (line 2028)
-{t('kdpCoverStudioTitle')}
-
-// Tab labels (lines 2034-2057)
-<TabsTrigger value="front">{t('tabFront')}</TabsTrigger>
-<TabsTrigger value="back">{t('tabBack')}</TabsTrigger>
-// etc.
-```
-
-4. **Hide Legal tab for non-admins**:
-```typescript
-// Only render Legal tab if isAdmin (not just hasFullAccess)
-{isAdmin && (
-  <TabsTrigger value="legal" className="gap-1 text-xs sm:text-sm">
-    <ShieldCheck className="w-3 h-3" />
-    {t('tabLegal')}
-  </TabsTrigger>
-)}
-
-// Only render Legal tab content if isAdmin
-{isAdmin && (
-  <TabsContent value="legal" className="pt-4">
-    ...
-  </TabsContent>
-)}
-```
-
-### KdpPrepDashboard.tsx - Add Translation Support
-
-1. **Import the hook**:
-```typescript
-import { useLanguage } from '@/contexts/LanguageContext';
-```
-
-2. **Get t function**:
-```typescript
-const { t } = useLanguage();
-```
-
-3. **Update loading state (lines 226-229)**:
-```typescript
-<WeavingLoader text={t('preparingMetadata')} />
-<p className="text-sm text-muted-foreground">
-  {t('generatingMetadata')}
-</p>
-```
-
-4. **Update form labels** (lines 239-256):
-```typescript
-<span className="text-xs text-muted-foreground">{t('pageCount')}:</span>
-<span className="text-xs text-muted-foreground">{t('spineLabel')}:</span>
-<span className="text-xs text-muted-foreground">{t('trimLabel')}:</span>
-<span className="text-xs text-muted-foreground">{t('bleedLabel')}:</span>
-```
-
-5. **Update description section labels**:
-```typescript
-<Label>{t('bookDescription')}</Label>
-<Button>{t('preview')}</Button>
-<Button>{t('html')}</Button>
-<Button>{t('writeBestSellingDesc')}</Button>
-```
-
----
-
-## New Translation Keys for All 8 Languages
-
-### English (baseline)
-```typescript
-chaptersReady: '{completed} of {total} chapters ready',
-```
-
-### Spanish
-```typescript
-chaptersReady: '{completed} de {total} capítulos listos',
-```
-
-### French
-```typescript
-chaptersReady: '{completed} sur {total} chapitres prêts',
-```
-
-### German
-```typescript
-chaptersReady: '{completed} von {total} Kapiteln fertig',
-```
-
-### Italian
-```typescript
-chaptersReady: '{completed} di {total} capitoli pronti',
-```
-
-### Portuguese
-```typescript
-chaptersReady: '{completed} de {total} capítulos prontos',
-```
-
-### Chinese
-```typescript
-chaptersReady: '{completed}/{total}章节已完成',
-```
-
-### Japanese
-```typescript
-chaptersReady: '{completed}/{total}章完成',
-```
-
----
-
-## Legal Tab Access Control
-
-**Current behavior**: Legal tab shows for `hasFullAccess` (both admin AND paid users)
-**Desired behavior**: Legal tab shows ONLY for `isAdmin`
-
-This is a security/access control change that restricts sensitive licensing documentation to administrators only.
-
----
-
-## Summary of Changes
-
-| Component | Change Type | # of Strings |
-|-----------|-------------|--------------|
-| Index.tsx | Add translation | 1 string |
-| BookCover.tsx | Import hook + translate + access control | ~60 strings |
-| KdpPrepDashboard.tsx | Import hook + translate | ~15 strings |
-| LanguageContext.tsx | Add new keys | 1 key × 8 languages |
+**CRITICAL**: All changes will preserve existing layout, spacing, and formatting:
+- Back cover preview dimensions unchanged
+- Text flow and positioning unchanged
+- Only the text CONTENT will be translated
+- No CSS or structural changes to the back cover component
 
 ---
 
 ## Testing Checklist
 
-After implementation:
-1. **Switch to French** and verify:
-   - Progress bar shows "2 sur 12 chapitres prêts"
-   - Button shows "Studio de Couverture" (admin) or "Studio de Prévisualisation" (guest)
-   - KDP Cover Studio dialog title shows "Studio KDP & Gestionnaire d'Export"
-   - All tab labels (Avant, Arrière, Dos, Complet, Prépa, $$$, Export) are in French
-   - Legal tab is hidden for non-admins
-   - Prep tab loading shows "Préparation des métadonnées Amazon..."
-   - All form labels in all tabs are in French
-2. **Test as non-admin paid user**:
-   - Verify Legal tab is NOT visible (only 7 tabs shown instead of 8)
-3. **Test as admin**:
-   - Verify Legal tab IS visible
-4. **Test all 8 languages** for consistency
-
+1. **Switch to French** as Admin:
+   - Verify Legal tab appears (8 tabs total)
+   - Click Legal tab to confirm it works
+2. **Switch to French** as Guest/Paid:
+   - Verify Legal tab is hidden (7 tabs total)
+3. **Open Cover Studio → Back tab**:
+   - Verify default text shows in French
+   - Verify layout is identical to English
+4. **Open Cover Studio → Prep tab**:
+   - Wait for auto-generation
+   - Verify description, keywords are in French
+   - Verify no layout changes
+5. **Test all 8 languages** for consistency
