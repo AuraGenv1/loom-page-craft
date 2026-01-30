@@ -832,7 +832,7 @@ const Index = () => {
                 onChange={setAdvancedOptions} 
               />
             </div>
-            <p className="text-sm text-muted-foreground mt-8 animate-fade-up animation-delay-300">
+            <p className="text-sm text-muted-foreground mt-16 animate-fade-up animation-delay-300">
               {t('searchExamples')}
             </p>
           </div>

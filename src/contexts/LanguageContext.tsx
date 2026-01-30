@@ -62,6 +62,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'The free sample includes the Cover, Table of Contents, and Chapter 1. The full guide unlocks all chapters.',
     fullAccessUnlocked: 'Full access unlocked',
     beginReading: 'Begin Reading',
+    advancedOptions: 'Advanced Options',
+    narrativeVoice: 'NARRATIVE VOICE',
+    bookStructure: 'BOOK STRUCTURE',
+    focusAreas: 'FOCUS AREAS',
   },
   es: {
     join: 'Unirse',
@@ -104,6 +108,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'La muestra gratuita incluye la portada, el índice y el capítulo 1. La guía completa desbloquea todos los capítulos.',
     fullAccessUnlocked: 'Acceso completo desbloqueado',
     beginReading: 'Comenzar a Leer',
+    advancedOptions: 'Opciones Avanzadas',
+    narrativeVoice: 'VOZ NARRATIVA',
+    bookStructure: 'ESTRUCTURA DEL LIBRO',
+    focusAreas: 'ÁREAS DE ENFOQUE',
   },
   fr: {
     join: 'Rejoindre',
@@ -146,6 +154,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'L\'échantillon gratuit comprend la couverture, la table des matières et le chapitre 1. Le guide complet débloque tous les chapitres.',
     fullAccessUnlocked: 'Accès complet débloqué',
     beginReading: 'Commencer la Lecture',
+    advancedOptions: 'Options Avancées',
+    narrativeVoice: 'VOIX NARRATIVE',
+    bookStructure: 'STRUCTURE DU LIVRE',
+    focusAreas: 'DOMAINES DE FOCUS',
   },
   de: {
     join: 'Beitreten',
@@ -188,6 +200,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'Die kostenlose Probe enthält das Cover, das Inhaltsverzeichnis und Kapitel 1. Der vollständige Leitfaden schaltet alle Kapitel frei.',
     fullAccessUnlocked: 'Vollzugriff freigeschaltet',
     beginReading: 'Mit dem Lesen beginnen',
+    advancedOptions: 'Erweiterte Optionen',
+    narrativeVoice: 'ERZÄHLSTIMME',
+    bookStructure: 'BUCHSTRUKTUR',
+    focusAreas: 'SCHWERPUNKTE',
   },
   it: {
     join: 'Unisciti',
@@ -230,6 +246,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'Il campione gratuito include la copertina, l\'indice e il capitolo 1. La guida completa sblocca tutti i capitoli.',
     fullAccessUnlocked: 'Accesso completo sbloccato',
     beginReading: 'Inizia a Leggere',
+    advancedOptions: 'Opzioni Avanzate',
+    narrativeVoice: 'VOCE NARRATIVA',
+    bookStructure: 'STRUTTURA DEL LIBRO',
+    focusAreas: 'AREE DI FOCUS',
   },
   pt: {
     join: 'Junte-se',
@@ -272,6 +292,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: 'A amostra grátis inclui a capa, o índice e o capítulo 1. O guia completo desbloqueia todos os capítulos.',
     fullAccessUnlocked: 'Acesso completo desbloqueado',
     beginReading: 'Começar a Ler',
+    advancedOptions: 'Opções Avançadas',
+    narrativeVoice: 'VOZ NARRATIVA',
+    bookStructure: 'ESTRUTURA DO LIVRO',
+    focusAreas: 'ÁREAS DE FOCO',
   },
   zh: {
     join: '加入',
@@ -314,6 +338,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: '免费样本包括封面、目录和第1章。完整指南解锁全部章节。',
     fullAccessUnlocked: '已解锁完整访问权限',
     beginReading: '开始阅读',
+    advancedOptions: '高级选项',
+    narrativeVoice: '叙事风格',
+    bookStructure: '书籍结构',
+    focusAreas: '关注领域',
   },
   ja: {
     join: '参加',
@@ -356,6 +384,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     freeSampleDesc: '無料サンプルには表紙、目次、第1章が含まれています。完全ガイドは全章をアンロックします。',
     fullAccessUnlocked: 'フルアクセスがアンロックされました',
     beginReading: '読み始める',
+    advancedOptions: '詳細オプション',
+    narrativeVoice: 'ナラティブボイス',
+    bookStructure: 'ブック構造',
+    focusAreas: 'フォーカスエリア',
   },
 };
 
