@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Cloud, X } from "lucide-react";
 import { useState } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface SaveToCloudBannerProps {
   onSignIn: () => void;
@@ -8,6 +9,7 @@ interface SaveToCloudBannerProps {
 }
 
 const SaveToCloudBanner = ({ onSignIn, isAuthenticating }: SaveToCloudBannerProps) => {
+  const { t } = useLanguage();
   const [isDismissed, setIsDismissed] = useState(false);
 
   if (isDismissed) return null;
@@ -20,9 +22,9 @@ const SaveToCloudBanner = ({ onSignIn, isAuthenticating }: SaveToCloudBannerProp
             <Cloud className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-serif font-medium text-foreground mb-1">Save your guide to the cloud</h3>
+            <h3 className="font-serif font-medium text-foreground mb-1">{t('saveToCloudTitle')}</h3>
             <p className="text-sm text-muted-foreground">
-              Sign in to save this guide permanently and access it from any device.
+              {t('saveToCloudDesc')}
             </p>
           </div>
         </div>
@@ -36,10 +38,10 @@ const SaveToCloudBanner = ({ onSignIn, isAuthenticating }: SaveToCloudBannerProp
       </div>
       <div className="mt-4 flex gap-3">
         <Button onClick={onSignIn} disabled={isAuthenticating} size="sm">
-          {isAuthenticating ? "Signing in..." : "Sign in"}
+          {isAuthenticating ? t('signingIn') : t('authSignIn')}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setIsDismissed(true)}>
-          Maybe later
+          {t('maybeLater')}
         </Button>
       </div>
     </div>

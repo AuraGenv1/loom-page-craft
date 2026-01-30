@@ -142,16 +142,19 @@ RULE 2: MANDATORY INLINE MARKDOWN (No Wall-of-Text!)
 - Use "### Subheader" to break up content within text blocks.
 - No plain text paragraphs without headers.
 
-RULE 3: KEY TAKEAWAY (ONE per chapter, Plain Text, No Emoji!)
-- Include EXACTLY ONE "Key Takeaway" section per chapter.
-- Place it in the SECOND-TO-LAST text block, right before the "pro_tip" block.
-- Use a standard subheader: \`### Key Takeaway\` - NO emojis, NO icons. Just plain text.
-- Keep it inline in a text block.
+RULE 3: KEY TAKEAWAY (Use key_takeaway BLOCK TYPE - CRITICAL!)
+- Include EXACTLY ONE "key_takeaway" block per chapter - NOT a heading, a DEDICATED BLOCK TYPE.
+- Place it as the SECOND-TO-LAST block, right before the "pro_tip" block.
+- Use: {"block_type": "key_takeaway", "content": {"text": "The actual takeaway text..."}}
+- NEVER use "### Key Takeaway" as a text heading. The UI renders the label automatically.
+- NEVER include the words "Key Takeaway" in the content text itself.
+- The UI will display the translated label (e.g., "POINT CLÉ" in French).
 
 RULE 4: BANNED CONTENT TYPES & FORMATTING
 - Do NOT use blockquotes (>). They are FORBIDDEN.
 - Do NOT use italics or asterisks (*) for emphasis.
-- Do NOT use "heading", "list", "quote", or "key_takeaway" block types - STRICTLY FORBIDDEN.
+- Do NOT use "heading", "list", "quote" block types - STRICTLY FORBIDDEN.
+- "key_takeaway" IS allowed as a block type.
 
 RULE 5: CHAPTER STRUCTURE (Strict Order with Image Spacing)
 This chapter MUST follow this structure:
@@ -160,8 +163,9 @@ This chapter MUST follow this structure:
   3. 2-3x Text Pages (text blocks)
   4. 1x Image (if needed - NEVER consecutive with another image!)
   5. 2-3x Text Pages
-  6. Second-to-last text block: Contains the ### Key Takeaway section
+  6. key_takeaway block (SECOND-TO-LAST - use the block type, NOT a heading!)
   7. Pro Tip Page (ALWAYS last block of the chapter)
+- BALANCE: Images must NOT exceed 30% of chapter pages.
 - BALANCE: Images must NOT exceed 30% of chapter pages.
 - **CRITICAL IMAGE SPACING RULE**: NEVER place two image blocks consecutively. There MUST be at least ONE text block between ANY two images.
 
@@ -186,10 +190,11 @@ TOPIC TYPE: ${isVisualTopic ? 'VISUAL (Travel/Lifestyle/Art) - More hero images'
 TARGET BLOCKS: ${targetPagesPerChapter}
 BOOK CONTEXT: ${tableOfContents?.map((c: { title: string }) => c.title).join(', ') || ''}
 
-Block types (ONLY use these four types - NO quote blocks!):
+Block types (ONLY use these five types):
 - "chapter_title": { "chapter_number": ${chapterNumber}, "title": "${chapterTitle}" } - ALWAYS first
 - "text": { "text": "200-230 words MAX. MUST start with ## Header. Use ### Subheader inside." }
 - "image_full": { "query": "Literal visual description of scene (e.g., 'Modern skyscraper reflecting sunset')", "caption": "Evocative caption" }
+- "key_takeaway": { "text": "The key insight from this chapter - DO NOT include 'Key Takeaway' in the text" } - SECOND-TO-LAST block
 - "pro_tip": { "text": "Expert insider advice - practical tips ONLY" } - ALWAYS last block
 
 FORMATTING BANS:
@@ -201,13 +206,14 @@ FORMATTING BANS:
 REQUIREMENTS:
 - First block MUST be "chapter_title"
 - Last block MUST be "pro_tip" (anchored to end)
-- Second-to-last text block MUST contain \`### Key Takeaway\` (one per chapter, no emoji)
+- Second-to-last block MUST be "key_takeaway" (use the block type, NOT a heading!)
+- NEVER include "Key Takeaway" as text content - the UI displays the translated label
 - EVERY "text" block MUST start with \`## Header\` - No exceptions
 - Each "text" block: 200-230 words MAX with inline markdown (target 215 words, NEVER over 230)
 - Total blocks: ${targetPagesPerChapter}
 - Images ≤30% of blocks
 - **NO CONSECUTIVE IMAGES** - Always separate images with at least one text block
-- NEVER use "heading", "list", "quote", "key_takeaway", or "image_half" blocks! Only: chapter_title, text, image_full, pro_tip.
+- NEVER use "heading", "list", "quote", or "image_half" blocks! Only: chapter_title, text, image_full, key_takeaway, pro_tip.
 
 Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE content):
 [
@@ -215,7 +221,7 @@ Return ONLY valid JSON array (DO NOT copy these placeholders - write UNIQUE cont
   {"block_type": "image_full", "content": {"query": "[unique search query - literal visual description]", "caption": "[unique evocative caption]"}},
   {"block_type": "text", "content": {"text": "## [Unique Descriptive Header]\\n\\n[Write 200-230 words MAX. Count your words! Keep it tight and focused.]\\n\\n### [Unique Subheader]\\n\\n[Continue with focused content...]"}},
   {"block_type": "text", "content": {"text": "## [Another Unique Header]\\n\\n[More original content - 200-230 words MAX. Never exceed 230 words.]"}},
-  {"block_type": "text", "content": {"text": "## [Header]\\n\\n[Content...]\\n\\n### Key Takeaway\\n\\n[The single most important insight from this chapter in 1-2 sentences.]"}},
+  {"block_type": "key_takeaway", "content": {"text": "[The single most important insight from this chapter in 1-2 sentences. DO NOT include 'Key Takeaway' in this text.]"}},
   {"block_type": "pro_tip", "content": {"text": "[Unique practical expert advice]"}}
 ]
 

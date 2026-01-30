@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Mail, Loader2 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface AuthModalProps {
   open: boolean;
@@ -18,6 +19,7 @@ interface AuthModalProps {
 type AuthView = "options" | "email-signup" | "email-login" | "forgot-password";
 
 const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: AuthModalProps) => {
+  const { t } = useLanguage();
   const [view, setView] = useState<AuthView>("options");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -136,17 +138,17 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl text-center">
-            {view === "options" && "Join LOOM & PAGE"}
-            {view === "email-signup" && "Create an account"}
-            {view === "email-login" && "Welcome back"}
-            {view === "forgot-password" && "Reset password"}
+            {view === "options" && t('authJoinTitle')}
+            {view === "email-signup" && t('authCreateAccount')}
+            {view === "email-login" && t('authWelcomeBack')}
+            {view === "forgot-password" && t('authResetPassword')}
           </DialogTitle>
         </DialogHeader>
 
         {view === "options" && (
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground text-center">
-              Save your guides to the cloud and access them anywhere.
+              {t('authSaveToCloud')}
             </p>
 
             <Button onClick={handleGoogleClick} disabled={isAuthenticating} className="w-full gap-2" variant="outline">
@@ -172,7 +174,7 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
                   />
                 </svg>
               )}
-              Continue with Google
+              {t('authContinueGoogle')}
             </Button>
 
             <div className="relative">
@@ -180,19 +182,19 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
                 <Separator className="w-full" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
+                <span className="bg-background px-2 text-muted-foreground">{t('orSeparator')}</span>
               </div>
             </div>
 
             <Button onClick={() => setView("email-signup")} variant="outline" className="w-full gap-2">
               <Mail className="h-4 w-4" />
-              Sign up with Email
+              {t('authSignUpEmail')}
             </Button>
 
             <p className="text-xs text-center text-muted-foreground">
-              Already have an account?{" "}
+              {t('authAlreadyHaveAccount')}{" "}
               <button onClick={() => setView("email-login")} className="text-primary hover:underline">
-                Sign in
+                {t('authSignIn')}
               </button>
             </p>
           </div>
@@ -201,32 +203,32 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
         {view === "email-signup" && (
           <form onSubmit={handleEmailSignUp} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="fullName">Name (optional)</Label>
+              <Label htmlFor="fullName">{t('formName')}</Label>
               <Input
                 id="fullName"
                 type="text"
-                placeholder="Your name"
+                placeholder={t('placeholderName')}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('formEmail')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('placeholderEmail')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('formPassword')}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder={t('placeholderPassword6')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -234,12 +236,12 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('formCreateAccount')}
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Already have an account?{" "}
+              {t('authAlreadyHaveAccount')}{" "}
               <button type="button" onClick={() => setView("email-login")} className="text-primary hover:underline">
-                Sign in
+                {t('authSignIn')}
               </button>
             </p>
             <button
@@ -247,7 +249,7 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
               onClick={() => setView("options")}
               className="text-xs text-muted-foreground hover:underline w-full text-center"
             >
-              ← Back to options
+              {t('authBackToOptions')}
             </button>
           </form>
         )}
@@ -255,11 +257,11 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
         {view === "email-login" && (
           <form onSubmit={handleEmailLogin} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="login-email">{t('formEmail')}</Label>
               <Input
                 id="login-email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('placeholderEmail')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -267,31 +269,31 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="login-password">Password</Label>
+                <Label htmlFor="login-password">{t('formPassword')}</Label>
                 <button
                   type="button"
                   onClick={() => setView("forgot-password")}
                   className="text-xs text-primary hover:underline"
                 >
-                  Forgot password?
+                  {t('authForgotPassword')}
                 </button>
               </div>
               <Input
                 id="login-password"
                 type="password"
-                placeholder="Your password"
+                placeholder={t('placeholderPassword')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('authSignIn')}
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Don't have an account?{" "}
+              {t('authDontHaveAccount')}{" "}
               <button type="button" onClick={() => setView("email-signup")} className="text-primary hover:underline">
-                Sign up
+                {t('authSignUp')}
               </button>
             </p>
             <button
@@ -299,7 +301,7 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
               onClick={() => setView("options")}
               className="text-xs text-muted-foreground hover:underline w-full text-center"
             >
-              ← Back to options
+              {t('authBackToOptions')}
             </button>
           </form>
         )}
@@ -307,28 +309,28 @@ const AuthModal = ({ open, onOpenChange, onGoogleSignIn, isAuthenticating }: Aut
         {view === "forgot-password" && (
           <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground text-center">
-              Enter your email and we'll send you a link to reset your password.
+              {t('authResetEmailSent')}
             </p>
             <div className="space-y-2">
-              <Label htmlFor="forgot-email">Email</Label>
+              <Label htmlFor="forgot-email">{t('formEmail')}</Label>
               <Input
                 id="forgot-email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('placeholderEmail')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('authSendResetLink')}
             </Button>
             <button
               type="button"
               onClick={() => setView("email-login")}
               className="text-xs text-muted-foreground hover:underline w-full text-center"
             >
-              ← Back to login
+              {t('authBackToLogin')}
             </button>
           </form>
         )}
