@@ -257,6 +257,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Legal',
     copyrightDefense: 'Copyright & Hallucination Defense',
     copyrightDefenseDesc: 'Unlock to scan for potential issues and generate legal disclaimers.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Created with Loom & Page',
+    backCoverDefaultBody: 'This book was brought to life using Loom & Page, the advanced AI platform that turns ideas into professional-grade books in minutes. Whether you\'re exploring a new passion, documenting history, or planning your next adventure, we help you weave your curiosity into reality.',
+    backCoverDefaultCta: 'Create yours at www.LoomandPage.com',
   },
   es: {
     join: 'Unirse',
@@ -494,6 +498,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Legal',
     copyrightDefense: 'Defensa de Derechos de Autor y Alucinación',
     copyrightDefenseDesc: 'Desbloquea para escanear posibles problemas y generar avisos legales.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Creado con Loom & Page',
+    backCoverDefaultBody: 'Este libro fue creado con Loom & Page, la plataforma de IA avanzada que transforma ideas en libros de calidad profesional en minutos. Ya sea que explores una nueva pasión, documentes historia o planees tu próxima aventura, te ayudamos a tejer tu curiosidad en realidad.',
+    backCoverDefaultCta: 'Crea el tuyo en www.LoomandPage.com',
   },
   fr: {
     join: 'Rejoindre',
@@ -731,6 +739,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Légal',
     copyrightDefense: 'Défense des Droits d\'Auteur et Hallucinations',
     copyrightDefenseDesc: 'Débloquer pour scanner les problèmes potentiels et générer des avertissements légaux.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Créé avec Loom & Page',
+    backCoverDefaultBody: 'Ce livre a été créé avec Loom & Page, la plateforme IA avancée qui transforme les idées en livres professionnels en quelques minutes. Que vous exploriez une nouvelle passion, documentiez l\'histoire ou planifiez votre prochaine aventure, nous vous aidons à tisser votre curiosité en réalité.',
+    backCoverDefaultCta: 'Créez le vôtre sur www.LoomandPage.com',
   },
   de: {
     join: 'Beitreten',
@@ -968,6 +980,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Rechtliches',
     copyrightDefense: 'Urheberrecht & Halluzinationsschutz',
     copyrightDefenseDesc: 'Freischalten um potenzielle Probleme zu scannen und rechtliche Hinweise zu generieren.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Erstellt mit Loom & Page',
+    backCoverDefaultBody: 'Dieses Buch wurde mit Loom & Page erstellt, der fortschrittlichen KI-Plattform, die Ideen in professionelle Bücher in Minuten verwandelt. Ob Sie eine neue Leidenschaft erkunden, Geschichte dokumentieren oder Ihr nächstes Abenteuer planen – wir helfen Ihnen, Ihre Neugier in Realität zu verweben.',
+    backCoverDefaultCta: 'Erstellen Sie Ihr eigenes auf www.LoomandPage.com',
   },
   it: {
     join: 'Unisciti',
@@ -1205,6 +1221,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Legale',
     copyrightDefense: 'Difesa Copyright e Allucinazioni',
     copyrightDefenseDesc: 'Sblocca per scansionare potenziali problemi e generare avvisi legali.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Creato con Loom & Page',
+    backCoverDefaultBody: 'Questo libro è stato creato con Loom & Page, la piattaforma IA avanzata che trasforma le idee in libri professionali in pochi minuti. Che tu stia esplorando una nuova passione, documentando la storia o pianificando la tua prossima avventura, ti aiutiamo a tessere la tua curiosità in realtà.',
+    backCoverDefaultCta: 'Crea il tuo su www.LoomandPage.com',
   },
   pt: {
     join: 'Junte-se',
@@ -1442,6 +1462,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: 'Legal',
     copyrightDefense: 'Defesa de Direitos Autorais e Alucinação',
     copyrightDefenseDesc: 'Desbloqueie para escanear possíveis problemas e gerar avisos legais.',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Criado com Loom & Page',
+    backCoverDefaultBody: 'Este livro foi criado com Loom & Page, a plataforma de IA avançada que transforma ideias em livros profissionais em minutos. Seja explorando uma nova paixão, documentando história ou planejando sua próxima aventura, ajudamos você a tecer sua curiosidade em realidade.',
+    backCoverDefaultCta: 'Crie o seu em www.LoomandPage.com',
   },
   zh: {
     join: '加入',
@@ -1679,6 +1703,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: '法律',
     copyrightDefense: '版权和幻觉防御',
     copyrightDefenseDesc: '解锁以扫描潜在问题并生成法律声明。',
+    // Back Cover Defaults
+    backCoverDefaultTitle: '由 Loom & Page 创建',
+    backCoverDefaultBody: '本书使用 Loom & Page 创建，这是一个先进的AI平台，能在几分钟内将想法转化为专业级书籍。无论您是探索新的热情、记录历史还是规划下一次冒险，我们都帮助您将好奇心编织成现实。',
+    backCoverDefaultCta: '在 www.LoomandPage.com 创建您的书籍',
   },
   ja: {
     join: '参加',
@@ -1916,6 +1944,10 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     tabLegal: '法的事項',
     copyrightDefense: '著作権と幻覚対策',
     copyrightDefenseDesc: '潜在的な問題をスキャンし、法的免責事項を生成するためにアンロック。',
+    // Back Cover Defaults
+    backCoverDefaultTitle: 'Loom & Page で作成',
+    backCoverDefaultBody: 'この本は Loom & Page で作成されました。アイデアを数分でプロフェッショナルな本に変える先進的なAIプラットフォームです。新しい情熱を探求し、歴史を記録し、次の冒険を計画する際に、あなたの好奇心を現実に織り込むお手伝いをします。',
+    backCoverDefaultCta: 'www.LoomandPage.com であなたの本を作成',
   },
 };
 

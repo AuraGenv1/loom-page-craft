@@ -35,7 +35,7 @@ const KdpPrepDashboard = ({
   contentPageCount,
   bookData,
 }: KdpPrepDashboardProps) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   
   // Metadata state
   const [localSubtitle, setLocalSubtitle] = useState(initialSubtitle || '');
@@ -98,6 +98,7 @@ const KdpPrepDashboard = ({
           topic,
           subtitle: localSubtitle,
           bookData,
+          language,
         },
       });
       
@@ -121,6 +122,7 @@ const KdpPrepDashboard = ({
           mode: 'kdp-subtitle',
           title,
           topic,
+          language,
         },
       });
       
@@ -145,6 +147,7 @@ const KdpPrepDashboard = ({
           title,
           topic,
           subtitle: localSubtitle,
+          language,
         },
       });
       
