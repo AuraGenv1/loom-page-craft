@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 import { Check, Lock, Loader2, Clock } from 'lucide-react';
 import { ChapterInfo } from '@/lib/bookTypes';
-import WeavingLoader from './WeavingLoader';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface TableOfContentsProps {
   topic: string;
@@ -28,6 +28,8 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
     },
     ref
   ) => {
+    const { t } = useLanguage();
+
     // Use AI-generated chapters or fallback to defaults
     // If allUnlocked is true (admin or purchased), mark all as unlocked
     // REALTIME SYNC: Use chapterContent to determine if chapter has content (ready)
@@ -80,8 +82,8 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
             <div className="w-1.5 h-1.5 rounded-full bg-foreground/20" />
             <div className="w-16 h-[1px] bg-foreground/15" />
           </div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">Contents</p>
-          <h2 className="font-serif text-3xl md:text-4xl font-medium text-foreground">Table of Contents</h2>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">{t('contents')}</p>
+          <h2 className="font-serif text-3xl md:text-4xl font-medium text-foreground">{t('tableOfContents')}</h2>
         </div>
 
         {/* Chapters list */}
@@ -124,12 +126,12 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                       {chapter.title}
                     </span>
 
-                    {/* Status badges */}
+                    {/* Status badges - translated */}
                     {isDrafting && (
                       <div className="flex items-center gap-2 mt-1">
                         <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
-                          Drafting...
+                          {t('status_drafting')}
                         </span>
                       </div>
                     )}
@@ -137,18 +139,18 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
                       <div className="flex items-center gap-2 mt-1">
                         <Clock className="w-3 h-3 text-muted-foreground" />
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
-                          Pending
+                          {t('status_pending')}
                         </span>
                       </div>
                     )}
                     {isComplete && chapter.isUnlocked && !isActive && (
-                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">Expand →</span>
+                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5">{t('status_expand')} →</span>
                     )}
                     {isActive && (
-                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5 font-medium">Reading</span>
+                      <span className="text-[10px] uppercase tracking-widest text-accent mt-0.5 font-medium">{t('status_reading')}</span>
                     )}
                     {!chapter.isUnlocked && !isDrafting && (
-                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-0.5">Locked</span>
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mt-0.5">{t('status_locked')}</span>
                     )}
                   </div>
                 </div>
@@ -184,12 +186,12 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
           })}
         </div>
 
-        {/* Footer decoration */}
+        {/* Footer decoration - translated */}
         <div className="flex items-center justify-center mt-8">
           <div className="flex items-center gap-2 opacity-40">
             <div className="w-8 h-[1px] bg-foreground/30" />
             <span className="text-[9px] tracking-[0.2em] text-muted-foreground uppercase font-serif">
-              {displayChapters.length} Chapters
+              {displayChapters.length} {t('chapters')}
             </span>
             <div className="w-8 h-[1px] bg-foreground/30" />
           </div>
@@ -202,4 +204,3 @@ const TableOfContents = forwardRef<HTMLDivElement, TableOfContentsProps>(
 TableOfContents.displayName = 'TableOfContents';
 
 export default TableOfContents;
-
